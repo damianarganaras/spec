@@ -1,0 +1,41 @@
+{
+  "name": "@ancleto/spec",
+  "version": "0.1.0",
+  "description": "Orquestador SDD liviano con subagentes optimizados para costo/tokens",
+  "type": "module",
+  "bin": {
+    "ancleto": "src/cli/index.js",
+    "aspec": "src/cli/index.js"
+  },
+  "files": [
+    "agents",
+    "commands",
+    "skills",
+    "templates",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ancleto/spec.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ancleto/spec/issues"
+  },
+  "homepage": "https://github.com/ancleto/spec",
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "keywords": [
+    "opencode",
+    "openspec",
+    "sdd",
+    "ai",
+    "agents",
+    "skills",
+    "spec-driven"
+  ]
+}

@@ -19,12 +19,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ancleto/spec.git"
+    "url": "git+https://github.com/damianarganaras/spec.git"
   },
   "bugs": {
-    "url": "https://github.com/ancleto/spec/issues"
+    "url": "https://github.com/damianarganaras/spec/issues"
   },
-  "homepage": "https://github.com/ancleto/spec",
+  "homepage": "https://github.com/damianarganaras/spec#readme",
   "engines": {
     "node": ">=18"
   },

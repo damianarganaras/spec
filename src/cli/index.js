@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { cp, mkdir, access, writeFile, readFile } from 'node:fs/promises'
-import { join, dirname, resolve } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { join, dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 
@@ -15,6 +16,8 @@ const HELP = `ancleto - orquestador SDD liviano con subagentes optimizados para 
 Uso:
   ancleto install [--project <dir>]   Instala agents/commands/skills en opencode
                                    (global por defecto, o en .opencode/ del proyecto)
+                                   Configura los MCP engram + caveman por defecto
+  ancleto install --no-mcp           Igual que install pero sin tocar config MCP
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
   ancleto init                        Crea .ancletorc en el repositorio actual
   ancleto discovery --check           Estado del technical seed (no implementado aun)
@@ -31,6 +34,76 @@ function globalConfigDir() {
   return process.env.XDG_CONFIG_HOME
     ? join(process.env.XDG_CONFIG_HOME, 'opencode')
     : join(homedir(), '.config', 'opencode')
+}
+
+function resolveBin(name, fallbacks = []) {
+  const probe = process.platform === 'win32' ? 'where' : 'which'
+  const r = spawnSync(probe, [name], { encoding: 'utf8' })
+  if (r.status === 0 && r.stdout) {
+    const first = r.stdout.split(/\r?\n/)
+      .map((s) => s.trim())
+      .find((s) => s && !/^informacion:/i.test(s))
+    if (first) return first
+  }
+  for (const fb of fallbacks) {
+    if (fb) return fb
+  }
+  return null
+}
+
+function buildDefaultMcp() {
+  const mcp = {}
+
+  const engramBin = resolveBin('engram', [join(homedir(), 'go', 'bin', 'engram.exe')])
+  if (engramBin) {
+    mcp.engram = { type: 'local', enabled: true, command: [engramBin, 'mcp', '--tools=agent'] }
+  } else {
+    console.warn('ancleto: no se encontro engram (memoria) en PATH; se omitio su MCP')
+  }
+
+  const cavemanBin = resolveBin('caveman-mcp', [
+    join(homedir(), '.caveman', 'bin', 'caveman-mcp.exe')
+  ])
+  if (cavemanBin) {
+    mcp.caveman = { type: 'local', enabled: true, command: [cavemanBin] }
+  } else {
+    console.warn('ancleto: no se encontro caveman-mcp (compresion) en PATH; se omitio su MCP')
+  }
+
+  return mcp
+}
+
+async function mergeMcp(configDir, mcpMap) {
+  if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
+
+  const existing = []
+  for (const c of ['opencode.json', 'opencode.jsonc']) {
+    const p = join(configDir, c)
+    if (await exists(p)) existing.push(p)
+  }
+  if (existing.length === 0) existing.push(join(configDir, 'opencode.json'))
+
+  const seen = new Set()
+  const added = []
+  for (const file of existing) {
+    let cfg = {}
+    try {
+      cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    } catch {
+      console.warn(`ancleto: no se pudo leer ${basename(file)} como JSON; MCP no se agrego ahi`)
+      continue
+    }
+    cfg.mcp = cfg.mcp || {}
+    for (const [name, def] of Object.entries(mcpMap)) {
+      if (seen.has(name)) continue
+      if (cfg.mcp[name]) { seen.add(name); continue }
+      cfg.mcp[name] = def
+      seen.add(name)
+      added.push(name)
+    }
+    await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
+  }
+  return { file: existing.join(', '), added: [...new Set(added)] }
 }
 
 async function copyAssets(dest) {
@@ -53,6 +126,9 @@ async function copyTemplates(projectDir) {
 async function install(args) {
   const pi = args.indexOf('--project')
   const project = pi >= 0 ? args[pi + 1] : null
+  const withMcp = !args.includes('--no-mcp')
+  const mcpMap = withMcp ? buildDefaultMcp() : {}
+
   if (project) {
     const dir = resolve(project)
     if (!(await exists(dir))) {
@@ -60,11 +136,19 @@ async function install(args) {
       process.exit(1)
     }
     await copyTemplates(dir)
+    const res = await mergeMcp(join(dir, '.opencode'), mcpMap)
     console.log(`ancleto: instalado en ${dir} (.opencode/ + templates en la raiz)`)
+    if (res.added.length) {
+      console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
+    }
   } else {
     const target = globalConfigDir()
     await copyAssets(target)
+    const res = await mergeMcp(target, mcpMap)
     console.log(`ancleto: instalado en ${target} (disponible en todos tus proyectos)`)
+    if (res.added.length) {
+      console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
+    }
   }
 }
 

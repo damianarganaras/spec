@@ -22,8 +22,14 @@ Binarios: `ancleto` (alias: `aspec`).
 ```bash
 ancleto install                          # global: disponible en todos tus proyectos
 ancleto install --project /ruta/repo     # por proyecto: .opencode/ + templates en la raiz
+ancleto install --no-mcp                 # igual, sin tocar la config MCP de opencode
 ancleto update                           # re-instala la ultima version
 ```
+
+El instalador configura por defecto los MCP locales **engram** (memoria persistente) y
+**caveman** (compresion de contexto) en `~/.config/opencode/opencode.json`, fusionandose
+con la config existente (no pisa nada). Si un binario no se encuentra en el sistema, ese
+MCP se omite con un warning.
 
 ## Requisitos
 

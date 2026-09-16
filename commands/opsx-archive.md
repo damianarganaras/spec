@@ -82,7 +82,6 @@ Archive a completed change in the experimental workflow.
 
    ```bash
    rm -f openspec/changes/<name>/context.md
-   rm -f openspec/changes/<name>/kb-context.md
    ```
 
    Then move:

@@ -118,6 +118,8 @@ Only if NO active change matches, proceed to resolve the Work Item context below
 
 Reached only when there is no active change to resume (i.e., new work).
 
+Azure DevOps is optional and **disabled by default**. Before any Work Item intake, check whether `.ancletorc` at the repo root declares `azure.enabled: true`. If it does not, skip the Work Item intake entirely and continue from the user's prompt as a request with no Work Item.
+
 - If the request references an Azure DevOps Work Item, delegate to **`@context-resolver`** to fetch the card. Preserve its full structured result as the Resolved Context Envelope below. Use it to inform triage, and pass the required portions unchanged to every later subagent. Briefly note that the classification used the card content.
 - If it does not reference a Work Item, proceed directly to triage using the user's prompt. Do not force the user to supply a Work Item — small changes may not have one.
 - Non-blocking: if `@context-resolver` reports a fetch failure or `incomplete work item context`, discard any partial card content and continue triage from the user's prompt alone. Explicitly state that the card was not used.

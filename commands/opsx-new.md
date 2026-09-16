@@ -79,41 +79,7 @@ Start a new change using the experimental artifact-driven approach.
 
    Skip this step if the user skipped the Work Item step.
 
-5. **Fetch Knowledge Base context** (if KB MCP is available)
-
-   Query the Knowledge Base MCP at three levels using the change name/description as the search topic:
-
-   - **Organization**: engineering standards, architectural decisions, and cross-team conventions relevant to this change
-   - **Squad**: Team-specific patterns, decisions, and conventions relevant to this change
-   - **Project**: Repository/domain-specific knowledge relevant to this change
-
-   Write results to `openspec/changes/<name>/kb-context.md`:
-
-   ```markdown
-   # Knowledge Base Context
-
-   ## Organization
-
-   {results or "No results."}
-
-   ## Squad
-
-   {results or "No results."}
-
-   ## Project
-
-   {results or "No results."}
-   ```
-
-   **If the KB MCP is unavailable, returns an error, or all three levels return no results:**
-
-   - Display a warning: "KB context unavailable — no results were found or the MCP failed."
-   - Use the **AskUserQuestion tool** to ask:
-     > "The Knowledge Base returned no context for this change. Continue without KB context, or stop to investigate?"
-   - If user chooses **continue**: proceed without writing `kb-context.md`
-   - If user chooses **stop**: halt and display: "Change initialization paused. Resolve KB access and retry."
-
-6. **Show the artifact status**
+5. **Show the artifact status**
 
    ```bash
    openspec status --change "<name>"
@@ -121,7 +87,7 @@ Start a new change using the experimental artifact-driven approach.
 
    This shows which artifacts need to be created and which are ready (dependencies satisfied).
 
-7. **Get instructions for the first artifact**
+6. **Get instructions for the first artifact**
    The first artifact depends on the schema. Check the status output to find the first artifact with status "ready".
 
    ```bash
@@ -130,7 +96,7 @@ Start a new change using the experimental artifact-driven approach.
 
    This outputs the template and context for creating the first artifact.
 
-8. **STOP and wait for user direction**
+7. **STOP and wait for user direction**
 
 **Output**
 

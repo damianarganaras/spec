@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { cp, mkdir, access, writeFile, readFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
+import { createInterface } from 'node:readline'
 import { join, dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
@@ -18,8 +19,10 @@ Uso:
                                    (global por defecto, o en .opencode/ del proyecto)
                                    Configura los MCP engram + caveman por defecto
   ancleto install --no-mcp           Igual que install pero sin tocar config MCP
+  ancleto install --tier <nivel>     normal | minimo | gratis (pregunta en la 1ra config)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
-  ancleto init                        Crea .ancletorc en el repositorio actual
+  ancleto init [--with-azure]         Crea .ancletorc en el repositorio actual
+                                   (Azure desactivado por defecto)
   ancleto discovery --check           Estado del technical seed (no implementado aun)
   ancleto discovery --compress        Genera el pack del repo (no implementado aun)
   ancleto --help                      Esta ayuda
@@ -73,6 +76,71 @@ function buildDefaultMcp() {
   return mcp
 }
 
+const TIERS = {
+  normal: {
+    orchestrator: 'opencode-go/qwen3.7-plus',
+    coder: 'opencode-go/minimax-m3',
+    tester: 'opencode-go/deepseek-v4-flash',
+    'spec-writer': 'opencode-go/qwen3.7-plus',
+    reviewer: 'opencode-go/qwen3.6-plus',
+    'technical-discovery': 'opencode-go/deepseek-v4-flash',
+    'technical-seed-writer': 'opencode-go/minimax-m3',
+    'memory-keeper': 'opencode-go/deepseek-v4-flash',
+    'context-resolver': 'opencode-go/deepseek-v4-flash',
+    documenter: 'opencode-go/deepseek-v4-flash'
+  },
+  minimo: {
+    orchestrator: 'opencode-go/deepseek-v4-flash',
+    coder: 'opencode-go/minimax-m2.7',
+    tester: 'opencode-go/deepseek-v4-flash',
+    'spec-writer': 'opencode-go/qwen3.6-plus',
+    reviewer: 'opencode-go/deepseek-v4-flash',
+    'technical-discovery': 'opencode-go/deepseek-v4-flash',
+    'technical-seed-writer': 'opencode-go/minimax-m2.7',
+    'memory-keeper': 'opencode-go/deepseek-v4-flash',
+    'context-resolver': 'opencode-go/deepseek-v4-flash',
+    documenter: 'opencode-go/deepseek-v4-flash'
+  },
+  gratis: {
+    orchestrator: 'opencode/big-pickle',
+    coder: 'opencode/big-pickle',
+    tester: 'opencode/big-pickle',
+    'spec-writer': 'opencode/big-pickle',
+    reviewer: 'opencode/big-pickle',
+    'technical-discovery': 'opencode/big-pickle',
+    'technical-seed-writer': 'opencode/big-pickle',
+    'memory-keeper': 'opencode/big-pickle',
+    'context-resolver': 'opencode/big-pickle',
+    documenter: 'opencode/big-pickle'
+  }
+}
+
+function tierStatePath(targetDir) {
+  return join(targetDir, '.ancleto-tier')
+}
+
+async function applyTier(agentsDir, tier) {
+  const map = TIERS[tier]
+  for (const [name, model] of Object.entries(map)) {
+    const p = join(agentsDir, name + '.md')
+    if (!(await exists(p))) continue
+    const c = await readFile(p, 'utf8')
+    const o = c.replace(/^model: .*$/m, `model: ${model}`)
+    if (o !== c) await writeFile(p, o)
+  }
+}
+
+function askTier() {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    rl.question('Tier de costo de los agents [normal/minimo/gratis] (default: normal): ', (a) => {
+      rl.close()
+      const t = a.trim().toLowerCase()
+      resolve(TIERS[t] ? t : 'normal')
+    })
+  })
+}
+
 async function mergeMcp(configDir, mcpMap) {
   if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
 
@@ -81,17 +149,19 @@ async function mergeMcp(configDir, mcpMap) {
     const p = join(configDir, c)
     if (await exists(p)) existing.push(p)
   }
-  if (existing.length === 0) existing.push(join(configDir, 'opencode.json'))
+  const targets = existing.length ? existing : [join(configDir, 'opencode.json')]
 
   const seen = new Set()
   const added = []
-  for (const file of existing) {
+  for (const file of targets) {
     let cfg = {}
-    try {
-      cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
-    } catch {
-      console.warn(`ancleto: no se pudo leer ${basename(file)} como JSON; MCP no se agrego ahi`)
-      continue
+    if (await exists(file)) {
+      try {
+        cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+      } catch {
+        console.warn(`ancleto: no se pudo leer ${basename(file)} como JSON; MCP no se agrego ahi`)
+        continue
+      }
     }
     cfg.mcp = cfg.mcp || {}
     for (const [name, def] of Object.entries(mcpMap)) {
@@ -103,7 +173,7 @@ async function mergeMcp(configDir, mcpMap) {
     }
     await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
   }
-  return { file: existing.join(', '), added: [...new Set(added)] }
+  return { file: targets.join(', '), added: [...new Set(added)] }
 }
 
 async function copyAssets(dest) {
@@ -129,44 +199,67 @@ async function install(args) {
   const withMcp = !args.includes('--no-mcp')
   const mcpMap = withMcp ? buildDefaultMcp() : {}
 
+  const ti = args.indexOf('--tier')
+  let tier = ti >= 0 ? args[ti + 1] : null
+  if (tier && !TIERS[tier]) {
+    console.error(`ancleto: tier invalido: ${tier} (normal|minimo|gratis)`)
+    process.exit(1)
+  }
+
   if (project) {
     const dir = resolve(project)
     if (!(await exists(dir))) {
       console.error(`ancleto: el directorio no existe: ${dir}`)
       process.exit(1)
     }
-    await copyTemplates(dir)
-    const res = await mergeMcp(join(dir, '.opencode'), mcpMap)
-    console.log(`ancleto: instalado en ${dir} (.opencode/ + templates en la raiz)`)
-    if (res.added.length) {
-      console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
-    }
+  }
+
+  const target = project ? join(resolve(project), '.opencode') : globalConfigDir()
+
+  if (project) {
+    await copyTemplates(resolve(project))
   } else {
-    const target = globalConfigDir()
     await copyAssets(target)
-    const res = await mergeMcp(target, mcpMap)
-    console.log(`ancleto: instalado en ${target} (disponible en todos tus proyectos)`)
-    if (res.added.length) {
-      console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
-    }
+  }
+
+  if (!tier) {
+    const stored = (await exists(tierStatePath(target)))
+      ? (await readFile(tierStatePath(target), 'utf8')).trim()
+      : null
+    tier = TIERS[stored] ? stored : await askTier()
+  }
+  await applyTier(join(target, 'agents'), tier)
+  await writeFile(tierStatePath(target), tier + '\n')
+
+  const res = await mergeMcp(target, mcpMap)
+  const loc = project
+    ? `${resolve(project)} (.opencode/ + templates en la raiz)`
+    : `${target} (disponible en todos tus proyectos)`
+  console.log(`ancleto: instalado en ${loc}`)
+  console.log(`ancleto: tier de costo de agents: ${tier}`)
+  if (res.added.length) {
+    console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
   }
 }
 
-async function initProject() {
+async function initProject(args) {
   const rc = join(process.cwd(), '.ancletorc')
   if (await exists(rc)) {
     console.log('ancleto: .ancletorc ya existe, no se toca')
     return
   }
+  const withAzure = args.includes('--with-azure')
   const content = JSON.stringify({
     version: 1,
+    azure: { enabled: withAzure },
     discovery: {
       outputDir: 'docs/technical-discovery',
       exclude: []
     }
   }, null, 2)
   await writeFile(rc, content + '\n')
-  console.log(`ancleto: .ancletorc creado en ${process.cwd()}`)
+  const azureNote = withAzure ? ' (Azure habilitado)' : ' (Azure desactivado)'
+  console.log(`ancleto: .ancletorc creado en ${process.cwd()}${azureNote}`)
 }
 
 function discovery() {
@@ -182,7 +275,7 @@ switch (cmd) {
     await install(rest)
     break
   case 'init':
-    await initProject()
+    await initProject(rest)
     break
   case 'discovery':
     discovery()

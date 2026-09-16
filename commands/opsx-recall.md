@@ -27,7 +27,7 @@ Este comando es la invocación **a mano** de la memoria. La invocación automát
    mem0-recall(query)
    ```
 
-   El tool lo expone el MCP del gateway bajo el alias `mem0` (mismo patrón que `kb-query_kb`); el tool subyacente es `recall(query)`.
+   El tool lo expone el MCP bajo el alias `mem0`; el tool subyacente es `recall(query)`.
 
    **No pasar nada más.** El scope (repositorio), el volumen de resultados (`MEM0_SEARCH_TOP_K`, default `5`), el orden y el reranking los resuelve internamente el sidecar y no son parámetros de este tool.
 

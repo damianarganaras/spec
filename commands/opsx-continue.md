@@ -37,12 +37,11 @@ Continue working on a change by creating the next artifact.
 
 3. **Load scaffold context files** (if not already loaded this session)
 
-   If `context.md` or `kb-context.md` for this change were already read earlier in the current session, skip this step — they are already in context.
+   If `context.md` for this change was already read earlier in the current session, skip this step — it is already in context.
 
-   Otherwise, read them as background context — they are NOT artifacts and must NOT be included in output files, but their contents inform what you write:
+   Otherwise, read it as background context — it is NOT an artifact and must NOT be included in output files, but its contents inform what you write:
 
    - `openspec/changes/<name>/context.md` — Work Item context (title, description, acceptance criteria)
-   - `openspec/changes/<name>/kb-context.md` — Knowledge Base context at org/squad/project levels
 
    If either file is missing, skip silently.
 
@@ -76,9 +75,8 @@ Continue working on a change by creating the next artifact.
    - **Create the artifact file**:
      - Read any completed dependency files for context
      - If creating the **first artifact** (proposal):
-       - If `context.md` was loaded with WI data (step 3): use the WI title/description as the problem statement, acceptance criteria as the requirements basis, and include a `## Related Work Item` section: `**#{id}** — {System.Title} ({WorkItemType}) · Project: {System.TeamProject}`
-       - If `kb-context.md` was loaded (step 3): use its contents as organizational context when writing the artifact (do NOT copy kb-context.md content into the output)
-     - Use `template` as the structure - fill in its sections
+- If `context.md` was loaded with WI data (step 3): use the WI title/description as the problem statement, acceptance criteria as the requirements basis, and include a `## Related Work Item` section: `**#{id}** — {System.Title} ({WorkItemType}) · Project: {System.TeamProject}`
+      - Use `template` as the structure - fill in its sections
      - Apply `context` and `rules` as constraints when writing - but do NOT copy them into the file
      - Write to the output path specified in instructions
    - Show what was created and what's now unlocked

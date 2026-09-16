@@ -40,41 +40,7 @@ Fast-forward through artifact creation - generate everything needed to start imp
 
    **IMPORTANT**: Do NOT proceed without a change name.
 
-2. **Fetch Knowledge Base context** (if KB MCP is available)
-
-   Query the Knowledge Base MCP at three levels using the change name/description as the search topic:
-
-   - **Organization**: engineering standards, architectural decisions, and cross-team conventions relevant to this change
-   - **Squad**: Team-specific patterns, decisions, and conventions relevant to this change
-   - **Project**: Repository/domain-specific knowledge relevant to this change
-
-   Write results to `openspec/changes/<name>/kb-context.md`:
-
-   ```markdown
-   # Knowledge Base Context
-
-   ## Organization
-
-   {results or "No results."}
-
-   ## Squad
-
-   {results or "No results."}
-
-   ## Project
-
-   {results or "No results."}
-   ```
-
-   **If the KB MCP is unavailable, returns an error, or all three levels return no results:**
-
-   - Display a warning: "KB context unavailable — no results were found or the MCP failed."
-   - Use the **AskUserQuestion tool** to ask:
-     > "The Knowledge Base returned no context for this change. Continue without KB context, or stop to investigate?"
-   - If user chooses **continue**: proceed without writing `kb-context.md`
-   - If user chooses **stop**: halt and display: "Change initialization paused. Resolve KB access and retry."
-
-3. **Create the change directory**
+2. **Create the change directory**
 
    ```bash
    openspec new change "<name>"
@@ -82,7 +48,7 @@ Fast-forward through artifact creation - generate everything needed to start imp
 
    This creates a scaffolded change at `openspec/changes/<name>/`.
 
-4. **Get the artifact build order**
+3. **Get the artifact build order**
 
    ```bash
    openspec status --change "<name>" --json
@@ -93,7 +59,7 @@ Fast-forward through artifact creation - generate everything needed to start imp
    - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
    - `artifacts`: list of all artifacts with their status and dependencies
 
-5. **Create artifacts in sequence until apply-ready**
+4. **Create artifacts in sequence until apply-ready**
 
    Use the **TodoWrite tool** to track progress through the artifacts.
 
@@ -114,9 +80,8 @@ Fast-forward through artifact creation - generate everything needed to start imp
      - `dependencies`: Completed artifacts to read for context
    - Read any completed dependency files for context
    - If creating the first artifact (proposal):
-     - If WI context is available (in-memory): use WI title/description as the problem statement, acceptance criteria as the requirements basis, and include a `## Related Work Item` section: `**#{id}** — {System.Title} ({WorkItemType}) · Project: {System.TeamProject}`
-     - If `kb-context.md` exists for this change: read it and use its contents as organizational context when writing the artifact (do NOT copy kb-context.md content into the output)
-   - Create the artifact file using `template` as the structure
+- If WI context is available (in-memory): use WI title/description as the problem statement, acceptance criteria as the requirements basis, and include a `## Related Work Item` section: `**#{id}** — {System.Title} ({WorkItemType}) · Project: {System.TeamProject}`
+    - Create the artifact file using `template` as the structure
    - Apply `context` and `rules` as constraints - but do NOT copy them into the file
    - Show brief progress: "✓ Created <artifact-id>"
 
@@ -131,7 +96,7 @@ Fast-forward through artifact creation - generate everything needed to start imp
    - Use **AskUserQuestion tool** to clarify
    - Then continue with creation
 
-6. **Show final status**
+5. **Show final status**
    ```bash
    openspec status --change "<name>"
    ```

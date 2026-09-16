@@ -1,15 +1,17 @@
 ---
 name: ancleto-pr
-description: Create pull request in Azure DevOps following conventional commits (semantic title, detailed description, test plan)
+description: Create pull request following conventional commits (semantic title, detailed description, test plan). Azure DevOps si esta habilitado, GitHub por defecto
 license: MIT
-compatibility: Requires Azure DevOps CLI (az repos)
+compatibility: Requires az repos (si azure.enabled) o gh CLI
 metadata:
   author: ancleto
   version: '1.0'
   category: git-workflow
 ---
 
-Create a pull request in Azure DevOps following semantic standards.
+Create a pull request following semantic standards.
+
+**Azure es opcional**: si `.ancletorc` no declara `azure.enabled: true`, usar el flujo GitHub (`gh pr create`, sección "Alternative: GitHub PRs" abajo). El flujo Azure DevOps solo aplica cuando esta habilitado.
 
 **When to use**: User wants to create a PR for their current branch.
 

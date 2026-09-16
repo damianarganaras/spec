@@ -31,6 +31,13 @@ Currently you resolve one source of context:
 
 Knowledge Base context will be added later via the KB MCP. Do not attempt it yet.
 
+## Azure gate
+
+Azure DevOps is optional and **disabled by default**. Before resolving anything:
+
+- Read `.ancletorc` at the repository root (JSON). If the file does not exist, or its `azure.enabled` is not `true`, Azure is off: report "no work item to resolve (Azure deshabilitado en .ancletorc)" and stop. Do not read `PRODUCT.md` nor call `az`.
+- Only when `azure.enabled` is `true` do you proceed with the workflow below.
+
 ## Bash Usage Rules
 
 Use `bash` ONLY to read an Azure DevOps work item, with exactly one call:

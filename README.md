@@ -31,6 +31,21 @@ El instalador configura por defecto los MCP locales **engram** (memoria persiste
 con la config existente (no pisa nada). Si un binario no se encuentra en el sistema, ese
 MCP se omite con un warning.
 
+## Tiers de costo
+
+En la primera configuración (`ancleto install`) se pregunta el nivel de gasto de los
+agents; también se elige con `--tier`:
+
+```bash
+ancleto install --tier normal     # modelos opencode-go balanceados (default)
+ancleto install --tier minimo     # todo al modelo pagado mas economico viable
+ancleto install --tier gratis     # solo modelos gratuitos (ej. opencode/big-pickle)
+```
+
+El nivel elegido queda guardado (`.ancleto-tier`) y `ancleto update` lo re-aplica sin
+volver a preguntar. Al llegar al tope mensual de la suscripcion, opencode cae
+automaticamente a los modelos gratuitos.
+
 ## Requisitos
 
 - Node.js >= 18
@@ -41,8 +56,21 @@ MCP se omite con un warning.
 
 ```bash
 ancleto init                             # prepara .ancletorc en el repo actual
+ancleto init --with-azure                # lo mismo, con Azure habilitado
 # en opencode: /opsx-new, /opsx-propose, /opsx-ff para iniciar un change
 ```
+
+## Azure DevOps (opcional)
+
+Azure viene **desactivado por defecto**. Para activarlo en un proyecto:
+
+```bash
+ancleto init --with-azure    # escribe .ancletorc con azure.enabled: true
+```
+
+Luego completar la seccion `Azure DevOps` de `PRODUCT.md` (Organization URL, Team Project)
+e instalar el CLI: `az extension add --name azure-devops`. Con `azure.enabled: false` (o sin
+`.ancletorc`), los flujos tratan cada request como sin Work Item y `ancleto-pr` usa GitHub.
 
 ## Estado
 

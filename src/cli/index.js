@@ -478,7 +478,7 @@ switch (cmd) {
     break
   case '--version':
   case '-v':
-    console.log('ancleto 0.1.0')
+    console.log('ancleto 0.1.1')
     break
   case '--help':
   case '-h':

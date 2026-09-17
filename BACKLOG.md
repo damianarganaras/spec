@@ -19,10 +19,12 @@ cerramos un milestone (`npm version minor|patch && npm publish`).
 - [x] Relevamiento de `lnx` CLI (fuente en `documentation/lnx-cli/`)
 - [x] **G1**: skills `triage-clarifier`, `openspec-recall`, `openspec-sync-specs` portadas (adaptadas, sin branding LN)
 - [x] **G2**: motor `ancleto discovery` (MVP) — pack con Repomix (`npx` o PATH, `--include/--ignore/--compress/--token-budget`), `--check` por hash de contenido (READY/STALE/PARTIAL/MISSING), estado en `.discovery-state.json`, zero-deps
+- [x] **M1**: Motor de Memoria Persistente (core v0.2.0) — `src/core/memory/database.js` (node:sqlite, PRAGMAs WAL/FK/busy_timeout, migraciones idempotentes, FTS5 external content `unicode61 remove_diacritics 1` sin stemmer, triggers INSERT/UPDATE/DELETE), `engine.js` (`buildWorkingContext`, `searchMemory` BM25 con escape FTS5, `recordNode` con supersesión atómica `BEGIN IMMEDIATE` por `memory_key` + índice único parcial sobre activas), `tools.js` (3 tools con encapsulamiento de `source/confidence/status/id`), 22 tests `node --test`
 
 ## En curso / próximo
 
-- [ ] Memoria: adaptar `memory-keeper` (hoy mem0 / `litellm_mem0-*`) a las tools de **engram**
+- [ ] Integrar el motor de memoria en el framework: wiring en CLI/orchestrator, `openspec-recall` →
+      `searchMemory`, `memory-keeper` → tools del motor (el contrato agnóstico mem0/engram queda obsoleto)
 - [ ] Republish a npm cuando haya milestone (version minor por features)
 
 ## Out of scope v0.1.1 (parked, decisión de Gemini + lean-build)
@@ -44,7 +46,9 @@ Estos gaps de lnx se documentaron pero NO se implementan en esta versión — ri
 
 ## Decisiones pendientes
 
-- Memoria: ¿adaptar a engram o dejar sin memoria? (afecta el contrato de `openspec-recall`, hoy agnóstico)
+- ~~Memoria: ¿adaptar a engram o dejar sin memoria?~~ → **Resuelta (v0.2.0)**: motor propio
+  con `node:sqlite`, diseño congelado en `DESIGN-memory-engine-v0.2.0.md`. Revisar el
+  contrato de `openspec-recall` al implementar.
 - Alcance del motor `discovery` (G2): ¿implementación completa o MVP (solo `--check`)?
 - ¿Portar las otras 11 skills base (`openspec-apply/archive/bulk-archive/continue/explore/ff/new/onboard/propose/verify/workflow`)? Los opsx ya son autocontenidos — solo si suman desde otros agents
 - Qué modelos van en cada tier (tabla `TIERS` en `src/cli/index.js` es ajustable)

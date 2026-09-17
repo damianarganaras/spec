@@ -17,6 +17,11 @@ Binarios: `ancleto` (alias: `aspec`).
 - **Templates**: `AGENTS.md`, `PRODUCT.md`, `CONTRIBUTING.md` para proyectos nuevos.
 - **CLI `ancleto`**: instalación (`ancleto install`), init de proyectos (`ancleto init`) y
   descubrimiento técnico (`ancleto discovery`, pack con Repomix).
+- **Motor de memoria (v0.2.0)**: base local `.ancleto/memory.db` sobre `node:sqlite`
+  (zero-deps, Node >= 24). Tres tools para el LLM — `searchMemory` (BM25, FTS5),
+  `recordRule` y `recordDecision` — con supersesión atómica por `memory_key`; reglas
+  inyectadas proactivamente en `<ProjectMemoryRules>` y decisiones recuperadas
+  reactivamente.
 
 ## Instalación
 
@@ -49,7 +54,7 @@ automaticamente a los modelos gratuitos.
 
 ## Requisitos
 
-- Node.js >= 18
+- Node.js >= 24.0.0 (el motor de memoria v0.2.0 usa `node:sqlite`)
 - `openspec` CLI (`npm i -g @openspec/cli`) para el ciclo de changes
 - Repomix (usado por `ancleto discovery`, se resuelve via `npx` si no esta instalado)
 
@@ -81,3 +86,4 @@ e instalar el CLI: `az extension add --name azure-devops`. Con `azure.enabled: f
 - [x] Agents/skills/commands adaptados (sin referencias corporativas)
 - [x] Motor de descubrimiento (`ancleto discovery`, Repomix + `--check` por hash)
 - [x] Skills base: `triage-clarifier`, `openspec-recall`, `openspec-sync-specs`
+- [x] Motor de memoria core (v0.2.0): `.ancleto/memory.db`, 3 tools, supersesión atómica

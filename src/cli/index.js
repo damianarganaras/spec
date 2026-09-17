@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { cp, mkdir, access, writeFile, readFile } from 'node:fs/promises'
+import { cp, mkdir, access, writeFile, readFile, readdir } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import { join, dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -23,8 +24,9 @@ Uso:
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
   ancleto init [--with-azure]         Crea .ancletorc en el repositorio actual
                                    (Azure desactivado por defecto)
-  ancleto discovery --check           Estado del technical seed (no implementado aun)
-  ancleto discovery --compress        Genera el pack del repo (no implementado aun)
+  ancleto discovery --check           Estado del seed (READY/STALE/PARTIAL/MISSING)
+  ancleto discovery [--compress] [--include G] [--ignore G] [--token-budget N]
+                                   Empaca el repo con Repomix y guarda estado
   ancleto --help                      Esta ayuda
   ancleto --version                   Version del paquete
 `
@@ -262,9 +264,203 @@ async function initProject(args) {
   console.log(`ancleto: .ancletorc creado en ${process.cwd()}${azureNote}`)
 }
 
-function discovery() {
-  console.error('ancleto: discovery todavia no esta implementado (motor de repomix pendiente).')
-  process.exit(1)
+const DEFAULT_IGNORES = ['node_modules', '.git', 'dist']
+const EXPECTED_DOCS = ['index.md', 'overview.md', 'setup.md', 'inventory.md', 'integrations.md', 'decisions.md', 'unknowns.md', 'units/_map.md']
+
+async function loadDiscoveryConfig() {
+  const rc = join(process.cwd(), '.ancletorc')
+  const defaults = { outputDir: 'docs/technical-discovery', exclude: [] }
+  if (!(await exists(rc))) return defaults
+  try {
+    const cfg = JSON.parse((await readFile(rc, 'utf8')).replace(/^\uFEFF/, ''))
+    const d = cfg.discovery || {}
+    return {
+      outputDir: d.outputDir || defaults.outputDir,
+      exclude: Array.isArray(d.exclude) ? d.exclude : []
+    }
+  } catch {
+    return defaults
+  }
+}
+
+function escapeRe(s) {
+  return s.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+}
+
+function matchesGlob(rel, glob) {
+  if (glob.includes('**')) {
+    return new RegExp('^' + glob.split('**').map(escapeRe).join('.*') + '$').test(rel)
+  }
+  return new RegExp('^' + glob.split('*').map(escapeRe).join('[^/]*') + '(/|$)').test(rel)
+}
+
+function isIgnored(rel, exclude) {
+  if (rel.split('/').some((seg) => DEFAULT_IGNORES.includes(seg))) return true
+  return exclude.some((g) => matchesGlob(rel, g))
+}
+
+async function walk(dir, rel, exclude, out, outputDir) {
+  const entries = await readdir(dir, { withFileTypes: true })
+  for (const e of entries) {
+    const relPath = rel ? `${rel}/${e.name}` : e.name
+    if (relPath === outputDir) continue
+    if (e.isDirectory()) {
+      if (isIgnored(relPath, exclude)) continue
+      await walk(join(dir, e.name), relPath, exclude, out, outputDir)
+    } else if (e.isFile()) {
+      if (isIgnored(relPath, exclude)) continue
+      out.push(relPath)
+    }
+  }
+}
+
+async function computeSources() {
+  const { outputDir, exclude } = await loadDiscoveryConfig()
+  const sources = []
+  await walk(process.cwd(), '', exclude, sources, outputDir)
+  return sources.sort()
+}
+
+async function hashSources(sources) {
+  const h = createHash('sha256')
+  for (const rel of sources) {
+    try {
+      const content = await readFile(join(process.cwd(), rel))
+      h.update(rel)
+      h.update('\0')
+      h.update(String(content.length))
+      h.update('\0')
+      h.update(content)
+      h.update('\n')
+    } catch {}
+  }
+  return h.digest('hex')
+}
+
+function statePath(outputDir) {
+  return join(outputDir, '.discovery-state.json')
+}
+
+async function presentDocs(outputDir) {
+  const present = []
+  for (const d of EXPECTED_DOCS) {
+    if (await exists(join(outputDir, d))) present.push(d)
+  }
+  return present
+}
+
+function flagValue(args, flag) {
+  const i = args.indexOf(flag)
+  return i >= 0 && args[i + 1] ? args[i + 1] : null
+}
+
+async function checkDiscovery() {
+  const { outputDir } = await loadDiscoveryConfig()
+  const present = await presentDocs(outputDir)
+  let state, action, message, missingDocs
+  if (present.length === 0) {
+    state = 'MISSING'
+    action = 'generate'
+    message = 'No technical seed documents found.'
+    missingDocs = EXPECTED_DOCS
+  } else if (present.length < EXPECTED_DOCS.length) {
+    state = 'PARTIAL'
+    action = 'complete'
+    missingDocs = EXPECTED_DOCS.filter((d) => !present.includes(d))
+    message = `Faltan ${missingDocs.length} documentos del seed.`
+  } else {
+    const sources = await computeSources()
+    const hash = await hashSources(sources)
+    let storedHash = null
+    const sp = statePath(outputDir)
+    if (await exists(sp)) {
+      try {
+        storedHash = JSON.parse((await readFile(sp, 'utf8')).replace(/^\uFEFF/, '')).hash
+      } catch {}
+    }
+    if (!storedHash) {
+      state = 'STALE'
+      action = 'regenerate'
+      message = 'Seed completo pero sin estado registrado — frescura desconocida.'
+    } else if (storedHash === hash) {
+      state = 'READY'
+      action = 'continue'
+      message = 'El seed esta al dia.'
+    } else {
+      state = 'STALE'
+      action = 'regenerate'
+      message = 'El repositorio cambio desde el ultimo pack.'
+    }
+    missingDocs = []
+  }
+  console.log(JSON.stringify({
+    schemaVersion: 2,
+    state,
+    recommendedAction: action,
+    message,
+    missingDocs
+  }, null, 2))
+}
+
+async function runRepomix(flags, tmpFile) {
+  const local = await resolveBin('repomix')
+  const args = []
+  if (!local) args.push('-y', 'repomix@1.18.0')
+  args.push('--output', tmpFile)
+  const inc = flagValue(flags, '--include')
+  if (inc) args.push('--include', inc)
+  const extraIgnore = flagValue(flags, '--ignore')
+  const { exclude } = await loadDiscoveryConfig()
+  const ignore = [...exclude, ...(extraIgnore ? extraIgnore.split(',') : [])].filter(Boolean)
+  if (ignore.length) args.push('--ignore', ignore.join(','))
+  if (flags.includes('--compress')) args.push('--compress')
+  const cmd = local || 'npx'
+  const r = spawnSync(cmd, args, { encoding: 'utf8', cwd: process.cwd(), shell: true })
+  if (r.error) {
+    console.error(`ancleto: no se pudo ejecutar repomix: ${r.error.message}`)
+    process.exit(1)
+  }
+  if (r.status !== 0) {
+    console.error(`ancleto: repomix fallo (exit ${r.status}):`)
+    console.error((r.stderr || r.stdout || '').trim())
+    process.exit(1)
+  }
+  return r
+}
+
+async function packDiscovery(flags) {
+  const { outputDir } = await loadDiscoveryConfig()
+  const tmpFile = join(tmpdir(), `ancleto-pack-${Date.now()}.txt`)
+  await runRepomix(flags, tmpFile)
+  let content = ''
+  try { content = await readFile(tmpFile, 'utf8') } catch {}
+  const tokens = Math.round(content.length / 4)
+  const budget = flagValue(flags, '--token-budget')
+  if (budget && tokens > Number(budget)) {
+    console.error(`ancleto: el pack supera el token-budget (${tokens} > ${budget})`)
+    process.exit(1)
+  }
+  const sources = await computeSources()
+  const hash = await hashSources(sources)
+  await mkdir(outputDir, { recursive: true })
+  await writeFile(statePath(outputDir), JSON.stringify({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    sources,
+    hash,
+    packTokens: tokens
+  }, null, 2) + '\n')
+  console.log(`ancleto: pack generado (${sources.length} archivos, ~${tokens} tokens)`)
+  console.log(`ancleto: estado guardado en ${statePath(outputDir)}`)
+  console.log(`ancleto: el seed lo genera la skill ancleto-technical-discovery a partir del pack`)
+}
+
+async function discovery(flags) {
+  if (flags.includes('--check')) {
+    await checkDiscovery()
+    return
+  }
+  await packDiscovery(flags)
 }
 
 const [cmd, ...rest] = process.argv.slice(2)
@@ -278,7 +474,7 @@ switch (cmd) {
     await initProject(rest)
     break
   case 'discovery':
-    discovery()
+    await discovery(rest)
     break
   case '--version':
   case '-v':

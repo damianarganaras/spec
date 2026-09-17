@@ -18,10 +18,10 @@ cerramos un milestone (`npm version minor|patch && npm publish`).
 - [x] Rama `development` + `main` protegida
 - [x] Relevamiento de `lnx` CLI (fuente en `documentation/lnx-cli/`)
 - [x] **G1**: skills `triage-clarifier`, `openspec-recall`, `openspec-sync-specs` portadas (adaptadas, sin branding LN)
+- [x] **G2**: motor `ancleto discovery` (MVP) — pack con Repomix (`npx` o PATH, `--include/--ignore/--compress/--token-budget`), `--check` por hash de contenido (READY/STALE/PARTIAL/MISSING), estado en `.discovery-state.json`, zero-deps
 
 ## En curso / próximo
 
-- [ ] **G2**: Motor `ancleto discovery` completo — pack con Repomix (`--include`, `--ignore`, `--compress`, `--token-budget`); `discovery --check` JSON schema v2; estados por hash de contenido (READY/PARTIAL/STALE/MISSING); cobertura por nodo (8 docs del seed). Fuente: `documentation/lnx-cli/source/plugins/lnx-plugin-ai/lib/discovery/*.js` y `lib/repomix.js`
 - [ ] Memoria: adaptar `memory-keeper` (hoy mem0 / `litellm_mem0-*`) a las tools de **engram**
 - [ ] Republish a npm cuando haya milestone (version minor por features)
 

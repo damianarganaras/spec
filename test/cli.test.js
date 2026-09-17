@@ -144,3 +144,78 @@ describe('CLI install', () => {
     })
   })
 })
+
+describe('CLI check (G3)', () => {
+  it('exit 0 en instalacion sana', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /✔/)
+      assert.match(r.stdout, /0 faltantes/)
+    })
+  })
+
+  it('exit 1 y ✖ cuando falta un template', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      rmSync(join(dir, 'AGENTS.md'))
+      const r = run(['check'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stdout, /✖/)
+      assert.match(r.stdout, /AGENTS\.md \(faltante\)/)
+    })
+  })
+
+  it('warning por huerfano sin fallar (exit 0)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      writeFileSync(join(dir, '.opencode', 'agents', 'stray.md'), '# stray')
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /⚠/)
+      assert.match(r.stdout, /stray\.md \(huerfano\)/)
+    })
+  })
+
+  it('exit 1 sin .ancletorc', () => {
+    withDir((dir) => {
+      const r = run(['check'], dir)
+      assert.equal(r.status, 1)
+    })
+  })
+})
+
+describe('CLI doctor (G4)', () => {
+  it('exit 0 con entorno sano y opencode.json valido', () => {
+    withDir((dir) => {
+      const xdg = join(dir, 'xdg')
+      mkdirSync(join(xdg, 'opencode'), { recursive: true })
+      writeFileSync(join(xdg, 'opencode', 'opencode.json'), JSON.stringify({ mcp: {} }))
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: xdg })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /✔ Node\.js/)
+      assert.match(r.stdout, /node:sqlite importable/)
+      assert.match(r.stdout, /opencode\.json valido/)
+    })
+  })
+
+  it('reporta opencode.json invalido sin fallar', () => {
+    withDir((dir) => {
+      const xdg = join(dir, 'xdg')
+      mkdirSync(join(xdg, 'opencode'), { recursive: true })
+      writeFileSync(join(xdg, 'opencode', 'opencode.json'), '{ invalido')
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: xdg })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /JSON invalido/)
+    })
+  })
+
+  it('reporta opencode.json ausente como warning (exit 0)', () => {
+    withDir((dir) => {
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: join(dir, 'xdg-vacio') })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /no encontrado/)
+    })
+  })
+})

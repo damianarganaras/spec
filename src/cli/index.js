@@ -7,6 +7,7 @@ import { join, dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
+import { memoryDoctor } from '../core/memory/doctor.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -30,6 +31,8 @@ Uso:
                                    Empaca el repo con Repomix y guarda estado
   ancleto memory context [--scope X] [--out file]
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
+  ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FTS5, unicidad)
+                                   y reconstruye el indice FTS5 con --rebuild
   ancleto --help                      Esta ayuda
   ancleto --version                   Version del paquete
 `
@@ -493,14 +496,34 @@ async function memoryContext(flags) {
   }
 }
 
+async function memoryDoctorCmd(flags) {
+  const rebuild = flags.includes('--rebuild')
+  const dbPath = defaultMemoryDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exit(0)
+  }
+  const { checks, healthy, rebuilt } = memoryDoctor(dbPath, { rebuild })
+  if (rebuilt) console.log('ancleto: indice FTS5 reconstruido')
+  for (const c of checks) {
+    console.log(`  ${c.ok ? '✔' : '✖'} ${c.name}: ${c.detail}`)
+  }
+  process.exit(healthy ? 0 : 1)
+}
+
 async function memoryCmd(args) {
   const [sub, ...flags] = args
   if (sub === 'context') {
     await memoryContext(flags)
     return
   }
+  if (sub === 'doctor') {
+    await memoryDoctorCmd(flags)
+    return
+  }
   console.error(`ancleto: subcomando de memory desconocido: ${sub || '(ninguno)'}`)
   console.error('ancleto: uso: ancleto memory context [--scope X] [--out file]')
+  console.error('ancleto: uso: ancleto memory doctor [--rebuild]')
   process.exit(1)
 }
 

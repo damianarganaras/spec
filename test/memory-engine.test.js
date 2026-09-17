@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openDatabase } from '../src/core/memory/database.js'
 import { createMemoryEngine, defaultMemoryDbPath } from '../src/core/memory/engine.js'
+import { memoryDoctor } from '../src/core/memory/doctor.js'
 import { memoryTools, createMemoryToolHandlers, createMemoryToolkit } from '../src/core/memory/tools.js'
 
 const dir = mkdtempSync(join(tmpdir(), 'ancleto-memory-'))
@@ -361,6 +362,81 @@ describe('buildWorkingContext — truncamiento (v0.3.0 item 2)', () => {
       assert.equal(block.endsWith('</ProjectMemoryRules>'), true)
       assert.equal((block.match(/^- \[/gm) || []).length, 0)
       assert.match(block, /1 rules omitted/)
+    })
+  })
+})
+
+describe('memory doctor (v0.3.0 item 4)', () => {
+  function withDoctor(fn) {
+    const dir = mkdtempSync(join(tmpdir(), 'ancleto-doc-'))
+    try {
+      return fn(join(dir, 'memory.db'))
+    } finally {
+      try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+      } catch {
+        // best effort: en Windows los handles de WAL pueden tardar en liberarse
+      }
+    }
+  }
+
+  it('reporta sano en una DB integra', () => {
+    withDoctor((dbPath) => {
+      const eng = createMemoryEngine(dbPath)
+      eng.recordNode({ memory_key: 'd1', type: 'rule', scope: 'project', content: 'regla doctor' })
+      eng.close()
+
+      const result = memoryDoctor(dbPath)
+      assert.equal(result.healthy, true)
+      assert.equal(result.checks.length, 3)
+      assert.ok(result.checks.every((c) => c.ok))
+    })
+  })
+
+  it('detecta indice FTS5 inconsistente y --rebuild lo repara', () => {
+    withDoctor((dbPath) => {
+      const eng = createMemoryEngine(dbPath)
+      eng.recordNode({ memory_key: 'd2', type: 'rule', scope: 'project', content: 'contenido doctor' })
+      eng.close()
+
+      // corrupcion realista: trigger removido -> nodo insertado sin indexar
+      const db = openDatabase(dbPath)
+      db.exec('DROP TRIGGER memory_fts_ai')
+      db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('raw-1', 'raw-key', 'rule', 'project', 'active', 'nodo sin indexar', '', 'test', 1, ?)`).run(new Date().toISOString())
+      db.close()
+
+      const before = memoryDoctor(dbPath)
+      assert.equal(before.healthy, false)
+      assert.equal(before.checks[1].ok, false)
+
+      const after = memoryDoctor(dbPath, { rebuild: true })
+      assert.equal(after.healthy, true)
+      assert.equal(after.rebuilt, true)
+      assert.equal(after.checks[1].ok, true)
+
+      const eng2 = createMemoryEngine(dbPath)
+      assert.equal(eng2.searchMemory({ query: 'indexar' }).length, 1)
+      eng2.close()
+    })
+  })
+
+  it('detecta mas de una activa por memory_key', () => {
+    withDoctor((dbPath) => {
+      const eng = createMemoryEngine(dbPath)
+      eng.recordNode({ memory_key: 'd3', type: 'rule', scope: 'project', content: 'duplicada' })
+      eng.close()
+
+      const db = openDatabase(dbPath)
+      db.exec('DROP INDEX idx_memory_nodes_key_active')
+      db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('dup-1', 'd3', 'rule', 'project', 'active', 'duplicada 2', '', 'test', 1, ?)`).run(new Date().toISOString())
+      db.close()
+
+      const result = memoryDoctor(dbPath)
+      assert.equal(result.healthy, false)
+      assert.equal(result.checks[2].ok, false)
+      assert.match(result.checks[2].detail, /d3/)
     })
   })
 })

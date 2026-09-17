@@ -73,8 +73,10 @@ Hito: integridad de la CLI y manifiesto completo.
 - [x] **Pulido (tests del CLI)**: suite `test/cli.test.js` (8 tests) — init con manifiesto, --with-azure,
       preservación de config, install --project (assets + tier + manifiesto), --no-mcp, fusión MCP no
       destructiva, install global con XDG_CONFIG_HOME, init post-install. ✅
-- [ ] **G3** `ancleto check` (integridad de instalación vs manifiesto, orphans)
-- [ ] **G4** `ancleto doctor` (diagnóstico de binarios/MCPs/modelos)
+- [x] **G3** `ancleto check`: verifica integridad de archivos instalados vs `installedPaths` del manifiesto
+      (✔/✖ faltantes, ⚠ huérfanos; exit 1 si hay faltantes). ✅
+- [x] **G4** `ancleto doctor`: diagnostica el entorno — Node >=24, `node:sqlite` importable, `opencode.json`
+      válido (exit 1 si Node/SQLite fallan). ✅
 - [ ] **G5** Scaffold OpenSpec en install/init (`openspec/changes/` + `config.yaml`)
 - [ ] **G7** LOCKED/EXTENSIBLE en templates (re-aplicación de secciones LOCKED)
 - [ ] **G8** Azure MCP opcional (`@azure-devops/mcp` cuando `azure.enabled`)

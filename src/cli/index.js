@@ -32,7 +32,9 @@ Uso:
   ancleto memory context [--scope X] [--out file]
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
   ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FTS5, unicidad)
-                                   y reconstruye el indice FTS5 con --rebuild
+                                    y reconstruye el indice FTS5 con --rebuild
+  ancleto check                         Verifica integridad de archivos instalados vs manifiesto
+  ancleto doctor                        Diagnostica el entorno (Node, node:sqlite, opencode.json)
   ancleto --help                      Esta ayuda
   ancleto --version                   Version del paquete
 `
@@ -556,6 +558,99 @@ async function memoryCmd(args) {
   process.exit(1)
 }
 
+async function checkCommand() {
+  const cwd = process.cwd()
+  const rc = await readAncletorc(cwd)
+  if (!rc || !rc.installedPaths) {
+    console.error('ancleto: no hay .ancletorc con installedPaths (corre ancleto init y ancleto install --project)')
+    process.exit(1)
+  }
+  const ip = rc.installedPaths
+  let missing = 0
+  let orphans = 0
+
+  for (const t of ip.templates || []) {
+    if (await exists(join(cwd, t))) {
+      console.log(`  ✔ ${t}`)
+    } else {
+      console.log(`  ✖ ${t} (faltante)`)
+      missing++
+    }
+  }
+
+  for (const cat of ['agents', 'commands', 'skills']) {
+    for (const dirRel of ip[cat] || []) {
+      const destDir = join(cwd, dirRel)
+      if (!(await exists(destDir))) {
+        console.log(`  ✖ ${dirRel} (directorio faltante)`)
+        missing++
+        continue
+      }
+      const expected = (await readdir(join(ROOT, cat))).sort()
+      const actual = (await readdir(destDir)).sort()
+      const missingFiles = expected.filter((f) => !actual.includes(f))
+      const orphanFiles = actual.filter((f) => !expected.includes(f))
+      for (const f of missingFiles) {
+        console.log(`  ✖ ${dirRel}/${f} (faltante)`)
+        missing++
+      }
+      for (const f of orphanFiles) {
+        console.log(`  ⚠ ${dirRel}/${f} (huerfano)`)
+        orphans++
+      }
+      if (missingFiles.length === 0 && orphanFiles.length === 0) {
+        console.log(`  ✔ ${dirRel} (${actual.length} archivos)`)
+      }
+    }
+  }
+
+  console.log(`ancleto: check -> ${missing} faltantes, ${orphans} huerfanos`)
+  process.exit(missing > 0 ? 1 : 0)
+}
+
+async function doctorCommand() {
+  let fatal = false
+
+  const nodeVersion = process.versions.node
+  const nodeMajor = Number(nodeVersion.split('.')[0])
+  if (nodeMajor >= 24) {
+    console.log(`  ✔ Node.js ${nodeVersion} (>=24)`)
+  } else {
+    console.log(`  ✖ Node.js ${nodeVersion} (requiere >=24 para node:sqlite)`)
+    fatal = true
+  }
+
+  try {
+    await import('node:sqlite')
+    console.log('  ✔ node:sqlite importable')
+  } catch (err) {
+    console.log(`  ✖ node:sqlite no importable: ${err.message}`)
+    fatal = true
+  }
+
+  const configDir = globalConfigDir()
+  let cfgFile = null
+  for (const c of ['opencode.json', 'opencode.jsonc']) {
+    const p = join(configDir, c)
+    if (await exists(p)) {
+      cfgFile = p
+      break
+    }
+  }
+  if (!cfgFile) {
+    console.log('  ⚠ opencode.json no encontrado (config MCP)')
+  } else {
+    try {
+      JSON.parse((await readFile(cfgFile, 'utf8')).replace(/^\uFEFF/, ''))
+      console.log(`  ✔ ${basename(cfgFile)} valido`)
+    } catch {
+      console.log(`  ✖ ${basename(cfgFile)} JSON invalido`)
+    }
+  }
+
+  process.exit(fatal ? 1 : 0)
+}
+
 const [cmd, ...rest] = process.argv.slice(2)
 
 switch (cmd) {
@@ -571,6 +666,12 @@ switch (cmd) {
     break
   case 'memory':
     await memoryCmd(rest)
+    break
+  case 'check':
+    await checkCommand()
+    break
+  case 'doctor':
+    await doctorCommand()
     break
   case '--version':
   case '-v':

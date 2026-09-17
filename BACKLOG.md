@@ -52,16 +52,32 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   `agents/orchestrator.md` (lee `.ancleto/working-context.md` como datos **no confiables**); tests de XML
   y scopes exactos. Patrón "CLI materializa + agente lee" (preserva `bash: false`).
 
-## Estado actual (v0.3.3)
+## Estado actual (v0.3.4)
 
 - Working tree **limpio** en `main` y `development`.
-- Versión local en `development`: **v0.3.3** (ítems 1-4 de v0.3.0 completos; tags v0.3.0 → v0.3.3 pusheados en `main`).
+- **v0.3.x cerrada**: ítems 1-4 + complementos de memoria + pulido. Tags `v0.3.0` → `v0.3.4` pusheados en `main`.
+- Versión local en `development`: **v0.3.4** (hito v0.4.0 en curso).
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD configurado (`publish.yml`): espera Release de GitHub para publicar a npm.
 
 ## En curso / próximo
 
-- [ ] Confirmar publish de `v0.3.3` en npm (Release de GitHub pendiente — dispara `publish.yml`)
+- [ ] Confirmar publish de `v0.3.4` en npm (Release de GitHub pendiente — dispara `publish.yml`)
+
+## v0.4.0 - CLI Integrity & Diagnostics
+
+Hito: integridad de la CLI y manifiesto completo.
+
+- [x] **G6**: Manifiesto `.ancletorc` completo — `version` (versión del paquete), `installedAt` (ISO) e
+      `installedPaths` (templates/agents/commands/skills) en `init` e `install` (merge no destructivo). ✅
+- [x] **Pulido (tests del CLI)**: suite `test/cli.test.js` (8 tests) — init con manifiesto, --with-azure,
+      preservación de config, install --project (assets + tier + manifiesto), --no-mcp, fusión MCP no
+      destructiva, install global con XDG_CONFIG_HOME, init post-install. ✅
+- [ ] **G3** `ancleto check` (integridad de instalación vs manifiesto, orphans)
+- [ ] **G4** `ancleto doctor` (diagnóstico de binarios/MCPs/modelos)
+- [ ] **G5** Scaffold OpenSpec en install/init (`openspec/changes/` + `config.yaml`)
+- [ ] **G7** LOCKED/EXTENSIBLE en templates (re-aplicación de secciones LOCKED)
+- [ ] **G8** Azure MCP opcional (`@azure-devops/mcp` cuando `azure.enabled`)
 
 ## v0.3.0 - Agent Memory Integration
 
@@ -72,20 +88,8 @@ Integración de la memoria persistente con el orquestador y los AI agents.
 - [x] `templates/AGENTS.md`: Agregar protocolo reactivo indicando cuándo los agentes deben llamar a `searchMemory`. ✅ (también reflejado en `templates/PRODUCT.md`, sección AI Memory)
 - [x] `cli/memory`: Agregar comando/subcomando `ancleto memory doctor` para verificar integrity check y rebuild de FTS5. ✅
 - [x] Complementos ya trackeados (se ejecutan dentro de v0.3.0): `openspec-recall` → `searchMemory`, `memory-keeper` → tools del motor ✅
-
-## v0.3.0 (candidatos adicionales)
-
-Candidatos priorizados (antes feature-creep, ahora con CI/CD de soporte):
-
-- [ ] **G3** `ancleto check` (integridad de instalación vs manifiesto, orphans)
-- [ ] **G4** `ancleto doctor` (diagnóstico de binarios/MCPs/modelos)
-- [ ] **G5** Scaffold OpenSpec en install/init (`openspec/changes/` + `config.yaml`)
-- [ ] **G6** Manifiesto `.ancletorc` completo (`installedPaths`, `version`, `installedAt`)
-- [ ] **G7** LOCKED/EXTENSIBLE en templates (re-aplicación de secciones LOCKED)
-- [ ] **G8** Azure MCP opcional (`@azure-devops/mcp` cuando `azure.enabled`)
 - [x] **Pulido**: `.gitattributes` para line-endings (evitar warnings LF/CRLF) ✅ y documentar
       flujo de release en el repo ✅
-- [ ] **Pulido pendiente**: tests del CLI (install/update/init/merge MCP/tiers)
 
 ## Decisiones pendientes
 

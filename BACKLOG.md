@@ -25,7 +25,7 @@ cerramos un milestone (`npm version minor|patch && npm publish`).
 - [ ] Memoria: adaptar `memory-keeper` (hoy mem0 / `litellm_mem0-*`) a las tools de **engram**
 - [ ] Republish a npm cuando haya milestone (version minor por features)
 
-## Out of scope v0.1.0 (parked, decisión de Gemini + lean-build)
+## Out of scope v0.1.1 (parked, decisión de Gemini + lean-build)
 
 Estos gaps de lnx se documentaron pero NO se implementan en esta versión — riesgo de feature creep:
 
@@ -52,4 +52,4 @@ Estos gaps de lnx se documentaron pero NO se implementan en esta versión — ri
 ## Ideas de colaboradores
 
 - Lucas: tener en cuenta modelos gratuitos (implementado: tier `gratis`, default `opencode/big-pickle`)
-- Gemini: aislar scope v0.1.0 (G3-G8 parked), Flash para G1, Pro para G2 (adoptado)
+- Gemini: aislar scope v0.1.1 (G3-G8 parked), Flash para G1, Pro para G2 (adoptado)

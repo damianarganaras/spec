@@ -41,6 +41,36 @@ async function exists(p) {
   try { await access(p); return true } catch { return false }
 }
 
+async function packageVersion() {
+  const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'))
+  return pkg.version
+}
+
+async function readAncletorc(projectDir) {
+  const rc = join(projectDir, '.ancletorc')
+  if (!(await exists(rc))) return null
+  try {
+    return JSON.parse((await readFile(rc, 'utf8')).replace(/^\uFEFF/, ''))
+  } catch {
+    return null
+  }
+}
+
+async function writeManifest(projectDir, extra = {}) {
+  const existing = (await readAncletorc(projectDir)) || {}
+  const { version: _legacy, ...rest } = existing
+  const manifest = {
+    ...rest,
+    schemaVersion: 1,
+    version: await packageVersion(),
+    installedAt: new Date().toISOString(),
+    installedPaths: rest.installedPaths || { templates: [], agents: [], commands: [], skills: [] },
+    ...extra
+  }
+  await writeFile(join(projectDir, '.ancletorc'), JSON.stringify(manifest, null, 2) + '\n')
+  return manifest
+}
+
 function globalConfigDir() {
   return process.env.XDG_CONFIG_HOME
     ? join(process.env.XDG_CONFIG_HOME, 'opencode')
@@ -226,6 +256,14 @@ async function install(args) {
 
   if (project) {
     await copyTemplates(resolve(project))
+    await writeManifest(resolve(project), {
+      installedPaths: {
+        templates: ['AGENTS.md', 'PRODUCT.md'],
+        agents: ['.opencode/agents'],
+        commands: ['.opencode/commands'],
+        skills: ['.opencode/skills']
+      }
+    })
   } else {
     await copyAssets(target)
   }
@@ -251,23 +289,14 @@ async function install(args) {
 }
 
 async function initProject(args) {
-  const rc = join(process.cwd(), '.ancletorc')
-  if (await exists(rc)) {
-    console.log('ancleto: .ancletorc ya existe, no se toca')
-    return
-  }
   const withAzure = args.includes('--with-azure')
-  const content = JSON.stringify({
-    version: 1,
-    azure: { enabled: withAzure },
-    discovery: {
-      outputDir: 'docs/technical-discovery',
-      exclude: []
-    }
-  }, null, 2)
-  await writeFile(rc, content + '\n')
-  const azureNote = withAzure ? ' (Azure habilitado)' : ' (Azure desactivado)'
-  console.log(`ancleto: .ancletorc creado en ${process.cwd()}${azureNote}`)
+  const projectDir = process.cwd()
+  const existing = await readAncletorc(projectDir)
+  const azure = existing?.azure ?? { enabled: false }
+  if (withAzure) azure.enabled = true
+  const discovery = existing?.discovery ?? { outputDir: 'docs/technical-discovery', exclude: [] }
+  const manifest = await writeManifest(projectDir, { azure, discovery })
+  console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'}`)
 }
 
 const DEFAULT_IGNORES = ['node_modules', '.git', 'dist']
@@ -545,10 +574,7 @@ switch (cmd) {
     break
   case '--version':
   case '-v':
-    {
-      const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'))
-      console.log(`ancleto ${pkg.version}`)
-    }
+    console.log(`ancleto ${await packageVersion()}`)
     break
   case '--help':
   case '-h':

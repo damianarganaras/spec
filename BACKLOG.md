@@ -14,7 +14,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ Tiers de costo `normal | minimo | gratis` (prompt en la 1ra config, persistidos en `.ancleto-tier`)
 - ✅ Azure DevOps **opcional** (off por defecto): gate en `.ancletorc`, `ancleto-pr` usa GitHub
 - ✅ KB MCP neutralizado (opsx-*, kb-context.md)
-- ✅ Templates `AGENTS.md` / `PRODUCT.md` / `CONTRIBUTING.md` para proyectos nuevos
+- ✅ Templates `AGENTS.md` / `PRODUCT.md` para proyectos nuevos (`CONTRIBUTING.md` eliminado: sus validaciones y reglas de commit pasaron a `AGENTS.md`)
 - ✅ Rama `development` + `main` protegida
 - ✅ Relevamiento de `lnx` CLI (fuente en `documentation/lnx-cli/`)
 - ✅ **G1**: skills `triage-clarifier`, `openspec-recall`, `openspec-sync-specs` portadas (adaptadas, sin branding LN)

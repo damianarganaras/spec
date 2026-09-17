@@ -16,7 +16,7 @@ asistido por IA para opencode. Proporciona:
   etc.) para cambios estructurados.
 - **Skills reutilizables (7)**: `ancleto-commit`, `ancleto-pr`, `ancleto-technical-discovery`,
   `ancleto-upgrade`, `triage-clarifier`, `openspec-recall`, `openspec-sync-specs`.
-- **Governance**: templates `AGENTS.md`, `PRODUCT.md`, `CONTRIBUTING.md` instalables en cada repo.
+- **Governance**: templates `AGENTS.md`, `PRODUCT.md` instalables en cada repo.
 - **Motor de memoria (v0.2.0)**: base local `.ancleto/memory.db` sobre `node:sqlite`
   (zero-deps) con 3 tools para el LLM y supersesión atómica.
 - **Descubrimiento técnico**: `ancleto discovery` empaca el repo con Repomix y
@@ -26,7 +26,7 @@ asistido por IA para opencode. Proporciona:
 
 | Problema | Solución |
 | --- | --- |
-| Inconsistencia en configs de IA entre repos | Governance con `AGENTS.md`, `PRODUCT.md`, `CONTRIBUTING.md` |
+| Inconsistencia en configs de IA entre repos | Governance con `AGENTS.md`, `PRODUCT.md` |
 | Procesos ad-hoc sin documentación | Workflows OpenSpec estandarizados (`opsx-*`) |
 | Cambios grandes sin análisis | Agents especializados con roles + clasificación `triage-clarifier` |
 | Commits sin semántica | Skill `ancleto-commit` con conventional commits |
@@ -46,7 +46,6 @@ Recursos gestionados por `ancleto install`:
 .
 ├── AGENTS.md                  (LOCKED)     - Contexto del proyecto
 ├── PRODUCT.md                 (EXTENSIBLE) - Datos del producto y metadata
-├── CONTRIBUTING.md            (LOCKED)     - Guía de contribución
 ├── .ancletorc                 (generado)   - Config del proyecto (azure, discovery)
 ├── .ancleto-tier              (generado)   - Nivel de costo elegido
 └── .opencode/

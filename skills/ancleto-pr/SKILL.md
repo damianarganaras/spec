@@ -163,4 +163,4 @@ EOF
 
 **Related Documentation**
 
-- See `CONTRIBUTING.md` for the PR review process
+- See `AGENTS.md` for commit and PR conventions

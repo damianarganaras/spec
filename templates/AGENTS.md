@@ -33,4 +33,4 @@ En caso de conflicto, prevalece la documentación más específica del área afe
 ## Tools de Soporte
 
 - `ancleto`: Descubrimiento técnico e inicialización.
-- `openspec`: Gestión del ciclo de vida del cambio (spec, design, tasks).
+- `openspec`: Gestión del ciclo de vida del cambio (proposal, specs, design, tasks, archive).

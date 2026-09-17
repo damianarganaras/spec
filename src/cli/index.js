@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline'
 import { join, dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
+import { createMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -27,6 +28,8 @@ Uso:
   ancleto discovery --check           Estado del seed (READY/STALE/PARTIAL/MISSING)
   ancleto discovery [--compress] [--include G] [--ignore G] [--token-budget N]
                                    Empaca el repo con Repomix y guarda estado
+  ancleto memory context [--scope X] [--out file]
+                                   Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
   ancleto --help                      Esta ayuda
   ancleto --version                   Version del paquete
 `
@@ -463,6 +466,44 @@ async function discovery(flags) {
   await packDiscovery(flags)
 }
 
+async function memoryContext(flags) {
+  const scope = flagValue(flags, '--scope') || 'project'
+  const out = flagValue(flags, '--out')
+  const dbPath = defaultMemoryDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exit(0)
+  }
+  const engine = createMemoryEngine(dbPath)
+  try {
+    const block = engine.buildWorkingContext(scope)
+    if (block === null) {
+      if (out) await writeFile(resolve(out), '')
+      console.error(`ancleto: sin reglas activas para el scope "${scope}"`)
+      return
+    }
+    if (out) {
+      await writeFile(resolve(out), block + '\n')
+      console.log(`ancleto: bloque <ProjectMemoryRules> escrito en ${out}`)
+    } else {
+      console.log(block)
+    }
+  } finally {
+    engine.close()
+  }
+}
+
+async function memoryCmd(args) {
+  const [sub, ...flags] = args
+  if (sub === 'context') {
+    await memoryContext(flags)
+    return
+  }
+  console.error(`ancleto: subcomando de memory desconocido: ${sub || '(ninguno)'}`)
+  console.error('ancleto: uso: ancleto memory context [--scope X] [--out file]')
+  process.exit(1)
+}
+
 const [cmd, ...rest] = process.argv.slice(2)
 
 switch (cmd) {
@@ -475,6 +516,9 @@ switch (cmd) {
     break
   case 'discovery':
     await discovery(rest)
+    break
+  case 'memory':
+    await memoryCmd(rest)
     break
   case '--version':
   case '-v':

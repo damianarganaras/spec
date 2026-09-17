@@ -22,6 +22,8 @@ Binarios: `ancleto` (alias: `aspec`).
   `recordRule` y `recordDecision` — con supersesión atómica por `memory_key`; reglas
   inyectadas proactivamente en `<ProjectMemoryRules>` y decisiones recuperadas
   reactivamente.
+- **Documentación**: `docs/` — `ancleto-cli-framework.md` (guía del framework),
+  `guia-configuracion.md` (puesta a punto del entorno) y `skill-ancleto-upgrade.md`.
 
 ## Instalación
 

@@ -36,6 +36,9 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   encapsulamiento, diacríticos sin stemmer, escape de caracteres FTS5) + smoke de creación de DB y
   triggers — **22/22 verdes, sin warnings**.
 - ✅ **Release v0.2.0** publicado en npm (`@ancleto/spec@0.2.0`, dist-tag `latest`).
+- ✅ **Documentación del framework** en `docs/` (equivalente a los GEN-*.pdf de LN, basada
+  en el sistema ancleto): `ancleto-cli-framework.md`, `guia-configuracion.md`,
+  `skill-ancleto-upgrade.md`.
 
 ## Estado actual (v0.2.0)
 

@@ -9,8 +9,6 @@ tools:
   write: true
   edit: true
   bash: false
-  litellm_mem0-recall: false
-  litellm_mem0-remember: false
 ---
 
 # Coder Agent

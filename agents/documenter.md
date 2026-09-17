@@ -9,8 +9,6 @@ tools:
   write: true
   bash: true
   glob: true
-  litellm_mem0-recall: false
-  litellm_mem0-remember: false
 permission:
   bash:
     '*': allow

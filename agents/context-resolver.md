@@ -7,8 +7,6 @@ color: '#8b5cf6'
 tools:
   read: true
   bash: true
-  litellm_mem0-recall: false
-  litellm_mem0-remember: false
 permission:
   bash:
     '*': deny

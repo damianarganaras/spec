@@ -12,10 +12,11 @@ Binarios: `ancleto` (alias: `aspec`).
   technical-discovery, technical-seed-writer, memory-keeper, context-resolver.
 - **Commands (12)**: `opsx-*` — ciclo de vida de changes OpenSpec (new, propose, ff,
   apply, verify, sync, archive, bulk-archive, continue, explore, onboard, recall).
-- **Skills (4)**: `ancleto-commit`, `ancleto-pr`, `ancleto-technical-discovery`, `ancleto-upgrade`.
+- **Skills (7)**: `ancleto-commit`, `ancleto-pr`, `ancleto-technical-discovery`, `ancleto-upgrade`,
+  `triage-clarifier`, `openspec-recall`, `openspec-sync-specs`.
 - **Templates**: `AGENTS.md`, `PRODUCT.md`, `CONTRIBUTING.md` para proyectos nuevos.
 - **CLI `ancleto`**: instalación (`ancleto install`), init de proyectos (`ancleto init`) y
-  descubrimiento técnico (`ancleto discovery`, motor pendiente).
+  descubrimiento técnico (`ancleto discovery`, pack con Repomix).
 
 ## Instalación
 
@@ -50,13 +51,15 @@ automaticamente a los modelos gratuitos.
 
 - Node.js >= 18
 - `openspec` CLI (`npm i -g @openspec/cli`) para el ciclo de changes
-- Repomix (requerido solo por el futuro motor de `ancleto discovery`)
+- Repomix (usado por `ancleto discovery`, se resuelve via `npx` si no esta instalado)
 
 ## Uso rápido
 
 ```bash
 ancleto init                             # prepara .ancletorc en el repo actual
 ancleto init --with-azure                # lo mismo, con Azure habilitado
+ancleto discovery --check                # estado del technical seed (READY/STALE/PARTIAL/MISSING)
+ancleto discovery                        # empaca el repo con Repomix y guarda estado
 # en opencode: /opsx-new, /opsx-propose, /opsx-ff para iniciar un change
 ```
 
@@ -76,5 +79,5 @@ e instalar el CLI: `az extension add --name azure-devops`. Con `azure.enabled: f
 
 - [x] Paquete y CLI de instalación
 - [x] Agents/skills/commands adaptados (sin referencias corporativas)
-- [ ] Motor de descubrimiento (`ancleto discovery`, repomix)
-- [ ] Skills faltantes: `triage-clarifier`, `openspec-recall`, `openspec-sync-specs`
+- [x] Motor de descubrimiento (`ancleto discovery`, Repomix + `--check` por hash)
+- [x] Skills base: `triage-clarifier`, `openspec-recall`, `openspec-sync-specs`

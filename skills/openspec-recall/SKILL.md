@@ -1,11 +1,11 @@
 ---
 name: openspec-recall
-description: Recupera memoria episódica del proyecto (mem0/engram) para precargar contexto de changes anteriores. Se invoca al iniciar un change, antes de generar artifacts. Opcional y no bloqueante.
+description: Recupera memoria episódica del proyecto (.ancleto/memory.db) para precargar contexto de changes anteriores. Se invoca al iniciar un change, antes de generar artifacts. Opcional y no bloqueante.
 license: MIT
-compatibility: Requires the memory MCP configured in the repo. Optional — degrades silently when unavailable.
+compatibility: Requires the memory engine configured in the repo. Optional — degrades silently when unavailable.
 metadata:
   author: ancleto
-  version: '1.0'
+  version: '2.0'
 ---
 
 Retrieve shared episodic memory for this repository and inject it as starting context for a change.
@@ -36,15 +36,15 @@ Steps 1 to 3 are identical for both. Only the failure behaviour differs, and it 
 
 2. **Invoke recall**
 
-   Call the memory recall tool with the query as its **only** argument:
+   Call the memory tool with the query as its **only** argument:
 
    ```
-   mem0-recall(query)
+   searchMemory({ query })
    ```
 
-   El tool lo expone el MCP de memoria configurado (backend actual mem0: `recall(query)`; si el backend configurado es engram, el equivalente es `mem_search(query)`). El backend de memoria es una decision pendiente del framework — el contrato no cambia, solo el tool concreto.
+   The tool is exposed by the local memory engine (`.ancleto/memory.db`, SQLite + FTS5). It returns active rules and decisions matching the query.
 
-   **Pass nothing else.** Scope (repository), result volume, ordering and reranking are resolved inside the memory backend; they are not parameters of this tool and must not be attempted.
+   **Pass nothing else.** Scope (repository) is resolved inside the engine; the optional `type` and `limit` parameters stay at their defaults so recall retrieves rules and decisions of any kind.
 
 3. **Inject the result as context**
 
@@ -66,8 +66,8 @@ Steps 1 to 3 are identical for both. Only the failure behaviour differs, and it 
 
    Memory is optional. All four of these outcomes are treated identically:
 
-   - The recall tool is not available (the repository has no memory MCP configured)
-   - The memory backend returns an error
+   - The recall tool is not available (the repository has no memory engine configured)
+   - The engine returns an error
    - The call exceeds the timeout (**10s**, provisional)
    - The result contains no memories
 
@@ -77,7 +77,7 @@ Steps 1 to 3 are identical for both. Only the failure behaviour differs, and it 
    - **Omit** the "Memoria del proyecto" section rather than injecting it empty
    - Do **not** prompt the user, and do **not** surface a blocking error
 
-   **On the manual path this rule inverts**: the user invoked recall on purpose, so every outcome is reported — no memories found, tool unavailable, or backend error. Staying silent there would look like an empty answer instead of an absent capability. What must never happen on either path is filling the gap with the model's own knowledge: if memory returns nothing, the answer is that there is nothing.
+   **On the manual path this rule inverts**: the user invoked recall on purpose, so every outcome is reported — no memories found, tool unavailable, or engine error. Staying silent there would look like an empty answer instead of an absent capability. What must never happen on either path is filling the gap with the model's own knowledge: if memory returns nothing, the answer is that there is nothing.
 
 **Guardrails**
 
@@ -89,4 +89,4 @@ Steps 1 to 3 are identical for both. Only the failure behaviour differs, and it 
 
 **Reference**
 
-- Read contract and scope model: `AGENTS.md` (Memoria Emergente)
+- Read contract and scope model: `AGENTS.md` (Memoria Persistente)

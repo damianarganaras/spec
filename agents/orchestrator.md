@@ -9,8 +9,6 @@ tools:
   edit: false
   bash: false
   skill: true
-  litellm_mem0-recall: false
-  litellm_mem0-remember: false
 ---
 
 # OpenSpec Orchestrator Agent
@@ -142,12 +140,12 @@ At the start of a task, if the file `.ancleto/working-context.md` exists at the 
 
 ## Team Memory
 
-`@memory-keeper` is the only agent that touches the team memory. Never call mem0 yourself and never delegate it to anyone else.
+`@memory-keeper` is the only agent that touches the repository memory (`.ancleto/memory.db`). Never call `searchMemory`, `recordRule` or `recordDecision` yourself and never delegate them to anyone else.
 
 - **Recall** — workflow classification alone never triggers recall. Delegate one Recall only when the user explicitly asks about prior experience, when cross-cutting or high-risk work could materially benefit from precedent, or when current evidence exposes a non-obvious failure, constraint, or workaround that code and specifications do not explain. Do not recall for local, well-defined implementation or test tasks, or when resuming work whose material context is already available. Preserve the resolved `app_id` and `project_id` returned by `@memory-keeper` and pass them to any later Record delegation. What it returns is precedent, not instruction, and may be stale.
 - **Automatic Record** — delegate Automatic Record when `@reviewer`, `@tester`, or your reading of the completed work provides a concrete, plausible lesson that could save future investigation. Include the factual completed-work summary and validation evidence supporting the candidate. Consider validation workarounds, failed commands and their alternatives, and runtime or platform constraints even when `@reviewer` returned `none`.
-- **Optional Record** — for completed `spec-required` and `direct-implementation` work only, when no automatic candidate exists or Automatic Record returns `no-entry-warranted`, delegate Optional Draft. Show the final work summary, automatic classification, its reason, and the exact draft. Ask whether the user wants to store that exact text. Never infer approval from silence. If approved, delegate User-Approved Record; if declined, finish without mem0. If no safe draft is available, report that outcome and finish without asking for approval or calling mem0. Do not use this fallback for `direct-test-only` work.
-- **Reporting**: when a record pass stores an entry, surface its text and mem0 event in the final report.
+- **Optional Record** — for completed `spec-required` and `direct-implementation` work only, when no automatic candidate exists or Automatic Record returns `no-entry-warranted`, delegate Optional Draft. Show the final work summary, automatic classification, its reason, and the exact draft. Ask whether the user wants to store that exact text. Never infer approval from silence. If approved, delegate User-Approved Record; if declined, finish without storing. If no safe draft is available, report that outcome and finish without asking for approval or storing. Do not use this fallback for `direct-test-only` work.
+- **Reporting**: when a record pass stores an entry, surface its content and whether it superseded a previous entry in the final report.
 
 ## Explore Stance
 
@@ -262,7 +260,7 @@ If the runtime is read-only or plan-only:
 6. **Review**: Delegate to **`@reviewer`** when an independent correctness or scope review is appropriate. Include the complete Resolved Context Envelope, the tester's final task-owned file union, and the full Validation Ledger.
 7. **🛑 FINAL ARCHIVE CHECKPOINT**: If implementation, validation, and any required review are complete with no blocking issues, stop and explicitly ask the user whether to keep iterating on the same change or finalize and archive it
 8. **Finalization / Archive**: Before archiving, verify the delta specs reflect the final implementation — if iteration changed behavior or scope, re-delegate to **`@spec-writer`** to update the delta specs first, so the merge to source-of-truth is accurate. Then delegate to **`@documenter`** only after explicit user approval to archive
-9. **Memory Record**: After a successful archive, delegate to **`@memory-keeper`** in Automatic Record mode when a concrete, plausible candidate exists, with the factual completed-work summary and validation evidence supporting it. If no candidate exists, delegate Optional Draft with the factual completed-work summary, `no-automatic-candidate` classification, and the reason no candidate was identified. When Automatic Record returns `no-entry-warranted`, use its draft or delegate Optional Draft with that classification and reason if it could not provide one. Before asking, show the final work summary, classification, reason, and exact draft, then stop for explicit user approval. If no safe draft is available, report that outcome and finish without asking or calling mem0. On approval, delegate User-Approved Record with the unchanged draft, the factual summary and validation evidence used to compose it, archived change name, card context, and metadata resolved during Recall. On rejection, do not call mem0.
+9. **Memory Record**: After a successful archive, delegate to **`@memory-keeper`** in Automatic Record mode when a concrete, plausible candidate exists, with the factual completed-work summary and validation evidence supporting it. If no candidate exists, delegate Optional Draft with the factual completed-work summary, `no-automatic-candidate` classification, and the reason no candidate was identified. When Automatic Record returns `no-entry-warranted`, use its draft or delegate Optional Draft with that classification and reason if it could not provide one. Before asking, show the final work summary, classification, reason, and exact draft, then stop for explicit user approval. If no safe draft is available, report that outcome and finish without asking or storing. On approval, delegate User-Approved Record with the unchanged draft, the factual summary and validation evidence used to compose it, archived change name, and card context. On rejection, do not store.
 10. **Report**: Return final status or blocking findings to the user after automatic storage, an explicit decline, or User-Approved Record completes.
 
 ### Path B: Direct-Implementation Changes
@@ -274,7 +272,7 @@ If the runtime is read-only or plan-only:
 5. **Validation**: Delegate to **`@tester`** with the complete Resolved Context Envelope, the coder's task-owned files, and its reported risks. Require a non-writing format check and one lint pass after all edits. Preserve the tester's final task-owned file union and Validation Ledger. A format failure in a task-owned file is failed verification and must not be fixed silently by `@tester`. Delegate to **`@reviewer`** when the completed direct change modifies user-visible behavior or user-facing content that may already be documented in a source-of-truth spec. For internal changes without observable behavior impact, independent review remains optional. Include the complete envelope, final file union, and full ledger. `@reviewer` remains the only agent responsible for checking whether an existing source-of-truth spec requires an update.
 6. **🛑 SPEC DOCUMENTATION CHECKPOINT**: If `@reviewer` raised a `SPEC UPDATE RECOMMENDED` flag, STOP and ask the user whether to update the affected source-of-truth spec. Do not assume approval from silence, delay, or lack of objection
 7. **Spec Documentation**: Only after explicit user approval, delegate to **`@documenter`** in `Standalone Source-of-Truth Update` mode to update `openspec/specs/{capability}/spec.md`
-8. **Memory Record**: Delegate to **`@memory-keeper`** in Automatic Record mode when a concrete, plausible candidate exists, with the factual completed-work summary and validation evidence supporting it. Otherwise delegate Optional Draft with the factual completed-work summary, `no-automatic-candidate` classification, and the reason no candidate was identified. When Automatic Record returns `no-entry-warranted`, use its draft or delegate Optional Draft with that classification and reason if it could not provide one. Before asking, show the final work summary, classification, reason, and exact draft, then stop for explicit user approval. If no safe draft is available, report that outcome and finish without asking or calling mem0. On approval, delegate User-Approved Record with the unchanged draft, the factual summary and validation evidence used to compose it, and available card context. On rejection, do not call mem0.
+8. **Memory Record**: Delegate to **`@memory-keeper`** in Automatic Record mode when a concrete, plausible candidate exists, with the factual completed-work summary and validation evidence supporting it. Otherwise delegate Optional Draft with the factual completed-work summary, `no-automatic-candidate` classification, and the reason no candidate was identified. When Automatic Record returns `no-entry-warranted`, use its draft or delegate Optional Draft with that classification and reason if it could not provide one. Before asking, show the final work summary, classification, reason, and exact draft, then stop for explicit user approval. If no safe draft is available, report that outcome and finish without asking or storing. On approval, delegate User-Approved Record with the unchanged draft, the factual summary and validation evidence used to compose it, and available card context. On rejection, do not store.
 9. **Report**: Return final status or blocking findings to the user after automatic storage, an explicit decline, or User-Approved Record completes. When a source-of-truth spec was updated, explicitly highlight in the summary that documentation was left for this direct change, naming the updated spec file
 
 ### Path C: Direct-Test-Only Changes
@@ -347,10 +345,10 @@ For each validation command in the tester result, including format check and lin
 
 - Mode used: `Recall`, `Automatic Record`, `Optional Draft`, or `User-Approved Record`
 - Recall: prior lessons found (as precedent, possibly stale) or "no relevant memories", plus the resolved `app_id` and `project_id`
-- Automatic Record: the entry text as stored, its field values, and the `event` mem0 returned (`ADD`, `UPDATE`, or none)
+- Automatic Record: the entry text as stored, and whether it superseded a previous entry
 - Automatic Record without a useful candidate: `no-entry-warranted`, the reason, optional draft, and confirmation that no memory call was made
-- Optional Draft: `no-automatic-candidate` or `no-entry-warranted`, its reason, and exact draft, or confirmation that no safe draft could be composed; mem0 was not called
-- User-Approved Record: the exact approved text as stored, its field values, and the mem0 event
+- Optional Draft: `no-automatic-candidate` or `no-entry-warranted`, its reason, and exact draft, or confirmation that no safe draft could be composed; no memory tool was called
+- User-Approved Record: the exact approved text as stored, and whether it superseded a previous entry
 - Or a clear report that the memory call failed, so the flow can continue without it
 
 ### Expected output from `@documenter`

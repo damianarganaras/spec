@@ -52,16 +52,16 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   `agents/orchestrator.md` (lee `.ancleto/working-context.md` como datos **no confiables**); tests de XML
   y scopes exactos. Patrón "CLI materializa + agente lee" (preserva `bash: false`).
 
-## Estado actual (v0.3.0)
+## Estado actual (v0.3.3)
 
 - Working tree **limpio** en `main` y `development`.
-- `development` mergeada en `main` + tag `v0.3.0` pusheado.
+- Versión local en `development`: **v0.3.3** (ítems 1-4 de v0.3.0 completos; tags v0.3.0 → v0.3.3 pusheados en `main`).
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD configurado (`publish.yml`): espera Release de GitHub para publicar a npm.
 
 ## En curso / próximo
 
-- [ ] Confirmar publish de `v0.3.0` en npm (Release de GitHub pendiente — dispara `publish.yml`)
+- [ ] Confirmar publish de `v0.3.3` en npm (Release de GitHub pendiente — dispara `publish.yml`)
 
 ## v0.3.0 - Agent Memory Integration
 
@@ -71,7 +71,7 @@ Integración de la memoria persistente con el orquestador y los AI agents.
 - [x] `core/memory`: Implementar política de token overflow / truncamiento seguro al recuperar reglas. ✅
 - [x] `templates/AGENTS.md`: Agregar protocolo reactivo indicando cuándo los agentes deben llamar a `searchMemory`. ✅ (también reflejado en `templates/PRODUCT.md`, sección AI Memory)
 - [x] `cli/memory`: Agregar comando/subcomando `ancleto memory doctor` para verificar integrity check y rebuild de FTS5. ✅
-- [ ] Complementos ya trackeados (se ejecutan dentro de v0.3.0): `openspec-recall` → `searchMemory`, `memory-keeper` → tools del motor
+- [x] Complementos ya trackeados (se ejecutan dentro de v0.3.0): `openspec-recall` → `searchMemory`, `memory-keeper` → tools del motor ✅
 
 ## v0.3.0 (candidatos adicionales)
 
@@ -83,8 +83,9 @@ Candidatos priorizados (antes feature-creep, ahora con CI/CD de soporte):
 - [ ] **G6** Manifiesto `.ancletorc` completo (`installedPaths`, `version`, `installedAt`)
 - [ ] **G7** LOCKED/EXTENSIBLE en templates (re-aplicación de secciones LOCKED)
 - [ ] **G8** Azure MCP opcional (`@azure-devops/mcp` cuando `azure.enabled`)
-- [ ] **Pulido**: `.gitattributes` para line-endings (evitar warnings LF/CRLF), tests del CLI
-      (install/update/init/merge MCP/tiers), documentar flujo de release en el repo
+- [x] **Pulido**: `.gitattributes` para line-endings (evitar warnings LF/CRLF) ✅ y documentar
+      flujo de release en el repo ✅
+- [ ] **Pulido pendiente**: tests del CLI (install/update/init/merge MCP/tiers)
 
 ## Decisiones pendientes
 

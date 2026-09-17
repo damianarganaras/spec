@@ -9,8 +9,6 @@ tools:
   write: true
   skill: true
   bash: false
-  litellm_mem0-recall: false
-  litellm_mem0-remember: false
 ---
 
 # OpenSpec Writer Agent

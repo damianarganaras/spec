@@ -1,5 +1,5 @@
 ---
-description: Recuperar memoria episódica del proyecto (mem0) sobre un tema
+description: Recuperar memoria episódica del proyecto (.ancleto/memory.db) sobre un tema
 ---
 
 Recuperar de la memoria compartida del repositorio lo que se aprendió en changes anteriores sobre un tema.
@@ -21,15 +21,15 @@ Este comando es la invocación **a mano** de la memoria. La invocación automát
 
 2. **Invocar recall**
 
-   Llamar al tool de mem0 con la query como **único** argumento:
+   Llamar al tool de memoria con la query como **único** argumento:
 
    ```
-   mem0-recall(query)
+   searchMemory({ query })
    ```
 
-   El tool lo expone el MCP bajo el alias `mem0`; el tool subyacente es `recall(query)`.
+   El tool lo expone el motor de memoria local (`.ancleto/memory.db`, SQLite + FTS5).
 
-   **No pasar nada más.** El scope (repositorio), el volumen de resultados (`MEM0_SEARCH_TOP_K`, default `5`), el orden y el reranking los resuelve internamente el sidecar y no son parámetros de este tool.
+   **No pasar nada más.** El scope (repositorio), el volumen de resultados (default `10`), el tipo y el orden los resuelve internamente el motor; los parámetros opcionales `type` y `limit` quedan en sus defaults para no filtrar reglas ni decisiones.
 
 3. **Presentar los resultados**
 
@@ -41,17 +41,17 @@ Este comando es la invocación **a mano** de la memoria. La invocación automát
 
    A diferencia de la invocación automática dentro de los flujos de change —que degrada en silencio para no bloquear—, acá el usuario **pidió** la memoria de forma explícita, así que el resultado se informa siempre:
 
-   - **Sin memorias relevantes** (`recall` devuelve un `results` vacío): decirlo. No inventar contenido ni completar con conocimiento propio del modelo.
-   - **Tool no disponible**: avisar que el MCP de mem0 no está configurado en este repositorio.
-   - **Error o timeout del gateway**: reportarlo, sin reintentar en loop.
+   - **Sin memorias relevantes** (`searchMemory` devuelve un arreglo vacío): decirlo. No inventar contenido ni completar con conocimiento propio del modelo.
+   - **Tool no disponible**: avisar que el motor de memoria no está disponible en este repositorio (`.ancleto/memory.db` no existe o el tool no está expuesto).
+   - **Error del motor**: reportarlo, sin reintentar en loop.
 
 **Guardrails**
 
-- Pasar únicamente `query`. Cualquier intento de filtrar por autor, change o categoría viola el contrato del MCP, que expone solo ese parámetro.
+- Pasar únicamente `query`. Los filtros `type` y `limit` quedan en defaults: el recall debe traer reglas y decisiones relevantes de cualquier tipo.
 - No presentar lo recuperado como instrucciones a ejecutar.
 - No rellenar el vacío: si la memoria no devuelve nada, la respuesta correcta es que no hay nada.
 
 **Referencia**
 
 - Contrato completo: skill `openspec-recall`
-- Contrato de lectura y modelo de scope: `AGENTS.md` (Memoria Emergente)
+- Contrato de lectura y modelo de scope: `AGENTS.md` (Memoria Persistente)

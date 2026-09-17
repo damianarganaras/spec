@@ -82,6 +82,35 @@ Luego completar la seccion `Azure DevOps` de `PRODUCT.md` (Organization URL, Tea
 e instalar el CLI: `az extension add --name azure-devops`. Con `azure.enabled: false` (o sin
 `.ancletorc`), los flujos tratan cada request como sin Work Item y `ancleto-pr` usa GitHub.
 
+## Flujo de release
+
+Publicación automática vía GitHub Actions (`publish.yml`):
+
+```bash
+# 1. Bump local (regla: todo commit de feature lleva su version bump)
+npm version patch --no-git-tag-version        # o: minor, segun el cambio
+git add package.json package-lock.json
+git commit -m "chore: bump version to X.Y.Z"
+git push origin development
+
+# 2. Merge development -> main
+git checkout main
+git pull origin main
+git merge development
+
+# 3. Tag anotado y push
+git tag -a vX.Y.Z -m "vX.Y.Z - <resumen>"
+git push origin main
+git push origin vX.Y.Z
+
+# 4. GitHub Release
+# En GitHub: Releases -> Draft a new release -> elegir el tag vX.Y.Z -> Publish release
+```
+
+Al publicar la Release, el workflow `publish.yml` se dispara (`on.release.types: [published]`):
+corre `node --test` en `ubuntu-latest` (Node 24, checkout@v5/setup-node@v5) y publica a npm con
+`NODE_AUTH_TOKEN` (secret `NPM_TOKEN` del repo).
+
 ## Estado
 
 - [x] Paquete y CLI de instalación

@@ -478,7 +478,10 @@ switch (cmd) {
     break
   case '--version':
   case '-v':
-    console.log('ancleto 0.1.1')
+    {
+      const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'))
+      console.log(`ancleto ${pkg.version}`)
+    }
     break
   case '--help':
   case '-h':

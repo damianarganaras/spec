@@ -19,17 +19,12 @@ cerramos un milestone (`npm version minor|patch && npm publish`).
 - [x] Relevamiento de `lnx` CLI (fuente en `documentation/lnx-cli/`)
 - [x] **G1**: skills `triage-clarifier`, `openspec-recall`, `openspec-sync-specs` portadas (adaptadas, sin branding LN)
 - [x] **G2**: motor `ancleto discovery` (MVP) — pack con Repomix (`npx` o PATH, `--include/--ignore/--compress/--token-budget`), `--check` por hash de contenido (READY/STALE/PARTIAL/MISSING), estado en `.discovery-state.json`, zero-deps
+- [x] **M1**: Motor de Memoria Persistente (core v0.2.0) — `src/core/memory/database.js` (node:sqlite, PRAGMAs WAL/FK/busy_timeout, migraciones idempotentes, FTS5 external content `unicode61 remove_diacritics 1` sin stemmer, triggers INSERT/UPDATE/DELETE), `engine.js` (`buildWorkingContext`, `searchMemory` BM25 con escape FTS5, `recordNode` con supersesión atómica `BEGIN IMMEDIATE` por `memory_key` + índice único parcial sobre activas), `tools.js` (3 tools con encapsulamiento de `source/confidence/status/id`), 22 tests `node --test`
 
 ## En curso / próximo
 
-- [ ] **v0.2.0 — Motor de Memoria Persistente**: implementar el diseño congelado
-      (especificación en `DESIGN-memory-engine-v0.2.0.md`). `node:sqlite`
-      (`DatabaseSync`), zero-deps, DB local `.ancleto/memory.db`, 3 tools al LLM
-      (`searchMemory`, `recordRule`, `recordDecision`), supersesión atómica por
-      `memory_key`, FTS5 `unicode61 remove_diacritics 1` sin stemmer, PRAGMAs
-      `WAL` / `foreign_keys` / `busy_timeout`. Requiere Node >= 24 (ya en `engines`).
-- [ ] Revisar `openspec-recall` y `memory-keeper` al implementar el motor (el contrato
-      agnóstico mem0/engram queda obsoleto para el motor propio).
+- [ ] Integrar el motor de memoria en el framework: wiring en CLI/orchestrator, `openspec-recall` →
+      `searchMemory`, `memory-keeper` → tools del motor (el contrato agnóstico mem0/engram queda obsoleto)
 - [ ] Republish a npm cuando haya milestone (version minor por features)
 
 ## Out of scope v0.1.1 (parked, decisión de Gemini + lean-build)

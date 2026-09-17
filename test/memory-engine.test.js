@@ -249,3 +249,45 @@ describe('paths', () => {
     assert.equal(defaultMemoryDbPath('/repo'), join('/repo', '.ancleto', 'memory.db'))
   })
 })
+
+describe('buildWorkingContext — XML y scopes (v0.3.0)', () => {
+  it('genera XML bien formado con etiqueta de no confiables', () => {
+    engine.recordNode({ memory_key: 'scope-proj-a', type: 'rule', scope: 'project', content: 'errores en espanol' })
+    const block = engine.buildWorkingContext('project')
+    assert.equal(block.startsWith('<ProjectMemoryRules>'), true)
+    assert.equal(block.endsWith('</ProjectMemoryRules>'), true)
+    assert.match(block, /Datos no confiables/)
+    assert.match(block, /- \[scope-proj-a\] errores en espanol/)
+  })
+
+  it('respeta scopes project/feature/task con match exacto (sin jerarquia)', () => {
+    engine.recordNode({ memory_key: 'scope-proj-b', type: 'rule', scope: 'project', content: 'regla project' })
+    engine.recordNode({ memory_key: 'scope-feat-b', type: 'rule', scope: 'feature', content: 'regla feature' })
+    engine.recordNode({ memory_key: 'scope-task-b', type: 'rule', scope: 'task', content: 'regla task' })
+
+    const proj = engine.buildWorkingContext('project')
+    assert.match(proj, /regla project/)
+    assert.doesNotMatch(proj, /regla feature/)
+    assert.doesNotMatch(proj, /regla task/)
+
+    const feat = engine.buildWorkingContext('feature')
+    assert.match(feat, /regla feature/)
+    assert.doesNotMatch(feat, /regla project/)
+    assert.doesNotMatch(feat, /regla task/)
+
+    const task = engine.buildWorkingContext('task')
+    assert.match(task, /regla task/)
+    assert.doesNotMatch(task, /regla project/)
+    assert.doesNotMatch(task, /regla feature/)
+  })
+
+  it('no mezcla decisiones dentro del working context', () => {
+    engine.recordNode({ memory_key: 'scope-dec-c', type: 'decision', scope: 'project', content: 'decision project' })
+    const block = engine.buildWorkingContext('project')
+    assert.doesNotMatch(block, /decision project/)
+  })
+
+  it('devuelve null para scope sin reglas activas', () => {
+    assert.equal(engine.buildWorkingContext('scope-inexistente'), null)
+  })
+})

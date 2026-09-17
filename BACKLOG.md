@@ -35,7 +35,10 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   (supersesión atómica + genealogía, sync FTS5 INSERT/UPDATE/DELETE, una sola activa por `memory_key`,
   encapsulamiento, diacríticos sin stemmer, escape de caracteres FTS5) + smoke de creación de DB y
   triggers — **22/22 verdes, sin warnings**.
-- ✅ **Release v0.2.0** publicado en npm (`@ancleto/spec@0.2.0`, dist-tag `latest`).
+- ✅ **Release v0.2.1** publicado en npm (`@ancleto/spec@0.2.1`, dist-tag `latest`).
+- ✅ **CI/CD**: workflow `publish.yml` de GitHub Actions — `on.release.types: [published]`, runner
+  `ubuntu-latest`, checkout@v5 + setup-node@v5 (runtime node24), `npm ci`, `node --test`,
+  `npm publish` con `NODE_AUTH_TOKEN`. `package-lock.json` generado (zero-deps, requerido por `npm ci`).
 - ✅ **Documentación del framework** en `docs/` (equivalente a los GEN-*.pdf de LN, basada
   en el sistema ancleto): `ancleto-cli-framework.md`, `guia-configuracion.md`,
   `skill-ancleto-upgrade.md`.
@@ -49,18 +52,22 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 
 ## En curso / próximo
 
-- [ ] **CI/CD**: workflow de GitHub Actions — run de `node --test` en `development` y PRs, bump
-      automático o release por tag, `npm publish` en tag semver
-- [ ] Integrar el motor de memoria en el framework: wiring en CLI/orchestrator, `openspec-recall` →
-      `searchMemory`, `memory-keeper` → tools del motor (el contrato agnóstico mem0/engram queda obsoleto)
 - [ ] Republish a npm cuando haya milestone (version minor por features)
 
-## v0.3.0 (próximos pasos estratégicos)
+## v0.3.0 - Agent Memory Integration
 
-Candidatos priorizados para la próxima versión (antes feature-creep, ahora con CI/CD de soporte):
+Integración de la memoria persistente con el orquestador y los AI agents.
 
-- [ ] **Integración de memoria en agents**: inyectar `buildWorkingContext()` en el orchestrator
-      (bloque `<ProjectMemoryRules>` en el System Prompt) y cablear las 3 tools al runtime del LLM
+- [ ] `core/orchestrator`: Integrar `buildWorkingContext()` para inyectar `<ProjectMemoryRules>` en el System Prompt.
+- [ ] `core/memory`: Implementar política de token overflow / truncamiento seguro al recuperar reglas.
+- [ ] `templates/AGENTS.md`: Agregar protocolo reactivo indicando cuándo los agentes deben llamar a `searchMemory`.
+- [ ] `cli/memory`: Agregar comando/subcomando `ancleto memory doctor` para verificar integrity check y rebuild de FTS5.
+- [ ] Complementos ya trackeados (se ejecutan dentro de v0.3.0): `openspec-recall` → `searchMemory`, `memory-keeper` → tools del motor
+
+## v0.3.0 (candidatos adicionales)
+
+Candidatos priorizados (antes feature-creep, ahora con CI/CD de soporte):
+
 - [ ] **G3** `ancleto check` (integridad de instalación vs manifiesto, orphans)
 - [ ] **G4** `ancleto doctor` (diagnóstico de binarios/MCPs/modelos)
 - [ ] **G5** Scaffold OpenSpec en install/init (`openspec/changes/` + `config.yaml`)
@@ -78,7 +85,6 @@ Candidatos priorizados para la próxima versión (antes feature-creep, ahora con
 - Alcance del motor `discovery` (G2): ¿implementación completa o MVP (solo `--check`)?
 - ¿Portar las otras 11 skills base (`openspec-apply/archive/bulk-archive/continue/explore/ff/new/onboard/propose/verify/workflow`)? Los opsx ya son autocontenidos — solo si suman desde otros agents
 - Qué modelos van en cada tier (tabla `TIERS` en `src/cli/index.js` es ajustable)
-- CI/CD: ¿publish manual por tag o automático desde `development`?
 
 ## Ideas de colaboradores
 

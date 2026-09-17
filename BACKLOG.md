@@ -31,11 +31,12 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   el runtime, nunca en las firmas JSON Schema; `additionalProperties: false`; args forjados ignorados).
 - ✅ **`engines.node: ">=24.0.0"`** en `package.json` (requiere el módulo nativo `node:sqlite`).
   Zero-Dependencies mantenida (sin `better-sqlite3` ni binarios C++).
-- ✅ **Suite de tests**: 30 tests `node --test` (unit + integración) en `test/memory-engine.test.js`
+- ✅ **Suite de tests**: 33 tests `node --test` (unit + integración) en `test/memory-engine.test.js`
   (supersesión atómica + genealogía, sync FTS5 INSERT/UPDATE/DELETE, una sola activa por `memory_key`,
   encapsulamiento, diacríticos sin stemmer, escape de caracteres FTS5, XML de `<ProjectMemoryRules>`,
-  scopes jerárquicos `project < feature < task`, truncamiento seguro con `<ContextOverflowWarning>`)
-  + smoke de creación de DB y triggers — **30/30 verdes, sin warnings**.
+  scopes jerárquicos `project < feature < task`, truncamiento seguro con `<ContextOverflowWarning>`,
+  memory doctor: sano / inconsistencia FTS5 + rebuild / duplicados de activas)
+  + smoke de creación de DB y triggers — **33/33 verdes, sin warnings**.
 - ✅ **Release v0.2.1** publicado en npm (`@ancleto/spec@0.2.1`, dist-tag `latest`).
 - ✅ **Release v0.3.0** — tag `v0.3.0` creado y pusheado en `main` (merge de `development`). Publish a npm
   pendiente del Release en GitHub (dispara `publish.yml`).
@@ -69,7 +70,7 @@ Integración de la memoria persistente con el orquestador y los AI agents.
 - [x] `core/orchestrator`: Integrar `buildWorkingContext()` para inyectar `<ProjectMemoryRules>` en el System Prompt. ✅ — implementado (commit `a17fc66`)
 - [x] `core/memory`: Implementar política de token overflow / truncamiento seguro al recuperar reglas. ✅
 - [x] `templates/AGENTS.md`: Agregar protocolo reactivo indicando cuándo los agentes deben llamar a `searchMemory`. ✅ (también reflejado en `templates/PRODUCT.md`, sección AI Memory)
-- [ ] `cli/memory`: Agregar comando/subcomando `ancleto memory doctor` para verificar integrity check y rebuild de FTS5.
+- [x] `cli/memory`: Agregar comando/subcomando `ancleto memory doctor` para verificar integrity check y rebuild de FTS5. ✅
 - [ ] Complementos ya trackeados (se ejecutan dentro de v0.3.0): `openspec-recall` → `searchMemory`, `memory-keeper` → tools del motor
 
 ## v0.3.0 (candidatos adicionales)

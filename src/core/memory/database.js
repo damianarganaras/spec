@@ -38,12 +38,14 @@ const MIGRATIONS = [
   END`
 ]
 
-export function openDatabase(dbPath) {
+export function openDatabase(dbPath, { migrate = true } = {}) {
   mkdirSync(dirname(dbPath), { recursive: true })
   const db = new DatabaseSync(dbPath)
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA foreign_keys = ON')
   db.exec('PRAGMA busy_timeout = 5000')
-  for (const sql of MIGRATIONS) db.exec(sql)
+  if (migrate) {
+    for (const sql of MIGRATIONS) db.exec(sql)
+  }
   return db
 }

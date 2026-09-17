@@ -10,7 +10,7 @@ import { homedir, tmpdir } from 'node:os'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
 const ASSETS = ['agents', 'commands', 'skills']
-const TEMPLATES = ['AGENTS.md', 'PRODUCT.md', 'CONTRIBUTING.md']
+const TEMPLATES = ['AGENTS.md', 'PRODUCT.md']
 
 const HELP = `ancleto - orquestador SDD liviano con subagentes optimizados para costo/tokens
 (alias: aspec)

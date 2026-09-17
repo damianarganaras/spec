@@ -6,31 +6,31 @@
 
 Antes de actuar, consultar el contexto en este orden:
 
-1. El `AGENTS.md` local del package o app afectada, si existe.
-2. `PRODUCT.md` para contexto del repositorio, estructura, comandos y reglas de producto.
-3. `CONTRIBUTING.md` para el flujo de contribución y validaciones esperadas.
-4. Este `AGENTS.md` como marco común.
+1. `AGENTS.md` local del package o app afectada (si existe en monorepos).
+2. `PRODUCT.md` para contexto del repositorio, estructura, comandos y reglas de negocio.
+3. Este `AGENTS.md` como marco común.
 
-En caso de conflicto, gana la documentación más específica del área afectada.
+En caso de conflicto, prevalece la documentación más específica del área afectada.
 
-## Guardrails
+## Guardrails & Conventions
 
-- Cambios de TypeScript en modo estricto donde aplique.
-- Mantener el repositorio en estado mergeable.
-- No commits directos a ramas protegidas (`main`, `develop`).
-- Commits con Conventional Commits.
-- Toda operación destructiva requiere confirmación explícita del usuario.
-- Antes de cerrar un cambio, correr las validaciones que el proyecto considere necesarias.
+- **TypeScript**: Cambios en modo estricto (`strict: true`).
+- **Commits**: Formato Conventional Commits (`feat(scope): ...`, `fix(scope): ...`,
+  `chore(scope): ...`). No realizar commits directos a ramas protegidas (`main`, `master`).
+- **Seguridad**: Toda operación destructiva (borrado de BD, archivos clave, deploys)
+  requiere confirmación explícita del usuario.
+- **Validaciones obligatorias antes de cerrar una tarea**:
+  - `npm run typecheck` o `npx tsc --noEmit`
+  - `npm run lint`
+  - `npm test`
 
-## Flujo de trabajo
+## Flujo Spec-Driven (OpenSpec)
 
-Este repositorio usa el flujo spec-driven (OpenSpec) cuando corresponde:
+- **Cambios con scope incierto / arquitectura**: Crear artifacts en `openspec/changes/<name>/`.
+- **Cambios menores / fixes**: Implementación directa.
+- **Cierre**: Archivar con `openspec archive` al finalizar.
 
-- Cambios nuevos o con scope incierto: artifacts en `openspec/changes/<name>/`
-- Cambios chicos y de riesgo bajo: implementación directa
-- Archivar con `openspec archive` cuando el cambio este completo
+## Tools de Soporte
 
-## Herramientas
-
-- `ancleto` CLI para inicialización de proyectos y descubrimiento técnico.
-- `openspec` CLI para el ciclo de changes (proposal, specs, design, tasks, archive).
+- `ancleto`: Descubrimiento técnico e inicialización.
+- `openspec`: Gestión del ciclo de vida del cambio (proposal, specs, design, tasks, archive).

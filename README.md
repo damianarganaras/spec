@@ -14,7 +14,7 @@ Binarios: `ancleto` (alias: `aspec`).
   apply, verify, sync, archive, bulk-archive, continue, explore, onboard, recall).
 - **Skills (7)**: `ancleto-commit`, `ancleto-pr`, `ancleto-technical-discovery`, `ancleto-upgrade`,
   `triage-clarifier`, `openspec-recall`, `openspec-sync-specs`.
-- **Templates**: `AGENTS.md`, `PRODUCT.md`, `CONTRIBUTING.md` para proyectos nuevos.
+- **Templates**: `AGENTS.md`, `PRODUCT.md` para proyectos nuevos.
 - **CLI `ancleto`**: instalación (`ancleto install`), init de proyectos (`ancleto init`) y
   descubrimiento técnico (`ancleto discovery`, pack con Repomix).
 - **Motor de memoria (v0.2.0)**: base local `.ancleto/memory.db` sobre `node:sqlite`
@@ -22,6 +22,8 @@ Binarios: `ancleto` (alias: `aspec`).
   `recordRule` y `recordDecision` — con supersesión atómica por `memory_key`; reglas
   inyectadas proactivamente en `<ProjectMemoryRules>` y decisiones recuperadas
   reactivamente.
+- **Documentación**: `docs/` — `ancleto-cli-framework.md` (guía del framework),
+  `guia-configuracion.md` (puesta a punto del entorno) y `skill-ancleto-upgrade.md`.
 
 ## Instalación
 

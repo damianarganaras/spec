@@ -49,7 +49,7 @@ automaticamente a los modelos gratuitos.
 
 ## Requisitos
 
-- Node.js >= 18
+- Node.js >= 24.0.0 (el motor de memoria v0.2.0 usa `node:sqlite`)
 - `openspec` CLI (`npm i -g @openspec/cli`) para el ciclo de changes
 - Repomix (usado por `ancleto discovery`, se resuelve via `npx` si no esta instalado)
 

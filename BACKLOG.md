@@ -22,7 +22,14 @@ cerramos un milestone (`npm version minor|patch && npm publish`).
 
 ## En curso / próximo
 
-- [ ] Memoria: adaptar `memory-keeper` (hoy mem0 / `litellm_mem0-*`) a las tools de **engram**
+- [ ] **v0.2.0 — Motor de Memoria Persistente**: implementar el diseño congelado
+      (especificación en `DESIGN-memory-engine-v0.2.0.md`). `node:sqlite`
+      (`DatabaseSync`), zero-deps, DB local `.ancleto/memory.db`, 3 tools al LLM
+      (`searchMemory`, `recordRule`, `recordDecision`), supersesión atómica por
+      `memory_key`, FTS5 `unicode61 remove_diacritics 1` sin stemmer, PRAGMAs
+      `WAL` / `foreign_keys` / `busy_timeout`. Requiere Node >= 24 (ya en `engines`).
+- [ ] Revisar `openspec-recall` y `memory-keeper` al implementar el motor (el contrato
+      agnóstico mem0/engram queda obsoleto para el motor propio).
 - [ ] Republish a npm cuando haya milestone (version minor por features)
 
 ## Out of scope v0.1.1 (parked, decisión de Gemini + lean-build)
@@ -44,7 +51,9 @@ Estos gaps de lnx se documentaron pero NO se implementan en esta versión — ri
 
 ## Decisiones pendientes
 
-- Memoria: ¿adaptar a engram o dejar sin memoria? (afecta el contrato de `openspec-recall`, hoy agnóstico)
+- ~~Memoria: ¿adaptar a engram o dejar sin memoria?~~ → **Resuelta (v0.2.0)**: motor propio
+  con `node:sqlite`, diseño congelado en `DESIGN-memory-engine-v0.2.0.md`. Revisar el
+  contrato de `openspec-recall` al implementar.
 - Alcance del motor `discovery` (G2): ¿implementación completa o MVP (solo `--check`)?
 - ¿Portar las otras 11 skills base (`openspec-apply/archive/bulk-archive/continue/explore/ff/new/onboard/propose/verify/workflow`)? Los opsx ya son autocontenidos — solo si suman desde otros agents
 - Qué modelos van en cada tier (tabla `TIERS` en `src/cli/index.js` es ajustable)

@@ -27,6 +27,8 @@
 
 > Memory for this repository is persisted locally in `.ancleto/memory.db` (SQLite + FTS5).
 > Agents store architectural decisions and rules here automatically. It never leaves the repo.
+> Consult via the `searchMemory` tool when modifying prior decisions, after a
+> `<ContextOverflowWarning>`, or before major refactors / contract changes.
 
 ---
 

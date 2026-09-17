@@ -260,7 +260,7 @@ describe('buildWorkingContext — XML y scopes (v0.3.0)', () => {
     assert.match(block, /- \[scope-proj-a\] errores en espanol/)
   })
 
-  it('respeta scopes project/feature/task con match exacto (sin jerarquia)', () => {
+  it('respeta scopes con jerarquia project < feature < task', () => {
     engine.recordNode({ memory_key: 'scope-proj-b', type: 'rule', scope: 'project', content: 'regla project' })
     engine.recordNode({ memory_key: 'scope-feat-b', type: 'rule', scope: 'feature', content: 'regla feature' })
     engine.recordNode({ memory_key: 'scope-task-b', type: 'rule', scope: 'task', content: 'regla task' })
@@ -272,13 +272,13 @@ describe('buildWorkingContext — XML y scopes (v0.3.0)', () => {
 
     const feat = engine.buildWorkingContext('feature')
     assert.match(feat, /regla feature/)
-    assert.doesNotMatch(feat, /regla project/)
+    assert.match(feat, /regla project/)
     assert.doesNotMatch(feat, /regla task/)
 
     const task = engine.buildWorkingContext('task')
     assert.match(task, /regla task/)
-    assert.doesNotMatch(task, /regla project/)
-    assert.doesNotMatch(task, /regla feature/)
+    assert.match(task, /regla feature/)
+    assert.match(task, /regla project/)
   })
 
   it('no mezcla decisiones dentro del working context', () => {
@@ -289,5 +289,78 @@ describe('buildWorkingContext — XML y scopes (v0.3.0)', () => {
 
   it('devuelve null para scope sin reglas activas', () => {
     assert.equal(engine.buildWorkingContext('scope-inexistente'), null)
+  })
+})
+
+describe('buildWorkingContext — truncamiento (v0.3.0 item 2)', () => {
+  function withEngine(fn) {
+    const dir = mkdtempSync(join(tmpdir(), 'ancleto-trunc-'))
+    const eng = createMemoryEngine(join(dir, 'memory.db'))
+    try {
+      return fn(eng)
+    } finally {
+      eng.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  it('trunca reglas enteras (nunca corta strings) y el XML cierra correctamente', () => {
+    withEngine((eng) => {
+      const c1 = 'A'.repeat(100)
+      const c2 = 'B'.repeat(100)
+      eng.recordNode({ memory_key: 'a1', type: 'rule', scope: 'project', content: c1 })
+      eng.recordNode({ memory_key: 'a2', type: 'rule', scope: 'project', content: c2 })
+
+      const block = eng.buildWorkingContext('project', 75) // 300 chars: solo entra una regla
+      assert.equal(block.startsWith('<ProjectMemoryRules>'), true)
+      assert.equal(block.endsWith('</ProjectMemoryRules>'), true)
+      assert.equal((block.match(/^- \[/gm) || []).length, 1)
+
+      // exactamente una regla incluida en su totalidad; la otra omitida por completo (sin parcial)
+      const hasA1 = block.includes(`- [a1] ${c1}`)
+      const hasA2 = block.includes(`- [a2] ${c2}`)
+      assert.equal(hasA1 !== hasA2, true)
+      if (hasA1) assert.equal(block.includes(c2), false)
+      else assert.equal(block.includes(c1), false)
+
+      assert.match(block, /1 rules omitted/)
+    })
+  })
+
+  it('inyecta ContextOverflowWarning con la cantidad correcta de reglas omitidas', () => {
+    withEngine((eng) => {
+      for (let i = 1; i <= 3; i++) {
+        eng.recordNode({ memory_key: `r${i}`, type: 'rule', scope: 'project', content: 'X'.repeat(60) })
+      }
+      const block = eng.buildWorkingContext('project', 60) // 240 chars: 1 entra, 2 omitidas
+      const m = block.match(/Context truncated due to size limits\. (\d+) rules omitted/)
+      assert.ok(m, 'warning presente')
+      assert.equal(m[1], '2')
+      assert.equal((block.match(/^- \[/gm) || []).length, 1)
+    })
+  })
+
+  it('prioriza task sobre project en la retencion con poco espacio', () => {
+    withEngine((eng) => {
+      const projContent = 'P'.repeat(100)
+      eng.recordNode({ memory_key: 'proj1', type: 'rule', scope: 'project', content: projContent })
+      eng.recordNode({ memory_key: 'task1', type: 'rule', scope: 'task', content: 'TASK_SHORT' })
+
+      const block = eng.buildWorkingContext('task', 50) // 200 chars: solo task entra
+      assert.ok(block.includes('- [task1] TASK_SHORT'))
+      assert.equal(block.includes(projContent), false)
+      assert.match(block, /1 rules omitted/)
+    })
+  })
+
+  it('con limite muy chico no incluye reglas y el XML sigue valido', () => {
+    withEngine((eng) => {
+      eng.recordNode({ memory_key: 'x1', type: 'rule', scope: 'project', content: 'contenido' })
+      const block = eng.buildWorkingContext('project', 5) // 20 chars < header: nada entra
+      assert.equal(block.startsWith('<ProjectMemoryRules>'), true)
+      assert.equal(block.endsWith('</ProjectMemoryRules>'), true)
+      assert.equal((block.match(/^- \[/gm) || []).length, 0)
+      assert.match(block, /1 rules omitted/)
+    })
   })
 })

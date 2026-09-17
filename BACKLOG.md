@@ -31,34 +31,41 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   el runtime, nunca en las firmas JSON Schema; `additionalProperties: false`; args forjados ignorados).
 - ✅ **`engines.node: ">=24.0.0"`** en `package.json` (requiere el módulo nativo `node:sqlite`).
   Zero-Dependencies mantenida (sin `better-sqlite3` ni binarios C++).
-- ✅ **Suite de tests**: 22 tests `node --test` (unit + integración) en `test/memory-engine.test.js`
+- ✅ **Suite de tests**: 26 tests `node --test` (unit + integración) en `test/memory-engine.test.js`
   (supersesión atómica + genealogía, sync FTS5 INSERT/UPDATE/DELETE, una sola activa por `memory_key`,
-  encapsulamiento, diacríticos sin stemmer, escape de caracteres FTS5) + smoke de creación de DB y
-  triggers — **22/22 verdes, sin warnings**.
+  encapsulamiento, diacríticos sin stemmer, escape de caracteres FTS5, XML de `<ProjectMemoryRules>`,
+  scopes `project/feature/task` con match exacto) + smoke de creación de DB y triggers — **26/26 verdes, sin warnings**.
 - ✅ **Release v0.2.1** publicado en npm (`@ancleto/spec@0.2.1`, dist-tag `latest`).
+- ✅ **Release v0.3.0** — tag `v0.3.0` creado y pusheado en `main` (merge de `development`). Publish a npm
+  pendiente del Release en GitHub (dispara `publish.yml`).
 - ✅ **CI/CD**: workflow `publish.yml` de GitHub Actions — `on.release.types: [published]`, runner
   `ubuntu-latest`, checkout@v5 + setup-node@v5 (runtime node24), `npm ci`, `node --test`,
   `npm publish` con `NODE_AUTH_TOKEN`. `package-lock.json` generado (zero-deps, requerido por `npm ci`).
 - ✅ **Documentación del framework** en `docs/` (equivalente a los GEN-*.pdf de LN, basada
   en el sistema ancleto): `ancleto-cli-framework.md`, `guia-configuracion.md`,
   `skill-ancleto-upgrade.md`.
+- ✅ **Fix CLI versión**: `ancleto --version` lee `package.json` en runtime (antes hardcodeado en 0.1.1, quedaba desincronizado con cada bump).
+- ✅ **v0.3.0 — Integración de contexto (item 1)**: subcomando `ancleto memory context [--scope X] [--out file]`
+  (imprime/escribe `<ProjectMemoryRules>`, default scope `project`); sección `## Project Memory Rules` en
+  `agents/orchestrator.md` (lee `.ancleto/working-context.md` como datos **no confiables**); tests de XML
+  y scopes exactos. Patrón "CLI materializa + agente lee" (preserva `bash: false`).
 
-## Estado actual (v0.2.0)
+## Estado actual (v0.3.0)
 
-- Working tree **limpio** en `main` y `development` (sin cambios pendientes).
-- `development` completamente mergeada en `main` (0 commits propios pendientes; `main` solo suma merges).
+- Working tree **limpio** en `main` y `development`.
+- `development` mergeada en `main` + tag `v0.3.0` pusheado.
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
-- Próximo hito de automatización: **CI/CD con GitHub Actions** (tests en PR, publish en tag).
+- CI/CD configurado (`publish.yml`): espera Release de GitHub para publicar a npm.
 
 ## En curso / próximo
 
-- [ ] Republish a npm cuando haya milestone (version minor por features)
+- [ ] Confirmar publish de `v0.3.0` en npm (Release de GitHub pendiente — dispara `publish.yml`)
 
 ## v0.3.0 - Agent Memory Integration
 
 Integración de la memoria persistente con el orquestador y los AI agents.
 
-- [ ] `core/orchestrator`: Integrar `buildWorkingContext()` para inyectar `<ProjectMemoryRules>` en el System Prompt.
+- [x] `core/orchestrator`: Integrar `buildWorkingContext()` para inyectar `<ProjectMemoryRules>` en el System Prompt. ✅ — implementado (commit `a17fc66`)
 - [ ] `core/memory`: Implementar política de token overflow / truncamiento seguro al recuperar reglas.
 - [ ] `templates/AGENTS.md`: Agregar protocolo reactivo indicando cuándo los agentes deben llamar a `searchMemory`.
 - [ ] `cli/memory`: Agregar comando/subcomando `ancleto memory doctor` para verificar integrity check y rebuild de FTS5.
@@ -82,7 +89,7 @@ Candidatos priorizados (antes feature-creep, ahora con CI/CD de soporte):
 - ~~Memoria: ¿adaptar a engram o dejar sin memoria?~~ → **Resuelta (v0.2.0)**: motor propio
   con `node:sqlite`, diseño congelado en `DESIGN-memory-engine-v0.2.0.md`. Revisar el
   contrato de `openspec-recall` al implementar.
-- Alcance del motor `discovery` (G2): ¿implementación completa o MVP (solo `--check`)?
+- ~~Alcance del motor `discovery` (G2): ¿implementación completa o MVP (solo `--check`)?~~ → **Resuelta**: MVP (`--check` por hash) — implementado en G2, ver `Hecho`.
 - ¿Portar las otras 11 skills base (`openspec-apply/archive/bulk-archive/continue/explore/ff/new/onboard/propose/verify/workflow`)? Los opsx ya son autocontenidos — solo si suman desde otros agents
 - Qué modelos van en cada tier (tabla `TIERS` en `src/cli/index.js` es ajustable)
 

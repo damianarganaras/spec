@@ -77,6 +77,41 @@ describe('CLI init (G6 manifest)', () => {
   })
 })
 
+describe('CLI agent (S1)', () => {
+  it('init --agent cursor guarda "agent": "cursor"', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'cursor'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'cursor')
+    })
+  })
+
+  it('agente no soportado falla con exit 1', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'invalid'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /agente invalido/)
+    })
+  })
+
+  it('install --project guarda "agent": "opencode" por defecto sin prompt', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'opencode')
+    })
+  })
+
+  it('ejecuciones subsecuentes preservan "agent" preexistente', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'cursor'], dir)
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'cursor')
+    })
+  })
+})
+
 describe('CLI install', () => {
   it('instala assets y templates, aplica tier y actualiza el manifiesto', () => {
     withDir((dir) => {

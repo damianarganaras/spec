@@ -24,9 +24,11 @@ Uso:
                                    Configura los MCP engram + caveman por defecto
   ancleto install --no-mcp           Igual que install pero sin tocar config MCP
   ancleto install --tier <nivel>     normal | minimo | gratis (pregunta en la 1ra config)
+  ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (pregunta si no esta guardado)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
-  ancleto init [--with-azure]         Crea .ancletorc en el repositorio actual
-                                   (Azure desactivado por defecto)
+  ancleto init [--with-azure] [--agent <nombre>]
+                                    Crea .ancletorc en el repositorio actual
+                                    (Azure desactivado por defecto, agente: opencode)
   ancleto discovery --check           Estado del seed (READY/STALE/PARTIAL/MISSING)
   ancleto discovery [--compress] [--include G] [--ignore G] [--token-budget N]
                                    Empaca el repo con Repomix y guarda estado
@@ -182,6 +184,35 @@ function askTier() {
   })
 }
 
+const SUPPORTED_AGENTS = ['opencode', 'vscode', 'antigravity', 'cursor', 'roo']
+const DEFAULT_AGENT = 'opencode'
+
+function askAgent() {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    rl.question('Agente/IDE [opencode/vscode/antigravity/cursor/roo] (default: opencode): ', (a) => {
+      rl.close()
+      const t = a.trim().toLowerCase()
+      resolve(SUPPORTED_AGENTS.includes(t) ? t : DEFAULT_AGENT)
+    })
+  })
+}
+
+async function resolveAgent(args, existing) {
+  const ai = args.indexOf('--agent')
+  if (ai >= 0) {
+    const name = args[ai + 1]
+    if (!SUPPORTED_AGENTS.includes(name)) {
+      console.error(`ancleto: agente invalido: ${name} (${SUPPORTED_AGENTS.join('/')})`)
+      process.exit(1)
+    }
+    return name
+  }
+  if (existing && SUPPORTED_AGENTS.includes(existing)) return existing
+  if (process.stdin.isTTY) return askAgent()
+  return DEFAULT_AGENT
+}
+
 async function mergeMcp(configDir, mcpMap) {
   if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
 
@@ -312,7 +343,10 @@ async function install(args) {
   if (project) {
     await copyTemplates(resolve(project))
     await scaffoldOpenSpec(resolve(project))
+    const existingRc = await readAncletorc(resolve(project))
+    const agent = await resolveAgent(args, existingRc?.agent)
     await writeManifest(resolve(project), {
+      agent,
       installedPaths: {
         templates: ['AGENTS.md', 'PRODUCT.md'],
         agents: ['.opencode/agents'],
@@ -361,10 +395,11 @@ async function initProject(args) {
   const azure = existing?.azure ?? { enabled: false }
   if (withAzure) azure.enabled = true
   const discovery = existing?.discovery ?? { outputDir: 'docs/technical-discovery', exclude: [] }
-  const manifest = await writeManifest(projectDir, { azure, discovery })
+  const agent = await resolveAgent(args, existing?.agent)
+  const manifest = await writeManifest(projectDir, { azure, discovery, agent })
   await scaffoldOpenSpec(projectDir)
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
-  console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'}`)
+  console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})`)
 }
 
 const DEFAULT_IGNORES = ['node_modules', '.git', 'dist']

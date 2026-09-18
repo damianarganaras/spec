@@ -285,3 +285,26 @@ describe('CLI LOCKED blocks (G7)', () => {
     })
   })
 })
+
+describe('CLI azure MCP (G8)', () => {
+  it('init --with-azure + install inyecta azure-devops y muestra aviso', () => {
+    withDir((dir) => {
+      run(['init', '--with-azure'], dir)
+      const r = run(['install', '--project', dir, '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8'))
+      assert.ok(cfg.mcp['azure-devops'], 'azure-devops presente')
+      assert.equal(cfg.mcp['azure-devops'].command[0], 'npx')
+      assert.match(r.stdout, /AZURE_DEVOPS_ORG_URL/)
+    })
+  })
+
+  it('sin --with-azure no inyecta azure-devops', () => {
+    withDir((dir) => {
+      run(['init'], dir)
+      run(['install', '--project', dir, '--tier', 'gratis'], dir)
+      const cfg = JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8'))
+      assert.equal(cfg.mcp['azure-devops'], undefined)
+    })
+  })
+})

@@ -52,11 +52,11 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   `agents/orchestrator.md` (lee `.ancleto/working-context.md` como datos **no confiables**); tests de XML
   y scopes exactos. Patrón "CLI materializa + agente lee" (preserva `bash: false`).
 
-## Estado actual (v0.3.4)
+## Estado actual (v0.4.2)
 
 - Working tree **limpio** en `main` y `development`.
-- **v0.3.x cerrada**: ítems 1-4 + complementos de memoria + pulido. Tags `v0.3.0` → `v0.3.4` pusheados en `main`.
-- Versión local en `development`: **v0.3.4** (hito v0.4.0 en curso).
+- **v0.3.x cerrada** y **v0.4.0 (CLI Integrity & Diagnostics) cerrada** (G3-G8 + manifiesto + tests).
+- Versión local en `development`: **v0.4.2** (último tag pusheado en `main`).
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD configurado (`publish.yml`): espera Release de GitHub para publicar a npm.
 
@@ -82,7 +82,11 @@ Hito: integridad de la CLI y manifiesto completo.
 - [x] **G7**: Re-aplicación de secciones `<!-- LOCKED: name -->` en templates durante `install`/`update`:
       reemplaza el interior de los bloques LOCKED con el del paquete, preserva el resto (EXTENSIBLE);
       si los tags faltan o están mal formados, warning y archivo intacto. ✅
-- [ ] **G8** Azure MCP opcional (`@azure-devops/mcp` cuando `azure.enabled`)
+- [x] **G8**: Azure MCP opcional — con `azure.enabled: true` y sin `--no-mcp`, `install --project` inyecta
+      `azure-devops` en `opencode.json` (fusión no destructiva, `npx -y @davstack/mcp-azure-devops`); aviso en
+      consola sobre `AZURE_DEVOPS_ORG_URL` y `AZURE_DEVOPS_PAT` (sin pedir credenciales por stdin ni hardcodear URLs). ✅
+
+> Épica **v0.4.0 — CLI Integrity & Diagnostics** cerrada: G6, tests CLI, G3, G4, G5, G7, G8 completos.
 
 ## v0.3.0 - Agent Memory Integration
 

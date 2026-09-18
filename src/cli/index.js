@@ -26,6 +26,7 @@ Uso:
   ancleto install --tier <nivel>     normal | minimo | gratis (pregunta en la 1ra config)
   ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (pregunta si no esta guardado)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
+  ancleto upgrade [--agent <nombre>]  Re-aplica templates (LOCKED) y skills sobre el proyecto actual
   ancleto init [--with-azure] [--agent <nombre>]
                                     Crea .ancletorc en el repositorio actual
                                     (Azure desactivado por defecto, agente: opencode)
@@ -417,6 +418,31 @@ async function install(args) {
   if (azureMcp) console.log(AZURE_MCP_NOTICE)
 }
 
+async function upgradeCmd(args) {
+  const projectDir = process.cwd()
+  const rc = await readAncletorc(projectDir)
+  if (!rc) {
+    console.error("Error: No se encontro .ancletorc. Ejecuta 'ancleto init' primero.")
+    process.exit(1)
+  }
+  const agent = await resolveAgent(args, rc.agent)
+  await copyTemplates(projectDir)
+  const agentSkillsDir = await installAgentSkills(projectDir, agent)
+  const manifest = await writeManifest(projectDir, {
+    agent,
+    installedPaths: {
+      templates: ['AGENTS.md', 'PRODUCT.md'],
+      agents: ['.opencode/agents'],
+      commands: ['.opencode/commands'],
+      skills: [agentSkillsDir]
+    }
+  })
+  console.log(`ancleto: upgrade completo (v${manifest.version}, agente: ${agent})`)
+  console.log('  ✔ templates re-aplicados (bloques LOCKED actualizados, EXTENSIBLE intacto)')
+  console.log(`  ✔ skills actualizadas en ${agentSkillsDir} (${OPENSPEC_SKILLS.length} skills)`)
+  console.log('  ✔ manifiesto .ancletorc actualizado')
+}
+
 async function initProject(args) {
   const withAzure = args.includes('--with-azure')
   const projectDir = process.cwd()
@@ -787,6 +813,9 @@ switch (cmd) {
   case 'install':
   case 'update':
     await install(rest)
+    break
+  case 'upgrade':
+    await upgradeCmd(rest)
     break
   case 'init':
     await initProject(rest)

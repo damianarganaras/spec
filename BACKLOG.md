@@ -69,8 +69,9 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 Eliminar la dependencia externa de OpenSpec: motor propio de skills con configuración por Agente/IDE.
 
 - [x] **S1**: Implementar configuración interactiva del Agente/IDE (opencode, vscode, antigravity, cursor, roo, etc.) en el CLI (`init`/`install`) y persistencia en `.ancletorc` (campo `agent`; default `opencode`; flag `--agent`). ✅
-- [ ] **S2**: Portar las 11 skills base de OpenSpec (`apply`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `new`, `onboard`, `propose`, `verify`, `workflow`) adaptadas a la configuración del Agente.
+- [x] **S2**: Portar las 11 skills base de OpenSpec (`apply`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `new`, `onboard`, `propose`, `verify`, `workflow`) adaptadas a la configuración del Agente. ✅
   - [x] **Pack 1 (core)**: `openspec-new`, `openspec-propose`, `openspec-apply`, `openspec-verify`, `openspec-archive` — autocontenidas (sin binario `openspec`), integradas con memoria (`recordRule`/`recordDecision` en verify/archive, recall en new/propose), ruteadas por `agent` e instaladas en el directorio del agente. ✅
+  - [x] **Pack 2 (workflows y utilidades)**: `openspec-bulk-archive` (con `recordDecision` en resoluciones), `openspec-continue`, `openspec-explore` (con `searchMemory` inicial), `openspec-ff`, `openspec-onboard` (con `searchMemory` inicial), `openspec-workflow` (router del ciclo de vida). `installAgentSkills()` instala el catálogo completo en el directorio del agente configurado. ✅
 - [ ] **S3**: Comando `ancleto upgrade`: actualiza templates y skills locales respetando bloques EXTENSIBLE (reusa la lógica LOCKED de G7).
 
 ## v0.4.0 - CLI Integrity & Diagnostics

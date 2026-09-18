@@ -263,13 +263,13 @@ const AGENT_SKILLS_DIR = {
   roo: '.roo/skills'
 }
 
-const OPENSPEC_PACK1 = ['openspec-new', 'openspec-propose', 'openspec-apply', 'openspec-verify', 'openspec-archive']
+const OPENSPEC_SKILLS = ['openspec-new', 'openspec-propose', 'openspec-apply', 'openspec-verify', 'openspec-archive', 'openspec-bulk-archive', 'openspec-continue', 'openspec-explore', 'openspec-ff', 'openspec-onboard', 'openspec-workflow']
 
 async function installAgentSkills(projectDir, agent) {
   const dir = AGENT_SKILLS_DIR[agent] || AGENT_SKILLS_DIR.opencode
   const dest = join(projectDir, dir)
   await mkdir(dest, { recursive: true })
-  for (const name of OPENSPEC_PACK1) {
+  for (const name of OPENSPEC_SKILLS) {
     const src = join(ROOT, 'skills', name)
     if (!(await exists(src))) {
       console.warn(`ancleto: skill no encontrada en el paquete: ${name}`)

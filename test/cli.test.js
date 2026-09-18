@@ -393,3 +393,44 @@ describe('CLI openspec skills catálogo completo (S2)', () => {
     })
   })
 })
+
+describe('CLI upgrade (S3)', () => {
+  it('upgrade sin .ancletorc falla con exit 1', () => {
+    withDir((dir) => {
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /No se encontro \.ancletorc/)
+    })
+  })
+
+  it('upgrade actualiza LOCKED y mantiene EXTENSIBLE', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const path = join(dir, 'AGENTS.md')
+      let content = readFileSync(path, 'utf8')
+      content = content.replace('## Tools de Soporte', '## MIS_HERRAMIENTAS')
+      content = content.replace(/Contexto gestionado por @ancleto\/spec[^\n]*/, 'BLOQUE_VIEJO')
+      writeFileSync(path, content)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      const updated = readFileSync(path, 'utf8')
+      assert.match(updated, /MIS_HERRAMIENTAS/)
+      assert.match(updated, /Contexto gestionado por @ancleto\/spec/)
+      assert.doesNotMatch(updated, /BLOQUE_VIEJO/)
+      assert.match(r.stdout, /upgrade completo/)
+    })
+  })
+
+  it('check pasa 100% despues de upgrade', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const up = run(['upgrade'], dir)
+      assert.equal(up.status, 0)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /0 faltantes/)
+      assert.match(r.stdout, /0 huerfanos/)
+    })
+  })
+})

@@ -72,7 +72,9 @@ Eliminar la dependencia externa de OpenSpec: motor propio de skills con configur
 - [x] **S2**: Portar las 11 skills base de OpenSpec (`apply`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `new`, `onboard`, `propose`, `verify`, `workflow`) adaptadas a la configuración del Agente. ✅
   - [x] **Pack 1 (core)**: `openspec-new`, `openspec-propose`, `openspec-apply`, `openspec-verify`, `openspec-archive` — autocontenidas (sin binario `openspec`), integradas con memoria (`recordRule`/`recordDecision` en verify/archive, recall en new/propose), ruteadas por `agent` e instaladas en el directorio del agente. ✅
   - [x] **Pack 2 (workflows y utilidades)**: `openspec-bulk-archive` (con `recordDecision` en resoluciones), `openspec-continue`, `openspec-explore` (con `searchMemory` inicial), `openspec-ff`, `openspec-onboard` (con `searchMemory` inicial), `openspec-workflow` (router del ciclo de vida). `installAgentSkills()` instala el catálogo completo en el directorio del agente configurado. ✅
-- [ ] **S3**: Comando `ancleto upgrade`: actualiza templates y skills locales respetando bloques EXTENSIBLE (reusa la lógica LOCKED de G7).
+- [x] **S3**: Comando `ancleto upgrade`: actualiza templates y skills locales respetando bloques EXTENSIBLE (reusa la lógica LOCKED de G7). ✅
+
+> Épica **v0.5.0 — Agentic OpenSpec Engine & Upgrades** cerrada: S1 (configuración por Agente), S2 (11 skills nativas), S3 (`ancleto upgrade`).
 
 ## v0.4.0 - CLI Integrity & Diagnostics
 

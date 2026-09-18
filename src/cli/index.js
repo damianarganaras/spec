@@ -13,6 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
 const ASSETS = ['agents', 'commands', 'skills']
 const TEMPLATES = ['AGENTS.md', 'PRODUCT.md']
+const AZURE_MCP_NOTICE = 'ancleto: MCP azure-devops habilitado — usa las variables de entorno AZURE_DEVOPS_ORG_URL y AZURE_DEVOPS_PAT'
 
 const HELP = `ancleto - orquestador SDD liviano con subagentes optimizados para costo/tokens
 (alias: aspec)
@@ -289,7 +290,7 @@ async function install(args) {
   const pi = args.indexOf('--project')
   const project = pi >= 0 ? args[pi + 1] : null
   const withMcp = !args.includes('--no-mcp')
-  const mcpMap = withMcp ? buildDefaultMcp() : {}
+  let mcpMap = withMcp ? buildDefaultMcp() : {}
 
   const ti = args.indexOf('--tier')
   let tier = ti >= 0 ? args[ti + 1] : null
@@ -332,6 +333,15 @@ async function install(args) {
   await applyTier(join(target, 'agents'), tier)
   await writeFile(tierStatePath(target), tier + '\n')
 
+  let azureMcp = false
+  if (project && withMcp) {
+    const rc = await readAncletorc(resolve(project))
+    if (rc?.azure?.enabled) {
+      mcpMap['azure-devops'] = { type: 'local', enabled: true, command: ['npx', '-y', '@davstack/mcp-azure-devops'] }
+      azureMcp = true
+    }
+  }
+
   const res = await mergeMcp(target, mcpMap)
   const loc = project
     ? `${resolve(project)} (.opencode/ + templates en la raiz)`
@@ -341,6 +351,7 @@ async function install(args) {
   if (res.added.length) {
     console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
   }
+  if (azureMcp) console.log(AZURE_MCP_NOTICE)
 }
 
 async function initProject(args) {
@@ -352,6 +363,7 @@ async function initProject(args) {
   const discovery = existing?.discovery ?? { outputDir: 'docs/technical-discovery', exclude: [] }
   const manifest = await writeManifest(projectDir, { azure, discovery })
   await scaffoldOpenSpec(projectDir)
+  if (azure.enabled) console.log(AZURE_MCP_NOTICE)
   console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'}`)
 }
 

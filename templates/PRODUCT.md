@@ -91,3 +91,7 @@ openspec/
 - `npm test` → Run tests
 - `npm run build` → Production build
 - `npm run lint` → Linter
+
+<!-- LOCKED: test-block -->
+Contexto gestionado por @ancleto/spec — no editar: se re-aplica en cada actualizacion.
+<!-- /LOCKED: test-block -->

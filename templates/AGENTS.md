@@ -60,3 +60,7 @@ conflicto, prevalece el diseño vigente.
 
 - `ancleto`: Descubrimiento técnico e inicialización.
 - `openspec`: Gestión del ciclo de vida del cambio (proposal, specs, design, tasks, archive).
+
+<!-- LOCKED: test-block -->
+Contexto gestionado por @ancleto/spec — no editar: se re-aplica en cada actualizacion.
+<!-- /LOCKED: test-block -->

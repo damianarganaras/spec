@@ -223,13 +223,65 @@ async function copyAssets(dest) {
   }
 }
 
+const DEFAULT_OPENSPEC_CONFIG = `# OpenSpec project configuration
+# Generado por @ancleto/spec (G5) — editalo libremente, no se sobrescribe en reinstalaciones.
+schema: spec-driven-development
+`
+
+async function scaffoldOpenSpec(projectDir) {
+  const changesDir = join(projectDir, 'openspec', 'changes')
+  await mkdir(changesDir, { recursive: true })
+  const configPath = join(projectDir, 'openspec', 'config.yaml')
+  if (!(await exists(configPath))) {
+    await writeFile(configPath, DEFAULT_OPENSPEC_CONFIG)
+  }
+}
+
+function extractLockedBlocks(content) {
+  const blocks = new Map()
+  const re = /<!--\s*LOCKED:\s*([\w-]+)\s*-->([\s\S]*?)<!--\s*\/LOCKED:\s*\1\s*-->/g
+  let m
+  while ((m = re.exec(content)) !== null) {
+    blocks.set(m[1], m[0])
+  }
+  return blocks
+}
+
+function replaceLockedBlock(local, name, sourceBlock) {
+  const re = new RegExp(`<!--\\s*LOCKED:\\s*${escapeRe(name)}\\s*-->[\\s\\S]*?<!--\\s*\\/LOCKED:\\s*${escapeRe(name)}\\s*-->`)
+  if (!re.test(local)) return null
+  return local.replace(re, sourceBlock)
+}
+
+function mergeLocked(source, local, filename) {
+  const blocks = extractLockedBlocks(source)
+  let result = local
+  for (const [name, sourceBlock] of blocks) {
+    const replaced = replaceLockedBlock(result, name, sourceBlock)
+    if (replaced === null) {
+      console.warn(`ancleto: no se pudo actualizar el bloque LOCKED "${name}" en ${filename} (tags ausentes o mal formados)`)
+    } else {
+      result = replaced
+    }
+  }
+  return result
+}
+
 async function copyTemplates(projectDir) {
   const dest = join(projectDir, '.opencode')
   await copyAssets(dest)
   for (const t of TEMPLATES) {
     const target = join(projectDir, t)
-    if (await exists(target)) continue
-    await writeFile(target, await readFile(join(ROOT, 'templates', t)))
+    const source = await readFile(join(ROOT, 'templates', t), 'utf8')
+    if (!(await exists(target))) {
+      await writeFile(target, source)
+      continue
+    }
+    const local = await readFile(target, 'utf8')
+    const merged = mergeLocked(source, local, t)
+    if (merged !== local) {
+      await writeFile(target, merged)
+    }
   }
 }
 
@@ -258,6 +310,7 @@ async function install(args) {
 
   if (project) {
     await copyTemplates(resolve(project))
+    await scaffoldOpenSpec(resolve(project))
     await writeManifest(resolve(project), {
       installedPaths: {
         templates: ['AGENTS.md', 'PRODUCT.md'],
@@ -298,6 +351,7 @@ async function initProject(args) {
   if (withAzure) azure.enabled = true
   const discovery = existing?.discovery ?? { outputDir: 'docs/technical-discovery', exclude: [] }
   const manifest = await writeManifest(projectDir, { azure, discovery })
+  await scaffoldOpenSpec(projectDir)
   console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'}`)
 }
 

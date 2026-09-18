@@ -70,6 +70,7 @@ Eliminar la dependencia externa de OpenSpec: motor propio de skills con configur
 
 - [x] **S1**: Implementar configuración interactiva del Agente/IDE (opencode, vscode, antigravity, cursor, roo, etc.) en el CLI (`init`/`install`) y persistencia en `.ancletorc` (campo `agent`; default `opencode`; flag `--agent`). ✅
 - [ ] **S2**: Portar las 11 skills base de OpenSpec (`apply`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `new`, `onboard`, `propose`, `verify`, `workflow`) adaptadas a la configuración del Agente.
+  - [x] **Pack 1 (core)**: `openspec-new`, `openspec-propose`, `openspec-apply`, `openspec-verify`, `openspec-archive` — autocontenidas (sin binario `openspec`), integradas con memoria (`recordRule`/`recordDecision` en verify/archive, recall en new/propose), ruteadas por `agent` e instaladas en el directorio del agente. ✅
 - [ ] **S3**: Comando `ancleto upgrade`: actualiza templates y skills locales respetando bloques EXTENSIBLE (reusa la lógica LOCKED de G7).
 
 ## v0.4.0 - CLI Integrity & Diagnostics

@@ -343,3 +343,29 @@ describe('CLI azure MCP (G8)', () => {
     })
   })
 })
+
+describe('CLI openspec skills Pack 1 (S2)', () => {
+  const PACK1 = ['openspec-new', 'openspec-propose', 'openspec-apply', 'openspec-verify', 'openspec-archive']
+
+  it('install --project instala las 5 skills en el directorio del agente', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      for (const name of PACK1) {
+        assert.ok(existsSync(join(dir, '.opencode', 'skills', name, 'SKILL.md')), name)
+      }
+      const rc = readRc(dir)
+      assert.deepEqual(rc.installedPaths.skills, ['.opencode/skills'])
+    })
+  })
+
+  it('check valida las 5 skills sin faltantes ni huerfanos', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /0 faltantes/)
+      assert.match(r.stdout, /0 huerfanos/)
+    })
+  })
+})

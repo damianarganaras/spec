@@ -255,6 +255,34 @@ async function copyAssets(dest) {
   }
 }
 
+const AGENT_SKILLS_DIR = {
+  opencode: '.opencode/skills',
+  vscode: '.vscode/skills',
+  antigravity: '.antigravity/skills',
+  cursor: '.cursor/skills',
+  roo: '.roo/skills'
+}
+
+const OPENSPEC_PACK1 = ['openspec-new', 'openspec-propose', 'openspec-apply', 'openspec-verify', 'openspec-archive']
+
+async function installAgentSkills(projectDir, agent) {
+  const dir = AGENT_SKILLS_DIR[agent] || AGENT_SKILLS_DIR.opencode
+  const dest = join(projectDir, dir)
+  await mkdir(dest, { recursive: true })
+  for (const name of OPENSPEC_PACK1) {
+    const src = join(ROOT, 'skills', name)
+    if (!(await exists(src))) {
+      console.warn(`ancleto: skill no encontrada en el paquete: ${name}`)
+      continue
+    }
+    await cp(src, join(dest, name), { recursive: true })
+  }
+  if (dir !== AGENT_SKILLS_DIR.opencode) {
+    await cp(join(ROOT, 'skills'), dest, { recursive: true })
+  }
+  return dir.replace(/\\/g, '/')
+}
+
 const DEFAULT_OPENSPEC_CONFIG = `# OpenSpec project configuration
 # Generado por @ancleto/spec (G5) — editalo libremente, no se sobrescribe en reinstalaciones.
 schema: spec-driven-development
@@ -345,13 +373,14 @@ async function install(args) {
     await scaffoldOpenSpec(resolve(project))
     const existingRc = await readAncletorc(resolve(project))
     const agent = await resolveAgent(args, existingRc?.agent)
+    const agentSkillsDir = await installAgentSkills(resolve(project), agent)
     await writeManifest(resolve(project), {
       agent,
       installedPaths: {
         templates: ['AGENTS.md', 'PRODUCT.md'],
         agents: ['.opencode/agents'],
         commands: ['.opencode/commands'],
-        skills: ['.opencode/skills']
+        skills: [agentSkillsDir]
       }
     })
   } else {

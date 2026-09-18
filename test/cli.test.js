@@ -77,6 +77,41 @@ describe('CLI init (G6 manifest)', () => {
   })
 })
 
+describe('CLI agent (S1)', () => {
+  it('init --agent cursor guarda "agent": "cursor"', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'cursor'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'cursor')
+    })
+  })
+
+  it('agente no soportado falla con exit 1', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'invalid'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /agente invalido/)
+    })
+  })
+
+  it('install --project guarda "agent": "opencode" por defecto sin prompt', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'opencode')
+    })
+  })
+
+  it('ejecuciones subsecuentes preservan "agent" preexistente', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'cursor'], dir)
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'cursor')
+    })
+  })
+})
+
 describe('CLI install', () => {
   it('instala assets y templates, aplica tier y actualiza el manifiesto', () => {
     withDir((dir) => {
@@ -305,6 +340,32 @@ describe('CLI azure MCP (G8)', () => {
       run(['install', '--project', dir, '--tier', 'gratis'], dir)
       const cfg = JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8'))
       assert.equal(cfg.mcp['azure-devops'], undefined)
+    })
+  })
+})
+
+describe('CLI openspec skills Pack 1 (S2)', () => {
+  const PACK1 = ['openspec-new', 'openspec-propose', 'openspec-apply', 'openspec-verify', 'openspec-archive']
+
+  it('install --project instala las 5 skills en el directorio del agente', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      for (const name of PACK1) {
+        assert.ok(existsSync(join(dir, '.opencode', 'skills', name, 'SKILL.md')), name)
+      }
+      const rc = readRc(dir)
+      assert.deepEqual(rc.installedPaths.skills, ['.opencode/skills'])
+    })
+  })
+
+  it('check valida las 5 skills sin faltantes ni huerfanos', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /0 faltantes/)
+      assert.match(r.stdout, /0 huerfanos/)
     })
   })
 })

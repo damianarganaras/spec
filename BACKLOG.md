@@ -64,6 +64,15 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 
 - [ ] Confirmar publish de `v0.3.4` en npm (Release de GitHub pendiente — dispara `publish.yml`)
 
+## v0.5.0 - Agentic OpenSpec Engine & Upgrades
+
+Eliminar la dependencia externa de OpenSpec: motor propio de skills con configuración por Agente/IDE.
+
+- [x] **S1**: Implementar configuración interactiva del Agente/IDE (opencode, vscode, antigravity, cursor, roo, etc.) en el CLI (`init`/`install`) y persistencia en `.ancletorc` (campo `agent`; default `opencode`; flag `--agent`). ✅
+- [ ] **S2**: Portar las 11 skills base de OpenSpec (`apply`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `new`, `onboard`, `propose`, `verify`, `workflow`) adaptadas a la configuración del Agente.
+  - [x] **Pack 1 (core)**: `openspec-new`, `openspec-propose`, `openspec-apply`, `openspec-verify`, `openspec-archive` — autocontenidas (sin binario `openspec`), integradas con memoria (`recordRule`/`recordDecision` en verify/archive, recall en new/propose), ruteadas por `agent` e instaladas en el directorio del agente. ✅
+- [ ] **S3**: Comando `ancleto upgrade`: actualiza templates y skills locales respetando bloques EXTENSIBLE (reusa la lógica LOCKED de G7).
+
 ## v0.4.0 - CLI Integrity & Diagnostics
 
 Hito: integridad de la CLI y manifiesto completo.
@@ -106,7 +115,7 @@ Integración de la memoria persistente con el orquestador y los AI agents.
   con `node:sqlite`, diseño congelado en `DESIGN-memory-engine-v0.2.0.md`. Revisar el
   contrato de `openspec-recall` al implementar.
 - ~~Alcance del motor `discovery` (G2): ¿implementación completa o MVP (solo `--check`)?~~ → **Resuelta**: MVP (`--check` por hash) — implementado en G2, ver `Hecho`.
-- ¿Portar las otras 11 skills base (`openspec-apply/archive/bulk-archive/continue/explore/ff/new/onboard/propose/verify/workflow`)? Los opsx ya son autocontenidos — solo si suman desde otros agents
+- ~~¿Portar las otras 11 skills base (`openspec-apply/archive/bulk-archive/continue/explore/ff/new/onboard/propose/verify/workflow`)?~~ → **Resuelta (v0.5.0)**: portar como skills nativas adaptadas al Agente (S2).
 - Qué modelos van en cada tier (tabla `TIERS` en `src/cli/index.js` es ajustable)
 
 ## Ideas de colaboradores

@@ -219,3 +219,69 @@ describe('CLI doctor (G4)', () => {
     })
   })
 })
+
+describe('CLI scaffold OpenSpec (G5)', () => {
+  it('init crea openspec/changes y config.yaml', () => {
+    withDir((dir) => {
+      run(['init'], dir)
+      assert.ok(existsSync(join(dir, 'openspec', 'config.yaml')))
+      assert.ok(existsSync(join(dir, 'openspec', 'changes')))
+    })
+  })
+
+  it('no pisa un config.yaml preexistente', () => {
+    withDir((dir) => {
+      run(['init'], dir)
+      const cfgPath = join(dir, 'openspec', 'config.yaml')
+      writeFileSync(cfgPath, '# config custom del equipo\n')
+      run(['init'], dir)
+      assert.equal(readFileSync(cfgPath, 'utf8'), '# config custom del equipo\n')
+    })
+  })
+
+  it('install --project tambien crea el scaffold', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      assert.ok(existsSync(join(dir, 'openspec', 'config.yaml')))
+      assert.ok(existsSync(join(dir, 'openspec', 'changes')))
+    })
+  })
+})
+
+describe('CLI LOCKED blocks (G7)', () => {
+  it('re-aplica bloques LOCKED y preserva contenido EXTENSIBLE', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      let content = readFileSync(path, 'utf8')
+      assert.match(content, /LOCKED: test-block/)
+
+      content = content.replace('## Tools de Soporte', '## MIS_HERRAMIENTAS_PERSONALIZADAS')
+      content = content.replace(/Contexto gestionado por @ancleto\/spec[^\n]*/, 'MODIFICADO_DENTRO_DEL_BLOQUE')
+      writeFileSync(path, content)
+
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const updated = readFileSync(path, 'utf8')
+      assert.match(updated, /MIS_HERRAMIENTAS_PERSONALIZADAS/)
+      assert.match(updated, /Contexto gestionado por @ancleto\/spec/)
+      assert.doesNotMatch(updated, /MODIFICADO_DENTRO_DEL_BLOQUE/)
+    })
+  })
+
+  it('no altera el archivo si falta el tag de cierre (escape seguro)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      let content = readFileSync(path, 'utf8')
+      content = content.replace('<!-- /LOCKED: test-block -->', '')
+      content = content.replace('## Tools de Soporte', '## CABECERA_PERSONAL')
+      writeFileSync(path, content)
+
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      const updated = readFileSync(path, 'utf8')
+      assert.match(updated, /CABECERA_PERSONAL/)
+      assert.match(r.stderr, /no se pudo actualizar el bloque LOCKED "test-block"/)
+    })
+  })
+})

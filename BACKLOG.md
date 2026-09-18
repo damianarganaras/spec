@@ -77,8 +77,11 @@ Hito: integridad de la CLI y manifiesto completo.
       (✔/✖ faltantes, ⚠ huérfanos; exit 1 si hay faltantes). ✅
 - [x] **G4** `ancleto doctor`: diagnostica el entorno — Node >=24, `node:sqlite` importable, `opencode.json`
       válido (exit 1 si Node/SQLite fallan). ✅
-- [ ] **G5** Scaffold OpenSpec en install/init (`openspec/changes/` + `config.yaml`)
-- [ ] **G7** LOCKED/EXTENSIBLE en templates (re-aplicación de secciones LOCKED)
+- [x] **G5**: Scaffold OpenSpec en `init` e `install --project` — crea `openspec/changes/` y
+      `openspec/config.yaml` solo si no existen (nunca pisa config.yaml). ✅
+- [x] **G7**: Re-aplicación de secciones `<!-- LOCKED: name -->` en templates durante `install`/`update`:
+      reemplaza el interior de los bloques LOCKED con el del paquete, preserva el resto (EXTENSIBLE);
+      si los tags faltan o están mal formados, warning y archivo intacto. ✅
 - [ ] **G8** Azure MCP opcional (`@azure-devops/mcp` cuando `azure.enabled`)
 
 ## v0.3.0 - Agent Memory Integration

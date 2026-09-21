@@ -106,7 +106,7 @@ ancleto init --agent opencode --tier normal
 
 * `normal`: Modelos balanceados sin restricciones agresivas de contexto (default).
 * `minimo`: Enfoque en el modelo pago más económico viable, con alta compresión de contexto y exclusión de tests/docs en el discovery.
-* `gratis`: Bloqueado a modelos gratuitos (ej. `opencode/big-pickle`), empaquetado ultra-agresivo y un límite estricto (budget) de tokens enviado al LLM.
+* `gratis`: Bloqueado a modelos gratuitos, empaquetado ultra-agresivo y un límite estricto (budget) de tokens enviado al LLM. Si tenés acceso a **Muse Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`, no abierto a todos), se usa ese; si no, se usa `opencode/big-pickle`. En modo interactivo el instalador te lo pregunta; la elección queda guardada en `.ancletorc` (`gratisModel`).
 
 La configuración se preserva en `.ancletorc` (raíz del proyecto) y `.ancleto-tier` (junto a la configuración instalada).
 
@@ -211,3 +211,28 @@ ancleto init --with-azure
 ```
 
 Esto escribe `azure.enabled: true` en tu `.ancletorc`. Solo deberás completar la sección de Azure en el archivo `PRODUCT.md` e instalar su extensión (`az extension add --name azure-devops`).
+
+---
+
+## 🤖 Referencia: Agentes y Modelos por Tier
+
+Los 10 agentes instalados y el modelo que usa cada uno según tu tier. Al instalar, el nivel elegido se escribe en la línea `model:` de cada agente (y se re-aplica en cada `update`).
+
+| Agente | `normal` (default) | `minimo` | `gratis` |
+|---|---|---|---|
+| orchestrator | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| coder | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| tester | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| spec-writer | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| reviewer | `opencode-go/qwen3.6-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| technical-discovery | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| technical-seed-writer | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| memory-keeper | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| context-resolver | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| documenter | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+
+El tier `minimo` usa un único modelo (`deepseek-v4.1-flash`) para los 10 agentes: es el más económico del catálogo para coding (0.15/0.60 por millón de tokens) con 1M de contexto.
+
+**Tier `gratis`:** los 10 agentes usan **Muse Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`) **si está disponible** en tu cuenta (no está abierto a todos). En una instalación interactiva el wizard te lo pregunta; la respuesta se guarda en `.ancletorc` (`gratisModel`) y se reutiliza en los siguientes `install`/`update`. Sin TTY (CI) se detecta con `opencode models` — con timeout — y si no se puede confirmar se usa `opencode/big-pickle`. El instalador siempre informa cuál aplicó (`ancleto: modelo gratis: ...`).
+
+> Variable avanzada: `ANCLETO_MUSE_SPARK=1` fuerza Muse Spark, `ANCLETO_MUSE_SPARK=0` fuerza `big-pickle` (útil para tests o para fijar el comportamiento; tiene prioridad sobre la elección guardada).

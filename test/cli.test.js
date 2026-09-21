@@ -14,7 +14,7 @@ function run(args, cwd, env = {}) {
   return spawnSync(process.execPath, [CLI, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, ...env }
+    env: { ...process.env, ANCLETO_MUSE_SPARK: '0', ...env }
   })
 }
 
@@ -132,7 +132,7 @@ describe('CLI install', () => {
       assert.deepEqual(rc.installedPaths.skills, ['.opencode/skills'])
 
       const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
-      assert.match(orchestrator, /model: opencode-go\/deepseek-v4-flash/)
+      assert.match(orchestrator, /model: opencode-go\/deepseek-v4\.1-flash/)
 
       assert.equal(readFileSync(join(dir, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'minimo')
     })
@@ -553,7 +553,7 @@ describe('CLI init --tier (v0.6.2)', () => {
       assert.equal(r.status, 0)
       assert.equal(readFileSync(join(dir, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'gratis')
 
-      const inst = run(['install', '--project', dir, '--no-mcp'], dir)
+      const inst = run(['install', '--project', dir, '--no-mcp'], dir, { ANCLETO_MUSE_SPARK: '0' })
       assert.equal(inst.status, 0)
       const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
       assert.match(orchestrator, /model: opencode\/big-pickle/)
@@ -592,6 +592,29 @@ describe('CLI install wizard (v0.6.6)', () => {
       const r = run(['install', '--project', dir, '--no-mcp'], dir)
       assert.equal(r.status, 0)
       assert.equal(readFileSync(join(dir, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'normal')
+    })
+  })
+
+  it('install --tier gratis con Muse Spark disponible aplica muse-spark', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '1' })
+      assert.equal(r.status, 0)
+      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orchestrator, /model: opencode\/muse-spark-1\.3-contributor-free/)
+      assert.match(r.stdout, /modelo gratis: opencode\/muse-spark-1\.3-contributor-free/)
+      assert.equal(readRc(dir).gratisModel, 'opencode/muse-spark-1.3-contributor-free')
+    })
+  })
+
+  it('install --tier gratis reutiliza el modelo persistido sin preguntar', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '1' })
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '' })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /modelo gratis: opencode\/muse-spark-1\.3-contributor-free/)
+      assert.equal(readRc(dir).gratisModel, 'opencode/muse-spark-1.3-contributor-free')
+      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orchestrator, /model: opencode\/muse-spark-1\.3-contributor-free/)
     })
   })
 })

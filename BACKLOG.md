@@ -55,6 +55,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ Feature v0.6.2: Banner ASCII animado y menú select TTY (Raw Mode) estilo OpenSpec para ancleto init.
 - ✅ Releases v0.6.3/v0.6.4: rebrand de skills/commands (`openspec-*`/`/opsx-*` → `ancleto-*`/`/cleto-*`) + fix MCP binaries portables.
 - ✅ Feature v0.6.5: Rebrand total openspec → aspec — directorio de changes `aspec/` (antes `openspec/`) con migración automática en `ancleto upgrade`, sin referencias al CLI externo.
+- ✅ Feature v0.6.7: Tier `gratis` prefiere Muse Spark 1.3 Free (`opencode/muse-spark-1.3-contributor-free`): se pregunta en el wizard interactivo, se persiste en `.ancletorc` (`gratisModel`), con detección por `opencode models` en modo no interactivo y fallback a `opencode/big-pickle`; wizard interactivo también en `ancleto install` (banner + menús Agente/Tier).
 
 ## Estado actual (v0.6.5)
 

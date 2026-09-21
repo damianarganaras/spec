@@ -290,13 +290,13 @@ const AGENT_SKILLS_DIR = {
   roo: '.roo/skills'
 }
 
-const OPENSPEC_SKILLS = ['openspec-new', 'openspec-propose', 'openspec-apply', 'openspec-verify', 'openspec-archive', 'openspec-bulk-archive', 'openspec-continue', 'openspec-explore', 'openspec-ff', 'openspec-onboard', 'openspec-workflow']
+const ANCLETO_SKILLS = ['ancleto-new', 'ancleto-propose', 'ancleto-apply', 'ancleto-verify', 'ancleto-archive', 'ancleto-bulk-archive', 'ancleto-continue', 'ancleto-explore', 'ancleto-ff', 'ancleto-onboard', 'ancleto-workflow']
 
 async function installAgentSkills(projectDir, agent) {
   const dir = AGENT_SKILLS_DIR[agent] || AGENT_SKILLS_DIR.opencode
   const dest = join(projectDir, dir)
   await mkdir(dest, { recursive: true })
-  for (const name of OPENSPEC_SKILLS) {
+  for (const name of ANCLETO_SKILLS) {
     const src = join(ROOT, 'skills', name)
     if (!(await exists(src))) {
       console.warn(`ancleto: skill no encontrada en el paquete: ${name}`)
@@ -460,7 +460,7 @@ async function upgradeCmd(args) {
   })
   console.log(`ancleto: upgrade completo (v${manifest.version}, agente: ${agent})`)
   console.log('  ✔ templates re-aplicados (bloques LOCKED actualizados, EXTENSIBLE intacto)')
-  console.log(`  ✔ skills actualizadas en ${agentSkillsDir} (${OPENSPEC_SKILLS.length} skills)`)
+  console.log(`  ✔ skills actualizadas en ${agentSkillsDir} (${ANCLETO_SKILLS.length} skills)`)
   console.log('  ✔ manifiesto .ancletorc actualizado')
 }
 

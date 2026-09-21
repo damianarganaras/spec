@@ -120,7 +120,7 @@ describe('CLI install', () => {
       assert.ok(existsSync(join(dir, 'AGENTS.md')))
       assert.ok(existsSync(join(dir, 'PRODUCT.md')))
       assert.ok(existsSync(join(dir, '.opencode', 'agents', 'orchestrator.md')))
-      assert.ok(existsSync(join(dir, '.opencode', 'commands', 'opsx-new.md')))
+      assert.ok(existsSync(join(dir, '.opencode', 'commands', 'cleto-new.md')))
       assert.ok(existsSync(join(dir, '.opencode', 'skills', 'triage-clarifier', 'SKILL.md')))
 
       const rc = readRc(dir)
@@ -349,7 +349,7 @@ describe('CLI azure MCP (G8)', () => {
 })
 
 describe('CLI openspec skills Pack 1 (S2)', () => {
-  const PACK1 = ['openspec-new', 'openspec-propose', 'openspec-apply', 'openspec-verify', 'openspec-archive']
+  const PACK1 = ['ancleto-new', 'ancleto-propose', 'ancleto-apply', 'ancleto-verify', 'ancleto-archive']
 
   it('install --project instala las 5 skills en el directorio del agente', () => {
     withDir((dir) => {
@@ -375,7 +375,7 @@ describe('CLI openspec skills Pack 1 (S2)', () => {
 })
 
 describe('CLI openspec skills catálogo completo (S2)', () => {
-  const ALL11 = ['openspec-new', 'openspec-propose', 'openspec-apply', 'openspec-verify', 'openspec-archive', 'openspec-bulk-archive', 'openspec-continue', 'openspec-explore', 'openspec-ff', 'openspec-onboard', 'openspec-workflow']
+  const ALL11 = ['ancleto-new', 'ancleto-propose', 'ancleto-apply', 'ancleto-verify', 'ancleto-archive', 'ancleto-bulk-archive', 'ancleto-continue', 'ancleto-explore', 'ancleto-ff', 'ancleto-onboard', 'ancleto-workflow']
 
   it('install --project instala las 11 skills en el directorio del agente', () => {
     withDir((dir) => {

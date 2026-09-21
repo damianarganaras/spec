@@ -37,7 +37,7 @@ ancleto install --tier normal
 Durante el proceso se configura:
 
 - **Agents (10)** en `~/.config/opencode/` (orchestrator, coder, tester, etc.).
-- **Commands (12)** `opsx-*` para el ciclo de changes OpenSpec.
+- **Commands (12)** `cleto-*` para el ciclo de changes OpenSpec.
 - **Skills (7)** base y de perfil ancleto.
 - **MCPs** `engram` (memoria persistente) y `caveman` (compresión) en
   `~/.config/opencode/opencode.json`, fusionándose con la config existente.
@@ -115,7 +115,7 @@ ancleto update
 Al completar la configuración, deberías tener:
 
 - `@ancleto/spec` instalado (`ancleto --version` responde).
-- Agents/commands/skills disponibles en opencode (`/opsx-new`, etc.).
+- Agents/commands/skills disponibles en opencode (`/cleto-new`, etc.).
 - MCPs `engram` y `caveman` configurados en opencode (o warnings claros si se omitieron).
 - `.ancleto-tier` con el nivel elegido.
 - `.ancletorc` en el proyecto (si corriste `ancleto init`).

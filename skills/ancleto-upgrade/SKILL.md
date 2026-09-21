@@ -431,7 +431,7 @@ build: sí/no | lint: sí/no | test: sí/no | test:ci: sí/no | typecheck: sí/n
 - tasks.md ✅ ({N} tareas en 6 fases)
 - design.md ✅
 
-Para implementar: /opsx-apply {CHANGE_NAME}
+Para implementar: /cleto-apply {CHANGE_NAME}
 ```
 
 ---
@@ -439,7 +439,7 @@ Para implementar: /opsx-apply {CHANGE_NAME}
 ## Guardrails
 
 Este skill solo genera artefactos OpenSpec — no modifica ningún archivo del repo.
-Todo cambio real lo ejecuta el desarrollador con `/opsx-apply`, que tiene su propio
+Todo cambio real lo ejecuta el desarrollador con `/cleto-apply`, que tiene su propio
 ciclo de revisión. Modificar el repo desde este skill saltearía ese control.
 
 - No tocar archivos fuera de `openspec/changes/{CHANGE_NAME}/`

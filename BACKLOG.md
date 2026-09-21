@@ -74,6 +74,12 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - [ ] **M2 (Garbage Collection):** Subcomando `ancleto memory gc [--dry-run]` para purgar nodos superseídos antiguos y ejecutar VACUUM/REINDEX en node:sqlite.
 - [ ] **A1 (Frontmatter Adapters):** Transformador dinámico de metadatos en `installAgentSkills` para adaptar el frontmatter de las skills según el IDE configurado (`agent` en `.ancletorc`).
 
+## Futuro (sin fecha) - Contexto colaborativo para equipos (Idea)
+
+Anotada para evaluación futura. **Aplica solo a trabajos en equipo** (no es prioridad hoy).
+
+- [ ] **C1 (carpeta de contexto compartido):** Flag opcional en `ancleto init` (p. ej. `--team`) que habilite una carpeta de contexto colaborativo versionada en el repo, donde se suban los artefactos SDD **archivados** (`aspec/changes/archive/`) y la **base de memoria SQLite** (`.ancleto/memory.db`), para compartir specs y reglas/decisiones entre el equipo. Requiere definir guardrails: qué NO se comparte (changes en curso, `working-context`), resolución de conflictos de la DB y sanitización de datos sensibles antes de commitear.
+
 ## v0.6.0 - Discovery Engine v2.0 & Token Budgeting
 
 Evolucionar el motor de discovery (MVP con Repomix + `--check` por hash) hacia un mapa estructural con presupuesto de tokens e inyección de contexto.

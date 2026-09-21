@@ -55,6 +55,9 @@ conflicto, prevalece el diseño vigente.
 - **Cambios con scope incierto / arquitectura**: Crear artifacts en `aspec/changes/<name>/`.
 - **Cambios menores / fixes**: Implementación directa.
 - **Cierre**: Archivar con `/cleto-archive` al finalizar.
+- **Idioma de los artifacts**: el contenido de `proposal.md`, `design.md`, `tasks.md` y `specs/` se escribe
+  en **inglés**. Los keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED
+  Requirements`) son literales y **no se traducen**. Nombres de archivos y directorios: inglés kebab-case.
 
 ## Tools de Soporte
 

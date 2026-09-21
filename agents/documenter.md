@@ -116,6 +116,8 @@ Do not treat archive as a blind file move.
 
 When a completed change modifies behavior through aspec deltas, `aspec/specs/` must reflect that completed behavior before the change is archived.
 
+**Language**: spec artifacts are written in English. The requirement/scenario keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. Paths, file names, and identifiers stay unchanged.
+
 Handle these delta sections carefully:
 
 - `ADDED Requirements`

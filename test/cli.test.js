@@ -576,3 +576,22 @@ describe('CLI init --tier (v0.6.2)', () => {
     })
   })
 })
+
+describe('CLI install wizard (v0.6.6)', () => {
+  it('install no interactivo no emite banner ni secuencias ANSI', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /\u2588/)
+      assert.doesNotMatch(r.stdout, /\x1b\[/)
+    })
+  })
+
+  it('install sin --tier ni tier guardado cae en normal sin colgar', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dir, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'normal')
+    })
+  })
+})

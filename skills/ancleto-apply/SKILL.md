@@ -10,63 +10,44 @@ metadata:
 
 # aspec Apply
 
-Implement the tasks of a change, working directly from its artifact files. No external binaries are invoked: task state lives in `tasks.md` checkboxes.
+Implement a change's tasks directly from its artifact files. No external binaries: task state lives in `tasks.md` checkboxes.
 
-**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `aspec/changes/` and ask the user to select.
+**Input**: optionally a change name (e.g., `add-auth`). If omitted, try to infer it from conversation context; if vague, list the directories under `aspec/changes/` and ask the user to select.
 
 ## Steps
 
 ### 1. Select the change
 
 - If a name is provided, use it. Announce: "Using change: `<name>`" and how to override.
-- If omitted: infer from conversation context; auto-select if only one active change directory exists under `aspec/changes/`; otherwise list the directories and ask the user to choose.
+- If omitted: infer from context; auto-select if only one active change directory exists; otherwise list them and ask the user to choose.
 
 **IMPORTANT**: Do NOT guess or auto-select when ambiguous. Always let the user choose.
 
 ### 2. Understand the change state
 
-Read the change directory `aspec/changes/<name>/` and load:
+Read `aspec/changes/<name>/` and load:
 
 - `proposal.md` — what & why (if present)
 - `design.md` — approach and decisions (if present)
-- `tasks.md` — the task list with checkbox state (required)
+- `tasks.md` — task list with checkbox state (required)
 - `specs/` — delta requirements (if present)
 
-If `tasks.md` is missing, report it and stop: there is nothing to implement. Suggest completing the artifacts first.
+If `tasks.md` is missing, report it and stop: nothing to implement. Suggest completing the artifacts first.
 
 ### 3. Read context files
 
-Read every artifact found in step 2 before writing any code:
-
-- **proposal + design**: the intent and the chosen approach
-- **specs/**: the exact required behavior and scenarios
-- **tasks.md**: the ordered checklist
-
-Do not assume file names beyond these four; read what exists.
+Read every artifact found in step 2 before writing code; do not assume file names beyond these four.
 
 ### 4. Show current progress
-
-Display:
 
 - Tasks completed vs total (count `- [x]` vs `- [ ]` in `tasks.md`)
 - Remaining tasks overview
 
 ### 5. Implement tasks (loop until done or blocked)
 
-For each pending task (`- [ ]`):
+For each pending task (`- [ ]`): show which task; make the required changes, minimal and focused; mark it `- [x]`; continue to the next.
 
-- Show which task is being worked on
-- Make the code changes required
-- Keep changes minimal and focused
-- Mark the task complete in the tasks file: `- [ ]` → `- [x]`
-- Continue to the next task
-
-**Pause if:**
-
-- Task is unclear → ask for clarification
-- Implementation reveals a design issue → suggest updating artifacts
-- Error or blocker encountered → report and wait for guidance
-- User interrupts
+**Pause if:** task is unclear → ask; implementation reveals a design issue → suggest updating artifacts; error or blocker → report and wait; user interrupts.
 
 ### 6. On completion or pause, show status
 
@@ -90,7 +71,7 @@ All tasks complete! You can archive this change with `ancleto-archive`.
 **Progress:** M/N tasks complete
 
 ### Issue Encountered
-<description of the issue>
+<description>
 
 What would you like to do?
 ```
@@ -101,17 +82,13 @@ What would you like to do?
 ## Implementing: <change-name>
 
 Working on task 3/7: <task description>
-[...implementation happening...]
+[...]
 ✓ Task complete
 ```
 
 ## Guardrails
 
-- Keep going through tasks until done or blocked
-- Always read the change artifacts before starting
-- If a task is ambiguous, pause and ask before implementing
-- If implementation reveals issues, pause and suggest artifact updates
-- Keep code changes minimal and scoped to each task
-- Update the task checkbox immediately after completing each task
-- Pause on errors, blockers, or unclear requirements — don't guess
-- An implementation task may be revisited: if artifacts change mid-flight, re-read them before continuing
+- Read the change artifacts before starting.
+- Pause on ambiguous tasks, design issues, errors, blockers, or unclear requirements — don't guess.
+- Keep code changes minimal and scoped to each task; update the checkbox immediately after each.
+- If artifacts change mid-flight, re-read them before continuing.

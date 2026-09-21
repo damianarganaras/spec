@@ -10,7 +10,9 @@ metadata:
 
 # aspec Bulk Archive
 
-Archive multiple completed changes in a single operation, handling spec conflicts by checking what is actually implemented. No external binaries are invoked: changes are listed from directories, status is read from files, archiving is a directory move.
+**Artifacts language**: write every artifact in English. Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. File and directory names stay English kebab-case.
+
+Archive multiple completed changes in one operation, resolving spec conflicts against the actual implementation. No external binaries: changes come from directories, status from files, archiving is a directory move.
 
 **Input**: None required (prompts for selection).
 
@@ -18,56 +20,56 @@ Archive multiple completed changes in a single operation, handling spec conflict
 
 ### 1. Get active changes
 
-List the directories directly under `aspec/changes/` (excluding `archive/`). If none exist, inform the user and stop.
+List `aspec/changes/` dirs (excluding `archive/`); if none, inform the user and stop.
 
 ### 2. Prompt for change selection
 
-Use the **AskUserQuestion tool** with multi-select to let the user choose:
+Ask the user to choose (runtime question tool with multi-select when available):
 
-- Show each change (no schema inference needed — all changes follow the same artifact layout)
-- Include an option for "All changes"
-- Allow any number of selections (1+ works, 2+ is the typical use case)
+- Show each change (all share one artifact layout)
+- Include an "All changes" option
+- Allow any number of selections (1+ works, 2+ typical)
 
 **IMPORTANT**: Do NOT auto-select. Always let the user choose.
 
-### 3. Batch validation — gather status for each selected change
+### 3. Batch validation — status per selected change
 
-For each selected change, collect by reading files:
+Read files per change:
 
-a. **Artifact presence** — which of `proposal.md`, `design.md`, `tasks.md`, `specs/` exist under `aspec/changes/<name>/`.
+a. **Artifacts** — which of `proposal.md`, `design.md`, `tasks.md`, `specs/` exist under `aspec/changes/<name>/`.
 
-b. **Task completion** — read `aspec/changes/<name>/tasks.md` and count `- [ ]` (incomplete) vs `- [x]` (complete). If no tasks file exists, note "No tasks".
+b. **Tasks** — count `- [ ]` vs `- [x]`; if no tasks file, note "No tasks".
 
-c. **Delta specs** — check `aspec/changes/<name>/specs/` and list which capability specs exist, extracting requirement names (lines matching `### Requirement: <name>`).
+c. **Delta specs** — list capability specs under `specs/`, extracting `### Requirement: <name>` lines.
 
 ### 4. Detect spec conflicts
 
-Build a map of `capability -> [changes that touch it]`:
+Map `capability -> [changes that touch it]`:
 
 ```
 auth -> [change-a, change-b]  <- CONFLICT (2+ changes)
 api  -> [change-c]            <- OK (only 1 change)
 ```
 
-A conflict exists when 2+ selected changes have delta specs for the same capability.
+Conflict = 2+ selected changes with delta specs for the same capability.
 
 ### 5. Resolve conflicts by checking the codebase
 
-**For each conflict**, investigate:
+Per conflict:
 
-a. **Read the delta specs** from each conflicting change to understand what each claims to add or modify.
+a. **Read each conflicting delta spec** — what it claims to add/modify.
 
-b. **Search the codebase** for implementation evidence: code implementing requirements from each delta spec, related files, functions, or tests.
+b. **Search the codebase** for implementation evidence (code, files, functions, tests).
 
-c. **Determine resolution**:
+c. **Resolution**:
 
-- If only one change is actually implemented → sync that one's specs.
-- If both are implemented → apply in chronological order (older first, newer overwrites).
-- If neither is implemented → skip spec sync, warn the user.
+- Only one implemented → sync that one's specs.
+- Both implemented → apply chronologically (older first, newer overwrites).
+- Neither → skip spec sync, warn the user.
 
-d. **Record the resolution** (which change's specs to apply, in what order, and the rationale).
+d. **Record the resolution** (which specs apply, order, rationale).
 
-### 6. Show the consolidated status table
+### 6. Show consolidated status table
 
 ```
 | Change     | Artifacts | Tasks | Specs   | Conflicts | Status |
@@ -75,69 +77,57 @@ d. **Record the resolution** (which change's specs to apply, in what order, and 
 | add-oauth  | Done      | 4/4   | 1 delta | None      | Ready  |
 ```
 
-For conflicts, show the resolution. For incomplete changes, show warnings.
+Show conflict resolutions and warnings for incomplete changes.
 
-### 7. Confirm the batch operation
+### 7. Confirm the batch
 
-Use the **AskUserQuestion tool** with a single confirmation:
+Ask once (runtime question tool when available): "Archive N changes?" — "Archive all N changes" / "Archive only N ready changes (skip incomplete)" / "Cancel".
 
-- "Archive N changes?" — options: "Archive all N changes", "Archive only N ready changes (skip incomplete)", "Cancel".
+If any are incomplete, make clear they'll be archived with warnings.
 
-If there are incomplete changes, make clear they will be archived with warnings.
+### 8. Execute the archive per confirmed change
 
-### 8. Execute the archive for each confirmed change
+Process in the determined order (respecting conflict resolution):
 
-Process changes in the determined order (respecting conflict resolution):
+a. **Sync specs** if delta specs exist and the resolution says so: apply the delta to `aspec/specs/<capability>/spec.md` (ADDED adds; MODIFIED updates preserving unmentioned scenarios; REMOVED deletes; RENAMED renames via `FROM:`/`TO:`). Track sync.
 
-a. **Sync specs** if delta specs exist and the resolution says so: apply the delta directly to `aspec/specs/<capability>/spec.md` (ADDED adds, MODIFIED updates preserving unmentioned scenarios, REMOVED deletes, RENAMED renames via `FROM:`/`TO:`). Track whether sync was done.
+b. **Archive**: create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), move the directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`. If the target exists, fail that change (record the error) but continue with others.
 
-b. **Perform the archive**: create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), then move the directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`. If the target already exists, fail that change (record the error) but continue with the others.
+c. **Track outcomes**: success, failed (with error), skipped.
 
-c. **Track each outcome**: success, failed (with error), or skipped.
+### 9. Record conflict resolutions and lessons
 
-### 9. Record conflict resolutions and lessons into persistent memory
+Per resolved conflict and durable lesson:
 
-For every resolved conflict and every durable lesson this batch taught, record it:
-
-- Conflict resolutions and design decisions (which change won, why, what the codebase showed) → `recordDecision`, e.g.:
+- Resolutions/design decisions (which change won, why, codebase evidence) → `recordDecision`:
   ```
   recordDecision({ memory_key: "<kebab-topic>", content: "<resolution>", justification: "<codebase evidence>" })
   ```
-- Standing rules discovered (e.g., "these two capabilities must evolve together") → `recordRule`, e.g.:
+- Standing rules discovered (e.g., "these two capabilities must evolve together") → `recordRule`:
   ```
   recordRule({ memory_key: "<kebab-topic>", content: "<the rule>", justification: "<evidence>" })
   ```
 
-Record only what would save future investigation. Never record workflow meta. If nothing meets the bar, record nothing and say so.
+Record only what saves future investigation; never workflow meta. If nothing meets the bar, record nothing and say so.
 
 ### 10. Display summary
 
 ```
 ## Bulk Archive Complete
 
-Archived N changes:
-- <change-1> -> archive/YYYY-MM-DD-<change-1>/
-
-Skipped M changes:
-- <change-2> (user chose not to archive incomplete)
-
-Spec sync summary:
-- N delta specs synced to main specs
-- M conflicts resolved
-
+Archived N changes: <change-1> -> archive/YYYY-MM-DD-<change-1>/
+Skipped M: <change-2> (incomplete; user declined)
+Spec sync: N delta specs synced, M conflicts resolved
 **Memories recorded:** <list, or "None">
 ```
 
 ## Guardrails
 
-- Allow any number of changes (1+ is fine, 2+ is the typical use case).
+- Allow any number of changes (1+ fine, 2+ typical).
 - Always prompt for selection, never auto-select.
-- Detect spec conflicts early and resolve by checking the codebase.
-- When both changes are implemented, apply specs in chronological order.
+- Detect conflicts early; resolve via the codebase, applying specs chronologically when both are implemented.
 - Skip spec sync only when implementation is missing (warn the user).
-- Show clear per-change status before confirming.
-- Use a single confirmation for the entire batch.
+- Show per-change status before confirming; one confirmation for the batch.
 - Track and report all outcomes (success/skip/fail).
-- Archive directory target uses the current date: `YYYY-MM-DD-<name>`.
-- If an archive target exists, fail that change but continue with others.
+- Archive target uses the current date (`YYYY-MM-DD-<name>`); if it exists, fail that change but continue with others.
 - `recordRule`/`recordDecision` accept only `memory_key`, `content`, `justification`, `scope`. Never send `source`, `confidence`, `status` or `id` — the runtime manages those.

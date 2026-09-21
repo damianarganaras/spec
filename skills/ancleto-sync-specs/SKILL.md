@@ -8,79 +8,58 @@ metadata:
   version: '1.0'
 ---
 
+# aspec Sync
+
+**Artifacts language**: write every artifact in English. Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. File and directory names stay English kebab-case.
+
 Sync delta specs from a change to main specs.
 
-This is an **agent-driven** operation - you will read delta specs and directly edit main specs to apply the changes. This allows intelligent merging (e.g., adding a scenario without copying the entire requirement).
+**Agent-driven**: read delta specs and directly edit main specs, enabling intelligent merging (add one scenario without copying the whole requirement). The delta is _intent_, not a wholesale replacement — apply partial updates. Must be idempotent (running twice gives the same result).
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally a change name; if omitted, infer from context. If ambiguous you MUST prompt for available changes.
 
 **Steps**
 
 1. **If no change name provided, prompt for selection**
 
-   Run `aspec list --json` to get available changes. Use the **AskUserQuestion tool** to let the user select.
-
-   Show changes that have delta specs (under `specs/` directory).
+   List `aspec/changes/` dirs (excluding `archive/`); ask the user to select (runtime question tool when available). Show changes that have delta specs (under `specs/`).
 
    **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
 2. **Find delta specs**
 
-   Look for delta spec files in `aspec/changes/<name>/specs/*/spec.md`.
-
-   Each delta spec file contains sections like:
+   Look for `aspec/changes/<name>/specs/*/spec.md`, whose sections are:
 
    - `## ADDED Requirements` - New requirements to add
    - `## MODIFIED Requirements` - Changes to existing requirements
    - `## REMOVED Requirements` - Requirements to remove
    - `## RENAMED Requirements` - Requirements to rename (FROM:/TO: format)
 
-   If no delta specs found, inform user and stop.
+   If none found, inform the user and stop.
 
-3. **For each delta spec, apply changes to main specs**
+3. **Apply each delta spec to main specs**
 
-   For each capability with a delta spec at `aspec/changes/<name>/specs/<capability>/spec.md`:
+   Per capability with a delta at `aspec/changes/<name>/specs/<capability>/spec.md`:
 
-   a. **Read the delta spec** to understand the intended changes
+   a. **Read the delta spec** for the intended changes
 
    b. **Read the main spec** at `aspec/specs/<capability>/spec.md` (may not exist yet)
 
-   c. **Apply changes intelligently**:
+   c. **Apply changes**:
 
-   **ADDED Requirements:**
+   **ADDED Requirements:** absent → add; present → update to match (implicit MODIFIED).
 
-   - If requirement doesn't exist in main spec → add it
-   - If requirement already exists → update it to match (treat as implicit MODIFIED)
+   **MODIFIED Requirements:** find the requirement and apply — add new scenarios (don't copy existing ones), modify scenarios, or change the description. Preserve content not mentioned in the delta.
 
-   **MODIFIED Requirements:**
+   **REMOVED Requirements:** remove the entire requirement block.
 
-   - Find the requirement in main spec
-   - Apply the changes - this can be:
-     - Adding new scenarios (don't need to copy existing ones)
-     - Modifying existing scenarios
-     - Changing the requirement description
-   - Preserve scenarios/content not mentioned in the delta
+   **RENAMED Requirements:** rename the FROM requirement to TO.
 
-   **REMOVED Requirements:**
-
-   - Remove the entire requirement block from main spec
-
-   **RENAMED Requirements:**
-
-   - Find the FROM requirement, rename to TO
-
-   d. **Create new main spec** if capability doesn't exist yet:
-
-   - Create `aspec/specs/<capability>/spec.md`
-   - Add Purpose section (can be brief, mark as TBD)
-   - Add Requirements section with the ADDED requirements
+   d. **Create the main spec** if the capability doesn't exist: `aspec/specs/<capability>/spec.md` with a brief Purpose (mark TBD if unknown) and the ADDED requirements.
 
 4. **Show summary**
 
-   After applying all changes, summarize:
-
-   - Which capabilities were updated
-   - What changes were made (requirements added/modified/removed/renamed)
+   Summarize capabilities updated and changes made (added/modified/removed/renamed).
 
 **Delta Spec Format Reference**
 
@@ -115,36 +94,22 @@ The system SHALL do something new.
 - TO: `### Requirement: New Name`
 ```
 
-**Key Principle: Intelligent Merging**
-
-Unlike programmatic merging, you can apply **partial updates**:
-
-- To add a scenario, just include that scenario under MODIFIED - don't copy existing scenarios
-- The delta represents _intent_, not a wholesale replacement
-- Use your judgment to merge changes sensibly
-
 **Output On Success**
 
 ```
 ## Specs Synced: <change-name>
 
 Updated main specs:
+- **<capability-1>**: added "New Feature"; modified "Existing Feature" (1 scenario)
+- **<capability-2>**: created new spec file; added "Another Feature"
 
-**<capability-1>**:
-- Added requirement: "New Feature"
-- Modified requirement: "Existing Feature" (added 1 scenario)
-
-**<capability-2>**:
-- Created new spec file
-- Added requirement: "Another Feature"
-
-Main specs are now updated. The change remains active - archive when implementation is complete.
+The change remains active - archive when implementation is complete.
 ```
 
 **Guardrails**
 
-- Read both delta and main specs before making changes
-- Preserve existing content not mentioned in delta
-- If something is unclear, ask for clarification
-- Show what you're changing as you go
-- The operation should be idempotent - running twice should give same result
+- Read both delta and main specs before editing
+- Preserve content not mentioned in the delta
+- If unclear, ask for clarification
+- Show changes as you go
+- Idempotent - running twice gives the same result

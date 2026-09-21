@@ -27,8 +27,8 @@ Uso:
                                    (global por defecto, o en .opencode/ del proyecto)
                                    Configura los MCP engram + caveman por defecto
   ancleto install --no-mcp           Igual que install pero sin tocar config MCP
-  ancleto install --tier <nivel>     normal | minimo | gratis (pregunta en la 1ra config)
-  ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (pregunta si no esta guardado)
+  ancleto install --tier <nivel>     normal | minimo | gratis (wizard interactivo en TTY)
+  ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (wizard si no esta guardado)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
   ancleto upgrade [--agent <nombre>]  Re-aplica templates (LOCKED) y skills sobre el proyecto actual
   ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>]
@@ -185,17 +185,6 @@ async function applyTier(agentsDir, tier) {
     const o = c.replace(/^model: .*$/m, `model: ${model}`)
     if (o !== c) await writeFile(p, o)
   }
-}
-
-function askTier() {
-  return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout })
-    rl.question('Tier de costo de los agents [normal/minimo/gratis] (default: normal): ', (a) => {
-      rl.close()
-      const t = a.trim().toLowerCase()
-      resolve(TIERS[t] ? t : 'normal')
-    })
-  })
 }
 
 const SUPPORTED_AGENTS = ['opencode', 'vscode', 'antigravity', 'cursor', 'roo']
@@ -380,6 +369,7 @@ async function install(args) {
   const withMcp = !args.includes('--no-mcp')
   let mcpMap = withMcp ? buildDefaultMcp() : {}
 
+  const agentFlag = scanAgentFlag(args)
   let tier = scanTierFlag(args)
 
   if (project) {
@@ -390,15 +380,36 @@ async function install(args) {
     }
   }
 
-  const target = project ? join(resolve(project), '.opencode') : globalConfigDir()
+  const projectDir = project ? resolve(project) : null
+  const target = projectDir ? join(projectDir, '.opencode') : globalConfigDir()
+  const existingRc = projectDir ? await readAncletorc(projectDir) : null
+  const storedTier = (await exists(tierStatePath(target)))
+    ? (await readFile(tierStatePath(target), 'utf8')).trim()
+    : null
 
-  if (project) {
-    await copyTemplates(resolve(project))
-    await scaffoldAspec(resolve(project))
-    const existingRc = await readAncletorc(resolve(project))
-    const agent = await resolveAgent(args, existingRc?.agent)
-    const agentSkillsDir = await installAgentSkills(resolve(project), agent)
-    await writeManifest(resolve(project), {
+  let agent = agentFlag || (existingRc?.agent && SUPPORTED_AGENTS.includes(existingRc.agent) ? existingRc.agent : null)
+
+  const isInteractive = Boolean(process.stdout.isTTY) && ((projectDir && !agent) || !tier)
+  if (isInteractive) {
+    await showBanner()
+    if (projectDir && !agent) {
+      agent = await selectOption('Agente/IDE', SUPPORTED_AGENTS, Math.max(0, SUPPORTED_AGENTS.indexOf(DEFAULT_AGENT)))
+    }
+    if (!tier) {
+      const current = TIERS[storedTier] ? storedTier : ''
+      tier = await selectOption('Tier de costo', Object.keys(TIERS), Math.max(0, Object.keys(TIERS).indexOf(current)))
+    }
+    stopBanner()
+  }
+
+  if (projectDir && !agent) agent = DEFAULT_AGENT
+  if (!tier) tier = TIERS[storedTier] ? storedTier : 'normal'
+
+  if (projectDir) {
+    await copyTemplates(projectDir)
+    await scaffoldAspec(projectDir)
+    const agentSkillsDir = await installAgentSkills(projectDir, agent)
+    await writeManifest(projectDir, {
       agent,
       installedPaths: {
         templates: ['AGENTS.md', 'PRODUCT.md'],
@@ -411,18 +422,12 @@ async function install(args) {
     await copyAssets(target)
   }
 
-  if (!tier) {
-    const stored = (await exists(tierStatePath(target)))
-      ? (await readFile(tierStatePath(target), 'utf8')).trim()
-      : null
-    tier = TIERS[stored] ? stored : await askTier()
-  }
   await applyTier(join(target, 'agents'), tier)
   await writeFile(tierStatePath(target), tier + '\n')
 
   let azureMcp = false
-  if (project && withMcp) {
-    const rc = await readAncletorc(resolve(project))
+  if (projectDir && withMcp) {
+    const rc = await readAncletorc(projectDir)
     if (rc?.azure?.enabled) {
       mcpMap['azure-devops'] = { type: 'local', enabled: true, command: ['npx', '-y', '@davstack/mcp-azure-devops'] }
       azureMcp = true
@@ -430,8 +435,8 @@ async function install(args) {
   }
 
   const res = await mergeMcp(target, mcpMap)
-  const loc = project
-    ? `${resolve(project)} (.opencode/ + templates en la raiz)`
+  const loc = projectDir
+    ? `${projectDir} (.opencode/ + templates en la raiz)`
     : `${target} (disponible en todos tus proyectos)`
   console.log(`ancleto: instalado en ${loc}`)
   console.log(`ancleto: tier de costo de agents: ${tier}`)

@@ -18,7 +18,7 @@ jobs:
 
       - run: npm ci
 
-      - run: node --test test/memory-engine.test.js
+      - run: node --test test/*.test.js
 
       - run: npm publish --access public
         env:

@@ -19,58 +19,42 @@ metadata:
 
 # ancleto-upgrade
 
-Analiza el repositorio completo y genera un aspec change para migrar cualquier
-librería o runtime a una nueva versión mayor — de forma documentada, faseada y sin
-romper el repo.
+**Artifacts language**: write every artifact in English. Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. File and directory names stay English kebab-case.
 
-El análisis es completamente dinámico: detecta la versión actual en el repo, obtiene
-los breaking changes de la documentación oficial, construye los patterns de búsqueda
-a partir de eso, y escanea todo el código. Sin listas estáticas.
+Generate an aspec change to migrate any library/runtime to a new major version. No code
+edits. Fully dynamic: detect the current repo version → fetch breaking changes from official
+docs → derive search patterns → scan all code. No static lists.
 
-**Ejemplos de uso:**
-
-- `/ancleto-upgrade node 22` → migra Node.js a v22
-- `/ancleto-upgrade @middy/core 7` → migra Middy a v7
-- `/ancleto-upgrade @middy/core 7 https://middy.js.org/docs/upgrade/v7` → con docs
-- `/ancleto-upgrade react 19` → migra React a v19
-- `/ancleto-upgrade typescript 5.8` → migra TypeScript a 5.8
+**Usage:** `/ancleto-upgrade <library> <major> [docs-url]` — e.g. `node 22`, `@middy/core 7`,
+`react 19`, `typescript 5.8`, `@middy/core 7 https://middy.js.org/docs/upgrade/v7`.
 
 ---
 
-## Paso 1 — Parsear argumentos
+## Step 1 — Parse arguments
 
-Del mensaje del usuario, extraer:
+Extract from the user message:
 
-- `LIBRARY` — nombre de la librería o runtime (ej: `node`, `@middy/core`, `react`)
-- `TARGET_VERSION` — versión objetivo, solo major (ej: `22`, `7`, `19`)
-- `DOCS_URL` — URL de migration guide (opcional, puede venir en el mensaje)
-- `IS_RUNTIME` — `true` si LIBRARY es `node`, `deno` o `bun`
-- `LIBRARY_SLUG` — nombre seguro para archivos:
-  - `node` → `node` | `@middy/core` → `middy` | `@aws-sdk/client-s3` → `aws-sdk`
-  - Regla: parte después del último `/` o `@`, sin caracteres especiales
-- `CHANGE_NAME` — `${LIBRARY_SLUG}${TARGET_VERSION}-migration` (ej: `node22-migration`)
+- `LIBRARY` — library/runtime (`node`, `@middy/core`, `react`)
+- `TARGET_VERSION` — target major (`22`, `7`, `19`)
+- `DOCS_URL` — migration guide URL (optional)
+- `IS_RUNTIME` — `true` for `node`, `deno`, `bun`
+- `LIBRARY_SLUG` — safe file name: `node` → `node`, `@middy/core` → `middy`, `@aws-sdk/client-s3` → `aws-sdk` (part after the last `/` or `@`, no special characters)
+- `CHANGE_NAME` — `${LIBRARY_SLUG}${TARGET_VERSION}-migration` (`node22-migration`)
 
-### 1.1 URL opcional de documentación
+### 1.1 Optional docs URL
 
-Si el usuario no incluyó `DOCS_URL`, preguntar de forma explícita y breve:
-
-- "¿Querés pasar una URL oficial de migration guide/changelog de {LIBRARY} v{TARGET_VERSION}? (opcional)"
-
-Regla:
-
-- Si responde con URL, usarla en Paso 3a
-- Si responde que no, continuar automáticamente con Paso 3a (búsqueda web)
-- Nunca bloquear la ejecución por no tener URL
+If `DOCS_URL` is missing, ask: "Provide an official migration guide/changelog URL for
+{LIBRARY} v{TARGET_VERSION}? (optional)". URL → Step 3a; none → Step 3a web search. Never
+block execution for lack of a URL.
 
 ---
 
-## Paso 2 — Detectar versión actual en el repo
+## Step 2 — Detect current version in the repo
 
-Antes de buscar documentación, detectar `CURRENT_VERSION` — la versión que tiene el
-repo hoy. Esto es crítico para construir los patterns de grep del Paso 4.
+Detect `CURRENT_VERSION` before fetching docs — critical for the Step 4 grep patterns.
 
 ```bash
-# Para runtimes: buscar en .nvmrc, engines, Dockerfiles, CI
+# Runtimes: look in .nvmrc, engines, Dockerfiles, CI
 cat .nvmrc 2>/dev/null
 cat .node-version 2>/dev/null
 grep -r "\"node\":" package.json
@@ -78,7 +62,7 @@ grep -rn "node-version\|nodeVersion" .github/ azure-pipelines.yml 2>/dev/null
 find . -name "Dockerfile*" -not -path "*/node_modules/*" \
   -exec grep -l "FROM node:" {} \; 2>/dev/null | xargs grep "FROM node:" 2>/dev/null
 
-# Para librerías: buscar en todos los package.json
+# Libraries: look in all package.json
 find . -name "package.json" \
   -not -path "*/node_modules/*" -not -path "*/dist/*" \
   -not -name "package-lock.json" \
@@ -86,67 +70,55 @@ find . -name "package.json" \
   | xargs grep "${LIBRARY}" 2>/dev/null
 ```
 
-De estos resultados, inferir `CURRENT_VERSION` (ej: `20` para Node, `6` para Middy).
-
-Si hay versiones inconsistentes entre archivos, registrarlas todas — son candidatas
-a cambio también.
+Infer `CURRENT_VERSION` (`20` Node, `6` Middy). Conflicting versions → record all; also
+change candidates.
 
 ---
 
-## Paso 3 — Obtener breaking changes de la documentación
+## Step 3 — Get breaking changes from the docs
 
-El objetivo es construir `SEARCH_PATTERNS[]` — qué buscar en el repo y por qué.
-Los patterns NO son estáticos: se derivan de la documentación real de la migración.
+Build `SEARCH_PATTERNS[]` (what to search, why) from the real migration docs, never static.
 
-### 3a. Obtener la documentación
+### 3a. Fetch the docs
 
-Ejecutar en paralelo:
-
-**Si el usuario proveyó DOCS_URL:** hacer fetch directo.
-
-**Siempre, en paralelo:** buscar en internet:
+Run in parallel. `DOCS_URL` → fetch directly. Always also web search:
 
 - `"{LIBRARY}" "v{TARGET_VERSION}" migration guide`
 - `"{LIBRARY}" "{TARGET_VERSION}" breaking changes changelog`
-- Releases oficiales en GitHub: `github.com/{owner}/{repo}/releases/tag/v{TARGET_VERSION}`
+- Official GitHub releases: `github.com/{owner}/{repo}/releases/tag/v{TARGET_VERSION}`
 
-Priorizar: URL del usuario → docs oficiales → release notes → changelog GitHub.
+Priority: user URL → official docs → release notes → GitHub changelog. Nothing found →
+document it and continue; Step 4 still finds `CURRENT_VERSION` references.
 
-Si no se encuentra nada: documentarlo y continuar — el Paso 4 igual detecta
-referencias a `CURRENT_VERSION` en todo el repo.
+### 3b. Extract breaking changes and build SEARCH_PATTERNS[]
 
-### 3b. Extraer breaking changes y construir SEARCH_PATTERNS[]
-
-De la documentación obtenida, extraer cada breaking change y construir un entry:
+One entry per breaking change:
 
 ```
 {
-  id:          string único (ej: "BC-001")
-  source:      URL de donde viene
-  description: qué cambia y por qué rompe
-  fix:         cómo arreglarlo
+  id:          unique string (e.g. "BC-001")
+  source:      URL it comes from
+  description: what changes and why it breaks
+  fix:         how to fix it
   severity:    "breaking" | "warning" | "info"
-  patterns:    [strings o regex a buscar en el repo]
+  patterns:    [strings or regex to search in the repo]
   file_types:  [".ts", ".js", "jest.config.*", "Dockerfile", etc.]
 }
 ```
 
-Ejemplos de cómo derivar patterns de la documentación:
+Derive patterns from docs:
 
-- Doc dice "`ReactDOM.render` fue eliminado" → patterns: `["ReactDOM.render"]`
-- Doc dice "`useFormState` se renombró" → patterns: `["useFormState"]`
-- Doc dice "Jest necesita `transformIgnorePatterns` para ESM" → verificar ausencia en jest.config
-- Doc dice "versión mínima de Node es 22" → pattern: `engines.node` con valor < 22
+- "`ReactDOM.render` was removed" → `["ReactDOM.render"]`
+- "`useFormState` was renamed" → `["useFormState"]`
+- "Jest needs `transformIgnorePatterns` for ESM" → check its absence in jest.config
+- "minimum Node version is 22" → pattern `engines.node` with value < 22
 
-### 3c. Construir VERSION_PATTERNS[] automáticamente
+### 3c. Build VERSION_PATTERNS[] automatically
 
-Independientemente de la doc, siempre construir patterns para encontrar cualquier
-referencia a `CURRENT_VERSION` en todas sus formas. Estos tienen confianza `high`
-porque toda mención de la versión vieja es candidata a actualización.
+Always build patterns for every form of `CURRENT_VERSION`, docs or not — `high` confidence:
+any old-version mention is a change candidate.
 
-Derivar las formas según el tipo:
-
-**Si IS_RUNTIME = true (Node.js como ejemplo con CURRENT_VERSION=20):**
+**IS_RUNTIME = true (Node example, CURRENT_VERSION=20):**
 
 ```
 NODEJS_20_X, NODEJS_20           # Lambda runtime strings (CDK/TS)
@@ -155,26 +127,24 @@ Runtime.NODEJS_20_X              # enum usage in CDK code
 node:20, node:20-alpine, node:20-slim, node:20-bullseye  # Docker
 "node": "20", "node": ">=20", "node": "^20"  # engines package.json
 nodeVersion: 20, node-version: 20, node-version: '20'   # CI/CD
-20.x, v20                        # referencias genéricas
+20.x, v20                        # generic references
 ```
 
-**Si IS_RUNTIME = false (librería npm como ejemplo con @middy/core v6):**
+**IS_RUNTIME = false (npm library, @middy/core v6):**
 
 ```
 "@middy/core": "^6", "@middy/core": "6"   # package.json
-@middy/core@6, middy@6                        # referencias inline
-"@middy/": "^6"                             # todos los scoped packages
+@middy/core@6, middy@6                        # inline references
+"@middy/": "^6"                             # all scoped packages
 ```
 
-Adaptar estos patterns al LIBRARY y CURRENT_VERSION detectados. El objetivo es no
-perder ninguna ocurrencia de la versión vieja en ningún tipo de archivo.
+Adapt to LIBRARY/CURRENT_VERSION; miss no old-version occurrence.
 
-## Paso 4 — Escanear el repo
+## Step 4 — Scan the repo
 
-Con `SEARCH_PATTERNS[]` (de la doc) + `VERSION_PATTERNS[]` (automáticos) del Paso 3,
-escanear exhaustivamente. Ejecutar todo en paralelo.
+Run both Step 3 pattern sets exhaustively, in parallel.
 
-### 4a. Grep de versión — todo el repo
+### 4a. Version grep — whole repo
 
 ```bash
 grep -rn \
@@ -186,10 +156,10 @@ grep -rn \
   .
 ```
 
-Reemplazar con los VERSION_PATTERNS[] reales. Registrar cada match:
+Replace with the real VERSION_PATTERNS[]. Record:
 `{file, line_number, line_content, pattern_matched, confidence: "high"}`
 
-### 4b. Grep de breaking changes semánticos
+### 4b. Semantic breaking-change grep
 
 ```bash
 grep -rn \
@@ -199,10 +169,10 @@ grep -rn \
   .
 ```
 
-Reemplazar con los patterns de SEARCH_PATTERNS[]. Registrar cada match:
+Replace with SEARCH_PATTERNS[]. Record:
 `{file, line_number, line_content, pattern_matched, break_id, confidence: "medium"}`
 
-### 4c. Archivos de configuración
+### 4c. Config files
 
 ```bash
 find . \( -name "jest.config.*" -o -name "tsconfig*.json" \
@@ -211,24 +181,23 @@ find . \( -name "jest.config.*" -o -name "tsconfig*.json" \
   -not -path "*/node_modules/*" -not -path "*/dist/*" | sort
 ```
 
-Leer cada uno y verificar breaking changes de configuración del Paso 3
-(ej: ausencia de `transformIgnorePatterns`, valor de `moduleResolution`).
+Verify Step 3 config breaking changes per file (e.g. missing `transformIgnorePatterns`,
+`moduleResolution`).
 
-### 4d. Registro por categoría (obligatorio)
+### 4d. Per-category registry (mandatory)
 
-Además de los grep agregados, ejecutar este escaneo por categoría para asegurar
-cobertura exhaustiva y permitir snippets accionables en proposal/tasks:
+Per-category scan for exhaustive coverage and actionable snippets:
 
-### 4d.1 package.json raíz
+### 4d.1 Root package.json
 
 ```bash
 cat package.json
 ```
 
-Extraer: dependencias relacionadas con LIBRARY (versión actual), scripts disponibles
-(`build`, `lint`, `test`, `test:ci`, `typecheck`), campo `workspaces`.
+Extract LIBRARY dependencies (current version), scripts (`build`, `lint`, `test`, `test:ci`,
+`typecheck`), `workspaces`.
 
-### 4d.2 Todos los package.json del monorepo
+### 4d.2 All monorepo package.json
 
 ```bash
 find . -name "package.json" \
@@ -237,18 +206,18 @@ find . -name "package.json" \
   -not -name "package-lock.json" | sort
 ```
 
-Para cada uno: dependencias relacionadas con LIBRARY, `engines.node`, `name`.
+Per file: LIBRARY dependencies, `engines.node`, `name`.
 
-### 4d.3 Archivos CI/CD
+### 4d.3 CI/CD files
 
 ```bash
 find . \( -name "azure-pipelines.yml" -o -path "*/.github/workflows/*.yml" \) \
   -not -path "*/node_modules/*" | sort
 ```
 
-Buscar: `nodeVersion`, `node-version`, imagen base de Node.
+Look for `nodeVersion`, `node-version`, Node base image.
 
-### 4d.4 Configuración de runtime
+### 4d.4 Runtime config
 
 ```bash
 cat .nvmrc 2>/dev/null || echo "NO_NVMRC"
@@ -261,7 +230,7 @@ cat .node-version 2>/dev/null || echo "NO_NODE_VERSION"
 find . -name "Dockerfile*" -not -path "*/node_modules/*" -not -path "*/dist/*" | sort
 ```
 
-Para cada uno: buscar `FROM node:X` o `FROM node:X-alpine`.
+Per file: `FROM node:X` or `FROM node:X-alpine`.
 
 ### 4d.6 CDK / Lambda appSettings
 
@@ -270,9 +239,9 @@ find . -name "appSettings*.json" \
   -not -path "*/node_modules/*" -not -path "*/dist/*" | sort
 ```
 
-Buscar el campo `"Runtime"`.
+Look for `"Runtime"`.
 
-### 4d.7 Build, tests y tsconfig
+### 4d.7 Build, tests and tsconfig
 
 ```bash
 find . \( -name "jest.config.*" -o -name "tsconfig*.json" \
@@ -281,11 +250,11 @@ find . \( -name "jest.config.*" -o -name "tsconfig*.json" \
   -not -path "*/node_modules/*" -not -path "*/dist/*" | sort
 ```
 
-Para `jest.config.*`: registrar `transformIgnorePatterns`, `transform`, `testEnvironment`.
-Para `tsconfig*.json`: registrar `target`, `module`, `moduleResolution`, `verbatimModuleSyntax`.
-Aplicar `SEARCH_PATTERNS[]` con `file_types` que incluyan `jest.config.*` o `tsconfig`.
+- `jest.config.*`: `transformIgnorePatterns`, `transform`, `testEnvironment`
+- `tsconfig*.json`: `target`, `module`, `moduleResolution`, `verbatimModuleSyntax`
+- apply `SEARCH_PATTERNS[]` whose `file_types` include `jest.config.*` or `tsconfig`
 
-### 4d.8 Código fuente
+### 4d.8 Source code
 
 ```bash
 find . \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" \) \
@@ -293,20 +262,13 @@ find . \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" \) \
   -not -name "*.spec.*" -not -name "*.test.*" | sort
 ```
 
-Para cada archivo de código:
+Per file:
 
-- Detectar uso directo de `LIBRARY` (imports/requires)
-- Detectar también patrones globales de `SEARCH_PATTERNS[]` aunque no haya import directo
-  (ej: `url.parse`, APIs deprecadas, patrones de ESM/CJS)
-- Detectar `VERSION_PATTERNS[]` de runtime/dependencia aunque no estén ligados a imports
-  (ej: `NODEJS_20_X`, `Runtime.NODEJS_20_X`, `nodejs20.x`, `node:20`)
-- Evaluar **cada archivo** y registrar evidencia por match:
-  `{file, line_number, snippet, break_id?, pattern_matched, confidence}`
-
-Formato de snippet:
-
-- incluir línea exacta + contexto breve (2 líneas antes / 2 líneas después)
-- evitar snippets ambiguos o sin contexto
+- direct `LIBRARY` use (imports/requires)
+- global `SEARCH_PATTERNS[]` without a direct import (e.g. `url.parse`, deprecated APIs, ESM/CJS)
+- runtime/dependency `VERSION_PATTERNS[]` not import-related (e.g. `NODEJS_20_X`, `Runtime.NODEJS_20_X`, `nodejs20.x`, `node:20`)
+- evaluate **every file**; per match record `{file, line_number, snippet, break_id?, pattern_matched, confidence}`
+- snippets: exact line + 2 lines before/after, never ambiguous or context-free
 
 ### 4d.9 Tests
 
@@ -316,132 +278,79 @@ find . \( -name "*.spec.ts" -o -name "*.test.ts" \
   -not -path "*/node_modules/*" -not -path "*/dist/*" | sort
 ```
 
-Mismo proceso que 4d.8, aplicando `SEARCH_PATTERNS[]` + `VERSION_PATTERNS[]` para tests.
+Same as 4d.8 with both pattern sets.
 
-Regla de cobertura obligatoria:
-
-- Reportar cuántos archivos fueron analizados por categoría:
-  - `source_files_scanned`
-  - `test_files_scanned`
-  - `config_files_scanned`
-- Si alguna categoría queda en 0, explicar por qué (no existe, filtros, etc.)
-- Registrar además:
-  - `total_matches`
-  - `patterns_used`
+**Coverage (mandatory):** report files analyzed per category (`source_files_scanned`,
+`test_files_scanned`, `config_files_scanned`); 0 → explain why. Also record `total_matches`,
+`patterns_used`.
 
 ---
 
-## Paso 5 — Clasificar hallazgos
+## Step 5 — Classify findings
 
-Con todos los matches del Paso 4, construir:
+Build from all Step 4 matches:
 
-- **`BREAKING_CHANGES_IN_CODE[]`** — matches en `.ts/.js` (no tests):
-  `id`, `description`, `fix`, `severity`, `source`,
-  `affected_files[{file, line_number, snippet, confidence}]`
+| Output | Contents |
+| ------ | -------- |
+| `BREAKING_CHANGES_IN_CODE[]` | `id`, `description`, `fix`, `severity`, `source`, `affected_files[{file, line_number, snippet, confidence}]` |
+| `BREAKING_CHANGES_IN_TESTS[]` | same schema, `.spec.ts/.test.ts` |
+| `CONFIG_CHANGES[]` | `file`, `description`, `current_value`, `target_value`, `source` |
+| `DEPENDENCY_CHANGES[]` | `path`, `package_name`, `current_version`, `target_version` |
+| `SCRIPTS_AVAILABLE[]` | root package.json scripts |
+| `UNSURE_MATCHES[]` | `file`, `line_number`, `snippet`, `reason` |
 
-- **`BREAKING_CHANGES_IN_TESTS[]`** — mismo esquema para `.spec.ts/.test.ts`
-
-- **`CONFIG_CHANGES[]`** — archivos de config a modificar:
-  `file`, `description`, `current_value`, `target_value`, `source`
-
-- **`DEPENDENCY_CHANGES[]`** — package.json afectados:
-  `path`, `package_name`, `current_version`, `target_version`
-
-- **`SCRIPTS_AVAILABLE[]`** — scripts detectados en package.json raíz
-
-- **`UNSURE_MATCHES[]`** — matches de baja confianza para revisión manual:
-  `file`, `line_number`, `snippet`, `reason`
-
-**Regla de confianza:**
-
-- `high` — match de VERSION_PATTERNS (versión vieja hardcodeada)
-- `medium` — match semántico derivado de la doc (API deprecada, flag eliminado)
-- `low` — match ambiguo, posible falso positivo
+**Confidence:** `high` = VERSION_PATTERNS (hardcoded old version); `medium` = semantic doc match
+(deprecated API, removed flag); `low` = ambiguous, possible false positive.
 
 ---
 
-## Paso 6 — Crear el change aspec
+## Step 6 — Create the aspec change
 
-Crear el directorio del change en `aspec/changes/${CHANGE_NAME}/` (con `specs/` si aplica).
-
-Si el nombre ya existe, preguntar al usuario: agregar sufijo `-v2` o eliminar el existente.
-
----
-
-## Paso 7 — Escribir los artefactos aspec
-
-Leer `references/templates.md` para obtener los templates exactos de cada archivo.
-Escribir en este orden:
-
-1. `proposal.md`
-2. `specs/{LIBRARY_SLUG}{TARGET_VERSION}.md`
-3. `tasks.md`
-4. `design.md`
-
-Reglas al completar los templates:
-
-- Cada match de código debe incluir `file`, `line_number` y `snippet` para ser accionable
-- Cada match debería incluir `confidence` (`high|medium|low`) cuando aplique
-- Las tareas de verificación (Fase 6) solo se incluyen si el script existe en `SCRIPTS_AVAILABLE[]`
-- Si `IS_RUNTIME = false`, la Fase 2 se marca como "No aplica"
-- Si no hay breaking changes en código o tests, incluir la fase con nota explicativa (nunca omitirla)
-- En monorepos Nx, incluir tanto el comando `npm` como el equivalente `npx nx`
-- Incluir siempre: cobertura del escaneo y lista de patterns utilizados
+Create `aspec/changes/${CHANGE_NAME}/` (with `specs/` if applicable). If it exists, ask: `-v2`
+suffix or delete the existing one.
 
 ---
 
-## Paso 8 — Mostrar resumen final
+## Step 7 — Write the aspec artifacts
+
+Read `references/templates.md`; write in order `proposal.md`,
+`specs/{LIBRARY_SLUG}{TARGET_VERSION}.md`, `tasks.md`, `design.md`.
+
+- every code match: `file`, `line_number`, `snippet`
+- include `confidence` (`high|medium|low`) where applicable
+- Phase 6 tasks only for scripts in `SCRIPTS_AVAILABLE[]`
+- `IS_RUNTIME = false` → Phase 2 "Not applicable"
+- no breaking changes in code/tests → keep the phase with an explanatory note (never omit)
+- Nx monorepos → both `npm` and `npx nx` commands
+- always include scan coverage and patterns used
+
+---
+
+## Step 8 — Show the final summary
 
 ```
-## Change creado: {CHANGE_NAME}
-
-### Librería migrada
-{LIBRARY} {CURRENT_VERSION} → v{TARGET_VERSION}
-
-### Documentación utilizada
-{URL(s) consultadas | "No se encontró documentación oficial — se usaron VERSION_PATTERNS únicamente"}
-
-### Patterns aplicados
-- De versión (high confidence): {N} patterns para todas las formas de "{CURRENT_VERSION}"
-- Semánticos (de la doc): {N} patterns
-
-### Análisis del repositorio
-- Cobertura: {source_files_scanned} source, {test_files_scanned} tests, {config_files_scanned} config
-- Total matches: {total_matches}
-- package.json afectados: {N}
-- Archivos de configuración a modificar: {N}
-- Archivos de código con issues: {N}
-- Archivos de tests con issues: {N}
-
-### Breaking changes detectados
-{lista: id, severity, description, N ocurrencias, confidence}
-{o: "Ninguno detectado"}
-
-### Matches de baja confianza — revisar manualmente
-{lista con file:line + razón | "Ninguno"}
-
-### Scripts de verificación
-build: sí/no | lint: sí/no | test: sí/no | test:ci: sí/no | typecheck: sí/no
-
-### Artefactos aspec generados
-- proposal.md ✅
-- specs/{LIBRARY_SLUG}{TARGET_VERSION}.md ✅
-- tasks.md ✅ ({N} tareas en 6 fases)
-- design.md ✅
-
-Para implementar: /cleto-apply {CHANGE_NAME}
+## Change created: {CHANGE_NAME}
+Library: {LIBRARY} {CURRENT_VERSION} → v{TARGET_VERSION}
+Docs: {URL(s) consulted | "None found — VERSION_PATTERNS only"}
+Patterns: {N} version (high confidence) + {N} semantic (from docs)
+Analysis: {source_files_scanned} source, {test_files_scanned} tests, {config_files_scanned} config | {total_matches} matches
+Affected: {N} package.json, {N} config, {N} code, {N} test files
+Breaking changes: {list id/severity/description/N occurrences/confidence | "None detected"}
+Low confidence — review manually: {file:line + reason | "None"}
+Scripts: build: yes/no | lint: yes/no | test: yes/no | test:ci: yes/no | typecheck: yes/no
+Artifacts: proposal.md ✅ | specs/{LIBRARY_SLUG}{TARGET_VERSION}.md ✅ | tasks.md ✅ ({N} tasks, 6 phases) | design.md ✅
+Implement: /cleto-apply {CHANGE_NAME}
 ```
 
 ---
 
 ## Guardrails
 
-Este skill solo genera artefactos aspec — no modifica ningún archivo del repo.
-Todo cambio real lo ejecuta el desarrollador con `/cleto-apply`, que tiene su propio
-ciclo de revisión. Modificar el repo desde este skill saltearía ese control.
+Generates aspec artifacts only — never edits repo files. Real changes run via `/cleto-apply`
+(own review cycle); editing here would bypass it.
 
-- No tocar archivos fuera de `aspec/changes/{CHANGE_NAME}/`
-- Los `VERSION_PATTERNS[]` siempre se aplican, con o sin documentación oficial
-- Si no hay doc disponible, documentarlo en proposal y continuar con el escaneo
-- Si el change ya existe, avisar antes de cualquier acción
-- Reportar siempre cobertura del escaneo y patterns utilizados
+- Do not touch files outside `aspec/changes/{CHANGE_NAME}/`
+- `VERSION_PATTERNS[]` always apply, with or without official docs
+- No docs → document it in proposal and continue scanning
+- Change already exists → warn before any action
+- Always report scan coverage and patterns used

@@ -11,7 +11,7 @@ metadata:
 
 Create a semantic git commit following semantic commit standards.
 
-**When to use**: User wants to commit changes with proper semantic commit message.
+**When to use**: User wants to commit changes with a proper semantic commit message.
 
 **Steps**
 
@@ -25,19 +25,19 @@ Create a semantic git commit following semantic commit standards.
    If on a protected branch (main, master, develop, qa, sandbox):
 
    - ⚠️ Warn the user
-   - Suggest creating a feature branch: `feat/`, `fix/`, `chore/`
-   - Ask if they want to proceed anyway or create a branch first
+   - Suggest a feature branch: `feat/`, `fix/`, `chore/`
+   - Ask whether to proceed anyway or create a branch first
 
 2. **Determine commit scope**
 
-   Ask the user (using AskUserQuestion):
+   Ask the user (use the runtime question tool when available):
 
    - "What files should be included in this commit?"
      - Option 1: "Only staged files (git commit)" (Recommended if files are staged)
      - Option 2: "Stage and commit all changes (git add . && git commit)"
      - Option 3: "Let me stage files manually first"
 
-   If option 3: Stop and let user stage files, then re-run this skill.
+   If option 3: stop, let the user stage files, then re-run this skill.
 
 3. **Analyze changes**
 
@@ -49,7 +49,7 @@ Create a semantic git commit following semantic commit standards.
 
 4. **Generate semantic commit message(s)**
 
-   Based on the diff, propose 1-2 commit messages following conventional commits:
+   Based on the diff, propose 1-2 conventional commit messages:
 
    **Format:**
 
@@ -61,31 +61,13 @@ Create a semantic git commit following semantic commit standards.
 
    ```
 
-   **Types:**
-
-   - `feat`: New feature
-   - `fix`: Bug fix
-   - `chore`: Maintenance (dependencies, configs, etc.)
-   - `docs`: Documentation only
-   - `refactor`: Code restructuring (no behavior change)
-   - `test`: Adding/updating tests
-   - `perf`: Performance improvement
+   **Types:** `feat` (new feature), `fix` (bug fix), `chore` (maintenance), `docs` (documentation), `refactor` (no behavior change), `test` (tests), `perf` (performance).
 
    **Scope:** Optional, e.g., `(api)`, `(ui)`, `(auth)`
 
-   **Examples:**
-
-   ```
-   feat(auth): add JWT token refresh mechanism
-
-   Implements automatic token refresh before expiration to improve
-   user experience and reduce re-authentication requests.
-
-   ```
-
 5. **Show command before executing**
 
-   Display the exact git command that will be executed:
+   Display the exact git command:
 
    ```bash
    git commit -m "$(cat <<'EOF'
@@ -97,12 +79,11 @@ Create a semantic git commit following semantic commit standards.
    )"
    ```
 
-   Use heredoc format to ensure proper multi-line formatting.
+   Use heredoc to ensure proper multi-line formatting.
 
 6. **Execute commit**
 
-   After user confirmation, execute the command.
-   Then run `git status` to verify success.
+   After user confirmation, execute the command, then run `git status` to verify success.
 
 **Guardrails**
 

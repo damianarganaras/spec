@@ -1,66 +1,63 @@
-# Templates — Artefactos aspec
+# Templates — aspec artifacts
 
-Este archivo contiene los templates exactos para los cuatro artefactos que genera
-el skill. Leer este archivo en el Paso 6 y completar cada placeholder `{...}`.
+Exact templates for the four generated artifacts; fill each `{...}` placeholder.
 
 ---
 
 ## proposal.md
 
 ```markdown
-# Propuesta: Migración a {LIBRARY} v{TARGET_VERSION}
+# Proposal: Migration to {LIBRARY} v{TARGET_VERSION}
 
-## Contexto
+## Context
 
-{Descripción del estado actual: versión actual de LIBRARY instalada, razón para migrar
-(EOL, mejoras de performance, compatibilidad, nuevas features). Si se obtuvo documentación
-oficial, resumir los puntos más relevantes del changelog aquí.}
+{Installed version + migration reason (EOL, perf, compatibility, features); key changelog
+points if docs exist.}
 
-## Cobertura del análisis
+## Analysis coverage
 
-- source files analizados: {source_files_scanned}
-- test files analizados: {test_files_scanned}
-- config files analizados: {config_files_scanned}
-- archivos con matches: {files_with_matches}
-- archivos sin matches: {files_without_matches}
+- source files analyzed: {source_files_scanned}
+- test files analyzed: {test_files_scanned}
+- config files analyzed: {config_files_scanned}
+- files with matches: {files_with_matches}
+- files without matches: {files_without_matches}
 
-## Alcance del cambio
+## Change scope
 
-### Dependencias afectadas — {N} paquetes en {M} package.json
+### Affected dependencies — {N} packages in {M} package.json
 
-| package.json | Paquete | Versión actual | Versión objetivo |
-| ------------ | ------- | -------------- | ---------------- |
+| package.json | Package | Current version | Target version |
+| ------------ | ------- | --------------- | -------------- |
 
-{Una fila por cada entry en DEPENDENCY_CHANGES[]}
+{One row per DEPENDENCY_CHANGES[]}
 
-### Archivos de configuración a modificar — {N} archivos
+### Config files to modify — {N} files
 
-{Lista de archivos con descripción del cambio requerido. Si no hay, escribir "Ninguno."}
+{Change per file; if none: "None."}
 
-### Código fuente con breaking changes — {N} archivos
+### Source code with breaking changes — {N} files
 
-{Lista de archivos afectados con el breaking change detectado. Si no hay, escribir "Ninguno."}
+{Affected files + breaking change; if none: "None."}
 
-### Tests con breaking changes — {N} archivos
+### Tests with breaking changes — {N} files
 
-{Lista de archivos de test afectados. Si no hay, escribir "Ninguno."}
+{Affected test files; if none: "None."}
 
-## Evaluación de breaking changes
+## Breaking-change assessment
 
-{Para cada KNOWN_BREAK relevante a la migración:}
+- ✅ AFFECTED — {id}: {description} — {N} occurrences in {M} files
+- ✓ NOT AFFECTED — {id}: {description}
 
-- ✅ AFECTA — {id}: {description} — {N} ocurrencias en {M} archivos
-- ✓ NO AFECTA — {id}: {description}
+{Per relevant KNOWN_BREAK}
 
-## Matches de baja confianza
+## Low-confidence matches
 
-{Lista de UNSURE_MATCHES[] para revisión manual. Si no hay, escribir "Ninguno."}
+{UNSURE_MATCHES[]; if none: "None."}
 
-## Decisión
+## Decision
 
-Migrar {LIBRARY} {CURRENT_VERSION} → v{TARGET_VERSION}.
-
-Fuente de información: {DOCS_URL | "Búsqueda web: {query}" | "Knowledge base interna"}
+Migrate {LIBRARY} {CURRENT_VERSION} → v{TARGET_VERSION}.
+Source: {DOCS_URL | "Web search: {query}" | "Internal knowledge base"}
 ```
 
 ---
@@ -68,55 +65,54 @@ Fuente de información: {DOCS_URL | "Búsqueda web: {query}" | "Knowledge base i
 ## specs/{LIBRARY_SLUG}{TARGET_VERSION}.md
 
 ```markdown
-# Especificaciones: {LIBRARY} v{TARGET_VERSION} Migration
+# Specs: {LIBRARY} v{TARGET_VERSION} Migration
 
-## Dependencias
+## ADDED Requirements
 
-{Para cada entry en DEPENDENCY_CHANGES[]:}
+### Requirement: Dependencies
 
-- REQ-D-{N}: `{package_name}` en `{path}` SHALL usar versión `^{TARGET_VERSION}.0.0`
+- REQ-D-{N}: The system SHALL use `{package_name}` at version `^{TARGET_VERSION}.0.0` in `{path}`
 
-## Configuración
+{Per DEPENDENCY_CHANGES[]}
 
-{Para cada entry en CONFIG_CHANGES[]:}
+#### Scenario: dependencies installed
 
-- REQ-C-{N}: `{file}` SHALL {descripción del cambio requerido}
+- **WHEN** dependencies are installed for the affected package
+- **THEN** `{package_name}` resolves to `^{TARGET_VERSION}.0.0`
 
-{Si CONFIG_CHANGES está vacío:}
-No se requieren cambios de configuración.
+### Requirement: Configuration
 
-## Código fuente
+- REQ-C-{N}: The system SHALL {required change} in `{file}`
 
-{Para cada entry en BREAKING_CHANGES_IN_CODE[]:}
+{Per CONFIG_CHANGES[]; empty → "No configuration requirements."}
 
-- REQ-S-{N} [{break_id}]: {descripción del cambio requerido en el código}
-  Evidencia: `{file}:{line_number}` ({confidence})
+### Requirement: Source code
 
-{Si BREAKING_CHANGES_IN_CODE está vacío:}
-No se detectaron breaking changes en código fuente.
+- REQ-S-{N} [{break_id}]: The system SHALL {required code change}
+  Evidence: `{file}:{line_number}` ({confidence})
 
-## Tests
+{Per BREAKING_CHANGES_IN_CODE[]; empty → "No source-code requirements."}
 
-{Para cada entry en BREAKING_CHANGES_IN_TESTS[]:}
+### Requirement: Tests
 
-- REQ-T-{N} [{break_id}]: {descripción del cambio requerido en los tests}
-  Evidencia: `{file}:{line_number}` ({confidence})
+- REQ-T-{N} [{break_id}]: The system SHALL {required test change}
+  Evidence: `{file}:{line_number}` ({confidence})
 
-{Si BREAKING_CHANGES_IN_TESTS está vacío:}
-No se detectaron breaking changes en tests.
+{Per BREAKING_CHANGES_IN_TESTS[]; empty → "No test requirements."}
 
-## Verificación
+### Requirement: Verification
 
-- REQ-V-001: El proyecto SHALL compilar sin errores TypeScript
-- REQ-V-002: Todos los tests SHALL pasar luego de la migración
-  {Si lint script existe:}
-- REQ-V-003: El proyecto SHALL pasar lint sin errores
+- REQ-V-001: The project SHALL compile without TypeScript errors
+- REQ-V-002: The project SHALL pass all tests after the migration
+- REQ-V-003: The project SHALL pass lint without errors
 
-## Cobertura
+{REQ-V-003 only if the lint script exists}
 
-- REQ-X-001: El análisis SHALL incluir todo archivo de código fuente elegible (`.ts`, `.tsx`, `.js`) excluyendo `node_modules`, `dist` y artefactos generados
-- REQ-X-002: El análisis SHALL incluir todo archivo de tests elegible (`*.spec.*`, `*.test.*`)
-- REQ-X-003: El resultado SHALL reportar métricas de cobertura (`source_files_scanned`, `test_files_scanned`, `config_files_scanned`)
+### Requirement: Analysis coverage
+
+- REQ-X-001: The analysis SHALL include every eligible source file (`.ts`, `.tsx`, `.js`), excluding `node_modules`, `dist` and generated artifacts
+- REQ-X-002: The analysis SHALL include every eligible test file (`*.spec.*`, `*.test.*`)
+- REQ-X-003: The result SHALL report coverage metrics (`source_files_scanned`, `test_files_scanned`, `config_files_scanned`)
 ```
 
 ---
@@ -126,132 +122,111 @@ No se detectaron breaking changes en tests.
 ````markdown
 # Tasks: {LIBRARY} v{TARGET_VERSION} Migration
 
-## Fase 1: Dependencias
+## Phase 1: Dependencies
 
-{Para cada entry en DEPENDENCY_CHANGES[]:}
+- [ ] **T-D-{N}** Update `{package_name}` in `{path}` from `{current_version}` to `^{TARGET_VERSION}.0.0`
 
-- [ ] **T-D-{N}** Actualizar `{package_name}` en `{path}` de `{current_version}` a `^{TARGET_VERSION}.0.0`
+{Per DEPENDENCY_CHANGES[]}
 
-- [ ] **T-D-LAST** Regenerar lockfile:
+- [ ] **T-D-LAST** Regenerate the lockfile:
   ```bash
   npm install
   ```
 ````
 
-## Fase 2: Infraestructura y runtime
+## Phase 2: Infrastructure and runtime
 
-{Solo si IS_RUNTIME = true:}
-{Si .nvmrc existe o debe crearse:}
+{Only if IS_RUNTIME = true; one T-I task per file found}
 
-- [ ] **T-I-001** {Crear | Actualizar} `.nvmrc` con el valor `{TARGET_VERSION}`
+- [ ] **T-I-001** {Create | Update} `.nvmrc` with value `{TARGET_VERSION}`
 
-{Para cada CI file con nodeVersion a cambiar:}
+- [ ] **T-I-002** Update `nodeVersion` in `{CI_FILE}` from `{current}` to `{TARGET_VERSION}.x`
 
-- [ ] **T-I-002** Actualizar `nodeVersion` en `{CI_FILE}` de `{current}` a `{TARGET_VERSION}.x`
-
-{Para cada Dockerfile con FROM node:X:}
-
-- [ ] **T-I-003** Actualizar imagen base en `{Dockerfile}`:
+- [ ] **T-I-003** Update the base image in `{Dockerfile}`:
   ```dockerfile
-  # Antes
+  # Before
   FROM node:{current}-alpine
-  # Después
+  # After
   FROM node:{TARGET_VERSION}-alpine
   ```
-  _(Ajustar variant según el Dockerfile existente: alpine, slim, bullseye, etc.)_
+  _(Match the existing variant: alpine, slim, bullseye, etc.)_
 
-{Para cada appSettings.json con "Runtime":}
+- [ ] **T-I-004** Update `Runtime` in `{appSettings.json}` to `NODEJS_{TARGET_VERSION}_X`
 
-- [ ] **T-I-004** Actualizar `Runtime` en `{appSettings.json}` a `NODEJS_{TARGET_VERSION}_X`
+{If IS_RUNTIME = false:}
+_(Not applicable to library migrations)_
 
-{Si IS*RUNTIME = false:}
-*(No aplica para migraciones de librería)\_
+## Phase 3: Build and test configuration
 
-## Fase 3: Configuración de build y tests
-
-{Para cada entry en CONFIG_CHANGES[]:}
-
-- [ ] **T-C-{N}** {Descripción concreta del cambio}
-      Archivo: `{file}`
+- [ ] **T-C-{N}** {Concrete change description}
+      File: `{file}`
   ```
-  // Antes
+  // Before
   {current_value}
-  // Después
+  // After
   {target_value}
   ```
 
-{Si CONFIG*CHANGES está vacío:}
-*(No se detectaron cambios de configuración necesarios)\_
+{Per CONFIG_CHANGES[]; empty →}
+_(No configuration changes detected)_
 
-## Fase 4: Breaking changes en código fuente
-
-{Para cada entry en BREAKING_CHANGES_IN_CODE[]:}
+## Phase 4: Breaking changes in source code
 
 - [ ] **T-S-{N}** [{break_id}] `{severity}` — {description}
       Fix: {fix}
-      Archivos afectados:
-      {Para cada {file, line_number, snippet}:}
+      Affected files:
   - `{file}:{line_number}` ({confidence}) — `{snippet}`
 
-{Si BREAKING*CHANGES_IN_CODE está vacío:}
-*(No se detectaron breaking changes en código fuente para esta migración)\_
+{Per BREAKING_CHANGES_IN_CODE[], one sub-bullet per file; empty →}
+_(No breaking changes detected in source code for this migration)_
 
-## Fase 5: Breaking changes en tests
-
-{Para cada entry en BREAKING_CHANGES_IN_TESTS[]:}
+## Phase 5: Breaking changes in tests
 
 - [ ] **T-T-{N}** [{break_id}] `{severity}` — {description}
       Fix: {fix}
-      Archivos afectados:
-      {Para cada {file, line_number, snippet}:}
+      Affected files:
   - `{file}:{line_number}` ({confidence}) — `{snippet}`
 
-{Si BREAKING*CHANGES_IN_TESTS está vacío:}
-*(No se detectaron breaking changes en tests para esta migración)\_
+{Per BREAKING_CHANGES_IN_TESTS[], one sub-bullet per file; empty →}
+_(No breaking changes detected in tests for this migration)_
 
-## Fase 6: Verificación
+## Phase 6: Verification
 
-- [ ] **T-V-001** Verificar compilación TypeScript:
+- [ ] **T-V-001** Verify TypeScript compilation:
   ```bash
   npx tsc --noEmit
-  # En monorepos Nx: npx nx affected --target=typecheck
+  # Nx monorepos: npx nx affected --target=typecheck
   ```
 
-{Si script "build" en SCRIPTS_AVAILABLE[]:}
-
-- [ ] **T-V-002** Verificar build:
+- [ ] **T-V-002** Verify build:
   ```bash
   npm run build
-  # En monorepos Nx: npx nx affected --target=build
+  # Nx monorepos: npx nx affected --target=build
   ```
 
-{Si script "lint" en SCRIPTS_AVAILABLE[]:}
-
-- [ ] **T-V-003** Ejecutar linter:
+- [ ] **T-V-003** Run the linter:
   ```bash
   npm run lint
-  # En monorepos Nx: npx nx affected:lint
+  # Nx monorepos: npx nx affected:lint
   ```
 
-{Si script "test" en SCRIPTS_AVAILABLE[]:}
-
-- [ ] **T-V-004** Correr suite de tests:
+- [ ] **T-V-004** Run the test suite:
   ```bash
   npm test
-  # En monorepos Nx: npx nx affected --target=test
+  # Nx monorepos: npx nx affected --target=test
   ```
 
-{Si script "test:ci" en SCRIPTS_AVAILABLE[]:}
-
-- [ ] **T-V-005** Correr tests en modo CI:
+- [ ] **T-V-005** Run tests in CI mode:
 
   ```bash
   npm run test:ci
   ```
 
-- [ ] **T-V-900** Validar cobertura del escaneo:
-  - confirmar conteo de archivos escaneados (source/tests/config)
-  - revisar `UNSURE_MATCHES[]` y clasificar cada caso
+- [ ] **T-V-900** Validate scan coverage:
+  - confirm scanned file counts (source/tests/config)
+  - review `UNSURE_MATCHES[]` and classify each case
+
+{T-V-002..T-V-005 only when the matching script exists in SCRIPTS_AVAILABLE[]}
 
 ````
 
@@ -262,59 +237,51 @@ No se detectaron breaking changes en tests.
 ```markdown
 # Design: {LIBRARY} v{TARGET_VERSION} Migration
 
-## Estrategia de migración
+## Migration strategy
 
-{Explicar el enfoque en orden de las fases: primero dependencias (para detectar errores
-de compilación antes de tocar código), luego infraestructura, luego config, luego código.
-Describir el riesgo principal y cómo se mitiga.}
+{Phase order: dependencies first (surface compilation errors before touching code), then
+infrastructure, config, code. Main risk and mitigation.}
 
-## Decisiones técnicas
+## Technical decisions
 
-### Rango de versión — `^{TARGET_VERSION}.0.0`
+### Version range — `^{TARGET_VERSION}.0.0`
 
-Se usa caret (`^`) en lugar de pin exacto para recibir parches y minor automáticamente,
-manteniendo la estabilidad del major. Se evita `>=` para no aceptar accidentalmente el
-próximo major con potenciales breaking changes.
+Caret (`^`) instead of an exact pin receives patches and minors automatically while keeping
+major stability. `>=` is avoided so the next major is not accepted by accident.
 
-### Cambios de configuración
+### Configuration changes
 
-{Para cada CONFIG_CHANGE relevante: explicar el razonamiento técnico.}
-{Ej para MIDDY7-001: "Jest necesita transformIgnorePatterns porque @middy v7 publica
-ESM puro y Jest por defecto no transpila node_modules. Sin este cambio, los tests
-fallan con SyntaxError en el import."}
+{Per CONFIG_CHANGE: technical reasoning. E.g. MIDDY7-001: "Jest needs transformIgnorePatterns
+because @middy v7 ships pure ESM and does not transpile node_modules; without it, tests fail
+with a SyntaxError on import."}
 
-### Breaking changes — análisis de impacto
+### Breaking changes — impact analysis
 
-{Para cada breaking change encontrado: explicar el impacto técnico y por qué el fix
-propuesto es la solución correcta y no un workaround.}
+{Per breaking change: technical impact and why the fix is correct, not a workaround.}
+{If none: "No breaking changes were detected in this repository for this migration. Risk is low."}
 
-{Si no hay breaking changes: "No se detectaron breaking changes en este repositorio
-para esta migración. El riesgo es bajo."}
+### Ecosystem compatibility
 
-### Compatibilidad del ecosistema
+{Related dependencies that may be affected (e.g. Middy v7 third-party middlewares). If none:
+"No ecosystem dependencies with incompatibility risk were identified."}
 
-{Mencionar dependencias relacionadas que pueden verse afectadas.}
-{Ej para Middy v7: listar middlewares de terceros y su estado de compatibilidad con v7.}
-{Si no aplica: "No se identificaron dependencias del ecosistema con riesgo de incompatibilidad."}
+### Analysis quality
 
-### Calidad del análisis
+- Coverage: {source_files_scanned} source, {test_files_scanned} tests, {config_files_scanned} config
+- High-confidence matches: {N}
+- Medium-confidence matches: {N}
+- Low-confidence matches: {N}
+- Manual review strategy for low confidence: {criterion applied}
 
-- Cobertura: {source_files_scanned} source, {test_files_scanned} tests, {config_files_scanned} config
-- Matches de alta confianza: {N}
-- Matches de media confianza: {N}
-- Matches de baja confianza: {N}
-- Estrategia de revisión manual para baja confianza: {criterio aplicado}
+## Change table
 
-## Tabla de cambios
+| File | Field / Pattern | Before | After |
+|------|-----------------|--------|-------|
+{One row per change in DEPENDENCY_CHANGES[], CONFIG_CHANGES[], BREAKING_CHANGES_IN_CODE[], BREAKING_CHANGES_IN_TESTS[]}
 
-| Archivo | Campo / Patrón | Antes | Después |
-|---------|----------------|-------|---------|
-{Una fila por cada cambio concreto en DEPENDENCY_CHANGES[], CONFIG_CHANGES[],
-BREAKING_CHANGES_IN_CODE[] y BREAKING_CHANGES_IN_TESTS[]}
+## References
 
-## Referencias
-
-- {DOCS_URL si está disponible}
-- {Links adicionales encontrados durante el análisis}
-- Knowledge base interna consultada: {lista de break_ids relevantes de known-breaks.md}
-````
+- {DOCS_URL if available}
+- {Additional links found during the analysis}
+- Internal knowledge base consulted: {relevant break_ids from known-breaks.md}
+```

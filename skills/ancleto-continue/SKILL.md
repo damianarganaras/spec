@@ -10,9 +10,11 @@ metadata:
 
 # aspec Continue
 
-Continue working on a change by creating exactly ONE next artifact. No external binaries are invoked: change state is derived by reading which artifact files exist.
+**Artifacts language**: write every artifact in English. Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. File and directory names stay English kebab-case.
 
-**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `aspec/changes/` (excluding `archive/`) and ask the user to select, marking the most recently modified one as "(Recommended)".
+Continue a change by creating exactly ONE next artifact. No external binaries: state is derived by which artifact files exist.
+
+**Input**: optionally a change name (e.g., `add-auth`). If omitted, try to infer it from conversation context. If vague, list the directories under `aspec/changes/` (excluding `archive/`) and ask the user to select, marking the most recently modified "(Recommended)".
 
 **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
@@ -20,49 +22,41 @@ Continue working on a change by creating exactly ONE next artifact. No external 
 
 ### 1. Determine the next missing artifact
 
-Read `aspec/changes/<name>/` and check for artifact files in this fixed dependency order:
+Read `aspec/changes/<name>/` and check files in this fixed dependency order:
 
 1. `proposal.md` — what & why
 2. `specs/` — delta requirements (at least one `spec.md` inside; skip only if the change specifies no behavior)
 3. `design.md` — how
 4. `tasks.md` — implementation checklist
 
-The first item in this order that is absent (or, for `specs/`, contains no `spec.md`) is the next artifact to create.
+The first absent item (or, for `specs/`, one with no `spec.md`) is next.
 
-- **If all four are present**: congratulate the user, show the status, and suggest "All artifacts created! You can now implement this change with `ancleto-apply` or archive it with `ancleto-archive`." STOP.
-- **If the change directory does not exist**: report it and stop.
+- **All four present**: congratulate the user, show status, suggest "All artifacts created! You can now implement this change with `ancleto-apply` or archive it with `ancleto-archive`." STOP.
+- **Change directory missing**: report it and stop.
 
 ### 2. Load context files
 
-Read every artifact that IS present — they constrain what you write next. If a `context.md` file exists in the change directory, read it as background (Work Item context: title, description, acceptance criteria). It is NOT an artifact and must NOT be copied into output files.
+Read every present artifact — they constrain what you write. If `context.md` exists, read it as background (Work Item title, description, acceptance criteria); it is NOT an artifact and must NOT be copied into output files.
 
 ### 3. Create exactly ONE artifact
 
 Draft the missing artifact using the same templates as `ancleto-propose`:
 
-- **proposal.md** (first artifact): problem statement, proposed change, scope, risks. If Work Item context is available, use its title/description as the problem statement, acceptance criteria as the requirements basis, and include a `## Related Work Item` section: `**#{id}** — {title} ({type}) · Project: {project}`.
-- **specs/\<capability\>/spec.md**: one spec file per capability the change touches, with `## ADDED Requirements` / `#### Scenario:` blocks in WHEN/THEN form.
+- **proposal.md** (first): problem statement, proposed change, scope, risks. With Work Item context, use its title/description as the problem statement, acceptance criteria as the requirements basis, and include `## Related Work Item`: `**#{id}** — {title} ({type}) · Project: {project}`.
+- **specs/\<capability\>/spec.md**: one spec file per capability touched, with `## ADDED Requirements` / `#### Scenario:` blocks in WHEN/THEN form.
 - **design.md**: approach, architecture, validation.
 - **tasks.md**: phased `- [ ]` checklist.
 
-Write the file, then verify it exists on disk.
+Verify the file exists on disk.
 
 ### 4. Show progress and stop
 
-Report:
-
-- Which artifact was created.
-- Current progress (N/4 complete).
-- What is unlocked next.
-- Prompt: "Run `ancleto-continue` to create the next artifact."
-
-Create ONE artifact per invocation, then STOP.
+Report which artifact was created, progress (N/4), and what is unlocked next, then: "Run `ancleto-continue` to create the next artifact." Create ONE artifact per invocation, then STOP.
 
 ## Guardrails
 
-- Create ONE artifact per invocation.
-- Always read existing artifacts before creating the next one.
-- Never skip artifacts or create out of order (proposal → specs → design → tasks).
-- If context is unclear, ask the user before creating.
-- Verify the artifact file exists after writing before reporting progress.
-- `context.md` content informs writing but must never be copied into artifact files.
+- Create ONE artifact per invocation, in order (proposal → specs → design → tasks); never skip.
+- Read existing artifacts before creating the next.
+- If context is unclear, ask before creating.
+- Verify the artifact exists before reporting progress.
+- `context.md` informs writing but must never be copied into artifact files.

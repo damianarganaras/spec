@@ -11,7 +11,7 @@ metadata:
 
 Create a pull request following semantic standards.
 
-**Azure es opcional**: si `.ancletorc` no declara `azure.enabled: true`, usar el flujo GitHub (`gh pr create`, sección "Alternative: GitHub PRs" abajo). El flujo Azure DevOps solo aplica cuando esta habilitado.
+**Azure is optional**: if `.ancletorc` does not declare `azure.enabled: true`, use the GitHub flow (`gh pr create`, see "Alternative: GitHub PRs" below). The Azure DevOps flow applies only when it is enabled.
 
 **When to use**: User wants to create a PR for their current branch.
 
@@ -26,9 +26,9 @@ Create a pull request following semantic standards.
 
    **Checks:**
 
-   - ❌ If on protected branch (main, master, develop, qa, sandbox): Error and stop
-   - ⚠️ If uncommitted changes: Warn and suggest committing first
-   - ✅ If clean: Proceed
+   - ❌ Protected branch (main, master, develop, qa, sandbox): error and stop
+   - ⚠️ Uncommitted changes: warn and suggest committing first
+   - ✅ Clean: proceed
 
 2. **Check remote tracking**
 
@@ -36,14 +36,11 @@ Create a pull request following semantic standards.
    git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null
    ```
 
-   If no upstream tracking:
-
-   - Suggest: `git push -u origin <branch-name>`
-   - Ask if they want to push now or do it manually
+   If no upstream tracking: suggest `git push -u origin <branch-name>` and ask whether to push now or manually.
 
 3. **Determine base branch**
 
-   Ask the user (using AskUserQuestion):
+   Ask the user (use the runtime question tool when available):
 
    - "What branch should this PR merge into?"
      - Option 1: "main" (Recommended for most features)
@@ -57,23 +54,19 @@ Create a pull request following semantic standards.
    git diff <base-branch>...HEAD --stat
    ```
 
-   Review ALL commits that will be included, not just the latest one.
+   Review ALL commits included, not just the latest.
 
 5. **Generate PR title and description**
 
-   **Title format:** `type: Short description (<70 chars)`
-
-   - Use the same types as commits: feat, fix, chore, docs, etc.
-   - Keep concise, details go in description
+   **Title format:** `type: Short description (<70 chars)` — same types as commits (feat, fix, chore, docs, etc.); keep concise, details go in the description.
 
    **Description format:**
 
    ```markdown
    ## Summary
 
-   - Bullet point 1 of main changes
-   - Bullet point 2 of main changes
-   - Bullet point 3 of main changes
+   - Main change 1
+   - Main change 2
 
    ## Technical Details
 
@@ -127,16 +120,9 @@ Create a pull request following semantic standards.
 
    After user confirmation, execute the command.
 
-   **On success:**
+   **On success:** show the PR URL and suggest next steps (request reviewers, link work items, etc.).
 
-   - Show the PR URL
-   - Suggest next steps: request reviewers, link work items, etc.
-
-   **On error:**
-
-   - If "az not found": Install Azure CLI and authenticate
-   - If "not authenticated": Run `az login`
-   - If other errors: Show error and suggest manual PR creation
+   **On error:** "az not found" → install Azure CLI and authenticate; "not authenticated" → run `az login`; other → show the error and suggest manual PR creation.
 
 **Guardrails**
 

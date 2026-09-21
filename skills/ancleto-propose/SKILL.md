@@ -10,80 +10,43 @@ metadata:
 
 # aspec Propose
 
-Create a change and generate all its artifacts in one step, writing files directly. No external binaries are invoked.
+**Artifacts language**: write every artifact in English. Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. File and directory names stay English kebab-case.
 
-**Input**: The argument is the change name (kebab-case), OR a description of what the user wants to build.
+Create a change and all its artifacts in one step, writing files directly. No external binaries.
+
+**Input**: the change name (kebab-case), or a description of what to build.
 
 ## Steps
 
 ### 1. Resolve context and derive the change name
 
-Same as `ancleto-new` step 1: use in-session Work Item context if available (record id/title/project for traceability, skip entirely when Azure DevOps is not configured), otherwise ask what the user wants to build and derive a kebab-case name.
+Same as `ancleto-new` step 1: use in-session Work Item context if available (record id/title/project; skip when Azure DevOps is unconfigured), else ask what to build and derive a kebab-case name.
 
-**IMPORTANT**: Do NOT proceed without a change name. If a change with that name already exists, ask whether to continue it or create a new one.
+**IMPORTANT**: Do NOT proceed without a change name.
 
 ### 2. Recall prior memory
 
-Call the memory tool once with a semantic query describing what the change will do:
+Call the memory tool once with a semantic query describing the change:
 
 ```
 searchMemory({ query })
 ```
 
-Use what comes back as read-only background while drafting. If nothing is returned, or the tool is unavailable, continue silently without blocking.
+Use the result as read-only background; if empty or unavailable, continue silently without blocking.
 
 ### 3. Create the change directory
 
-Create `aspec/changes/<name>/` directly if it does not exist yet.
+Create `aspec/changes/<name>/` if missing.
 
 ### 4. Create artifacts in dependency order
 
-Write each artifact file directly, in this order. Read each completed artifact before drafting the next one so they stay consistent.
+Write each directly, reading each completed one before drafting the next.
 
-**4a. `proposal.md`** — what & why:
+**4a. `proposal.md`** — what & why: `# Proposal: <title>`, then `## Problem`, `## Proposed change`, `## Scope` (In/Out of scope), `## Risks` (`<risk>: <mitigation>`).
 
-```markdown
-# Proposal: <title>
+**4b. `design.md`** — how: `# Design: <title>`, then `## Approach`, `## Architecture`, `## Validation`.
 
-## Problem
-<what is wrong or missing, and for whom>
-
-## Proposed change
-<what will change>
-
-## Scope
-- In scope: ...
-- Out of scope: ...
-
-## Risks
-- <risk>: <mitigation>
-```
-
-**4b. `design.md`** — how:
-
-```markdown
-# Design: <title>
-
-## Approach
-<chosen approach and why it was preferred over alternatives>
-
-## Architecture
-<components touched, data flow, key interfaces>
-
-## Validation
-<how the change will be verified: tests, checks, manual steps>
-```
-
-**4c. `tasks.md`** — phased implementation checklist:
-
-```markdown
-# Tasks: <title>
-
-- [ ] Task 1 — <description>
-- [ ] Task 2 — <description>
-```
-
-Break work into small, independently verifiable tasks. Mark each with `- [ ]` (unchecked).
+**4c. `tasks.md`** — phased `- [ ]` checklist of small, independently verifiable tasks: `# Tasks: <title>`.
 
 **4d. `specs/<capability>/spec.md`** — delta requirements (only when the change alters specified behavior):
 
@@ -111,29 +74,19 @@ The system SHALL <behavior>.
 
 If the change adds no specified behavior, skip `specs/` and note why.
 
-### 5. Verify each file exists before proceeding to the next
+### 5. Verify each file exists before proceeding
 
-After writing an artifact, confirm the file is on disk, then continue.
+Confirm each artifact is on disk after writing.
 
 ## Output
 
-After completing all artifacts, summarize:
-
-- Change name and location
-- List of artifacts created with brief descriptions
-- What's ready: "All artifacts created! Ready for implementation."
-- Prompt: "Run `ancleto-apply` to start implementing."
-
-## Artifact Creation Guidelines
-
-- Read dependency artifacts for context before creating new ones
-- Keep each artifact focused on its own concern (what / how / steps / requirements)
-- If context is critically unclear, ask the user — but prefer making reasonable decisions to keep momentum
+Report name/location and artifacts created, then: "All artifacts created! Ready for implementation. Run `ancleto-apply`."
 
 ## Guardrails
 
-- Create ALL artifacts needed for implementation (proposal, design, tasks; specs only when behavior is specified)
-- Always read dependency artifacts before creating a new one
-- If a change with that name already exists, ask whether to continue it or create a new one
-- Verify each artifact file exists after writing before proceeding to the next
-- Memory recall never blocks artifact creation
+- Create ALL artifacts needed for implementation (proposal, design, tasks; specs only when behavior is specified).
+- Read dependency artifacts before creating the next one.
+- If a change with that name already exists, ask whether to continue it or create a new one.
+- Verify each artifact file exists after writing before proceeding.
+- Keep each artifact focused on its own concern (what / how / steps / requirements); if context is unclear, ask — but prefer momentum.
+- Memory recall never blocks artifact creation.

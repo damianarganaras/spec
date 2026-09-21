@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync } from 'node:fs'
 import { cp, mkdir, access, writeFile, readFile, readdir } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -86,17 +87,21 @@ function globalConfigDir() {
     : join(homedir(), '.config', 'opencode')
 }
 
+function binName(base) {
+  return process.platform === 'win32' ? `${base}.exe` : base
+}
+
 function resolveBin(name, fallbacks = []) {
   const probe = process.platform === 'win32' ? 'where' : 'which'
   const r = spawnSync(probe, [name], { encoding: 'utf8' })
   if (r.status === 0 && r.stdout) {
-    const first = r.stdout.split(/\r?\n/)
-      .map((s) => s.trim())
-      .find((s) => s && !/^informacion:/i.test(s))
-    if (first) return first
+    for (const line of r.stdout.split(/\r?\n/)) {
+      const candidate = line.trim()
+      if (candidate && !/^informacion:/i.test(candidate)) return candidate
+    }
   }
   for (const fb of fallbacks) {
-    if (fb) return fb
+    if (fb && existsSync(fb)) return fb
   }
   return null
 }
@@ -104,16 +109,21 @@ function resolveBin(name, fallbacks = []) {
 function buildDefaultMcp() {
   const mcp = {}
 
-  const engramBin = resolveBin('engram', [join(homedir(), 'go', 'bin', 'engram.exe')])
+  const engramFallbacks = [
+    join(homedir(), 'go', 'bin', binName('engram')),
+    join(homedir(), '.local', 'bin', binName('engram'))
+  ]
+  const engramBin = resolveBin('engram', engramFallbacks)
   if (engramBin) {
     mcp.engram = { type: 'local', enabled: true, command: [engramBin, 'mcp', '--tools=agent'] }
   } else {
     console.warn('ancleto: no se encontro engram (memoria) en PATH; se omitio su MCP')
   }
 
-  const cavemanBin = resolveBin('caveman-mcp', [
-    join(homedir(), '.caveman', 'bin', 'caveman-mcp.exe')
-  ])
+  const cavemanFallbacks = [
+    join(homedir(), '.caveman', 'bin', binName('caveman-mcp'))
+  ]
+  const cavemanBin = resolveBin('caveman-mcp', cavemanFallbacks)
   if (cavemanBin) {
     mcp.caveman = { type: 'local', enabled: true, command: [cavemanBin] }
   } else {

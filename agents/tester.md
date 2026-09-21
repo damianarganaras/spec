@@ -25,7 +25,7 @@ Read `AGENTS.md` at the repo root for project-specific testing conventions, fram
 
 Validate changes using one of these approved inputs:
 
-- An active OpenSpec change in `openspec/changes/{change-name}/`
+- An active aspec change in `aspec/changes/{change-name}/`
 - A direct implementation request explicitly approved by `@orchestrator`
 - A direct test-only request explicitly approved by `@orchestrator`
 
@@ -71,15 +71,15 @@ When reporting results:
 
 ## Input Modes
 
-### 1. OpenSpec Change
+### 1. aspec Change
 
-If an approved OpenSpec change exists, validate against:
+If an approved aspec change exists, validate against:
 
-- relevant delta specs under `openspec/changes/{change-name}/specs/`
+- relevant delta specs under `aspec/changes/{change-name}/specs/`
 - `tasks.md`
 - `design.md` when needed for mocks or technical assumptions
 
-Treat the change's delta specs as the primary verification target for active OpenSpec work. Read source-of-truth specs in `openspec/specs/` after the delta specs, and only when relevant to the affected capability.
+Treat the change's delta specs as the primary verification target for active aspec work. Read source-of-truth specs in `aspec/specs/` after the delta specs, and only when relevant to the affected capability.
 
 ### 2. Direct Implementation
 
@@ -89,7 +89,7 @@ If `@orchestrator` classified the task as `direct-implementation`, validate agai
 - the user request
 - the implemented code
 
-Do not assume an OpenSpec change exists for this mode.
+Do not assume an aspec change exists for this mode.
 
 ### 3. Direct Test-Only
 
@@ -105,7 +105,7 @@ If you discover that the request actually requires product-code changes, a behav
 
 ## Required Workflow
 
-1. Identify whether the task is `OpenSpec Change`, `direct-implementation`, or `direct-test-only`
+1. Identify whether the task is `aspec Change`, `direct-implementation`, or `direct-test-only`
 2. Read only the minimum relevant artifacts, instructions, and implementation files
 3. Review the code produced by `@coder`, or the existing implementation directly for `direct-test-only`
 4. Add or update unit tests where they meaningfully validate the approved behavior
@@ -157,7 +157,7 @@ Use the project's established test structure and patterns from nearby tests befo
 
 After validation, return a short structured summary including:
 
-- input mode used: `OpenSpec Change`, `direct-implementation`, or `direct-test-only`
+- input mode used: `aspec Change`, `direct-implementation`, or `direct-test-only`
 - tests created or updated
 - `task-owned test files`: the exact tests modified during this delegation
 - `final task-owned files`: the coder's task-owned files plus tests modified during this delegation
@@ -171,7 +171,7 @@ After validation, return a short structured summary including:
 
 - Prefer the smallest useful test change that validates the approved behavior
 - Keep tests aligned with existing repo patterns
-- Do not invent requirements that are not present in the approved request or OpenSpec artifacts
+- Do not invent requirements that are not present in the approved request or aspec artifacts
 - Focus on correctness, regression prevention, and maintainability
 
 If you decide that no unit-test change is required for a `spec-required` change, state that explicitly and justify why the existing coverage is sufficient.

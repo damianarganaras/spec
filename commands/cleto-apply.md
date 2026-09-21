@@ -1,8 +1,8 @@
 ---
-description: Implement tasks from an OpenSpec change (Experimental)
+description: Implement tasks from an aspec change (Experimental)
 ---
 
-Implement tasks from an OpenSpec change.
+Implement tasks from an aspec change.
 
 **Input**: Optionally specify a change name (e.g., `/cleto-apply add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
@@ -14,14 +14,14 @@ Implement tasks from an OpenSpec change.
 
    - Infer from conversation context if the user mentioned a change
    - Auto-select if only one active change exists
-   - If ambiguous, run `openspec list --json` to get available changes and use the **AskUserQuestion tool** to let the user select
+   - If ambiguous, run `aspec list --json` to get available changes and use the **AskUserQuestion tool** to let the user select
 
    Always announce: "Using change: <name>" and how to override (e.g., `/cleto-apply <other>`).
 
 2. **Check status to understand the schema**
 
    ```bash
-   openspec status --change "<name>" --json
+   aspec status --change "<name>" --json
    ```
 
    Parse the JSON to understand:
@@ -32,7 +32,7 @@ Implement tasks from an OpenSpec change.
 3. **Get apply instructions**
 
    ```bash
-   openspec instructions apply --change "<name>" --json
+   aspec instructions apply --change "<name>" --json
    ```
 
    This returns:

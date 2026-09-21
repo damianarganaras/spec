@@ -8,11 +8,11 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec Continue
+# aspec Continue
 
 Continue working on a change by creating exactly ONE next artifact. No external binaries are invoked: change state is derived by reading which artifact files exist.
 
-**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `openspec/changes/` (excluding `archive/`) and ask the user to select, marking the most recently modified one as "(Recommended)".
+**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `aspec/changes/` (excluding `archive/`) and ask the user to select, marking the most recently modified one as "(Recommended)".
 
 **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
@@ -20,7 +20,7 @@ Continue working on a change by creating exactly ONE next artifact. No external 
 
 ### 1. Determine the next missing artifact
 
-Read `openspec/changes/<name>/` and check for artifact files in this fixed dependency order:
+Read `aspec/changes/<name>/` and check for artifact files in this fixed dependency order:
 
 1. `proposal.md` — what & why
 2. `specs/` — delta requirements (at least one `spec.md` inside; skip only if the change specifies no behavior)

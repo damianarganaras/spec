@@ -53,14 +53,17 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   y scopes exactos. Patrón "CLI materializa + agente lee" (preserva `bash: false`).
 - ✅ Hotfix v0.6.1: buildWorkingContext devuelve topología en repositorios sin reglas (Día Cero).
 - ✅ Feature v0.6.2: Banner ASCII animado y menú select TTY (Raw Mode) estilo OpenSpec para ancleto init.
+- ✅ Releases v0.6.3/v0.6.4: rebrand de skills/commands (`openspec-*`/`/opsx-*` → `ancleto-*`/`/cleto-*`) + fix MCP binaries portables.
+- ✅ Feature v0.6.5: Rebrand total openspec → aspec — directorio de changes `aspec/` (antes `openspec/`) con migración automática en `ancleto upgrade`, sin referencias al CLI externo.
 
-## Estado actual (v0.6.1)
+## Estado actual (v0.6.5)
 
 - Working tree **limpio** en `main` y `development`.
-- **v0.4.x cerrada**, **v0.5.0 (Agentic OpenSpec Engine & Upgrades) cerrada** (S1+S2+S3) y
-  **v0.6.0 (Discovery Engine v2.0 & Token Budgeting) cerrada** (D1+D2+D3) + hotfix **v0.6.1** (Día Cero).
-- Versión local en `development`: **v0.6.1** (último tag pusheado en `main`).
-- Suite: **81 tests** `node --test` en verde (memory-engine 37 + cli 33 + discovery-topology 2 + discovery-tier 9).
+- **v0.4.x cerrada**, **v0.5.0 (Agentic OpenSpec Engine & Upgrades) cerrada** (S1+S2+S3),
+  **v0.6.0 (Discovery Engine v2.0 & Token Budgeting) cerrada** (D1+D2+D3), hotfixes **v0.6.1** (Día Cero)
+  y **v0.6.2** (UI init) + rebrand **v0.6.3-v0.6.5** (skills/commands/cli → ancleto/cleto/aspec).
+- Versión local en `development`: **v0.6.5** (último tag pusheado en `main`).
+- Suite: **89 tests** `node --test` en verde (memory-engine 37 + cli 41 + discovery-topology 2 + discovery-tier 9).
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD configurado (`publish.yml`): espera Release de GitHub para publicar a npm.
 

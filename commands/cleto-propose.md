@@ -23,7 +23,7 @@ When ready to implement, run /cleto-apply
    Resolve Work Item context in this order — stop at the first source that yields data:
 
    a. **In-session context** — If WI data was already fetched in this session, use it. Proceed to name derivation below.
-   b. **`context.md`** — If a change name was provided as argument and `openspec/changes/<name>/context.md` exists, read it and use its content. Proceed to name derivation.
+   b. **`context.md`** — If a change name was provided as argument and `aspec/changes/<name>/context.md` exists, read it and use its content. Proceed to name derivation.
    c. **Ask the user** — Use the **AskUserQuestion tool** to ask for the Work Item reference. Two accepted formats:
 
    - **ID + Project** — e.g., ID `12345` and project `MyProject`
@@ -52,16 +52,14 @@ When ready to implement, run /cleto-apply
 
 2. **Create the change directory**
 
-   ```bash
-   openspec new change "<name>"
-   ```
+   Create the directory `aspec/changes/<name>/` in the repository.
 
-   This creates a scaffolded change at `openspec/changes/<name>/` with `.openspec.yaml`.
+   This scaffolds the change at `aspec/changes/<name>/` with `.aspec.yaml`.
 
 3. **Get the artifact build order**
 
    ```bash
-   openspec status --change "<name>" --json
+   aspec status --change "<name>" --json
    ```
 
    Parse the JSON to get:
@@ -79,7 +77,7 @@ When ready to implement, run /cleto-apply
 
    - Get instructions:
      ```bash
-     openspec instructions <artifact-id> --change "<name>" --json
+     aspec instructions <artifact-id> --change "<name>" --json
      ```
    - The instructions JSON includes:
      - `context`: Project background (constraints for you - do NOT include in output)
@@ -97,7 +95,7 @@ When ready to implement, run /cleto-apply
 
    b. **Continue until all `applyRequires` artifacts are complete**
 
-   - After creating each artifact, re-run `openspec status --change "<name>" --json`
+   - After creating each artifact, re-run `aspec status --change "<name>" --json`
    - Check if every artifact ID in `applyRequires` has `status: "done"` in the artifacts array
    - Stop when all `applyRequires` artifacts are done
 
@@ -108,7 +106,7 @@ When ready to implement, run /cleto-apply
 
 5. **Show final status**
    ```bash
-   openspec status --change "<name>"
+   aspec status --change "<name>"
    ```
 
 **Output**
@@ -122,7 +120,7 @@ After completing all artifacts, summarize:
 
 **Artifact Creation Guidelines**
 
-- Follow the `instruction` field from `openspec instructions` for each artifact type
+- Follow the `instruction` field from `aspec instructions` for each artifact type
 - The schema defines what each artifact should contain - follow it
 - Read dependency artifacts for context before creating new ones
 - Use `template` as the structure for your output file - fill in its sections

@@ -55,7 +55,7 @@ Al trabajar en repositorios complejos con asistentes de IA, surgen tres problema
 - 🧠 **Motor de Memoria Persistente (FTS5):** Base local SQLite (`.ancleto/memory.db`) que provee al LLM herramientas para registrar y recuperar reglas arquitectónicas y decisiones pasadas proactivamente.
 - 🗺️ **Discovery Engine:** Un escáner topológico rápido que genera mapas del repositorio (`.discovery-map.json`) y empaqueta el contexto vía Repomix con presupuestos de tokens dinámicos.
 - 💸 **Gestión de Tiers de Costo:** Control absoluto sobre qué modelos y cuánto contexto se envía (`normal`, `minimo`, `gratis`), protegiendo tus cuotas de API.
-- ⚡ **Agentic OpenSpec Engine:** Totalmente independiente, sin binarios externos. Las 11 skills del ciclo de vida (`new`, `propose`, `apply`, `verify`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `onboard`, `workflow`) se instalan e inyectan nativamente en tu IDE favorito, más skills auxiliares (`ancleto-commit`, `ancleto-pr`, `triage-clarifier`, entre otras).
+- ⚡ **Agentic aspec Engine:** Totalmente independiente, sin binarios externos. Las 11 skills del ciclo de vida (`new`, `propose`, `apply`, `verify`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `onboard`, `workflow`) se instalan e inyectan nativamente en tu IDE favorito, más skills auxiliares (`ancleto-commit`, `ancleto-pr`, `triage-clarifier`, entre otras).
 - 🎨 **Wizard Interactivo:** Inicialización por TTY con banner animado y menús navegables con flechas, sin requerir librerías pesadas (Zero-Deps).
 
 ---

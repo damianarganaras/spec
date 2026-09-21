@@ -8,7 +8,7 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec FF
+# aspec FF
 
 Fast-forward through artifact creation: generate everything needed to start implementation, writing files directly. No external binaries are invoked.
 
@@ -37,7 +37,7 @@ Use what comes back as read-only background while drafting. If nothing is return
 
 ### 3. Create the change directory
 
-Create `openspec/changes/<name>/` directly.
+Create `aspec/changes/<name>/` directly.
 
 ### 4. Create all artifacts in dependency order
 

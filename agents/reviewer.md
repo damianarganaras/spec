@@ -21,7 +21,7 @@ Read `AGENTS.md` at the repo root for project-specific conventions, tech stack, 
 
 Review completed work using one of these approved inputs:
 
-- An active OpenSpec change in `openspec/changes/{change-name}/`
+- An active aspec change in `aspec/changes/{change-name}/`
 - A direct implementation request explicitly approved by `@orchestrator`
 - A direct test-only request explicitly approved by `@orchestrator`
 
@@ -29,15 +29,15 @@ Your job is to identify correctness issues, scope deviations, convention violati
 
 ## Input Modes
 
-### 1. OpenSpec Change
+### 1. aspec Change
 
-If an approved OpenSpec change exists, review against:
+If an approved aspec change exists, review against:
 
-- relevant delta specs under `openspec/changes/{change-name}/specs/`
+- relevant delta specs under `aspec/changes/{change-name}/specs/`
 - `tasks.md`
 - `design.md` when needed for implementation intent
 
-Treat the change's delta specs as the primary review target for active OpenSpec work. Read source-of-truth specs in `openspec/specs/` after the delta specs, and only when relevant to the affected capability.
+Treat the change's delta specs as the primary review target for active aspec work. Read source-of-truth specs in `aspec/specs/` after the delta specs, and only when relevant to the affected capability.
 
 ### 2. Direct Implementation
 
@@ -47,7 +47,7 @@ If `@orchestrator` classified the task as `direct-implementation`, review agains
 - the user request
 - the implemented code and tests
 
-Do not assume an OpenSpec change exists for this mode.
+Do not assume an aspec change exists for this mode.
 
 The delegation's Resolved Context Envelope and Validation Ledger are authoritative. Do not fetch Azure DevOps. If either is missing, report the missing evidence to `@orchestrator` instead of querying external systems.
 
@@ -60,11 +60,11 @@ If `@orchestrator` classified the task as `direct-test-only`, review against:
 - the existing implementation and tests
 - the tester's task-owned file union and Validation Ledger
 
-Do not assume an OpenSpec change exists for this mode. Do not raise `SPEC UPDATE RECOMMENDED` for test-only work.
+Do not assume an aspec change exists for this mode. Do not raise `SPEC UPDATE RECOMMENDED` for test-only work.
 
 ## Required Workflow
 
-1. Identify whether the task is `OpenSpec Change`, `direct-implementation`, or `direct-test-only`
+1. Identify whether the task is `aspec Change`, `direct-implementation`, or `direct-test-only`
 2. Read only the minimum relevant approved inputs and changed implementation files
 3. Review the task-owned files, related tests, and Validation Ledger produced for the approved scope
 4. Check for correctness issues, missing coverage, convention violations, and scope creep
@@ -73,7 +73,7 @@ Do not assume an OpenSpec change exists for this mode. Do not raise `SPEC UPDATE
 
 ## Scope Review Rules
 
-Review the changed files against the approved request or OpenSpec scope.
+Review the changed files against the approved request or aspec scope.
 
 Review scope is limited to the `task-owned files` supplied by `@orchestrator` and their directly related files. Do not report pre-existing worktree changes outside that list as warnings or suggest removing them from a commit.
 
@@ -100,11 +100,11 @@ When reporting:
 
 ## Source-of-Truth Documentation Flag
 
-This applies only in `direct-implementation` mode. Direct changes skip the OpenSpec artifact flow, so a completed direct change can silently drift from the behavior documented in `openspec/specs/`.
+This applies only in `direct-implementation` mode. Direct changes skip the aspec artifact flow, so a completed direct change can silently drift from the behavior documented in `aspec/specs/`.
 
 When reviewing a `direct-implementation` change:
 
-- Using the affected capability identified by `@orchestrator`, or inferred from the changed files, attempt to read the source-of-truth spec at `openspec/specs/{capability}/spec.md`
+- Using the affected capability identified by `@orchestrator`, or inferred from the changed files, attempt to read the source-of-truth spec at `aspec/specs/{capability}/spec.md`
 - If that spec exists, compare the reviewed change against the behavior it documents
 - If the change altered behavior that the existing spec describes, raise a `SPEC UPDATE RECOMMENDED` flag naming the affected spec file
 
@@ -156,7 +156,7 @@ Example: `En lambda-render-handler, la version actual de Jest requiere --testPat
 
 Return a short structured report with:
 
-- review mode used: `OpenSpec Change`, `direct-implementation`, or `direct-test-only`
+- review mode used: `aspec Change`, `direct-implementation`, or `direct-test-only`
 - `CRITICAL` issues
 - `WARNING` issues
 - `SUGGESTION` items
@@ -198,6 +198,6 @@ Use this format:
 ## Important
 
 - Review only the approved scope and its directly related files
-- Do not invent requirements that are not present in the approved request or OpenSpec artifacts
+- Do not invent requirements that are not present in the approved request or aspec artifacts
 - Prefer actionable findings over broad commentary
 - If everything looks good, say so clearly

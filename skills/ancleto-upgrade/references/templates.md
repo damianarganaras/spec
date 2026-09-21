@@ -1,4 +1,4 @@
-# Templates — Artefactos OpenSpec
+# Templates — Artefactos aspec
 
 Este archivo contiene los templates exactos para los cuatro artefactos que genera
 el skill. Leer este archivo en el Paso 6 y completar cada placeholder `{...}`.

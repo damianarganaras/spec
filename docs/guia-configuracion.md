@@ -12,7 +12,7 @@ Antes de comenzar, debes tener:
 
 - **Node.js >= 24.0.0** (el motor de memoria v0.2.0 usa el módulo nativo `node:sqlite`).
 - **opencode** instalado (cliente soportado del framework).
-- **openspec CLI** (`npm i -g @openspec/cli`) para el ciclo de changes.
+- **Sin binarios externos**: el ciclo de changes corre con el motor propio (skills `ancleto-*`); no requiere el CLI de aspec.
 - Cuenta en npm con acceso al paquete público `@ancleto/spec`.
 
 ## 1. Instalar el CLI
@@ -37,7 +37,7 @@ ancleto install --tier normal
 Durante el proceso se configura:
 
 - **Agents (10)** en `~/.config/opencode/` (orchestrator, coder, tester, etc.).
-- **Commands (12)** `cleto-*` para el ciclo de changes OpenSpec.
+- **Commands (12)** `cleto-*` para el ciclo de changes aspec.
 - **Skills (7)** base y de perfil ancleto.
 - **MCPs** `engram` (memoria persistente) y `caveman` (compresión) en
   `~/.config/opencode/opencode.json`, fusionándose con la config existente.

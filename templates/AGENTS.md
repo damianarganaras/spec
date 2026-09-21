@@ -50,16 +50,16 @@ conflicto, prevalece el diseño vigente.
 - Si la memoria contradice el estado actual del código o los guardrails de este archivo,
   reportá la discrepancia en lugar de aplicarla a ciegas.
 
-## Flujo Spec-Driven (OpenSpec)
+## Flujo Spec-Driven (aspec)
 
-- **Cambios con scope incierto / arquitectura**: Crear artifacts en `openspec/changes/<name>/`.
+- **Cambios con scope incierto / arquitectura**: Crear artifacts en `aspec/changes/<name>/`.
 - **Cambios menores / fixes**: Implementación directa.
-- **Cierre**: Archivar con `openspec archive` al finalizar.
+- **Cierre**: Archivar con `/cleto-archive` al finalizar.
 
 ## Tools de Soporte
 
 - `ancleto`: Descubrimiento técnico e inicialización.
-- `openspec`: Gestión del ciclo de vida del cambio (proposal, specs, design, tasks, archive).
+- `cleto-*`: Comandos del ciclo de vida del cambio en el IDE (proposal, specs, design, tasks, archive).
 
 <!-- LOCKED: test-block -->
 Contexto gestionado por @ancleto/spec — no editar: se re-aplica en cada actualizacion.

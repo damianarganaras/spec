@@ -7,10 +7,10 @@ description: >
   like "migrar a", "upgrade a", "actualizar a", "mover a v", or any mention of
   bumping a major version. Analyzes the full repository (TypeScript source, tests,
   config, CI, Docker, CDK), fetches official migration docs, builds search patterns
-  dynamically from those docs, and generates a complete OpenSpec change with phased
+  dynamically from those docs, and generates a complete aspec change with phased
   tasks — without touching any code.
 license: MIT
-compatibility: Requires openspec CLI, Node.js
+compatibility: Requires Node.js (no external CLI)
 metadata:
   author: ancleto
   version: '4.0'
@@ -19,7 +19,7 @@ metadata:
 
 # ancleto-upgrade
 
-Analiza el repositorio completo y genera un OpenSpec change para migrar cualquier
+Analiza el repositorio completo y genera un aspec change para migrar cualquier
 librería o runtime a una nueva versión mayor — de forma documentada, faseada y sin
 romper el repo.
 
@@ -360,17 +360,15 @@ Con todos los matches del Paso 4, construir:
 
 ---
 
-## Paso 6 — Crear el change OpenSpec
+## Paso 6 — Crear el change aspec
 
-```bash
-openspec new change "${CHANGE_NAME}"
-```
+Crear el directorio del change en `aspec/changes/${CHANGE_NAME}/` (con `specs/` si aplica).
 
 Si el nombre ya existe, preguntar al usuario: agregar sufijo `-v2` o eliminar el existente.
 
 ---
 
-## Paso 7 — Escribir los artefactos OpenSpec
+## Paso 7 — Escribir los artefactos aspec
 
 Leer `references/templates.md` para obtener los templates exactos de cada archivo.
 Escribir en este orden:
@@ -425,7 +423,7 @@ Reglas al completar los templates:
 ### Scripts de verificación
 build: sí/no | lint: sí/no | test: sí/no | test:ci: sí/no | typecheck: sí/no
 
-### Artefactos OpenSpec generados
+### Artefactos aspec generados
 - proposal.md ✅
 - specs/{LIBRARY_SLUG}{TARGET_VERSION}.md ✅
 - tasks.md ✅ ({N} tareas en 6 fases)
@@ -438,11 +436,11 @@ Para implementar: /cleto-apply {CHANGE_NAME}
 
 ## Guardrails
 
-Este skill solo genera artefactos OpenSpec — no modifica ningún archivo del repo.
+Este skill solo genera artefactos aspec — no modifica ningún archivo del repo.
 Todo cambio real lo ejecuta el desarrollador con `/cleto-apply`, que tiene su propio
 ciclo de revisión. Modificar el repo desde este skill saltearía ese control.
 
-- No tocar archivos fuera de `openspec/changes/{CHANGE_NAME}/`
+- No tocar archivos fuera de `aspec/changes/{CHANGE_NAME}/`
 - Los `VERSION_PATTERNS[]` siempre se aplican, con o sin documentación oficial
 - Si no hay doc disponible, documentarlo en proposal y continuar con el escaneo
 - Si el change ya existe, avisar antes de cualquier acción

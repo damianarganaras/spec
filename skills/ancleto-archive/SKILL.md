@@ -8,11 +8,11 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec Archive
+# aspec Archive
 
 Archive a completed change by moving its directory, after checking completion and syncing delta specs. No external binaries are invoked: completion is read from files, archiving is a directory move.
 
-**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `openspec/changes/` (excluding `archive/`) and ask the user to select.
+**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `aspec/changes/` (excluding `archive/`) and ask the user to select.
 
 **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
@@ -20,21 +20,21 @@ Archive a completed change by moving its directory, after checking completion an
 
 ### 1. Check task completion status
 
-Read `openspec/changes/<name>/tasks.md` (when it exists) and count tasks marked with `- [ ]` (incomplete) vs `- [x]` (complete).
+Read `aspec/changes/<name>/tasks.md` (when it exists) and count tasks marked with `- [ ]` (incomplete) vs `- [x]` (complete).
 
 - **If incomplete tasks found**: display a warning showing the count, prompt the user for confirmation to continue, and proceed only if confirmed.
 - **If no tasks file exists**: proceed without a task-related warning.
 
 ### 2. Assess delta spec sync state
 
-Check for delta specs at `openspec/changes/<name>/specs/`. If none exist, proceed without a sync prompt.
+Check for delta specs at `aspec/changes/<name>/specs/`. If none exist, proceed without a sync prompt.
 
 **If delta specs exist:**
 
-- Compare each delta spec with its corresponding main spec at `openspec/specs/<capability>/spec.md`.
+- Compare each delta spec with its corresponding main spec at `aspec/specs/<capability>/spec.md`.
 - Determine what would change (adds, modifications, removals, renames) and show a combined summary.
 - Prompt the user: "Sync now (recommended)" vs "Archive without syncing" (or "Archive now" / "Sync anyway" / "Cancel" when already synced).
-- If the user chooses sync, apply the delta to the main spec directly, editing `openspec/specs/<capability>/spec.md`:
+- If the user chooses sync, apply the delta to the main spec directly, editing `aspec/specs/<capability>/spec.md`:
   - `## ADDED Requirements` → add the new requirement blocks (skip those already present).
   - `## MODIFIED Requirements` → update the matching requirement, preserving scenarios not mentioned in the delta.
   - `## REMOVED Requirements` → remove the entire requirement block.
@@ -43,12 +43,12 @@ Check for delta specs at `openspec/changes/<name>/specs/`. If none exist, procee
 
 ### 3. Perform the archive
 
-Create the archive directory if it does not exist: `openspec/changes/archive/`.
+Create the archive directory if it does not exist: `aspec/changes/archive/`.
 
 Generate the target name using the current date: `YYYY-MM-DD-<change-name>`.
 
 - **If the target already exists**: fail with an error suggesting to rename the existing archive or pick a different date.
-- **If not**: delete scaffold-only files (e.g., `openspec/changes/<name>/context.md` — they must not be preserved), then move the whole change directory to `openspec/changes/archive/YYYY-MM-DD-<name>/`.
+- **If not**: delete scaffold-only files (e.g., `aspec/changes/<name>/context.md` — they must not be preserved), then move the whole change directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`.
 
 ### 4. Capture lessons into persistent memory
 
@@ -71,7 +71,7 @@ Record only durable lessons — decisions whose reasons are not visible in the r
 ## Archive Complete
 
 **Change:** <change-name>
-**Archived to:** openspec/changes/archive/YYYY-MM-DD-<name>/
+**Archived to:** aspec/changes/archive/YYYY-MM-DD-<name>/
 **Specs:** ✓ Synced to main specs (or: No delta specs / Sync skipped)
 
 **Memories recorded:** <list, or "None">

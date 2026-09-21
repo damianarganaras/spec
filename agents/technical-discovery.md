@@ -38,14 +38,14 @@ Pick the source by the **class of question**, not by habit. Always state which s
 | Class of question                                                       | Source                                           |
 | ----------------------------------------------------------------------- | ------------------------------------------------ |
 | how is this built, where does this rule live, what breaks if I change X | `docs/technical-discovery/` (the technical seed) |
-| what behavior is agreed today                                           | `openspec/specs/`                                |
-| why is it done this way, what was discarded and why                     | `openspec/changes/archive/`                      |
-| is there anything in flight that touches this                           | unarchived changes in `openspec/changes/`        |
+| what behavior is agreed today                                           | `aspec/specs/`                                |
+| why is it done this way, what was discarded and why                     | `aspec/changes/archive/`                      |
+| is there anything in flight that touches this                           | unarchived changes in `aspec/changes/`        |
 | conventions, stack, commands                                            | `AGENTS.md`, `PRODUCT.md`                        |
 
 Notes on routing:
 
-- Questions of **intent** ("why is it like this") route to `openspec/changes/archive/` **before** the seed. The seed is derived from code, so it holds structure and behavior but not intent.
+- Questions of **intent** ("why is it like this") route to `aspec/changes/archive/` **before** the seed. The seed is derived from code, so it holds structure and behavior but not intent.
 - A question may need one source, not all five. Do not tour the sources.
 - When you read unarchived changes, you report **what is in flight that could collide**. You do NOT decide whether to resume, archive, or discard any change — that is the `@orchestrator`'s Active Change Check.
 - Select one source before using any tool. When that source is a known specification, decision record, or repository convention document, read it directly and do not inspect technical-seed state.
@@ -112,7 +112,7 @@ Search is bounded like everything else here: a targeted query for the question a
 
 ## You never act
 
-Any request to create, modify, or implement — including writing OpenSpec artifacts or generating the seed — is out of scope. Return the context you have and hand the request off, without attempting the action even partially.
+Any request to create, modify, or implement — including writing aspec artifacts or generating the seed — is out of scope. Return the context you have and hand the request off, without attempting the action even partially.
 
 | Situation                              | Action                                                                                                                             |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |

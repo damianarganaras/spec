@@ -1,7 +1,7 @@
 # ancleto CLI — AI Tooling Framework
 
 Estandariza la configuración de IA de opencode en tus repositorios con governance
-automática, workflows OpenSpec y skills especializados, optimizado para costo/tokens.
+automática, workflows aspec y skills especializados, optimizado para costo/tokens.
 
 ## Introducción
 
@@ -12,7 +12,7 @@ asistido por IA para opencode. Proporciona:
 
 - **Agentes especializados (10)**: orchestrator, coder, tester, spec-writer, reviewer,
   documenter, technical-discovery, technical-seed-writer, memory-keeper, context-resolver.
-- **Workflows OpenSpec**: comandos `cleto-*` (`/cleto-new`, `/cleto-apply`, `/cleto-verify`,
+- **Workflows aspec**: comandos `cleto-*` (`/cleto-new`, `/cleto-apply`, `/cleto-verify`,
   etc.) para cambios estructurados.
 - **Skills reutilizables (7)**: `ancleto-commit`, `ancleto-pr`, `ancleto-technical-discovery`,
   `ancleto-upgrade`, `triage-clarifier`, `ancleto-recall`, `ancleto-sync-specs`.
@@ -27,7 +27,7 @@ asistido por IA para opencode. Proporciona:
 | Problema | Solución |
 | --- | --- |
 | Inconsistencia en configs de IA entre repos | Governance con `AGENTS.md`, `PRODUCT.md` |
-| Procesos ad-hoc sin documentación | Workflows OpenSpec estandarizados (`cleto-*`) |
+| Procesos ad-hoc sin documentación | Workflows aspec estandarizados (`cleto-*`) |
 | Cambios grandes sin análisis | Agents especializados con roles + clasificación `triage-clarifier` |
 | Commits sin semántica | Skill `ancleto-commit` con conventional commits |
 | Migraciones manuales y propensas a errores | Skill `ancleto-upgrade` que analiza y planifica |
@@ -64,7 +64,7 @@ Recursos que podés personalizar (el installer no los sobrescribe):
 ```
 ├── PRODUCT.md                 (EXTENSIBLE) - Project Type, Tech Stack, ...
 ├── .opencode/skills/                        - skills locales de tu equipo
-└── openspec/
+└── aspec/
     ├── changes/                             - Cambios activos y archivados
     ├── specs/                               - Especificaciones del proyecto
     └── config.yaml                          - (nunca se reemplaza)
@@ -165,7 +165,7 @@ Base local por repositorio en `.ancleto/memory.db` (SQLite vía `node:sqlite`, z
 
 ## Workflows Disponibles
 
-### Workflow OpenSpec (Cambios Estructurados)
+### Workflow aspec (Cambios Estructurados)
 
 Al iniciar una tarea con el agente Orchestrator, `triage-clarifier` clasifica el cambio:
 
@@ -192,7 +192,7 @@ una nueva versión del paquete, se distribuye vía `ancleto update`.
 ```bash
 # 1. Requisitos
 node -v                              # >= 24.0.0
-npm i -g openspec                     # openspec CLI para el ciclo de changes
+# sin binarios extra: el ciclo de changes corre con las skills aspec
 
 # 2. Instalar el framework
 npm i -g @ancleto/spec

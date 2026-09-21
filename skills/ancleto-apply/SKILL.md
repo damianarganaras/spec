@@ -8,24 +8,24 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec Apply
+# aspec Apply
 
 Implement the tasks of a change, working directly from its artifact files. No external binaries are invoked: task state lives in `tasks.md` checkboxes.
 
-**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `openspec/changes/` and ask the user to select.
+**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `aspec/changes/` and ask the user to select.
 
 ## Steps
 
 ### 1. Select the change
 
 - If a name is provided, use it. Announce: "Using change: `<name>`" and how to override.
-- If omitted: infer from conversation context; auto-select if only one active change directory exists under `openspec/changes/`; otherwise list the directories and ask the user to choose.
+- If omitted: infer from conversation context; auto-select if only one active change directory exists under `aspec/changes/`; otherwise list the directories and ask the user to choose.
 
 **IMPORTANT**: Do NOT guess or auto-select when ambiguous. Always let the user choose.
 
 ### 2. Understand the change state
 
-Read the change directory `openspec/changes/<name>/` and load:
+Read the change directory `aspec/changes/<name>/` and load:
 
 - `proposal.md` — what & why (if present)
 - `design.md` — approach and decisions (if present)

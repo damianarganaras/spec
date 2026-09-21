@@ -8,7 +8,7 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec Onboard
+# aspec Onboard
 
 Guide the user through their first complete spec-driven workflow cycle. This is a teaching experience — do real work in their codebase while explaining each step. No external binaries are invoked: changes and artifacts are plain directories and files.
 
@@ -75,33 +75,33 @@ Briefly demonstrate explore mode on the selected task: read the involved files, 
 
 ## Phase 4: Create the Change
 
-**EXPLAIN:** a "change" is a container for all the thinking and planning around a piece of work. It lives in `openspec/changes/<name>/` and holds the artifacts.
+**EXPLAIN:** a "change" is a container for all the thinking and planning around a piece of work. It lives in `aspec/changes/<name>/` and holds the artifacts.
 
-**DO:** create the directory `openspec/changes/<derived-kebab-name>/` directly, and show the folder layout (`proposal.md`, `design.md`, `specs/`, `tasks.md` — to be filled next).
+**DO:** create the directory `aspec/changes/<derived-kebab-name>/` directly, and show the folder layout (`proposal.md`, `design.md`, `specs/`, `tasks.md` — to be filled next).
 
 ## Phase 5: Proposal
 
 **EXPLAIN:** the proposal captures **why** and **what** at a high level.
 
-**DO:** draft it from the task (Why / What Changes / Capabilities / Impact), show it, and **PAUSE** for approval. After approval, write it to `openspec/changes/<name>/proposal.md`.
+**DO:** draft it from the task (Why / What Changes / Capabilities / Impact), show it, and **PAUSE** for approval. After approval, write it to `aspec/changes/<name>/proposal.md`.
 
 ## Phase 6: Specs
 
 **EXPLAIN:** specs define **what** precisely, in testable WHEN/THEN form.
 
-**DO:** create `openspec/changes/<name>/specs/<capability>/spec.md` with `## ADDED Requirements` / `#### Scenario:` blocks. Save the file.
+**DO:** create `aspec/changes/<name>/specs/<capability>/spec.md` with `## ADDED Requirements` / `#### Scenario:` blocks. Save the file.
 
 ## Phase 7: Design
 
 **EXPLAIN:** the design captures **how** — decisions, tradeoffs, approach. For small changes this may be brief.
 
-**DO:** draft Context / Goals-Non-Goals / Decisions and save to `openspec/changes/<name>/design.md`.
+**DO:** draft Context / Goals-Non-Goals / Decisions and save to `aspec/changes/<name>/design.md`.
 
 ## Phase 8: Tasks
 
 **EXPLAIN:** break the work into checkboxed implementation tasks.
 
-**DO:** generate the phased checklist, show it, and **PAUSE** for confirmation. Save to `openspec/changes/<name>/tasks.md`.
+**DO:** generate the phased checklist, show it, and **PAUSE** for confirmation. Save to `aspec/changes/<name>/tasks.md`.
 
 ## Phase 9: Apply (Implementation)
 
@@ -109,9 +109,9 @@ Briefly demonstrate explore mode on the selected task: read the involved files, 
 
 ## Phase 10: Archive
 
-**EXPLAIN:** archiving moves the change to `openspec/changes/archive/YYYY-MM-DD-<name>/`, preserving the decision record.
+**EXPLAIN:** archiving moves the change to `aspec/changes/archive/YYYY-MM-DD-<name>/`, preserving the decision record.
 
-**DO:** create `openspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), move the directory, and show the archive location.
+**DO:** create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), move the directory, and show the archive location.
 
 ## Phase 11: Recap & Next Steps
 

@@ -225,13 +225,18 @@ antes).
 
 ### El MCP de engram/caveman no aparece en opencode
 
-`ancleto install` busca los binarios en PATH (con fallbacks en `~/go/bin/engram.exe` y
-`~/.caveman/bin/caveman-mcp.exe`). Si no los encuentra, los omite con un warning. Verificar:
+`ancleto install` busca los binarios en PATH y solo usa un fallback si el archivo realmente
+existe en disco. Los fallbacks dependen de la plataforma: en Windows
+`~/go/bin/engram.exe` y `~/.caveman/bin/caveman-mcp.exe`; en Linux/macOS se prueban
+`~/go/bin/engram`, `~/.local/bin/engram` y `~/.caveman/bin/caveman-mcp`. Si no los
+encuentra, los omite con un warning. Verificar:
 
 ```bash
 where engram
 where caveman-mcp
 ```
+
+En Linux/macOS, `which engram` / `which caveman-mcp`.
 
 ### `ancleto discovery` falla
 

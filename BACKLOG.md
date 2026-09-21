@@ -63,6 +63,13 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD configurado (`publish.yml`): espera Release de GitHub para publicar a npm.
 
+## En curso / próximo
+
+## v0.7.0 - Multi-Agent Adaptability & Memory Ops (Planeado)
+- [ ] **M1 (Export/Import):** Commands `ancleto memory export` e `import` para respaldar/compartir reglas y decisiones activas en JSON/SQL sanitizado.
+- [ ] **M2 (Garbage Collection):** Subcomando `ancleto memory gc [--dry-run]` para purgar nodos superseídos antiguos y ejecutar VACUUM/REINDEX en node:sqlite.
+- [ ] **A1 (Frontmatter Adapters):** Transformador dinámico de metadatos en `installAgentSkills` para adaptar el frontmatter de las skills según el IDE configurado (`agent` en `.ancletorc`).
+
 ## v0.6.0 - Discovery Engine v2.0 & Token Budgeting
 
 Evolucionar el motor de discovery (MVP con Repomix + `--check` por hash) hacia un mapa estructural con presupuesto de tokens e inyección de contexto.

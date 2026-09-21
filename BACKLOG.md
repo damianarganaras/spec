@@ -74,8 +74,10 @@ Motor de descubrimiento topológico y gestión dinámica de contexto según el t
 Evolucionar el motor de discovery (MVP con Repomix + `--check` por hash) hacia un mapa estructural con presupuesto de tokens e inyección de contexto.
 
 - [x] **D1**: Topología — `ancleto discovery` genera/actualiza `.discovery-map.json` (`last_updated`, `total_files`, `tree_summary` por directorio de primer nivel, `root_files`) ignorando `node_modules`, `.git`, `.ancleto`, `dist`, `build`, `coverage`. ✅
-- [ ] **D2**: Token Budgeting — presupuesto de tokens sobre el mapa/pack (límites, advertencias y truncamiento). 🔄 en progreso
-- [ ] **D3**: Inyección de Contexto — exponer la topología al agente (working-context / seed).
+- [x] **D2**: Token Budgeting — presupuesto de tokens sobre el mapa/pack (límites, advertencias y truncamiento). ✅
+- [x] **D3**: Inyección de Contexto — exponer la topología al agente (working-context / seed). ✅
+
+> Épica **v0.6.0 — Discovery Engine v2.0 & Token Budgeting** cerrada: D1 (topología), D2 (budgeting por tier), D3 (inyección de topología en el working context).
 
 ## v0.5.0 - Agentic OpenSpec Engine & Upgrades
 

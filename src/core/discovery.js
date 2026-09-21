@@ -1,4 +1,4 @@
-import { readdirSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const DISCOVERY_MAP_FILE = '.discovery-map.json'
@@ -59,4 +59,15 @@ export function writeDiscoveryMap(rootDir) {
   const map = buildTopologyMap(rootDir)
   writeFileSync(join(rootDir, DISCOVERY_MAP_FILE), JSON.stringify(map, null, 2) + '\n')
   return map
+}
+
+export function readTopologySummary(cwd = process.cwd()) {
+  try {
+    const raw = readFileSync(join(cwd, DISCOVERY_MAP_FILE), 'utf8')
+    const map = JSON.parse(raw)
+    if (!map || typeof map.total_files !== 'number' || typeof map.tree_summary !== 'object' || map.tree_summary === null) return null
+    return { total_files: map.total_files, tree_summary: map.tree_summary }
+  } catch {
+    return null
+  }
 }

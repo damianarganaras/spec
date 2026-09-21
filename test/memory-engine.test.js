@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openDatabase } from '../src/core/memory/database.js'
@@ -437,6 +437,66 @@ describe('memory doctor (v0.3.0 item 4)', () => {
       assert.equal(result.healthy, false)
       assert.equal(result.checks[2].ok, false)
       assert.match(result.checks[2].detail, /d3/)
+    })
+  })
+})
+
+describe('buildWorkingContext — inyeccion de topologia (D3)', () => {
+  function withTopologyEngine(fn) {
+    const dir = mkdtempSync(join(tmpdir(), 'ancleto-topo-'))
+    const eng = createMemoryEngine(join(dir, 'memory.db'))
+    try {
+      return fn(eng, dir)
+    } finally {
+      eng.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  function seedMap(dir) {
+    writeFileSync(join(dir, '.discovery-map.json'), JSON.stringify({
+      last_updated: new Date().toISOString(),
+      total_files: 5,
+      tree_summary: { src: 2, docs: 1 },
+      root_files: ['README.md']
+    }, null, 2) + '\n')
+  }
+
+  it('inyecta <ProjectTopology> antes de <ProjectMemoryRules> si el JSON existe', () => {
+    withTopologyEngine((eng, dir) => {
+      seedMap(dir)
+      eng.recordNode({ memory_key: 'd3-rule', type: 'rule', scope: 'project', content: 'regla de prueba' })
+      const block = eng.buildWorkingContext('project', 2000, dir)
+      assert.equal(block.startsWith('<ProjectTopology>'), true)
+      assert.match(block, /Total files: 5/)
+      assert.match(block, /- docs: 1/)
+      assert.match(block, /- src: 2/)
+      assert.match(block, /Datos no confiables/)
+      const memoryIdx = block.indexOf('<ProjectMemoryRules>')
+      const topoIdx = block.indexOf('<ProjectTopology>')
+      assert.ok(topoIdx >= 0 && memoryIdx > topoIdx)
+      assert.match(block, /- \[d3-rule\] regla de prueba/)
+      assert.equal(block.endsWith('</ProjectMemoryRules>'), true)
+    })
+  })
+
+  it('no crashea y devuelve el contexto normal si el JSON no existe', () => {
+    withTopologyEngine((eng, dir) => {
+      eng.recordNode({ memory_key: 'd3-rule-2', type: 'rule', scope: 'project', content: 'sin topologia' })
+      const block = eng.buildWorkingContext('project', 2000, dir)
+      assert.doesNotMatch(block, /<ProjectTopology>/)
+      assert.equal(block.startsWith('<ProjectMemoryRules>'), true)
+      assert.match(block, /- \[d3-rule-2\] sin topologia/)
+    })
+  })
+
+  it('no crashea con JSON corrupto', () => {
+    withTopologyEngine((eng, dir) => {
+      writeFileSync(join(dir, '.discovery-map.json'), '{corrupto')
+      eng.recordNode({ memory_key: 'd3-rule-3', type: 'rule', scope: 'project', content: 'json roto' })
+      const block = eng.buildWorkingContext('project', 2000, dir)
+      assert.doesNotMatch(block, /<ProjectTopology>/)
+      assert.equal(block.startsWith('<ProjectMemoryRules>'), true)
     })
   })
 })

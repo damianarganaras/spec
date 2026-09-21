@@ -1,161 +1,170 @@
 <div align="center">
 
-# ☕ ANCLETO (aspec)
-**Orquestador SDD (Spec-Driven Development) y Toolkit Personal Asistido por IA**
+# ANCLETO (aspec)
 
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D%2024.0.0-43853D?style=flat-square&logo=node.js&logoColor=white)](#requisitos)
-[![Version](https://img.shields.io/badge/version-v0.6.2-blue?style=flat-square)](#uso-rápido)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen?style=flat-square)](#requisitos)
+**Orquestador SDD (Spec-Driven Development) y toolkit personal asistido por IA**
 
-*Descubrimiento técnico, memoria persistente y control estricto de tokens para tu IDE.*
+[![Version](https://img.shields.io/npm/v/@ancleto/spec?style=flat-square&label=version&color=4f46e5)](https://www.npmjs.com/package/@ancleto/spec)
+[![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A5%2024-43853D?style=flat-square&logo=node.js&logoColor=white)](#requisitos)
+[![Dependencies](https://img.shields.io/badge/dependencies-0-0d9488?style=flat-square)](#requisitos)
+[![Agents](https://img.shields.io/badge/agents-10-334155?style=flat-square)](#caracter%C3%ADsticas-principales)
+[![Skills](https://img.shields.io/badge/skills-18-06b6d4?style=flat-square)](#caracter%C3%ADsticas-principales)
+
+<sub>Descubrimiento técnico, memoria persistente y control estricto de tokens para tu IDE.</sub>
 
 </div>
 
 ---
 
-## 📖 Tabla de Contenidos
+## Tabla de contenidos
 
-- [¿Qué es Ancleto?](#-qué-es-ancleto)
-- [¿Por qué fue creado?](#-por-qué-fue-creado)
-- [Características Principales](#-características-principales)
-- [Requisitos](#-requisitos)
-- [Instalación](#-instalación)
-- [Configuración y Tiers de Costo](#-configuración-y-tiers-de-costo)
-- [Uso Rápido](#-uso-rápido)
-- [Referencia de Comandos CLI](#-referencia-de-comandos-cli)
-- [Motor de Memoria Persistente](#-motor-de-memoria-persistente)
-- [Comandos del Ciclo SDD en tu IDE](#-comandos-del-ciclo-sdd-en-tu-ide)
-- [Azure DevOps (Opcional)](#-azure-devops-opcional)
-
----
-
-## 🚀 ¿Qué es Ancleto?
-
-**Ancleto** (cuyo alias de CLI es `aspec`) es un orquestador ligero diseñado para potenciar el desarrollo de software asistido por Inteligencia Artificial bajo el paradigma **SDD (Spec-Driven Development)**.
-
-Funciona como un conjunto de herramientas y agentes que viven en tu entorno de desarrollo local (como OpenCode, Cursor, VS Code, Roo, etc.), permitiéndote automatizar la escritura de especificaciones, el descubrimiento topológico del código y la retención de memoria de las decisiones técnicas.
-
-Todo esto está envuelto en una CLI moderna, interactiva y construida bajo una filosofía estricta de **cero dependencias (Zero-Deps)**.
-
-## 💡 ¿Por qué fue creado?
-
-Al trabajar en repositorios complejos con asistentes de IA, surgen tres problemas críticos:
-
-1. **La "Memoria de Pez" de los LLMs:** Los agentes olvidan las convenciones del proyecto o las decisiones arquitectónicas pasadas en cuanto se limpia la ventana de contexto.
-2. **El Costo Oculto (Token Budgeting):** Empaquetar todo un monorepo para darle contexto a la IA consume presupuestos de tokens masivos y encarece el uso de las APIs.
-3. **Falta de Estandarización:** Cada agente de IA actúa por su cuenta, sin seguir un ciclo de vida definido de especificación -> revisión -> implementación -> verificación.
-
-**Ancleto** nace para resolver esto. Centraliza las reglas de negocio en un motor de memoria local (`node:sqlite`), empaqueta inteligentemente el contexto según el nivel de tu suscripción (Tiers) y orquesta 10 subagentes nativos para que el código que escriba la IA cumpla estrictamente con tus estándares, minimizando la fricción y los costos.
+- [¿Qué es Ancleto?](#qué-es-ancleto)
+- [¿Por qué fue creado?](#por-qué-fue-creado)
+- [Características principales](#características-principales)
+- [Requisitos](#requisitos)
+- [Instalación](#instalación)
+- [Configuración y tiers de costo](#configuración-y-tiers-de-costo)
+- [Uso rápido](#uso-rápido)
+- [Referencia de comandos CLI](#referencia-de-comandos-cli)
+- [Motor de memoria persistente](#motor-de-memoria-persistente)
+- [Comandos del ciclo SDD en tu IDE](#comandos-del-ciclo-sdd-en-tu-ide)
+- [Azure DevOps (opcional)](#azure-devops-opcional)
+- [Referencia: agentes y modelos por tier](#referencia-agentes-y-modelos-por-tier)
 
 ---
 
-## ✨ Características Principales
+## ¿Qué es Ancleto?
 
-- 🤖 **Catálogo Multi-Agente (10 Agents):** Orquestador, Coder, Tester, Spec-Writer, Reviewer, Documenter, Technical-Discovery, Technical-Seed-Writer, Memory-Keeper y Context-Resolver.
-- 🧠 **Motor de Memoria Persistente (FTS5):** Base local SQLite (`.ancleto/memory.db`) que provee al LLM herramientas para registrar y recuperar reglas arquitectónicas y decisiones pasadas proactivamente.
-- 🗺️ **Discovery Engine:** Un escáner topológico rápido que genera mapas del repositorio (`.discovery-map.json`) y empaqueta el contexto vía Repomix con presupuestos de tokens dinámicos.
-- 💸 **Gestión de Tiers de Costo:** Control absoluto sobre qué modelos y cuánto contexto se envía (`normal`, `minimo`, `gratis`), protegiendo tus cuotas de API.
-- ⚡ **Agentic aspec Engine:** Totalmente independiente, sin binarios externos. Las 11 skills del ciclo de vida (`new`, `propose`, `apply`, `verify`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `onboard`, `workflow`) se instalan e inyectan nativamente en tu IDE favorito, más skills auxiliares (`ancleto-commit`, `ancleto-pr`, `triage-clarifier`, entre otras).
-- 🎨 **Wizard Interactivo:** Inicialización por TTY con banner animado y menús navegables con flechas, sin requerir librerías pesadas (Zero-Deps).
+**Ancleto** (alias de CLI: `aspec`) es un orquestador ligero para desarrollo de software asistido por IA bajo el paradigma **SDD (Spec-Driven Development)**.
+
+Vive dentro de tu entorno de desarrollo (OpenCode, Cursor, VS Code, Roo, etc.) y automatiza tres cosas que normalmente hacés a mano:
+
+- **Especificar** — escritura guiada de especificaciones y planes de implementación.
+- **Descubrir** — relevamiento topológico del repositorio y empaquetado de contexto.
+- **Recordar** — retención de decisiones técnicas y reglas del proyecto entre sesiones.
+
+Todo envuelto en una CLI interactiva construida bajo una política estricta de **cero dependencias**.
+
+## ¿Por qué fue creado?
+
+Al trabajar en repositorios complejos con asistentes de IA aparecen tres problemas recurrentes:
+
+1. **Memoria frágil.** Los agentes olvidan convenciones y decisiones arquitectónicas apenas se limpia la ventana de contexto.
+2. **Costo oculto.** Empaquetar un monorepo entero para dar contexto consume presupuestos de tokens y encarece cada consulta.
+3. **Falta de método.** Cada agente improvisa, sin un ciclo de vida definido: especificación → revisión → implementación → verificación.
+
+Ancleto resuelve esto centralizando las reglas de negocio en un motor de memoria local (`node:sqlite`), empaquetando el contexto según tu nivel de suscripción (tiers) y orquestando **10 subagentes nativos** para que el código que escribe la IA respete tus estándares.
 
 ---
 
-## 🛠 Requisitos
+## Características principales
 
-Dado que Ancleto mantiene una política de cero dependencias externas, aprovecha las capacidades nativas más recientes de Node:
+**Catálogo multi-agente (10 agentes)** — Orchestrator, Coder, Tester, Spec-Writer, Reviewer, Documenter, Technical-Discovery, Technical-Seed-Writer, Memory-Keeper y Context-Resolver. Cada uno con su modelo asignado según el tier.
 
-- **Node.js >= 24.0.0** (requerido estrictamente para el módulo nativo `node:sqlite`).
-- **Repomix** (utilizado dinámicamente vía `npx` si no está instalado globalmente, para el empaquetado de contexto).
+**Motor de memoria persistente (FTS5)** — Base local SQLite (`.ancleto/memory.db`) que expone al LLM herramientas para registrar y recuperar reglas arquitectónicas y decisiones pasadas. Sin bases vectoriales.
+
+**Discovery engine** — Escáner topológico que genera `.discovery-map.json` y empaqueta el repositorio vía Repomix con presupuesto de tokens dinámico según el tier.
+
+**Gestión de tiers de costo** — Control explícito sobre qué modelos y cuánto contexto se envía: `normal`, `minimo` y `gratis`.
+
+**Agentic aspec engine** — Sin binarios externos. Las 11 skills del ciclo de vida (`new`, `propose`, `apply`, `verify`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `onboard`, `workflow`) más las auxiliares (`ancleto-commit`, `ancleto-pr`, `triage-clarifier`, entre otras) se instalan e inyectan nativamente en tu IDE.
+
+**Wizard interactivo** — Banner animado y menús navegables con flechas en `init` e `install`, sin librerías pesadas.
 
 ---
 
-## 📦 Instalación
+## Requisitos
 
-Puedes instalar la herramienta a nivel global o por proyecto.
+| Requisito | Detalle |
+|---|---|
+| **Node.js ≥ 24.0.0** | Obligatorio: el motor de memoria usa el módulo nativo `node:sqlite`. |
+| **Repomix** | Opcional: se resuelve vía `npx` cuando no está instalado globalmente. |
+
+---
+
+## Instalación
 
 ```bash
-# Instalación global (disponible en todos tus proyectos)
+# Global (disponible en todos tus proyectos)
 npm install -g @ancleto/spec
 
-# O alternativamente a través de la CLI de ancleto:
+# O desde la propia CLI
 ancleto install
 
-# Instalación circunscrita a un proyecto específico (inyecta templates y .opencode/)
+# Acotada a un proyecto (inyecta templates y .opencode/)
 ancleto install --project /ruta/repo
 
-# Instalación sin modificar la configuración MCP de tu IDE
+# Sin modificar la configuración MCP de tu IDE
 ancleto install --no-mcp
 
-# Actualizar a la última versión manteniendo tus personalizaciones
+# Actualizar conservando tus personalizaciones
 ancleto update
 ```
 
-*(El instalador configura por defecto los MCP locales **engram** y **caveman**. Si un binario no se encuentra en tu sistema, se omitirá con un warning sin romper el flujo).*
+> El instalador configura por defecto los MCP locales **engram** y **caveman**. Si un binario no está en tu sistema, se omite con un warning sin interrumpir el flujo.
 
 ---
 
-## ⚙️ Configuración y Tiers de Costo
+## Configuración y tiers de costo
 
-Al ejecutar la CLI por primera vez, un **Wizard interactivo (ASCII animado)** te guiará para configurar el Agente (IDE) y tu nivel de gasto. También puedes pasarlos por flags:
+En la primera ejecución, un **wizard interactivo** te guía por los pasos de configuración (agente/IDE y nivel de gasto). También podés pasarlos por flags:
 
 ```bash
 ancleto init --agent opencode --tier normal
 ```
 
-**Tiers Disponibles:**
-
-* `normal`: Modelos balanceados sin restricciones agresivas de contexto (default).
-* `minimo`: Enfoque en el modelo pago más económico viable, con alta compresión de contexto y exclusión de tests/docs en el discovery.
-* `gratis`: Bloqueado a modelos gratuitos, empaquetado ultra-agresivo y un límite estricto (budget) de tokens enviado al LLM. Si tenés acceso a **Muse Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`, no abierto a todos), se usa ese; si no, se usa `opencode/big-pickle`. En modo interactivo el instalador te lo pregunta; la elección queda guardada en `.ancletorc` (`gratisModel`).
+| Tier | Qué hace |
+|---|---|
+| `normal` | Modelos balanceados, sin restricciones agresivas de contexto. Es el default. |
+| `minimo` | El modelo pago más económico viable, con alta compresión de contexto y exclusión de tests/docs en el discovery. |
+| `gratis` | Modelos gratuitos, empaquetado agresivo y límite estricto de tokens. Prefiere **Muse Spark 1.3 Free** si tu cuenta lo tiene habilitado; si no, usa `opencode/big-pickle`. |
 
 La configuración se preserva en `.ancletorc` (raíz del proyecto) y `.ancleto-tier` (junto a la configuración instalada).
 
 ---
 
-## 💻 Uso Rápido
+## Uso rápido
 
-El ciclo diario con Ancleto consiste en preparar el terreno técnico para tu Agente y luego usar los comandos del ciclo SDD dentro de tu IDE.
+El ciclo diario consiste en preparar el terreno técnico para tu agente y después usar los comandos SDD dentro del IDE.
 
-### 1. Inicialización en un Repositorio
+### 1. Inicializar el repositorio
 
 ```bash
 cd tu-proyecto
-ancleto init              # Crea .ancletorc, plantillas AGENTS.md y PRODUCT.md
+ancleto init              # Crea .ancletorc, AGENTS.md y PRODUCT.md
 ```
 
-### 2. Descubrimiento Técnico de Contexto
+### 2. Descubrir contexto técnico
 
 ```bash
-ancleto discovery --check # Verifica si el 'technical seed' requiere actualización (READY/STALE)
+ancleto discovery --check # Estado del technical seed (READY / STALE)
 ancleto discovery         # Genera .discovery-map.json y empaqueta el repo
 ```
 
-### 3. Integración Diaria
+### 3. Trabajar con los comandos del IDE
 
-Utiliza los comandos barra (`/`) expuestos en el chat de tu IDE (ej. Cursor, OpenCode):
-
-* `/cleto-new` y `/cleto-propose`: Para planificar un nuevo feature.
-* `/cleto-verify` y `/cleto-apply`: Para validar reglas, chequear tests y aplicar el código.
-* `/cleto-archive`: Para consolidar el historial y registrar aprendizajes en la memoria de Ancleto.
+```text
+/cleto-new  y  /cleto-propose   planificar un feature
+/cleto-verify  y  /cleto-apply  validar reglas, correr tests y aplicar el código
+/cleto-archive                  consolidar el historial y registrar aprendizajes
+```
 
 ---
 
-## 📟 Referencia de Comandos CLI
-
-Todos los comandos de mantenimiento que puedes necesitar en el día a día:
+## Referencia de comandos CLI
 
 ```bash
 ancleto init [--agent <nombre>] [--tier <nivel>] [--with-azure]
                           # Configura el proyecto (interactivo en TTY)
 
 ancleto install [--project <dir>] [--tier <nivel>] [--agent <nombre>] [--no-mcp]
-                          # Instala agents, skills y templates
+                          # Instala agentes, skills y templates
 
 ancleto update            # Re-instala la última versión sobre lo existente
 
 ancleto upgrade           # Re-aplica templates y skills respetando tus personalizaciones
 
-ancleto check             # Verifica la integridad de la instalación (0 faltantes, 0 huérfanos)
+ancleto check             # Verifica la integridad de la instalación (faltantes / huérfanos)
 
 ancleto doctor            # Diagnostica el entorno (Node, node:sqlite, opencode.json)
 
@@ -163,7 +172,7 @@ ancleto memory context [--scope <project|feature|task>] [--out <archivo>]
                           # Muestra el bloque de memoria activa del proyecto
 
 ancleto memory doctor [--rebuild]
-                          # Diagnostica la base de memoria (y reconstruye el índice con --rebuild)
+                          # Diagnostica la base de memoria y reconstruye el índice FTS5
 
 ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
                           # Empaqueta el repo con Repomix según tu tier
@@ -171,68 +180,72 @@ ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-bud
 
 ---
 
-## 🧠 Motor de Memoria Persistente
+## Motor de memoria persistente
 
-Ancleto **no** usa bases de datos vectoriales pesadas. Implementa una solución elegante en **SQLite nativo** con búsqueda full-text (FTS5) y BM25.
+No hay bases de datos vectoriales: es **SQLite nativo** con búsqueda full-text (FTS5) y ranking BM25.
 
-El LLM tiene a su disposición 3 herramientas (tools):
+El LLM dispone de tres herramientas:
 
-* `searchMemory`: Recupera contexto de decisiones previas.
-* `recordRule`: Guarda una regla arquitectónica estricta de manera jerárquica (Proyecto > Feature > Tarea).
-* `recordDecision`: Inmortaliza el "por qué" de un cambio en el código.
+| Herramienta | Función |
+|---|---|
+| `searchMemory` | Recupera contexto de decisiones previas. |
+| `recordRule` | Guarda una regla arquitectónica de forma jerárquica (proyecto → feature → tarea). |
+| `recordDecision` | Registra el *por qué* de un cambio en el código. |
 
-El orquestador inyecta proactivamente los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` (contexto desde el día cero, incluso sin reglas previas) en el System Prompt de tu Agente para que **nunca repita los mismos errores**.
+El orquestador inyecta los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` en el system prompt de tu agente desde el día cero —incluso sin reglas previas— para que no repita errores ya resueltos.
 
 ---
 
-## 🔄 Comandos del Ciclo SDD en tu IDE
+## Comandos del ciclo SDD en tu IDE
 
-Una vez instalado, tu IDE expone el ciclo de vida completo como comandos barra (`/`):
+Una vez instalado, tu IDE expone el ciclo de vida completo como comandos barra:
 
 | Comando | Para qué sirve |
 |---|---|
-| `/cleto-new` | Iniciar la especificación de un feature |
-| `/cleto-propose` | Proponer el diseño técnico |
-| `/cleto-ff` | Avanzar rápido con contexto recuperado |
-| `/cleto-apply` | Aplicar el código del change |
-| `/cleto-verify` | Verificar reglas, tests y memoria antes de cerrar |
-| `/cleto-sync` | Sincronizar specs con el estado del repo |
-| `/cleto-archive` | Archivar el change y registrar aprendizajes |
-| `/cleto-continue`, `/cleto-explore`, `/cleto-onboard` | Retomar, explorar y orientarse en el proyecto |
+| `/cleto-new` | Iniciar la especificación de un feature. |
+| `/cleto-propose` | Proponer el diseño técnico. |
+| `/cleto-ff` | Avanzar rápido con el contexto ya recuperado. |
+| `/cleto-apply` | Aplicar el código del change. |
+| `/cleto-verify` | Verificar reglas, tests y memoria antes de cerrar. |
+| `/cleto-sync` | Sincronizar las specs con el estado del repositorio. |
+| `/cleto-archive` | Archivar el change y registrar aprendizajes. |
+| `/cleto-continue` | Retomar un change con artefactos pendientes. |
+| `/cleto-explore` | Explorar un problema sin comprometerse a implementar. |
+| `/cleto-onboard` | Recorrer el ciclo completo en modo tutorial. |
 
 ---
 
-## 🔗 Azure DevOps (Opcional)
+## Azure DevOps (opcional)
 
-Por defecto, los comandos asumen el uso de **GitHub** (`ancleto-pr`). Si tu equipo utiliza Azure DevOps:
+Por defecto los comandos asumen **GitHub** (`ancleto-pr`). Si usás Azure DevOps:
 
 ```bash
 ancleto init --with-azure
 ```
 
-Esto escribe `azure.enabled: true` en tu `.ancletorc`. Solo deberás completar la sección de Azure en el archivo `PRODUCT.md` e instalar su extensión (`az extension add --name azure-devops`).
+Esto escribe `azure.enabled: true` en tu `.ancletorc`. Después completá la sección de Azure en `PRODUCT.md` e instalá la extensión con `az extension add --name azure-devops`.
 
 ---
 
-## 🤖 Referencia: Agentes y Modelos por Tier
+## Referencia: agentes y modelos por tier
 
-Los 10 agentes instalados y el modelo que usa cada uno según tu tier. Al instalar, el nivel elegido se escribe en la línea `model:` de cada agente (y se re-aplica en cada `update`).
+Los 10 agentes instalados y el modelo que usa cada uno según tu tier. Al instalar, el nivel elegido se escribe en la línea `model:` de cada agente y se re-aplica en cada `update`.
 
 | Agente | `normal` (default) | `minimo` | `gratis` |
 |---|---|---|---|
-| orchestrator | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
-| coder | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
-| tester | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
-| spec-writer | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
-| reviewer | `opencode-go/qwen3.6-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
-| technical-discovery | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
-| technical-seed-writer | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
-| memory-keeper | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
-| context-resolver | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
-| documenter | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota ↓ |
+| orchestrator | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| coder | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| tester | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| spec-writer | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| reviewer | `opencode-go/qwen3.6-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| technical-discovery | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| technical-seed-writer | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| memory-keeper | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| context-resolver | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| documenter | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
 
-El tier `minimo` usa un único modelo (`deepseek-v4.1-flash`) para los 10 agentes: es el más económico del catálogo para coding (0.15/0.60 por millón de tokens) con 1M de contexto.
+El tier `minimo` usa un único modelo para los 10 agentes: `deepseek-v4.1-flash` es el más económico del catálogo para coding (0.15 / 0.60 por millón de tokens) y ofrece 1M de contexto.
 
-**Tier `gratis`:** los 10 agentes usan **Muse Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`) **si está disponible** en tu cuenta (no está abierto a todos). En una instalación interactiva el wizard te lo pregunta; la respuesta se guarda en `.ancletorc` (`gratisModel`) y se reutiliza en los siguientes `install`/`update`. Sin TTY (CI) se detecta con `opencode models` — con timeout — y si no se puede confirmar se usa `opencode/big-pickle`. El instalador siempre informa cuál aplicó (`ancleto: modelo gratis: ...`).
+**Tier `gratis`.** Los 10 agentes usan **Muse Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`) si está disponible en tu cuenta —no está abierto a todos—. En una instalación interactiva el wizard te lo pregunta y la respuesta queda guardada en `.ancletorc` (`gratisModel`) para los siguientes `install`/`update`. Sin TTY se detecta con `opencode models` y, si no se puede confirmar, se usa `opencode/big-pickle`. El instalador siempre informa cuál aplicó.
 
-> Variable avanzada: `ANCLETO_MUSE_SPARK=1` fuerza Muse Spark, `ANCLETO_MUSE_SPARK=0` fuerza `big-pickle` (útil para tests o para fijar el comportamiento; tiene prioridad sobre la elección guardada).
+> `ANCLETO_MUSE_SPARK=1` fuerza Muse Spark, `ANCLETO_MUSE_SPARK=0` fuerza `big-pickle`. Tiene prioridad sobre la elección guardada.

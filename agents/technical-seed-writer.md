@@ -30,7 +30,7 @@ Read `AGENTS.md` at the repo root for project conventions and guardrails .
   content, language, command sequence, exclusions, and output validation.
 - Write only beneath `config.outputDir` from the `ancleto discovery --check` report passed by
   `@orchestrator` (normally `docs/technical-discovery/`). Do not modify application code,
-  OpenSpec artifacts, configuration, or files outside that directory.
+  aspec artifacts, configuration, or files outside that directory.
 - Never create an empty directory or empty document.
 - Do not create commits, stage files, install dependencies, call network services, or invoke
   subagents.

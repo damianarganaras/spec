@@ -1,27 +1,15 @@
 ---
-description: Guided onboarding - walk through a complete OpenSpec workflow cycle with narration
+description: Guided onboarding - walk through a complete aspec workflow cycle with narration
 ---
 
-Guide the user through their first complete OpenSpec workflow cycle. This is a teaching experience—you'll do real work in their codebase while explaining each step.
+Guide the user through their first complete aspec workflow cycle. This is a teaching experience—you'll do real work in their codebase while explaining each step.
 
 ---
 
 ## Preflight
 
-Before starting, check if the OpenSpec CLI is installed:
-
-```bash
-# Unix/macOS
-openspec --version 2>&1 || echo "CLI_NOT_INSTALLED"
-# Windows (PowerShell)
-# if (Get-Command openspec -ErrorAction SilentlyContinue) { openspec --version } else { echo "CLI_NOT_INSTALLED" }
-```
-
-**If CLI not installed:**
-
-> OpenSpec CLI is not installed. Install it first, then come back to `/cleto-onboard`.
-
-Stop here if not installed.
+No external binaries are required: the change cycle runs on the aspec skills bundled
+with your agent (`/cleto-*`). Proceed directly.
 
 ---
 
@@ -30,7 +18,7 @@ Stop here if not installed.
 Display:
 
 ```
-## Welcome to OpenSpec!
+## Welcome to aspec!
 
 I'll walk you through a complete change cycle—from idea to implementation—using a real task in your codebase. Along the way, you'll learn the workflow by doing it.
 
@@ -110,7 +98,7 @@ Which task interests you? (Pick a number or describe your own)
 If the user picks or describes something too large (major feature, multi-day work):
 
 ```
-That's a valuable task, but it's probably larger than ideal for your first OpenSpec run-through.
+That's a valuable task, but it's probably larger than ideal for your first aspec run-through.
 
 For learning the workflow, smaller is better—it lets you see the full cycle without getting stuck in implementation details.
 
@@ -165,26 +153,26 @@ Now let's create a change to hold our work.
 ```
 ## Creating a Change
 
-A "change" in OpenSpec is a container for all the thinking and planning around a piece of work. It lives in `openspec/changes/<name>/` and holds your artifacts—proposal, specs, design, tasks.
+A "change" in aspec is a container for all the thinking and planning around a piece of work. It lives in `aspec/changes/<name>/` and holds your artifacts—proposal, specs, design, tasks.
 
 Let me create one for our task.
 ```
 
-**DO:** Create the change with a derived kebab-case name:
+**DO:** Create the change directory with a derived kebab-case name:
 
 ```bash
-openspec new change "<derived-name>"
+mkdir -p aspec/changes/<derived-name>
 ```
 
 **SHOW:**
 
 ```
-Created: `openspec/changes/<name>/`
+Created: `aspec/changes/<name>/`
 
 The folder structure:
 ```
 
-openspec/changes/<name>/
+aspec/changes/<name>/
 ├── proposal.md ← Why we're doing this (empty, we'll fill it)
 ├── design.md ← How we'll build it (empty)
 ├── specs/ ← Detailed requirements (empty)
@@ -247,10 +235,10 @@ Does this capture the intent? I can adjust before we save it.
 After approval, save the proposal:
 
 ```bash
-openspec instructions proposal --change "<name>" --json
+aspec instructions proposal --change "<name>" --json
 ```
 
-Then write the content to `openspec/changes/<name>/proposal.md`.
+Then write the content to `aspec/changes/<name>/proposal.md`.
 
 ```
 Proposal saved. This is your "why" document—you can always come back and refine it as understanding evolves.
@@ -276,9 +264,9 @@ For a small task like this, we might only need one spec file.
 
 ```bash
 # Unix/macOS
-mkdir -p openspec/changes/<name>/specs/<capability-name>
+mkdir -p aspec/changes/<name>/specs/<capability-name>
 # Windows (PowerShell)
-# New-Item -ItemType Directory -Force -Path "openspec/changes/<name>/specs/<capability-name>"
+# New-Item -ItemType Directory -Force -Path "aspec/changes/<name>/specs/<capability-name>"
 ```
 
 Draft the spec content:
@@ -305,7 +293,7 @@ Here's the spec:
 This format—WHEN/THEN/AND—makes requirements testable. You can literally read them as test cases.
 ```
 
-Save to `openspec/changes/<name>/specs/<capability>/spec.md`.
+Save to `aspec/changes/<name>/specs/<capability>/spec.md`.
 
 ---
 
@@ -351,7 +339,7 @@ Here's the design:
 For a small task, this captures the key decisions without over-engineering.
 ```
 
-Save to `openspec/changes/<name>/design.md`.
+Save to `aspec/changes/<name>/design.md`.
 
 ---
 
@@ -390,7 +378,7 @@ Each checkbox becomes a unit of work in the apply phase. Ready to implement?
 
 **PAUSE** - Wait for user to confirm they're ready to implement.
 
-Save to `openspec/changes/<name>/tasks.md`.
+Save to `aspec/changes/<name>/tasks.md`.
 
 ---
 
@@ -436,7 +424,7 @@ The change is implemented! One more step—let's archive it.
 ```
 ## Archiving
 
-When a change is complete, we archive it. This moves it from `openspec/changes/` to `openspec/changes/archive/YYYY-MM-DD-<name>/`.
+When a change is complete, we archive it. This moves it from `aspec/changes/` to `aspec/changes/archive/YYYY-MM-DD-<name>/`.
 
 Archived changes become your project's decision history—you can always find them later to understand why something was built a certain way.
 ```
@@ -444,13 +432,13 @@ Archived changes become your project's decision history—you can always find th
 **DO:**
 
 ```bash
-openspec archive "<name>"
+aspec archive "<name>"
 ```
 
 **SHOW:**
 
 ```
-Archived to: `openspec/changes/archive/YYYY-MM-DD-<name>/`
+Archived to: `aspec/changes/archive/YYYY-MM-DD-<name>/`
 
 The change is now part of your project's history. The code is in your codebase, the decision record is preserved.
 ```
@@ -462,7 +450,7 @@ The change is now part of your project's history. The code is in your codebase, 
 ```
 ## Congratulations!
 
-You just completed a full OpenSpec cycle:
+You just completed a full aspec cycle:
 
 1. **Explore** - Thought through the problem
 2. **New** - Created a change container
@@ -513,7 +501,7 @@ Try `/cleto-propose` on something you actually want to build. You've got the rhy
 If the user says they need to stop, want to pause, or seem disengaged:
 
 ```
-No problem! Your change is saved at `openspec/changes/<name>/`.
+No problem! Your change is saved at `aspec/changes/<name>/`.
 
 To pick up where we left off later:
 - `/cleto-continue <name>` - Resume artifact creation
@@ -529,7 +517,7 @@ Exit gracefully without pressure.
 If the user says they just want to see the commands or skip the tutorial:
 
 ```
-## OpenSpec Quick Reference
+## aspec Quick Reference
 
 **Core workflow:**
 

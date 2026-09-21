@@ -13,7 +13,7 @@ Start a new change using the experimental artifact-driven approach.
    Resolve Work Item context in this order — stop at the first source that yields data:
 
    a. **In-session context** — If WI data was already fetched in this session, use it. Proceed to name derivation below.
-   b. **`context.md`** — If a change name was provided as argument and `openspec/changes/<name>/context.md` exists, read it and use its content. Proceed to name derivation.
+   b. **`context.md`** — If a change name was provided as argument and `aspec/changes/<name>/context.md` exists, read it and use its content. Proceed to name derivation.
    c. **Ask the user** — Use the **AskUserQuestion tool** to ask for the Work Item reference. Two accepted formats:
 
    - **ID + Project** — e.g., ID `12345` and project `MyProject`
@@ -45,22 +45,20 @@ Start a new change using the experimental artifact-driven approach.
    **Use a different schema only if the user mentions:**
 
    - A specific schema name → use `--schema <name>`
-   - "show workflows" or "what workflows" → run `openspec schemas --json` and let them choose
+   - "show workflows" or "what workflows" → run `aspec schemas --json` and let them choose
 
    **Otherwise**: Omit `--schema` to use the default.
 
 3. **Create the change directory**
 
-   ```bash
-   openspec new change "<name>"
-   ```
+   Create the directory `aspec/changes/<name>/` in the repository.
 
-   Add `--schema <name>` only if the user requested a specific workflow.
-   This creates a scaffolded change at `openspec/changes/<name>/` with the selected schema.
+   Record the schema selection in the change metadata only if the user requested a specific workflow.
+   This scaffolds the change at `aspec/changes/<name>/` with the selected schema.
 
 4. **Persist Work Item context to `context.md`** (only if WI was resolved in step 1)
 
-   Write WI context to `openspec/changes/<name>/context.md`:
+   Write WI context to `aspec/changes/<name>/context.md`:
 
    ```
    # Work Item Context
@@ -82,7 +80,7 @@ Start a new change using the experimental artifact-driven approach.
 5. **Show the artifact status**
 
    ```bash
-   openspec status --change "<name>"
+   aspec status --change "<name>"
    ```
 
    This shows which artifacts need to be created and which are ready (dependencies satisfied).
@@ -91,7 +89,7 @@ Start a new change using the experimental artifact-driven approach.
    The first artifact depends on the schema. Check the status output to find the first artifact with status "ready".
 
    ```bash
-   openspec instructions <first-artifact-id> --change "<name>"
+   aspec instructions <first-artifact-id> --change "<name>"
    ```
 
    This outputs the template and context for creating the first artifact.

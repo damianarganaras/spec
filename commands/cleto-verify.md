@@ -10,7 +10,7 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 
 1. **If no change name provided, prompt for selection**
 
-   Run `openspec list --json` to get available changes. Use the **AskUserQuestion tool** to let the user select.
+   Run `aspec list --json` to get available changes. Use the **AskUserQuestion tool** to let the user select.
 
    Show changes that have implementation tasks (tasks artifact exists).
    Include the schema used for each change if available.
@@ -21,7 +21,7 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 2. **Check status to understand the schema**
 
    ```bash
-   openspec status --change "<name>" --json
+   aspec status --change "<name>" --json
    ```
 
    Parse the JSON to understand:
@@ -32,7 +32,7 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 3. **Get the change directory and load artifacts**
 
    ```bash
-   openspec instructions apply --change "<name>" --json
+   aspec instructions apply --change "<name>" --json
    ```
 
    This returns the change directory and `contextFiles` (artifact ID -> array of concrete file paths). Read all available artifacts from `contextFiles`.
@@ -60,7 +60,7 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 
    **Spec Coverage**:
 
-   - If delta specs exist in `openspec/changes/<name>/specs/`:
+   - If delta specs exist in `aspec/changes/<name>/specs/`:
      - Extract all requirements (marked with "### Requirement:")
      - For each requirement:
        - Search codebase for keywords related to the requirement

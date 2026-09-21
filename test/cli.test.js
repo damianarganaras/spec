@@ -255,19 +255,19 @@ describe('CLI doctor (G4)', () => {
   })
 })
 
-describe('CLI scaffold OpenSpec (G5)', () => {
-  it('init crea openspec/changes y config.yaml', () => {
+describe('CLI scaffold aspec (G5)', () => {
+  it('init crea aspec/changes y config.yaml', () => {
     withDir((dir) => {
       run(['init'], dir)
-      assert.ok(existsSync(join(dir, 'openspec', 'config.yaml')))
-      assert.ok(existsSync(join(dir, 'openspec', 'changes')))
+      assert.ok(existsSync(join(dir, 'aspec', 'config.yaml')))
+      assert.ok(existsSync(join(dir, 'aspec', 'changes')))
     })
   })
 
   it('no pisa un config.yaml preexistente', () => {
     withDir((dir) => {
       run(['init'], dir)
-      const cfgPath = join(dir, 'openspec', 'config.yaml')
+      const cfgPath = join(dir, 'aspec', 'config.yaml')
       writeFileSync(cfgPath, '# config custom del equipo\n')
       run(['init'], dir)
       assert.equal(readFileSync(cfgPath, 'utf8'), '# config custom del equipo\n')
@@ -277,8 +277,38 @@ describe('CLI scaffold OpenSpec (G5)', () => {
   it('install --project tambien crea el scaffold', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
-      assert.ok(existsSync(join(dir, 'openspec', 'config.yaml')))
-      assert.ok(existsSync(join(dir, 'openspec', 'changes')))
+      assert.ok(existsSync(join(dir, 'aspec', 'config.yaml')))
+      assert.ok(existsSync(join(dir, 'aspec', 'changes')))
+    })
+  })
+})
+
+describe('CLI upgrade migracion openspec -> aspec (v0.6.5)', () => {
+  it('migra openspec/ a aspec/ preservando contenido', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
+      mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# demo\n')
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(join(dir, 'openspec')), false)
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n')
+      assert.match(r.stdout, /migrados/)
+    })
+  })
+
+  it('no pisa aspec/ existente y avisa', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
+      mkdirSync(join(dir, 'openspec'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'old.txt'), 'viejo\n')
+      mkdirSync(join(dir, 'aspec'), { recursive: true })
+      writeFileSync(join(dir, 'aspec', 'keep.txt'), 'nuevo\n')
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dir, 'openspec', 'old.txt'), 'utf8'), 'viejo\n')
+      assert.equal(readFileSync(join(dir, 'aspec', 'keep.txt'), 'utf8'), 'nuevo\n')
+      assert.match(r.stderr, /no se migro/)
     })
   })
 })
@@ -348,7 +378,7 @@ describe('CLI azure MCP (G8)', () => {
   })
 })
 
-describe('CLI openspec skills Pack 1 (S2)', () => {
+describe('CLI aspec skills Pack 1 (S2)', () => {
   const PACK1 = ['ancleto-new', 'ancleto-propose', 'ancleto-apply', 'ancleto-verify', 'ancleto-archive']
 
   it('install --project instala las 5 skills en el directorio del agente', () => {
@@ -374,7 +404,7 @@ describe('CLI openspec skills Pack 1 (S2)', () => {
   })
 })
 
-describe('CLI openspec skills catálogo completo (S2)', () => {
+describe('CLI aspec skills catálogo completo (S2)', () => {
   const ALL11 = ['ancleto-new', 'ancleto-propose', 'ancleto-apply', 'ancleto-verify', 'ancleto-archive', 'ancleto-bulk-archive', 'ancleto-continue', 'ancleto-explore', 'ancleto-ff', 'ancleto-onboard', 'ancleto-workflow']
 
   it('install --project instala las 11 skills en el directorio del agente', () => {

@@ -8,11 +8,11 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec Explore
+# aspec Explore
 
 Enter explore mode. Think deeply. Visualize freely. Follow the conversation wherever it goes.
 
-**IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or implement features. If the user asks you to implement something, remind them to exit explore mode first and create a change proposal. You MAY draft OpenSpec artifacts (proposals, designs, specs) if the user asks — that's capturing thinking, not implementing.
+**IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or implement features. If the user asks you to implement something, remind them to exit explore mode first and create a change proposal. You MAY draft aspec artifacts (proposals, designs, specs) if the user asks — that's capturing thinking, not implementing.
 
 **This is a stance, not a workflow.** There are no fixed steps, no required sequence, no mandatory outputs. You're a thinking partner helping the user explore.
 
@@ -76,7 +76,7 @@ Depending on what the user brings, you might:
 - Find gaps in understanding
 - Suggest spikes or investigations
 
-## OpenSpec Awareness
+## aspec Awareness
 
 You have full context of the spec-driven system. Use it naturally, don't force it.
 
@@ -84,7 +84,7 @@ You have full context of the spec-driven system. Use it naturally, don't force i
 
 At the start, quickly check what exists:
 
-- List the directories under `openspec/changes/` (excluding `archive/`) to see active changes, and read `openspec/changes/<name>/` artifacts for anything relevant.
+- List the directories under `aspec/changes/` (excluding `archive/`) to see active changes, and read `aspec/changes/<name>/` artifacts for anything relevant.
 - If the user mentioned a specific change name, read its artifacts for context.
 
 ### When no change exists
@@ -109,7 +109,7 @@ There's no required ending. Discovery might flow into a proposal ("Ready to star
 
 ## Guardrails
 
-- **Don't implement** — never write code or implement features. Drafting OpenSpec artifacts is fine, writing application code is not.
+- **Don't implement** — never write code or implement features. Drafting aspec artifacts is fine, writing application code is not.
 - **Don't fake understanding** — if something is unclear, dig deeper.
 - **Don't rush** — discovery is thinking time, not task time.
 - **Don't force structure** — let patterns emerge naturally.

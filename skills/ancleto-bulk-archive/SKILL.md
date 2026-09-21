@@ -8,7 +8,7 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec Bulk Archive
+# aspec Bulk Archive
 
 Archive multiple completed changes in a single operation, handling spec conflicts by checking what is actually implemented. No external binaries are invoked: changes are listed from directories, status is read from files, archiving is a directory move.
 
@@ -18,7 +18,7 @@ Archive multiple completed changes in a single operation, handling spec conflict
 
 ### 1. Get active changes
 
-List the directories directly under `openspec/changes/` (excluding `archive/`). If none exist, inform the user and stop.
+List the directories directly under `aspec/changes/` (excluding `archive/`). If none exist, inform the user and stop.
 
 ### 2. Prompt for change selection
 
@@ -34,11 +34,11 @@ Use the **AskUserQuestion tool** with multi-select to let the user choose:
 
 For each selected change, collect by reading files:
 
-a. **Artifact presence** — which of `proposal.md`, `design.md`, `tasks.md`, `specs/` exist under `openspec/changes/<name>/`.
+a. **Artifact presence** — which of `proposal.md`, `design.md`, `tasks.md`, `specs/` exist under `aspec/changes/<name>/`.
 
-b. **Task completion** — read `openspec/changes/<name>/tasks.md` and count `- [ ]` (incomplete) vs `- [x]` (complete). If no tasks file exists, note "No tasks".
+b. **Task completion** — read `aspec/changes/<name>/tasks.md` and count `- [ ]` (incomplete) vs `- [x]` (complete). If no tasks file exists, note "No tasks".
 
-c. **Delta specs** — check `openspec/changes/<name>/specs/` and list which capability specs exist, extracting requirement names (lines matching `### Requirement: <name>`).
+c. **Delta specs** — check `aspec/changes/<name>/specs/` and list which capability specs exist, extracting requirement names (lines matching `### Requirement: <name>`).
 
 ### 4. Detect spec conflicts
 
@@ -89,9 +89,9 @@ If there are incomplete changes, make clear they will be archived with warnings.
 
 Process changes in the determined order (respecting conflict resolution):
 
-a. **Sync specs** if delta specs exist and the resolution says so: apply the delta directly to `openspec/specs/<capability>/spec.md` (ADDED adds, MODIFIED updates preserving unmentioned scenarios, REMOVED deletes, RENAMED renames via `FROM:`/`TO:`). Track whether sync was done.
+a. **Sync specs** if delta specs exist and the resolution says so: apply the delta directly to `aspec/specs/<capability>/spec.md` (ADDED adds, MODIFIED updates preserving unmentioned scenarios, REMOVED deletes, RENAMED renames via `FROM:`/`TO:`). Track whether sync was done.
 
-b. **Perform the archive**: create `openspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), then move the directory to `openspec/changes/archive/YYYY-MM-DD-<name>/`. If the target already exists, fail that change (record the error) but continue with the others.
+b. **Perform the archive**: create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), then move the directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`. If the target already exists, fail that change (record the error) but continue with the others.
 
 c. **Track each outcome**: success, failed (with error), or skipped.
 

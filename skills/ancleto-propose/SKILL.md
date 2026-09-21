@@ -8,7 +8,7 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec Propose
+# aspec Propose
 
 Create a change and generate all its artifacts in one step, writing files directly. No external binaries are invoked.
 
@@ -34,7 +34,7 @@ Use what comes back as read-only background while drafting. If nothing is return
 
 ### 3. Create the change directory
 
-Create `openspec/changes/<name>/` directly if it does not exist yet.
+Create `aspec/changes/<name>/` directly if it does not exist yet.
 
 ### 4. Create artifacts in dependency order
 

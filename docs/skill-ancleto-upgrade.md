@@ -9,7 +9,7 @@ repositorio:
 - Analiza TODO el repo (source, tests, config, CI/CD, Docker).
 - Descarga documentación oficial de la librería (o acepta una URL provista).
 - Detecta automáticamente qué hay que cambiar.
-- Crea un plan estructurado en OpenSpec (no toca código).
+- Crea un plan estructurado en aspec (no toca código).
 - Deja todo listo para aplicar cambios sistemáticamente.
 
 **Diferencia clave**: no es un script que aplica sed/regex ciegamente. El análisis es
@@ -33,7 +33,7 @@ estricto en 8 pasos:
 5. **Clasificar hallazgos** — `BREAKING_CHANGES_IN_CODE[]`, `IN_TESTS[]`,
    `CONFIG_CHANGES[]`, `DEPENDENCY_CHANGES[]`, `UNSURE_MATCHES[]`, con confianza
    `high|medium|low`.
-6. **Crear el change OpenSpec** — `openspec new change`.
+6. **Crear el change aspec** — scaffold del directorio en `aspec/changes/`.
 7. **Escribir los artefactos** — `proposal.md`, `specs/`, `tasks.md`, `design.md`.
 8. **Mostrar resumen final** — cobertura del escaneo, patterns usados, breaking changes.
 
@@ -49,8 +49,8 @@ estricto en 8 pasos:
 
 ## ¿Qué hace exactamente tras ejecutarse?
 
-El skill genera automáticamente un Change OpenSpec dentro de
-`openspec/changes/{LIBRARIA}-migration/`. Estos artefactos contienen todo lo necesario
+El skill genera automáticamente un Change aspec dentro de
+`aspec/changes/{LIBRARIA}-migration/`. Estos artefactos contienen todo lo necesario
 para escalar el esfuerzo de la migración:
 
 1. **proposal.md** — qué, por qué y cómo vamos a migrar, versiones y dependencias afectadas.
@@ -60,7 +60,7 @@ para escalar el esfuerzo de la migración:
 4. **design.md** — diseño y estrategia.
 
 Una vez que el skill arroja este resultado, todo se reduce a seguir el plan. Revisá el
-contenido propuesto de OpenSpec y luego invocá:
+contenido propuesto de aspec y luego invocá:
 
 ```text
 /cleto-apply {nombre-del-change}
@@ -71,7 +71,7 @@ Esto indica al agente que empiece a modificar el código fuente basándose en lo
 ## Guardrails (Garantías de Seguridad)
 
 - **No produce "Breaking Changes" silenciosos**: solo investiga y documenta. No modifica
-  ningún archivo del repo fuera de `openspec/changes/{CHANGE_NAME}/`.
+  ningún archivo del repo fuera de `aspec/changes/{CHANGE_NAME}/`.
 - **Usa evidencias empíricas**: cada archivo recomendado se basa en los migration guides
   oficiales. Los `VERSION_PATTERNS[]` siempre se aplican, con o sin documentación oficial.
 - **No bloquea sin URL**: si no hay doc oficial, se documenta en el proposal y se continúa
@@ -84,7 +84,7 @@ Esto indica al agente que empiece a modificar el código fuente basándose en lo
 Después de ejecutar `/ancleto-upgrade node 22`, te encontrás esto:
 
 ```
-openspec/changes/
+aspec/changes/
 └── node22-migration/
     ├── proposal.md
     │   ├── Resumen (versiones actuales vs target)

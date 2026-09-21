@@ -8,7 +8,7 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec Workflow
+# aspec Workflow
 
 This skill is the map of the spec-driven lifecycle. It does not execute work itself — it routes: given where the user (or the current change) stands, it names the skill that runs next and hands over the required context.
 
@@ -39,7 +39,7 @@ explore → new/propose/ff → continue* → apply → verify → archive
 | Learn the whole cycle hands-on | `ancleto-onboard` |
 | Recall what the team learned about a topic | `searchMemory` directly (or the recall contract) |
 
-**By change state** (read `openspec/changes/<name>/`):
+**By change state** (read `aspec/changes/<name>/`):
 
 | State | Run |
 |---|---|

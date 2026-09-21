@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs'
-import { cp, mkdir, access, writeFile, readFile, readdir } from 'node:fs/promises'
+import { cp, mkdir, access, writeFile, readFile, readdir, rename } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createInterface } from 'node:readline'
@@ -310,17 +310,19 @@ async function installAgentSkills(projectDir, agent) {
   return dir.replace(/\\/g, '/')
 }
 
-const DEFAULT_OPENSPEC_CONFIG = `# OpenSpec project configuration
+const CHANGES_ROOT = 'aspec'
+
+const DEFAULT_ASPEC_CONFIG = `# OpenSpec project configuration
 # Generado por @ancleto/spec (G5) — editalo libremente, no se sobrescribe en reinstalaciones.
 schema: spec-driven-development
 `
 
-async function scaffoldOpenSpec(projectDir) {
-  const changesDir = join(projectDir, 'openspec', 'changes')
+async function scaffoldAspec(projectDir) {
+  const changesDir = join(projectDir, CHANGES_ROOT, 'changes')
   await mkdir(changesDir, { recursive: true })
-  const configPath = join(projectDir, 'openspec', 'config.yaml')
+  const configPath = join(projectDir, CHANGES_ROOT, 'config.yaml')
   if (!(await exists(configPath))) {
-    await writeFile(configPath, DEFAULT_OPENSPEC_CONFIG)
+    await writeFile(configPath, DEFAULT_ASPEC_CONFIG)
   }
 }
 
@@ -392,7 +394,7 @@ async function install(args) {
 
   if (project) {
     await copyTemplates(resolve(project))
-    await scaffoldOpenSpec(resolve(project))
+    await scaffoldAspec(resolve(project))
     const existingRc = await readAncletorc(resolve(project))
     const agent = await resolveAgent(args, existingRc?.agent)
     const agentSkillsDir = await installAgentSkills(resolve(project), agent)
@@ -445,6 +447,14 @@ async function upgradeCmd(args) {
   if (!rc) {
     console.error("Error: No se encontro .ancletorc. Ejecuta 'ancleto init' primero.")
     process.exit(1)
+  }
+  const legacyChanges = join(projectDir, 'openspec')
+  const changesRoot = join(projectDir, CHANGES_ROOT)
+  if ((await exists(legacyChanges)) && !(await exists(changesRoot))) {
+    await rename(legacyChanges, changesRoot)
+    console.log('ancleto: changes migrados de openspec/ a aspec/')
+  } else if ((await exists(legacyChanges)) && (await exists(changesRoot))) {
+    console.warn('ancleto: existen openspec/ y aspec/ — no se migro nada (revisar manualmente)')
   }
   const agent = await resolveAgent(args, rc.agent)
   await copyTemplates(projectDir)
@@ -501,7 +511,7 @@ async function initProject(args) {
   }
 
   const manifest = await writeManifest(projectDir, { azure, discovery, agent })
-  await scaffoldOpenSpec(projectDir)
+  await scaffoldAspec(projectDir)
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
   console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''}`)
 }

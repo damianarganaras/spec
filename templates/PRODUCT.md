@@ -64,7 +64,7 @@ src/
   components/
   features/
   services/
-openspec/
+aspec/
   config.yaml
   changes/
 ```

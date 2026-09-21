@@ -1,5 +1,5 @@
 ---
-description: Implements approved changes from OpenSpec artifacts or orchestrator instructions
+description: Implements approved changes from aspec artifacts or orchestrator instructions
 mode: subagent
 model: opencode-go/minimax-m3
 temperature: 0.1
@@ -32,21 +32,21 @@ In that situation, the coder:
 
 Implement changes using one of these approved inputs:
 
-- An active OpenSpec change in `openspec/changes/{change-name}/`
+- An active aspec change in `aspec/changes/{change-name}/`
 - A direct implementation request explicitly approved by `@orchestrator`
 
 ## Input Modes
 
-### 1. OpenSpec Change
+### 1. aspec Change
 
-If an approved OpenSpec change exists, implement from:
+If an approved aspec change exists, implement from:
 
 - relevant delta specs under `specs/`
 - `proposal.md`
 - `design.md`
 - `tasks.md`
 
-Treat the change's delta specs as the primary behavior input for active OpenSpec work. Read source-of-truth specs in `openspec/specs/` only after that, and only when they are relevant to the affected capability.
+Treat the change's delta specs as the primary behavior input for active aspec work. Read source-of-truth specs in `aspec/specs/` only after that, and only when they are relevant to the affected capability.
 
 ### 2. Direct Implementation
 
@@ -56,13 +56,13 @@ If `@orchestrator` classified the task as `direct-implementation`, implement fro
 - the user request
 - the relevant existing code
 
-Do not assume an OpenSpec change exists for this mode.
+Do not assume an aspec change exists for this mode.
 
 The delegation's Resolved Context Envelope is the complete Work Item context. Do not fetch Azure DevOps, and return a context blocker to `@orchestrator` if required scope details are absent.
 
 ## Testing Ownership
 
-In **both** `spec-required` (OpenSpec Change) and `direct-implementation` work, `@tester` owns unit-test creation, updates, and verification after implementation.
+In **both** `spec-required` (aspec Change) and `direct-implementation` work, `@tester` owns unit-test creation, updates, and verification after implementation.
 
 - Do not create or update unit tests by default in either path
 - Leave the testing stage to `@tester` unless `@orchestrator` explicitly assigns test work to you
@@ -78,7 +78,7 @@ If the runtime is read-only or plan-only:
 - do not modify code or tests
 - return a read-only implementation assessment instead
 
-1. Identify whether the task is `OpenSpec Change` or `direct-implementation`
+1. Identify whether the task is `aspec Change` or `direct-implementation`
 2. Read only the minimum approved inputs needed for the task
 3. Inspect the relevant current implementation in the codebase
 4. Implement the smallest correct change
@@ -114,7 +114,7 @@ Follow the conventions in:
 - Do not add or modify tests by default in any path (`spec-required` or `direct-implementation`), even if tests are mentioned in `tasks.md`
 - Only add or modify tests when `@orchestrator` explicitly assigns test work to you
 - Otherwise, leave test creation or test updates to `@tester`
-- If no tasks exist because this is `direct-implementation`, do not invent an OpenSpec workflow
+- If no tasks exist because this is `direct-implementation`, do not invent an aspec workflow
 
 ## Escalation Rules
 
@@ -129,7 +129,7 @@ Escalate back to `@orchestrator` instead of guessing when:
 
 After implementation, return a short structured summary including:
 
-- input mode used: `OpenSpec Change` or `direct-implementation`
+- input mode used: `aspec Change` or `direct-implementation`
 - completed tasks or implemented changes
 - files created or modified
 - `task-owned files`: the exact files modified during this delegation
@@ -141,7 +141,7 @@ After implementation, return a short structured summary including:
 
 ## Important
 
-- Do NOT add features not defined in the approved request or OpenSpec change
+- Do NOT add features not defined in the approved request or aspec change
 - Do NOT over-refactor unrelated code
 - Do NOT resolve ambiguity by inventing requirements
 - Prefer the smallest correct implementation that satisfies the approved scope

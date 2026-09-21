@@ -8,11 +8,11 @@ metadata:
   version: '1.0'
 ---
 
-# OpenSpec Verify
+# aspec Verify
 
 Verify that an implementation matches its change artifacts (proposal, design, tasks, delta specs) by reading the files directly. No external binaries are invoked.
 
-**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `openspec/changes/` that contain a `tasks.md` file and ask the user to select. Mark changes with incomplete tasks as "(In Progress)".
+**Input**: Optionally specify a change name (e.g., `add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous, list the directories under `aspec/changes/` that contain a `tasks.md` file and ask the user to select. Mark changes with incomplete tasks as "(In Progress)".
 
 **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
@@ -20,7 +20,7 @@ Verify that an implementation matches its change artifacts (proposal, design, ta
 
 ### 1. Load the change artifacts
 
-Read everything under `openspec/changes/<name>/`:
+Read everything under `aspec/changes/<name>/`:
 
 - `tasks.md` — the checklist (required)
 - `proposal.md`, `design.md` — intent and decisions (if present)
@@ -36,7 +36,7 @@ Read everything under `openspec/changes/<name>/`:
 
 **Spec Coverage:**
 
-- If delta specs exist in `openspec/changes/<name>/specs/`:
+- If delta specs exist in `aspec/changes/<name>/specs/`:
   - Extract all requirements (marked with `### Requirement:`).
   - For each requirement, search the codebase for keywords related to it and assess whether implementation likely exists.
   - If a requirement appears unimplemented, add a CRITICAL issue: "Requirement not found: `<requirement name>`" with the recommendation "Implement requirement: `<description>`".

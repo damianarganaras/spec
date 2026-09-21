@@ -12,7 +12,7 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
 
 1. **Get active changes**
 
-   Run `openspec list --json` to get all active changes.
+   Run `aspec list --json` to get all active changes.
 
    If no active changes exist, inform user and stop.
 
@@ -30,17 +30,17 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
 
    For each selected change, collect:
 
-   a. **Artifact status** - Run `openspec status --change "<name>" --json`
+   a. **Artifact status** - Run `aspec status --change "<name>" --json`
 
    - Parse `schemaName` and `artifacts` list
    - Note which artifacts are `done` vs other states
 
-   b. **Task completion** - Read `openspec/changes/<name>/tasks.md`
+   b. **Task completion** - Read `aspec/changes/<name>/tasks.md`
 
    - Count `- [ ]` (incomplete) vs `- [x]` (complete)
    - If no tasks file exists, note as "No tasks"
 
-   c. **Delta specs** - Check `openspec/changes/<name>/specs/` directory
+   c. **Delta specs** - Check `aspec/changes/<name>/specs/` directory
 
    - List which capability specs exist
    - For each, extract requirement names (lines matching `### Requirement: <name>`)
@@ -131,8 +131,8 @@ This skill allows you to batch-archive changes, handling spec conflicts intellig
    b. **Perform the archive**:
 
    ```bash
-   mkdir -p openspec/changes/archive
-   mv openspec/changes/<name> openspec/changes/archive/YYYY-MM-DD-<name>
+   mkdir -p aspec/changes/archive
+   mv aspec/changes/<name> aspec/changes/archive/YYYY-MM-DD-<name>
    ```
 
    c. **Track outcome** for each change:
@@ -250,6 +250,6 @@ No active changes found. Create a new change to get started.
 - Show clear per-change status before confirming
 - Use single confirmation for entire batch
 - Track and report all outcomes (success/skip/fail)
-- Preserve .openspec.yaml when moving to archive
+- Preserve .aspec.yaml when moving to archive
 - Archive directory target uses current date: YYYY-MM-DD-<name>
 - If archive target exists, fail that change but continue with others

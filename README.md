@@ -134,9 +134,9 @@ ancleto discovery         # Genera .discovery-map.json y empaqueta el repo
 
 Utiliza los comandos barra (`/`) expuestos en el chat de tu IDE (ej. Cursor, OpenCode):
 
-* `/opsx-new` y `/opsx-propose`: Para planificar un nuevo feature.
-* `/opsx-verify` y `/opsx-apply`: Para validar reglas, chequear tests y aplicar el código.
-* `/opsx-archive`: Para consolidar el historial y registrar aprendizajes en la memoria de Ancleto.
+* `/cleto-new` y `/cleto-propose`: Para planificar un nuevo feature.
+* `/cleto-verify` y `/cleto-apply`: Para validar reglas, chequear tests y aplicar el código.
+* `/cleto-archive`: Para consolidar el historial y registrar aprendizajes en la memoria de Ancleto.
 
 ---
 
@@ -191,14 +191,14 @@ Una vez instalado, tu IDE expone el ciclo de vida completo como comandos barra (
 
 | Comando | Para qué sirve |
 |---|---|
-| `/opsx-new` | Iniciar la especificación de un feature |
-| `/opsx-propose` | Proponer el diseño técnico |
-| `/opsx-ff` | Avanzar rápido con contexto recuperado |
-| `/opsx-apply` | Aplicar el código del change |
-| `/opsx-verify` | Verificar reglas, tests y memoria antes de cerrar |
-| `/opsx-sync` | Sincronizar specs con el estado del repo |
-| `/opsx-archive` | Archivar el change y registrar aprendizajes |
-| `/opsx-continue`, `/opsx-explore`, `/opsx-onboard` | Retomar, explorar y orientarse en el proyecto |
+| `/cleto-new` | Iniciar la especificación de un feature |
+| `/cleto-propose` | Proponer el diseño técnico |
+| `/cleto-ff` | Avanzar rápido con contexto recuperado |
+| `/cleto-apply` | Aplicar el código del change |
+| `/cleto-verify` | Verificar reglas, tests y memoria antes de cerrar |
+| `/cleto-sync` | Sincronizar specs con el estado del repo |
+| `/cleto-archive` | Archivar el change y registrar aprendizajes |
+| `/cleto-continue`, `/cleto-explore`, `/cleto-onboard` | Retomar, explorar y orientarse en el proyecto |
 
 ---
 

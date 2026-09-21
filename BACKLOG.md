@@ -13,11 +13,11 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ MCP **engram** + **caveman** configurados por defecto al instalar (fusión no destructiva)
 - ✅ Tiers de costo `normal | minimo | gratis` (prompt en la 1ra config, persistidos en `.ancleto-tier`)
 - ✅ Azure DevOps **opcional** (off por defecto): gate en `.ancletorc`, `ancleto-pr` usa GitHub
-- ✅ KB MCP neutralizado (opsx-*, kb-context.md)
+- ✅ KB MCP neutralizado (cleto-*, kb-context.md)
 - ✅ Templates `AGENTS.md` / `PRODUCT.md` para proyectos nuevos (`CONTRIBUTING.md` eliminado: sus validaciones y reglas de commit pasaron a `AGENTS.md`)
 - ✅ Rama `development` + `main` protegida
 - ✅ Relevamiento de `lnx` CLI (fuente en `documentation/lnx-cli/`)
-- ✅ **G1**: skills `triage-clarifier`, `openspec-recall`, `openspec-sync-specs` portadas (adaptadas, sin branding LN)
+- ✅ **G1**: skills `triage-clarifier`, `ancleto-recall`, `ancleto-sync-specs` portadas (adaptadas, sin branding LN)
 - ✅ **G2**: motor `ancleto discovery` (MVP) — pack con Repomix (`npx` o PATH, `--include/--ignore/--compress/--token-budget`), `--check` por hash de contenido (READY/STALE/PARTIAL/MISSING), estado en `.discovery-state.json`, zero-deps
 - ✅ **M1 — Motor de Memoria Persistente SQLite+FTS5 (v0.2.0)**:
   `src/core/memory/database.js` (node:sqlite `DatabaseSync`, PRAGMAs `WAL`/`foreign_keys`/`busy_timeout=5000`,
@@ -87,8 +87,8 @@ Eliminar la dependencia externa de OpenSpec: motor propio de skills con configur
 
 - [x] **S1**: Implementar configuración interactiva del Agente/IDE (opencode, vscode, antigravity, cursor, roo, etc.) en el CLI (`init`/`install`) y persistencia en `.ancletorc` (campo `agent`; default `opencode`; flag `--agent`). ✅
 - [x] **S2**: Portar las 11 skills base de OpenSpec (`apply`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `new`, `onboard`, `propose`, `verify`, `workflow`) adaptadas a la configuración del Agente. ✅
-  - [x] **Pack 1 (core)**: `openspec-new`, `openspec-propose`, `openspec-apply`, `openspec-verify`, `openspec-archive` — autocontenidas (sin binario `openspec`), integradas con memoria (`recordRule`/`recordDecision` en verify/archive, recall en new/propose), ruteadas por `agent` e instaladas en el directorio del agente. ✅
-  - [x] **Pack 2 (workflows y utilidades)**: `openspec-bulk-archive` (con `recordDecision` en resoluciones), `openspec-continue`, `openspec-explore` (con `searchMemory` inicial), `openspec-ff`, `openspec-onboard` (con `searchMemory` inicial), `openspec-workflow` (router del ciclo de vida). `installAgentSkills()` instala el catálogo completo en el directorio del agente configurado. ✅
+  - [x] **Pack 1 (core)**: `ancleto-new`, `ancleto-propose`, `ancleto-apply`, `ancleto-verify`, `ancleto-archive` — autocontenidas (sin binario `openspec`), integradas con memoria (`recordRule`/`recordDecision` en verify/archive, recall en new/propose), ruteadas por `agent` e instaladas en el directorio del agente. ✅
+  - [x] **Pack 2 (workflows y utilidades)**: `ancleto-bulk-archive` (con `recordDecision` en resoluciones), `ancleto-continue`, `ancleto-explore` (con `searchMemory` inicial), `ancleto-ff`, `ancleto-onboard` (con `searchMemory` inicial), `ancleto-workflow` (router del ciclo de vida). `installAgentSkills()` instala el catálogo completo en el directorio del agente configurado. ✅
 - [x] **S3**: Comando `ancleto upgrade`: actualiza templates y skills locales respetando bloques EXTENSIBLE (reusa la lógica LOCKED de G7). ✅
 
 > Épica **v0.5.0 — Agentic OpenSpec Engine & Upgrades** cerrada: S1 (configuración por Agente), S2 (11 skills nativas), S3 (`ancleto upgrade`).
@@ -125,7 +125,7 @@ Integración de la memoria persistente con el orquestador y los AI agents.
 - [x] `core/memory`: Implementar política de token overflow / truncamiento seguro al recuperar reglas. ✅
 - [x] `templates/AGENTS.md`: Agregar protocolo reactivo indicando cuándo los agentes deben llamar a `searchMemory`. ✅ (también reflejado en `templates/PRODUCT.md`, sección AI Memory)
 - [x] `cli/memory`: Agregar comando/subcomando `ancleto memory doctor` para verificar integrity check y rebuild de FTS5. ✅
-- [x] Complementos ya trackeados (se ejecutan dentro de v0.3.0): `openspec-recall` → `searchMemory`, `memory-keeper` → tools del motor ✅
+- [x] Complementos ya trackeados (se ejecutan dentro de v0.3.0): `ancleto-recall` → `searchMemory`, `memory-keeper` → tools del motor ✅
 - [x] **Pulido**: `.gitattributes` para line-endings (evitar warnings LF/CRLF) ✅ y documentar
       flujo de release en el repo ✅
 
@@ -133,9 +133,9 @@ Integración de la memoria persistente con el orquestador y los AI agents.
 
 - ~~Memoria: ¿adaptar a engram o dejar sin memoria?~~ → **Resuelta (v0.2.0)**: motor propio
   con `node:sqlite`, diseño congelado en `DESIGN-memory-engine-v0.2.0.md`. Revisar el
-  contrato de `openspec-recall` al implementar.
+  contrato de `ancleto-recall` al implementar.
 - ~~Alcance del motor `discovery` (G2): ¿implementación completa o MVP (solo `--check`)?~~ → **Resuelta**: MVP (`--check` por hash) — implementado en G2, ver `Hecho`.
-- ~~¿Portar las otras 11 skills base (`openspec-apply/archive/bulk-archive/continue/explore/ff/new/onboard/propose/verify/workflow`)?~~ → **Resuelta (v0.5.0)**: portar como skills nativas adaptadas al Agente (S2).
+- ~~¿Portar las otras 11 skills base (`ancleto-apply/archive/bulk-archive/continue/explore/ff/new/onboard/propose/verify/workflow`)?~~ → **Resuelta (v0.5.0)**: portar como skills nativas adaptadas al Agente (S2).
 - Qué modelos van en cada tier (tabla `TIERS` en `src/cli/index.js` es ajustable)
 
 ## Ideas de colaboradores

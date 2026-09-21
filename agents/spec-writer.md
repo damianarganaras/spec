@@ -28,7 +28,7 @@ Generate an OpenSpec change in:
 
 - `openspec/changes/{change-name}/`
 
-using the `openspec-workflow` skill and the conventions of:
+using the `ancleto-workflow` skill and the conventions of:
 
 - `AGENTS.md`
 
@@ -36,7 +36,7 @@ using the `openspec-workflow` skill and the conventions of:
 
 1. Use the repository context received in the delegation, including its cited source paths and seed state; exploratory sweeping is prohibited. You MAY open a specific path that the received context cites when a detail needs confirmation.
 2. Read relevant source-of-truth specs in `openspec/specs/` when they exist
-3. Load and follow the `openspec-workflow` skill
+3. Load and follow the `ancleto-workflow` skill
 4. Create a clear `change-name`
 5. Generate the minimum correct set of artifacts for the requested change:
    - `proposal.md`

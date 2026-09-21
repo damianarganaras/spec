@@ -96,6 +96,6 @@ If option 4 happened and the answer still does not remove the main ambiguity, cl
 ## What not to do
 
 - do not create specs, design, tasks, or proposals
-- do not trigger opsx or any workflow handoff
+- do not trigger cleto or any workflow handoff
 - do not ask more than one clarification question
 - do not replace the orchestrator's final responsibility for classification

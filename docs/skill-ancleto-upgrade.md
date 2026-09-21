@@ -63,7 +63,7 @@ Una vez que el skill arroja este resultado, todo se reduce a seguir el plan. Rev
 contenido propuesto de OpenSpec y luego invocá:
 
 ```text
-/opsx-apply {nombre-del-change}
+/cleto-apply {nombre-del-change}
 ```
 
 Esto indica al agente que empiece a modificar el código fuente basándose en los `tasks.md`.

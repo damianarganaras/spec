@@ -12,10 +12,10 @@ asistido por IA para opencode. Proporciona:
 
 - **Agentes especializados (10)**: orchestrator, coder, tester, spec-writer, reviewer,
   documenter, technical-discovery, technical-seed-writer, memory-keeper, context-resolver.
-- **Workflows OpenSpec**: comandos `opsx-*` (`/opsx-new`, `/opsx-apply`, `/opsx-verify`,
+- **Workflows OpenSpec**: comandos `cleto-*` (`/cleto-new`, `/cleto-apply`, `/cleto-verify`,
   etc.) para cambios estructurados.
 - **Skills reutilizables (7)**: `ancleto-commit`, `ancleto-pr`, `ancleto-technical-discovery`,
-  `ancleto-upgrade`, `triage-clarifier`, `openspec-recall`, `openspec-sync-specs`.
+  `ancleto-upgrade`, `triage-clarifier`, `ancleto-recall`, `ancleto-sync-specs`.
 - **Governance**: templates `AGENTS.md`, `PRODUCT.md` instalables en cada repo.
 - **Motor de memoria (v0.2.0)**: base local `.ancleto/memory.db` sobre `node:sqlite`
   (zero-deps) con 3 tools para el LLM y supersesión atómica.
@@ -27,7 +27,7 @@ asistido por IA para opencode. Proporciona:
 | Problema | Solución |
 | --- | --- |
 | Inconsistencia en configs de IA entre repos | Governance con `AGENTS.md`, `PRODUCT.md` |
-| Procesos ad-hoc sin documentación | Workflows OpenSpec estandarizados (`opsx-*`) |
+| Procesos ad-hoc sin documentación | Workflows OpenSpec estandarizados (`cleto-*`) |
 | Cambios grandes sin análisis | Agents especializados con roles + clasificación `triage-clarifier` |
 | Commits sin semántica | Skill `ancleto-commit` con conventional commits |
 | Migraciones manuales y propensas a errores | Skill `ancleto-upgrade` que analiza y planifica |
@@ -50,7 +50,7 @@ Recursos gestionados por `ancleto install`:
 ├── .ancleto-tier              (generado)   - Nivel de costo elegido
 └── .opencode/
     ├── agents/                (LOCKED)     - orchestrator, coder, tester, ...
-    ├── commands/              (LOCKED)     - opsx-*.md
+    ├── commands/              (LOCKED)     - cleto-*.md
     └── skills/                (LOCKED)     - skills base y de perfil ancleto
 ```
 
@@ -207,7 +207,7 @@ ancleto discovery                     # empaca el repo con Repomix
 "Usá ancleto-technical-discovery para analizar este repositorio"
 
 # 5. Empezar a trabajar
-# en opencode: /opsx-new, /opsx-propose, /opsx-ff
+# en opencode: /cleto-new, /cleto-propose, /cleto-ff
 ```
 
 ## Troubleshooting

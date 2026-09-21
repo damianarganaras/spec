@@ -52,6 +52,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   `agents/orchestrator.md` (lee `.ancleto/working-context.md` como datos **no confiables**); tests de XML
   y scopes exactos. Patrón "CLI materializa + agente lee" (preserva `bash: false`).
 - ✅ Hotfix v0.6.1: buildWorkingContext devuelve topología en repositorios sin reglas (Día Cero).
+- ✅ Feature v0.6.2: Banner ASCII animado y menú select TTY (Raw Mode) estilo OpenSpec para ancleto init.
 
 ## Estado actual (v0.6.1)
 

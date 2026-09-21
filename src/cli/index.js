@@ -10,6 +10,7 @@ import { createMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.j
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
+import { showBanner, selectOption, stopBanner } from './ui.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -29,9 +30,9 @@ Uso:
   ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (pregunta si no esta guardado)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
   ancleto upgrade [--agent <nombre>]  Re-aplica templates (LOCKED) y skills sobre el proyecto actual
-  ancleto init [--with-azure] [--agent <nombre>]
+  ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>]
                                     Crea .ancletorc en el repositorio actual
-                                    (Azure desactivado por defecto, agente: opencode)
+                                    (interactivo en TTY: banner + menu; Azure desactivado por defecto)
   ancleto discovery --check           Estado del seed (READY/STALE/PARTIAL/MISSING)
   ancleto discovery [--compress] [--include G] [--ignore G] [--token-budget N]
                                    Empaca el repo con Repomix y guarda estado
@@ -201,18 +202,31 @@ function askAgent() {
   })
 }
 
-async function resolveAgent(args, existing) {
-  const ai = args.indexOf('--agent')
-  if (ai >= 0) {
-    const name = args[ai + 1]
-    if (!SUPPORTED_AGENTS.includes(name)) {
-      console.error(`ancleto: agente invalido: ${name} (${SUPPORTED_AGENTS.join('/')})`)
-      process.exit(1)
-    }
-    return name
+function scanAgentFlag(args) {
+  const name = flagValue(args, '--agent')
+  if (!name) return null
+  if (!SUPPORTED_AGENTS.includes(name)) {
+    console.error(`ancleto: agente invalido: ${name} (${SUPPORTED_AGENTS.join('/')})`)
+    process.exit(1)
   }
+  return name
+}
+
+function scanTierFlag(args) {
+  const t = flagValue(args, '--tier')
+  if (!t) return null
+  if (!TIERS[t]) {
+    console.error(`ancleto: tier invalido: ${t} (normal|minimo|gratis)`)
+    process.exit(1)
+  }
+  return t
+}
+
+async function resolveAgent(args, existing, allowAsk = Boolean(process.stdin.isTTY)) {
+  const flag = scanAgentFlag(args)
+  if (flag) return flag
   if (existing && SUPPORTED_AGENTS.includes(existing)) return existing
-  if (process.stdin.isTTY) return askAgent()
+  if (allowAsk) return askAgent()
   return DEFAULT_AGENT
 }
 
@@ -354,12 +368,7 @@ async function install(args) {
   const withMcp = !args.includes('--no-mcp')
   let mcpMap = withMcp ? buildDefaultMcp() : {}
 
-  const ti = args.indexOf('--tier')
-  let tier = ti >= 0 ? args[ti + 1] : null
-  if (tier && !TIERS[tier]) {
-    console.error(`ancleto: tier invalido: ${tier} (normal|minimo|gratis)`)
-    process.exit(1)
-  }
+  let tier = scanTierFlag(args)
 
   if (project) {
     const dir = resolve(project)
@@ -446,17 +455,45 @@ async function upgradeCmd(args) {
 }
 
 async function initProject(args) {
-  const withAzure = args.includes('--with-azure')
   const projectDir = process.cwd()
+  const withAzure = args.includes('--with-azure')
+  const agentFlag = scanAgentFlag(args)
+  const tierFlag = scanTierFlag(args)
   const existing = await readAncletorc(projectDir)
   const azure = existing?.azure ?? { enabled: false }
-  if (withAzure) azure.enabled = true
   const discovery = existing?.discovery ?? { outputDir: 'docs/technical-discovery', exclude: [] }
-  const agent = await resolveAgent(args, existing?.agent)
+  const tierFile = join(projectDir, '.opencode', '.ancleto-tier')
+
+  let agent, tier
+  const isInteractive = Boolean(process.stdout.isTTY) && (!agentFlag || !tierFlag)
+  if (isInteractive) {
+    await showBanner()
+    const agentIdx = Math.max(0, SUPPORTED_AGENTS.indexOf(existing?.agent))
+    const storedTier = (await exists(tierFile)) ? (await readFile(tierFile, 'utf8')).trim() : null
+    const tierIdx = Math.max(0, Object.keys(TIERS).indexOf(TIERS[storedTier] ? storedTier : ''))
+    agent = agentFlag || await selectOption('Agente/IDE', SUPPORTED_AGENTS, agentIdx)
+    tier = tierFlag || await selectOption('Tier de costo', Object.keys(TIERS), tierIdx)
+    if (withAzure) {
+      azure.enabled = true
+    } else {
+      azure.enabled = (await selectOption('Habilitar Azure DevOps', ['No', 'Si'], azure.enabled ? 1 : 0)) === 'Si'
+    }
+    stopBanner()
+  } else {
+    agent = await resolveAgent(args, existing?.agent, false)
+    tier = tierFlag
+    if (withAzure) azure.enabled = true
+  }
+
+  if (tier) {
+    await mkdir(join(projectDir, '.opencode'), { recursive: true })
+    await writeFile(tierFile, tier + '\n')
+  }
+
   const manifest = await writeManifest(projectDir, { azure, discovery, agent })
   await scaffoldOpenSpec(projectDir)
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
-  console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})`)
+  console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''}`)
 }
 
 const DEFAULT_IGNORES = ['node_modules', '.git', 'dist']

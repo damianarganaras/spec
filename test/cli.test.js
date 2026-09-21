@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const CLI = join(TEST_DIR, '..', 'src', 'cli', 'index.js')
@@ -431,6 +431,114 @@ describe('CLI upgrade (S3)', () => {
       assert.equal(r.status, 0)
       assert.match(r.stdout, /0 faltantes/)
       assert.match(r.stdout, /0 huerfanos/)
+    })
+  })
+})
+
+describe('CLI ui (v0.6.2) — fallback sin TTY', () => {
+  const UI = pathToFileURL(join(TEST_DIR, '..', 'src', 'cli', 'ui.js')).href
+
+  function runUi(code, cwd) {
+    return spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 15000
+    })
+  }
+
+  it('selectOption sin TTY devuelve la opcion inicial sin colgar', () => {
+    withDir((dir) => {
+      const code = `import(${JSON.stringify(UI)}).then(async (m) => { const r = await m.selectOption('x', ['a', 'b', 'c'], 1); process.stdout.write('RESULT:' + r) })`
+      const r = runUi(code, dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /RESULT:b/)
+    })
+  })
+
+  it('showBanner sin TTY muestra el arte cyan estatico sin animacion', () => {
+    withDir((dir) => {
+      const code = `import(${JSON.stringify(UI)}).then(async (m) => { await m.showBanner(1); m.stopBanner(); process.stdout.write('OK') })`
+      const r = runUi(code, dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /\u2588/)
+      assert.ok(r.stdout.includes('\x1b[36m'))
+      assert.doesNotMatch(r.stdout, /\x1b\[\d+A/)
+      assert.doesNotMatch(r.stdout, /\x1b\[\?25/)
+    })
+  })
+
+  it('animacion de fondo se detiene limpia y redibuja sin romper el menu', () => {
+    withDir((dir) => {
+      const code = [
+        `const m = await import(${JSON.stringify(UI)})`,
+        `const out = process.stdout`,
+        `Object.defineProperty(out, 'isTTY', { value: true })`,
+        `let buf = ''`,
+        `const orig = out.write.bind(out)`,
+        `out.write = (c) => { buf += String(c); return true }`,
+        `Object.defineProperty(process.stdin, 'isTTY', { value: true })`,
+        `let handler = null`,
+        `process.stdin.setRawMode = () => {}`,
+        `process.stdin.resume = () => {}`,
+        `process.stdin.pause = () => {}`,
+        `process.stdin.on = (ev, fn) => { if (ev === 'data') handler = fn; return process.stdin }`,
+        `process.stdin.removeListener = () => process.stdin`,
+        `m.showBanner(1, 5000)`,
+        `await new Promise((r) => setTimeout(r, 40))`,
+        `const p = m.selectOption('Agente', ['a', 'b', 'c'])`,
+        `await new Promise((r) => setTimeout(r, 40))`,
+        `handler(Buffer.from('\\u001b[B'))`,
+        `await new Promise((r) => setTimeout(r, 40))`,
+        `handler(Buffer.from('\\r'))`,
+        `const result = await p`,
+        `m.stopBanner()`,
+        `const at = buf.length`,
+        `await new Promise((r) => setTimeout(r, 40))`,
+        `out.write = orig`,
+        `const ups = [...new Set([...buf.matchAll(/\\x1b\\[(\\d+)A/g)].map((x) => +x[1]))].sort((a, b) => a - b)`,
+        `process.stdout.write(JSON.stringify({ result, quiet: buf.length === at, ups, hide: buf.includes('\\x1b[?25l'), show: buf.includes('\\x1b[?25h') }))`
+      ].join('\n')
+      const r = runUi(code, dir)
+      assert.equal(r.status, 0)
+      const summary = JSON.parse(r.stdout)
+      assert.equal(summary.result, 'b')
+      assert.equal(summary.hide, true)
+      assert.equal(summary.show, true)
+      assert.equal(summary.quiet, true)
+      assert.ok(summary.ups.includes(3), 'redraw del menu')
+      assert.ok(summary.ups.includes(18), 'tick del banner sin menu')
+      assert.ok(summary.ups.includes(22), 'tick del banner con menu debajo (18 + 4)')
+    })
+  })
+})
+
+describe('CLI init --tier (v0.6.2)', () => {
+  it('init --tier persiste el tier y install lo aplica sin preguntar', () => {
+    withDir((dir) => {
+      const r = run(['init', '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dir, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'gratis')
+
+      const inst = run(['install', '--project', dir, '--no-mcp'], dir)
+      assert.equal(inst.status, 0)
+      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orchestrator, /model: opencode\/big-pickle/)
+    })
+  })
+
+  it('init --tier invalido falla con exit 1', () => {
+    withDir((dir) => {
+      const r = run(['init', '--tier', 'premium'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /tier invalido/)
+    })
+  })
+
+  it('init sin tier no escribe .ancleto-tier (fallback silencioso)', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'opencode'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(join(dir, '.opencode', '.ancleto-tier')), false)
     })
   })
 })

@@ -31,6 +31,14 @@ function publicNode(row) {
   }
 }
 
+function formatTopologyBlock(topo) {
+  if (!topo) return null
+  const entries = Object.entries(topo.tree_summary)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([k, v]) => `- ${k}: ${v}`)
+  return `<ProjectTopology>\n${UNTRUSTED_LABEL}\nTotal files: ${topo.total_files}${entries.length ? '\n' + entries.join('\n') : ''}\n</ProjectTopology>`
+}
+
 export function defaultMemoryDbPath(cwd = process.cwd()) {
   return join(cwd, '.ancleto', 'memory.db')
 }
@@ -53,7 +61,10 @@ export function createMemoryEngine(dbPath = defaultMemoryDbPath()) {
        WHERE type = 'rule' AND status = 'active' AND scope IN (${placeholders})
        ORDER BY CASE n.scope WHEN 'task' THEN 0 WHEN 'feature' THEN 1 WHEN 'project' THEN 2 ELSE 9 END, n.created_at DESC, n.rowid DESC`
     ).all(...scopes)
-    if (rows.length === 0) return null
+
+    const topoBlock = formatTopologyBlock(readTopologySummary(cwd))
+
+    if (rows.length === 0) return topoBlock
 
     const maxChars = Number(maxTokens) * CHARS_PER_TOKEN
     let block = `<ProjectMemoryRules>\n${UNTRUSTED_LABEL}`
@@ -72,15 +83,7 @@ export function createMemoryEngine(dbPath = defaultMemoryDbPath()) {
       console.warn(`ancleto: ${omitted} reglas omitidas por limite de tamano (scope "${scope}")`)
     }
     const memoryBlock = `${block}\n</ProjectMemoryRules>`
-
-    const topo = readTopologySummary(cwd)
-    if (!topo) return memoryBlock
-
-    const entries = Object.entries(topo.tree_summary)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([k, v]) => `- ${k}: ${v}`)
-    const topoBlock = `<ProjectTopology>\n${UNTRUSTED_LABEL}\nTotal files: ${topo.total_files}${entries.length ? '\n' + entries.join('\n') : ''}\n</ProjectTopology>`
-    return `${topoBlock}\n${memoryBlock}`
+    return topoBlock ? `${topoBlock}\n${memoryBlock}` : memoryBlock
   }
 
   function searchMemory({ query, type, limit } = {}) {

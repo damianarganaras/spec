@@ -490,6 +490,18 @@ describe('buildWorkingContext — inyeccion de topologia (D3)', () => {
     })
   })
 
+  it('Day Zero Context: BD vacia con mapa devuelve solo topologia (no null)', () => {
+    withTopologyEngine((eng, dir) => {
+      seedMap(dir)
+      const block = eng.buildWorkingContext('project', 2000, dir)
+      assert.notEqual(block, null)
+      assert.equal(block.startsWith('<ProjectTopology>'), true)
+      assert.match(block, /Total files: 5/)
+      assert.match(block, /- src: 2/)
+      assert.doesNotMatch(block, /<ProjectMemoryRules>/)
+    })
+  })
+
   it('no crashea con JSON corrupto', () => {
     withTopologyEngine((eng, dir) => {
       writeFileSync(join(dir, '.discovery-map.json'), '{corrupto')

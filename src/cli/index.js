@@ -9,6 +9,7 @@ import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
+import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -598,16 +599,11 @@ async function checkDiscovery() {
 
 async function runRepomix(flags, tmpFile) {
   const local = await resolveBin('repomix')
+  const tier = readProjectTier(process.cwd())
+  const { exclude } = await loadDiscoveryConfig()
   const args = []
   if (!local) args.push('-y', 'repomix@1.18.0')
-  args.push('--output', tmpFile)
-  const inc = flagValue(flags, '--include')
-  if (inc) args.push('--include', inc)
-  const extraIgnore = flagValue(flags, '--ignore')
-  const { exclude } = await loadDiscoveryConfig()
-  const ignore = [...exclude, ...(extraIgnore ? extraIgnore.split(',') : [])].filter(Boolean)
-  if (ignore.length) args.push('--ignore', ignore.join(','))
-  if (flags.includes('--compress')) args.push('--compress')
+  args.push('--output', tmpFile, ...buildRepomixArgs(flags, tier, exclude))
   const cmd = local || 'npx'
   const r = spawnSync(cmd, args, { encoding: 'utf8', cwd: process.cwd(), shell: true })
   if (r.error) {
@@ -629,8 +625,9 @@ async function packDiscovery(flags) {
   let content = ''
   try { content = await readFile(tmpFile, 'utf8') } catch {}
   const tokens = Math.round(content.length / 4)
-  const budget = flagValue(flags, '--token-budget')
-  if (budget && tokens > Number(budget)) {
+  const explicit = flagValue(flags, '--token-budget')
+  const budget = explicit ? Number(explicit) : tierTokenBudget(readProjectTier(process.cwd()))
+  if (budget && tokens > budget) {
     console.error(`ancleto: el pack supera el token-budget (${tokens} > ${budget})`)
     process.exit(1)
   }

@@ -1,120 +1,213 @@
-# ancleto
+<div align="center">
 
-Orquestador SDD liviano con subagentes optimizados para costo/tokens. Toolkit personal
-de desarrollo asistido por IA para opencode: ciclo spec-driven completo (OpenSpec),
-agents y skills, más un CLI de inicialización y descubrimiento técnico del repositorio.
+# ☕ ANCLETO (aspec)
+**Orquestador SDD (Spec-Driven Development) y Toolkit Personal Asistido por IA**
 
-Binarios: `ancleto` (alias: `aspec`).
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D%2024.0.0-43853D?style=flat-square&logo=node.js&logoColor=white)](#requisitos)
+[![Version](https://img.shields.io/badge/version-v0.6.2-blue?style=flat-square)](#uso-rápido)
+[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen?style=flat-square)](#requisitos)
 
-## Qué incluye
+*Descubrimiento técnico, memoria persistente y control estricto de tokens para tu IDE.*
 
-- **Agents (10)**: orchestrator, coder, tester, spec-writer, reviewer, documenter,
-  technical-discovery, technical-seed-writer, memory-keeper, context-resolver.
-- **Commands (12)**: `opsx-*` — ciclo de vida de changes OpenSpec (new, propose, ff,
-  apply, verify, sync, archive, bulk-archive, continue, explore, onboard, recall).
-- **Skills (7)**: `ancleto-commit`, `ancleto-pr`, `ancleto-technical-discovery`, `ancleto-upgrade`,
-  `triage-clarifier`, `openspec-recall`, `openspec-sync-specs`.
-- **Templates**: `AGENTS.md`, `PRODUCT.md` para proyectos nuevos.
-- **CLI `ancleto`**: instalación (`ancleto install`), init de proyectos (`ancleto init`) y
-  descubrimiento técnico (`ancleto discovery`, pack con Repomix).
-- **Motor de memoria (v0.2.0)**: base local `.ancleto/memory.db` sobre `node:sqlite`
-  (zero-deps, Node >= 24). Tres tools para el LLM — `searchMemory` (BM25, FTS5),
-  `recordRule` y `recordDecision` — con supersesión atómica por `memory_key`; reglas
-  inyectadas proactivamente en `<ProjectMemoryRules>` y decisiones recuperadas
-  reactivamente.
-- **Documentación**: `docs/` — `ancleto-cli-framework.md` (guía del framework),
-  `guia-configuracion.md` (puesta a punto del entorno) y `skill-ancleto-upgrade.md`.
+</div>
 
-## Instalación
+---
 
-```bash
-ancleto install                          # global: disponible en todos tus proyectos
-ancleto install --project /ruta/repo     # por proyecto: .opencode/ + templates en la raiz
-ancleto install --no-mcp                 # igual, sin tocar la config MCP de opencode
-ancleto update                           # re-instala la ultima version
-```
+## 📖 Tabla de Contenidos
 
-El instalador configura por defecto los MCP locales **engram** (memoria persistente) y
-**caveman** (compresion de contexto) en `~/.config/opencode/opencode.json`, fusionandose
-con la config existente (no pisa nada). Si un binario no se encuentra en el sistema, ese
-MCP se omite con un warning.
+- [¿Qué es Ancleto?](#-qué-es-ancleto)
+- [¿Por qué fue creado?](#-por-qué-fue-creado)
+- [Características Principales](#-características-principales)
+- [Requisitos](#-requisitos)
+- [Instalación](#-instalación)
+- [Configuración y Tiers de Costo](#-configuración-y-tiers-de-costo)
+- [Uso Rápido](#-uso-rápido)
+- [Referencia de Comandos CLI](#-referencia-de-comandos-cli)
+- [Motor de Memoria Persistente](#-motor-de-memoria-persistente)
+- [Comandos del Ciclo SDD en tu IDE](#-comandos-del-ciclo-sdd-en-tu-ide)
+- [Azure DevOps (Opcional)](#-azure-devops-opcional)
 
-## Tiers de costo
+---
 
-En la primera configuración (`ancleto install`) se pregunta el nivel de gasto de los
-agents; también se elige con `--tier`:
+## 🚀 ¿Qué es Ancleto?
 
-```bash
-ancleto install --tier normal     # modelos opencode-go balanceados (default)
-ancleto install --tier minimo     # todo al modelo pagado mas economico viable
-ancleto install --tier gratis     # solo modelos gratuitos (ej. opencode/big-pickle)
-```
+**Ancleto** (cuyo alias de CLI es `aspec`) es un orquestador ligero diseñado para potenciar el desarrollo de software asistido por Inteligencia Artificial bajo el paradigma **SDD (Spec-Driven Development)**.
 
-El nivel elegido queda guardado (`.ancleto-tier`) y `ancleto update` lo re-aplica sin
-volver a preguntar. Al llegar al tope mensual de la suscripcion, opencode cae
-automaticamente a los modelos gratuitos.
+Funciona como un conjunto de herramientas y agentes que viven en tu entorno de desarrollo local (como OpenCode, Cursor, VS Code, Roo, etc.), permitiéndote automatizar la escritura de especificaciones, el descubrimiento topológico del código y la retención de memoria de las decisiones técnicas.
 
-## Requisitos
+Todo esto está envuelto en una CLI moderna, interactiva y construida bajo una filosofía estricta de **cero dependencias (Zero-Deps)**.
 
-- Node.js >= 24.0.0 (el motor de memoria v0.2.0 usa `node:sqlite`)
-- `openspec` CLI (`npm i -g @openspec/cli`) para el ciclo de changes
-- Repomix (usado por `ancleto discovery`, se resuelve via `npx` si no esta instalado)
+## 💡 ¿Por qué fue creado?
 
-## Uso rápido
+Al trabajar en repositorios complejos con asistentes de IA, surgen tres problemas críticos:
 
-```bash
-ancleto init                             # prepara .ancletorc en el repo actual
-ancleto init --with-azure                # lo mismo, con Azure habilitado
-ancleto discovery --check                # estado del technical seed (READY/STALE/PARTIAL/MISSING)
-ancleto discovery                        # empaca el repo con Repomix y guarda estado
-# en opencode: /opsx-new, /opsx-propose, /opsx-ff para iniciar un change
-```
+1. **La "Memoria de Pez" de los LLMs:** Los agentes olvidan las convenciones del proyecto o las decisiones arquitectónicas pasadas en cuanto se limpia la ventana de contexto.
+2. **El Costo Oculto (Token Budgeting):** Empaquetar todo un monorepo para darle contexto a la IA consume presupuestos de tokens masivos y encarece el uso de las APIs.
+3. **Falta de Estandarización:** Cada agente de IA actúa por su cuenta, sin seguir un ciclo de vida definido de especificación -> revisión -> implementación -> verificación.
 
-## Azure DevOps (opcional)
+**Ancleto** nace para resolver esto. Centraliza las reglas de negocio en un motor de memoria local (`node:sqlite`), empaqueta inteligentemente el contexto según el nivel de tu suscripción (Tiers) y orquesta 10 subagentes nativos para que el código que escriba la IA cumpla estrictamente con tus estándares, minimizando la fricción y los costos.
 
-Azure viene **desactivado por defecto**. Para activarlo en un proyecto:
+---
 
-```bash
-ancleto init --with-azure    # escribe .ancletorc con azure.enabled: true
-```
+## ✨ Características Principales
 
-Luego completar la seccion `Azure DevOps` de `PRODUCT.md` (Organization URL, Team Project)
-e instalar el CLI: `az extension add --name azure-devops`. Con `azure.enabled: false` (o sin
-`.ancletorc`), los flujos tratan cada request como sin Work Item y `ancleto-pr` usa GitHub.
+- 🤖 **Catálogo Multi-Agente (10 Agents):** Orquestador, Coder, Tester, Spec-Writer, Reviewer, Documenter, Technical-Discovery, Technical-Seed-Writer, Memory-Keeper y Context-Resolver.
+- 🧠 **Motor de Memoria Persistente (FTS5):** Base local SQLite (`.ancleto/memory.db`) que provee al LLM herramientas para registrar y recuperar reglas arquitectónicas y decisiones pasadas proactivamente.
+- 🗺️ **Discovery Engine:** Un escáner topológico rápido que genera mapas del repositorio (`.discovery-map.json`) y empaqueta el contexto vía Repomix con presupuestos de tokens dinámicos.
+- 💸 **Gestión de Tiers de Costo:** Control absoluto sobre qué modelos y cuánto contexto se envía (`normal`, `minimo`, `gratis`), protegiendo tus cuotas de API.
+- ⚡ **Agentic OpenSpec Engine:** Totalmente independiente, sin binarios externos. Las 11 skills del ciclo de vida (`new`, `propose`, `apply`, `verify`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `onboard`, `workflow`) se instalan e inyectan nativamente en tu IDE favorito, más skills auxiliares (`ancleto-commit`, `ancleto-pr`, `triage-clarifier`, entre otras).
+- 🎨 **Wizard Interactivo:** Inicialización por TTY con banner animado y menús navegables con flechas, sin requerir librerías pesadas (Zero-Deps).
 
-## Flujo de release
+---
 
-Publicación automática vía GitHub Actions (`publish.yml`):
+## 🛠 Requisitos
+
+Dado que Ancleto mantiene una política de cero dependencias externas, aprovecha las capacidades nativas más recientes de Node:
+
+- **Node.js >= 24.0.0** (requerido estrictamente para el módulo nativo `node:sqlite`).
+- **Repomix** (utilizado dinámicamente vía `npx` si no está instalado globalmente, para el empaquetado de contexto).
+
+---
+
+## 📦 Instalación
+
+Puedes instalar la herramienta a nivel global o por proyecto.
 
 ```bash
-# 1. Bump local (regla: todo commit de feature lleva su version bump)
-npm version patch --no-git-tag-version        # o: minor, segun el cambio
-git add package.json package-lock.json
-git commit -m "chore: bump version to X.Y.Z"
-git push origin development
+# Instalación global (disponible en todos tus proyectos)
+npm install -g @ancleto/spec
 
-# 2. Merge development -> main
-git checkout main
-git pull origin main
-git merge development
+# O alternativamente a través de la CLI de ancleto:
+ancleto install
 
-# 3. Tag anotado y push
-git tag -a vX.Y.Z -m "vX.Y.Z - <resumen>"
-git push origin main
-git push origin vX.Y.Z
+# Instalación circunscrita a un proyecto específico (inyecta templates y .opencode/)
+ancleto install --project /ruta/repo
 
-# 4. GitHub Release
-# En GitHub: Releases -> Draft a new release -> elegir el tag vX.Y.Z -> Publish release
+# Instalación sin modificar la configuración MCP de tu IDE
+ancleto install --no-mcp
+
+# Actualizar a la última versión manteniendo tus personalizaciones
+ancleto update
 ```
 
-Al publicar la Release, el workflow `publish.yml` se dispara (`on.release.types: [published]`):
-corre `node --test` en `ubuntu-latest` (Node 24, checkout@v5/setup-node@v5) y publica a npm con
-`NODE_AUTH_TOKEN` (secret `NPM_TOKEN` del repo).
+*(El instalador configura por defecto los MCP locales **engram** y **caveman**. Si un binario no se encuentra en tu sistema, se omitirá con un warning sin romper el flujo).*
 
-## Estado
+---
 
-- [x] Paquete y CLI de instalación
-- [x] Agents/skills/commands adaptados (sin referencias corporativas)
-- [x] Motor de descubrimiento (`ancleto discovery`, Repomix + `--check` por hash)
-- [x] Skills base: `triage-clarifier`, `openspec-recall`, `openspec-sync-specs`
-- [x] Motor de memoria core (v0.2.0): `.ancleto/memory.db`, 3 tools, supersesión atómica
+## ⚙️ Configuración y Tiers de Costo
+
+Al ejecutar la CLI por primera vez, un **Wizard interactivo (ASCII animado)** te guiará para configurar el Agente (IDE) y tu nivel de gasto. También puedes pasarlos por flags:
+
+```bash
+ancleto init --agent opencode --tier normal
+```
+
+**Tiers Disponibles:**
+
+* `normal`: Modelos balanceados sin restricciones agresivas de contexto (default).
+* `minimo`: Enfoque en el modelo pago más económico viable, con alta compresión de contexto y exclusión de tests/docs en el discovery.
+* `gratis`: Bloqueado a modelos gratuitos (ej. `opencode/big-pickle`), empaquetado ultra-agresivo y un límite estricto (budget) de tokens enviado al LLM.
+
+La configuración se preserva en `.ancletorc` (raíz del proyecto) y `.ancleto-tier` (junto a la configuración instalada).
+
+---
+
+## 💻 Uso Rápido
+
+El ciclo diario con Ancleto consiste en preparar el terreno técnico para tu Agente y luego usar los comandos del ciclo SDD dentro de tu IDE.
+
+### 1. Inicialización en un Repositorio
+
+```bash
+cd tu-proyecto
+ancleto init              # Crea .ancletorc, plantillas AGENTS.md y PRODUCT.md
+```
+
+### 2. Descubrimiento Técnico de Contexto
+
+```bash
+ancleto discovery --check # Verifica si el 'technical seed' requiere actualización (READY/STALE)
+ancleto discovery         # Genera .discovery-map.json y empaqueta el repo
+```
+
+### 3. Integración Diaria
+
+Utiliza los comandos barra (`/`) expuestos en el chat de tu IDE (ej. Cursor, OpenCode):
+
+* `/opsx-new` y `/opsx-propose`: Para planificar un nuevo feature.
+* `/opsx-verify` y `/opsx-apply`: Para validar reglas, chequear tests y aplicar el código.
+* `/opsx-archive`: Para consolidar el historial y registrar aprendizajes en la memoria de Ancleto.
+
+---
+
+## 📟 Referencia de Comandos CLI
+
+Todos los comandos de mantenimiento que puedes necesitar en el día a día:
+
+```bash
+ancleto init [--agent <nombre>] [--tier <nivel>] [--with-azure]
+                          # Configura el proyecto (interactivo en TTY)
+
+ancleto install [--project <dir>] [--tier <nivel>] [--agent <nombre>] [--no-mcp]
+                          # Instala agents, skills y templates
+
+ancleto update            # Re-instala la última versión sobre lo existente
+
+ancleto upgrade           # Re-aplica templates y skills respetando tus personalizaciones
+
+ancleto check             # Verifica la integridad de la instalación (0 faltantes, 0 huérfanos)
+
+ancleto doctor            # Diagnostica el entorno (Node, node:sqlite, opencode.json)
+
+ancleto memory context [--scope <project|feature|task>] [--out <archivo>]
+                          # Muestra el bloque de memoria activa del proyecto
+
+ancleto memory doctor [--rebuild]
+                          # Diagnostica la base de memoria (y reconstruye el índice con --rebuild)
+
+ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
+                          # Empaqueta el repo con Repomix según tu tier
+```
+
+---
+
+## 🧠 Motor de Memoria Persistente
+
+Ancleto **no** usa bases de datos vectoriales pesadas. Implementa una solución elegante en **SQLite nativo** con búsqueda full-text (FTS5) y BM25.
+
+El LLM tiene a su disposición 3 herramientas (tools):
+
+* `searchMemory`: Recupera contexto de decisiones previas.
+* `recordRule`: Guarda una regla arquitectónica estricta de manera jerárquica (Proyecto > Feature > Tarea).
+* `recordDecision`: Inmortaliza el "por qué" de un cambio en el código.
+
+El orquestador inyecta proactivamente los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` (contexto desde el día cero, incluso sin reglas previas) en el System Prompt de tu Agente para que **nunca repita los mismos errores**.
+
+---
+
+## 🔄 Comandos del Ciclo SDD en tu IDE
+
+Una vez instalado, tu IDE expone el ciclo de vida completo como comandos barra (`/`):
+
+| Comando | Para qué sirve |
+|---|---|
+| `/opsx-new` | Iniciar la especificación de un feature |
+| `/opsx-propose` | Proponer el diseño técnico |
+| `/opsx-ff` | Avanzar rápido con contexto recuperado |
+| `/opsx-apply` | Aplicar el código del change |
+| `/opsx-verify` | Verificar reglas, tests y memoria antes de cerrar |
+| `/opsx-sync` | Sincronizar specs con el estado del repo |
+| `/opsx-archive` | Archivar el change y registrar aprendizajes |
+| `/opsx-continue`, `/opsx-explore`, `/opsx-onboard` | Retomar, explorar y orientarse en el proyecto |
+
+---
+
+## 🔗 Azure DevOps (Opcional)
+
+Por defecto, los comandos asumen el uso de **GitHub** (`ancleto-pr`). Si tu equipo utiliza Azure DevOps:
+
+```bash
+ancleto init --with-azure
+```
+
+Esto escribe `azure.enabled: true` en tu `.ancletorc`. Solo deberás completar la sección de Azure en el archivo `PRODUCT.md` e instalar su extensión (`az extension add --name azure-devops`).

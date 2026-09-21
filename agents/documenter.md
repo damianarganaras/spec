@@ -1,7 +1,7 @@
 ---
 description: Finalizes and archives completed aspec changes in alignment with the aspec lifecycle
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode-go/deepseek-v4.1-flash
 temperature: 0.1
 color: '#10b981'
 tools:

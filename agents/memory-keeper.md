@@ -1,7 +1,7 @@
 ---
 description: Owns the repository memory (.ancleto/memory.db) — recalls prior lessons at intake and records rules and decisions at close, so a finding survives the session that produced it
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode-go/deepseek-v4.1-flash
 temperature: 0.1
 color: '#f59e0b'
 tools:

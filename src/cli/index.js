@@ -12,6 +12,7 @@ import { memoryDoctor } from '../core/memory/doctor.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, stopBanner } from './ui.js'
+import { tierModels, gratisModel, envGratisModel, isKnownGratisModel, MUSE_SPARK_MODEL, GRATIS_FALLBACK_MODEL } from '../core/tier-models.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -137,26 +138,26 @@ const TIERS = {
   normal: {
     orchestrator: 'opencode-go/qwen3.7-plus',
     coder: 'opencode-go/minimax-m3',
-    tester: 'opencode-go/deepseek-v4-flash',
+    tester: 'opencode-go/deepseek-v4.1-flash',
     'spec-writer': 'opencode-go/qwen3.7-plus',
     reviewer: 'opencode-go/qwen3.6-plus',
-    'technical-discovery': 'opencode-go/deepseek-v4-flash',
+    'technical-discovery': 'opencode-go/deepseek-v4.1-flash',
     'technical-seed-writer': 'opencode-go/minimax-m3',
-    'memory-keeper': 'opencode-go/deepseek-v4-flash',
-    'context-resolver': 'opencode-go/deepseek-v4-flash',
-    documenter: 'opencode-go/deepseek-v4-flash'
+    'memory-keeper': 'opencode-go/deepseek-v4.1-flash',
+    'context-resolver': 'opencode-go/deepseek-v4.1-flash',
+    documenter: 'opencode-go/deepseek-v4.1-flash'
   },
   minimo: {
-    orchestrator: 'opencode-go/deepseek-v4-flash',
-    coder: 'opencode-go/minimax-m2.7',
-    tester: 'opencode-go/deepseek-v4-flash',
-    'spec-writer': 'opencode-go/qwen3.6-plus',
-    reviewer: 'opencode-go/deepseek-v4-flash',
-    'technical-discovery': 'opencode-go/deepseek-v4-flash',
-    'technical-seed-writer': 'opencode-go/minimax-m2.7',
-    'memory-keeper': 'opencode-go/deepseek-v4-flash',
-    'context-resolver': 'opencode-go/deepseek-v4-flash',
-    documenter: 'opencode-go/deepseek-v4-flash'
+    orchestrator: 'opencode-go/deepseek-v4.1-flash',
+    coder: 'opencode-go/deepseek-v4.1-flash',
+    tester: 'opencode-go/deepseek-v4.1-flash',
+    'spec-writer': 'opencode-go/deepseek-v4.1-flash',
+    reviewer: 'opencode-go/deepseek-v4.1-flash',
+    'technical-discovery': 'opencode-go/deepseek-v4.1-flash',
+    'technical-seed-writer': 'opencode-go/deepseek-v4.1-flash',
+    'memory-keeper': 'opencode-go/deepseek-v4.1-flash',
+    'context-resolver': 'opencode-go/deepseek-v4.1-flash',
+    documenter: 'opencode-go/deepseek-v4.1-flash'
   },
   gratis: {
     orchestrator: 'opencode/big-pickle',
@@ -176,8 +177,8 @@ function tierStatePath(targetDir) {
   return join(targetDir, '.ancleto-tier')
 }
 
-async function applyTier(agentsDir, tier) {
-  const map = TIERS[tier]
+async function applyTier(agentsDir, tier, models = null) {
+  const map = models || TIERS[tier]
   for (const [name, model] of Object.entries(map)) {
     const p = join(agentsDir, name + '.md')
     if (!(await exists(p))) continue
@@ -389,9 +390,11 @@ async function install(args) {
 
   let agent = agentFlag || (existingRc?.agent && SUPPORTED_AGENTS.includes(existingRc.agent) ? existingRc.agent : null)
 
+  let bannerShown = false
   const isInteractive = Boolean(process.stdout.isTTY) && ((projectDir && !agent) || !tier)
   if (isInteractive) {
     await showBanner()
+    bannerShown = true
     if (projectDir && !agent) {
       agent = await selectOption('Agente/IDE', SUPPORTED_AGENTS, Math.max(0, SUPPORTED_AGENTS.indexOf(DEFAULT_AGENT)))
     }
@@ -405,12 +408,29 @@ async function install(args) {
   if (projectDir && !agent) agent = DEFAULT_AGENT
   if (!tier) tier = TIERS[storedTier] ? storedTier : 'normal'
 
+  let gratisModelChoice = null
+  if (tier === 'gratis') {
+    const env = envGratisModel()
+    const persisted = isKnownGratisModel(existingRc?.gratisModel) ? existingRc.gratisModel : null
+    if (env || persisted) {
+      gratisModelChoice = env || persisted
+    } else if (process.stdout.isTTY) {
+      if (!bannerShown) await showBanner()
+      const answer = await selectOption('Muse Spark 1.3 Free disponible en tu cuenta?', ['No (usar big-pickle)', 'Si (Muse Spark)'], 0)
+      if (!bannerShown) stopBanner()
+      gratisModelChoice = answer.startsWith('Si') ? MUSE_SPARK_MODEL : GRATIS_FALLBACK_MODEL
+    } else {
+      gratisModelChoice = gratisModel()
+    }
+  }
+
   if (projectDir) {
     await copyTemplates(projectDir)
     await scaffoldAspec(projectDir)
     const agentSkillsDir = await installAgentSkills(projectDir, agent)
     await writeManifest(projectDir, {
       agent,
+      ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {}),
       installedPaths: {
         templates: ['AGENTS.md', 'PRODUCT.md'],
         agents: ['.opencode/agents'],
@@ -422,7 +442,8 @@ async function install(args) {
     await copyAssets(target)
   }
 
-  await applyTier(join(target, 'agents'), tier)
+  const models = tierModels(tier, TIERS, gratisModelChoice)
+  await applyTier(join(target, 'agents'), tier, models)
   await writeFile(tierStatePath(target), tier + '\n')
 
   let azureMcp = false
@@ -440,6 +461,7 @@ async function install(args) {
     : `${target} (disponible en todos tus proyectos)`
   console.log(`ancleto: instalado en ${loc}`)
   console.log(`ancleto: tier de costo de agents: ${tier}`)
+  if (tier === 'gratis') console.log(`ancleto: modelo gratis: ${models.orchestrator}`)
   if (res.added.length) {
     console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
   }

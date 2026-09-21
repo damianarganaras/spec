@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
+import { writeDiscoveryMap } from '../core/discovery.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -649,6 +650,7 @@ async function packDiscovery(flags) {
 }
 
 async function discovery(flags) {
+  try { writeDiscoveryMap(process.cwd()) } catch {}
   if (flags.includes('--check')) {
     await checkDiscovery()
     return

@@ -52,17 +52,30 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   `agents/orchestrator.md` (lee `.ancleto/working-context.md` como datos **no confiables**); tests de XML
   y scopes exactos. Patrón "CLI materializa + agente lee" (preserva `bash: false`).
 
-## Estado actual (v0.4.2)
+## Estado actual (v0.5.0)
 
 - Working tree **limpio** en `main` y `development`.
-- **v0.3.x cerrada** y **v0.4.0 (CLI Integrity & Diagnostics) cerrada** (G3-G8 + manifiesto + tests).
-- Versión local en `development`: **v0.4.2** (último tag pusheado en `main`).
+- **v0.4.x cerrada** y **v0.5.0 (Agentic OpenSpec Engine & Upgrades) cerrada** (G3-G8 + manifiesto + tests).
+- Versión local en `development`: **v0.5.0** (último tag pusheado en `main`).
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD configurado (`publish.yml`): espera Release de GitHub para publicar a npm.
 
 ## En curso / próximo
+## v0.6.0 - Discovery Engine v2.0 & Token Budgeting
 
-- [ ] Confirmar publish de `v0.3.4` en npm (Release de GitHub pendiente — dispara `publish.yml`)
+Motor de descubrimiento topológico y gestión dinámica de contexto según el tier del modelo.
+
+- [ ] **D1 (Topología):** Actualizar `ancleto discovery` para que, además de validar hashes, genere un mapa estructural colapsado en `.discovery-map.json`. Debe ser zero-deps (fs nativo) e ignorar carpetas pesadas (`node_modules`, `.git`, `dist`).
+- [ ] **D2 (Token Budgeting):** Conectar la ejecución de empaquetado (Repomix) con el tier configurado en `.ancleto-tier` (`normal`, `minimo`, `gratis`), ajustando dinámicamente los límites de compresión y exclusión.
+- [ ] **D3 (Inyección de Contexto):** Modificar `buildWorkingContext()` para que inyecte un resumen ligero de `.discovery-map.json` en el system prompt, dándole al orquestador un mapa de calor del repositorio sin saturar la ventana de contexto.
+
+## v0.6.0 - Discovery Engine v2.0 & Token Budgeting
+
+Evolucionar el motor de discovery (MVP con Repomix + `--check` por hash) hacia un mapa estructural con presupuesto de tokens e inyección de contexto.
+
+- [ ] **D1**: Topología — `ancleto discovery` genera/actualiza `.discovery-map.json` (`last_updated`, `total_files`, `tree_summary` por directorio de primer nivel, `root_files`) ignorando `node_modules`, `.git`, `.ancleto`, `dist`, `build`, `coverage`. 🔄 en progreso
+- [ ] **D2**: Token Budgeting — presupuesto de tokens sobre el mapa/pack (límites, advertencias y truncamiento).
+- [ ] **D3**: Inyección de Contexto — exponer la topología al agente (working-context / seed).
 
 ## v0.5.0 - Agentic OpenSpec Engine & Upgrades
 

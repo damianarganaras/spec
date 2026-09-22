@@ -59,16 +59,20 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ Feature v0.6.9: Optimización fina de skills (2da pasada: `ancleto-upgrade` −20% en skill y references; 6 skills medianas −8%) + sección en el README con el costo medido de los MCP (~5.800 tokens por request con el perfil mínimo de engram + caveman) y cómo reducirlo.
 - ✅ Feature v0.6.10/v0.6.11: Publish automatizado e idempotente — el workflow se dispara al pushear el tag `v*` (o manualmente con `workflow_dispatch`), omite `npm publish` si la versión ya existe, verifica de forma paciente y **no bloqueante** que el tarball sea descargable (npm puede tardar en propagar) y crea el GitHub Release con la descripción del tag anotado. Diagnóstico que lo motivó: el README de npm no cambiaba porque npm muestra el README del tarball de la última versión **ingerida** (0.6.7), y tanto 0.6.9 como 0.6.10 quedaron en cola de propagación; además **v0.6.8 nunca tuvo Release** (un tag pusheado no publica por sí solo con el disparador anterior).
 - ✅ Feature v0.6.14: Memoria propia cableada al runtime — nuevo subcomando `ancleto mcp` (servidor MCP stdio, zero-deps) que expone `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`; `install` lo configura por defecto y **engram pasa a opcional** (`--with-engram`), bajando el overhead fijo de ~5.800 a ~1.300 tokens por request. Fix: el scope por defecto era `repo` (las reglas grabadas sin scope quedaban invisibles para `<ProjectMemoryRules>`, que usa `project`); ahora default `project` con `enum` en el schema.
+- ✅ Feature v0.6.15: Fix del helper `withDir` en los tests MCP (no esperaba callbacks `async` y borraba el cwd del servidor hijo antes del spawn: verde en Windows, rojo en Linux). Se reprodujo y validó con Node 24 en WSL. El CI lo atajó **antes** de publicar una versión rota.
 
-## Estado actual (v0.6.14)
+## Estado actual
 
-- Working tree **limpio** en `main` y `development`.
-- Épicas cerradas: **v0.4.x**, **v0.5.0** (S1+S2+S3), **v0.6.0** (D1+D2+D3) y los hitos posteriores:
-  hotfixes **v0.6.1/v0.6.2**, rebrand **v0.6.3-v0.6.5**, inglés+compresión **v0.6.6**, modelos **v0.6.7**,
-  README **v0.6.8/v0.6.9**, pipeline de publish **v0.6.10-v0.6.13** y memoria cableada al runtime **v0.6.14**.
-- Versión local en `development`: **v0.6.14** (último tag pusheado en `main`).
+> Los números de versión se evitan a propósito acá: la fuente de verdad es el último tag (`git tag --sort=-v:refname | head -1`) y npm (`npm view @ancleto/spec version`).
+
+- Working tree **limpio**; `main` y `development` apuntan al mismo commit.
+- Épicas cerradas: **v0.4.x** (CLI Integrity), **v0.5.0** (Agentic OpenSpec Engine: S1+S2+S3),
+  **v0.6.0** (Discovery Engine v2.0: D1+D2+D3) y los hitos posteriores: hotfixes **v0.6.1/v0.6.2**,
+  rebrand **v0.6.3-v0.6.5**, inglés+compresión **v0.6.6**, modelos y Muse Spark **v0.6.7**,
+  README **v0.6.8/v0.6.9**, pipeline de publish **v0.6.10-v0.6.13**, memoria cableada al runtime
+  **v0.6.14** y fix de tests **v0.6.15**.
 - Suite: **111 tests** `node --test` en verde (memory-engine 37 + cli 47 + discovery-topology 2 +
-  discovery-tier 9 + content-guards 7 + tier-models 6 + mcp 3).
+  discovery-tier 9 + content-guards 7 + tier-models 6 + mcp 3), verificado en Windows y Linux.
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD: `publish.yml` se dispara **al pushear el tag** `v*` (o a mano), publica a npm, verifica el
   tarball con un canary corto y crea el Release con el mensaje del tag.

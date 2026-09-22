@@ -73,8 +73,15 @@ jobs:
             echo "el Release ${TAG} ya existe — se omite"
             exit 0
           fi
-          NOTES=$(git for-each-ref "refs/tags/${TAG}" --format='%(contents)')
+          # checkout puede dejar el tag como ref lightweight: traemos el objeto tag real
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}" >/dev/null 2>&1 || true
+          TYPE=$(git cat-file -t "refs/tags/${TAG}" 2>/dev/null || echo none)
+          NOTES=""
+          if [ "$TYPE" = "tag" ]; then
+            NOTES=$(git for-each-ref "refs/tags/${TAG}" --format='%(contents)')
+          fi
           if [ -z "$NOTES" ]; then
+            echo "sin mensaje de tag anotado: se usan notas generadas"
             gh release create "$TAG" --title "$TAG" --generate-notes
           else
             gh release create "$TAG" --title "$TAG" --notes "$NOTES"

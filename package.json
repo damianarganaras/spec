@@ -1,6 +1,6 @@
 {
   "name": "@ancleto/spec",
-  "version": "0.6.15",
+  "version": "0.6.16",
   "description": "Orquestador SDD liviano con subagentes optimizados para costo/tokens",
   "type": "module",
   "bin": {

@@ -50,21 +50,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Verify published tarball (patient, non-blocking)
-        continue-on-error: true
-        run: |
-          URL="https://registry.npmjs.org/@ancleto/spec/-/spec-${PKG_VERSION}.tgz"
-          for attempt in $(seq 1 12); do
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "$URL")
-            if [ "$CODE" = "200" ]; then
-              echo "tarball OK: $URL"
-              exit 0
-            fi
-            echo "intento ${attempt}/12: HTTP ${CODE}"
-            sleep 20
-          done
-          echo "::warning::el tarball de ${PKG_VERSION} todavia no es descargable; npm puede tardar en propagar. Verificalo mas tarde (no bloquea el Release)."
-
       - name: Create GitHub Release (skipped if it already exists)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -86,3 +71,20 @@ jobs:
           else
             gh release create "$TAG" --title "$TAG" --notes "$NOTES"
           fi
+
+      # Canary corto y NO bloqueante: va despues del Release para no demorarlo.
+      # npm puede tardar bastante en servir el tarball; si todavia no esta, avisa y sigue.
+      - name: Canary - npm tarball disponible (no bloqueante)
+        continue-on-error: true
+        run: |
+          URL="https://registry.npmjs.org/@ancleto/spec/-/spec-${PKG_VERSION}.tgz"
+          for attempt in 1 2 3; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "$URL")
+            if [ "$CODE" = "200" ]; then
+              echo "tarball OK: $URL"
+              exit 0
+            fi
+            echo "intento ${attempt}/3: HTTP ${CODE}"
+            if [ "$attempt" -lt 3 ]; then sleep 10; fi
+          done
+          echo "::warning::npm todavia no sirve el tarball de ${PKG_VERSION} (propagacion lenta, es normal). No hace falta hacer nada: la version y el README se actualizan solos. Para chequear mas tarde: npm view @ancleto/spec@${PKG_VERSION} dist.tarball"

@@ -1,14 +1,21 @@
 name: Publish
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: actions/setup-node@v5
         with:
@@ -20,6 +27,34 @@ jobs:
 
       - run: node --test test/*.test.js
 
-      - run: npm publish --access public
+      - name: Publish to npm
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published tarball
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          URL="https://registry.npmjs.org/@ancleto/spec/-/spec-${VERSION}.tgz"
+          for attempt in 1 2 3 4 5 6; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "$URL")
+            if [ "$CODE" = "200" ]; then
+              echo "tarball OK: $URL"
+              exit 0
+            fi
+            echo "intento ${attempt}: HTTP ${CODE} — reintentando en 5s"
+            sleep 5
+          done
+          echo "ERROR: el tarball de ${VERSION} no es descargable desde npm" >&2
+          exit 1
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NOTES=$(git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)')
+          if [ -z "$NOTES" ]; then
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "$NOTES"
+          fi

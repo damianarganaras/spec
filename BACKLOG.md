@@ -57,6 +57,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ Feature v0.6.5: Rebrand total openspec → aspec — directorio de changes `aspec/` (antes `openspec/`) con migración automática en `ancleto upgrade`, sin referencias al CLI externo.
 - ✅ Feature v0.6.7: Tier `gratis` prefiere Muse Spark 1.3 Free (`opencode/muse-spark-1.3-contributor-free`): se pregunta en el wizard interactivo, se persiste en `.ancletorc` (`gratisModel`), con detección por `opencode models` en modo no interactivo y fallback a `opencode/big-pickle`; wizard interactivo también en `ancleto install` (banner + menús Agente/Tier).
 - ✅ Feature v0.6.9: Optimización fina de skills (2da pasada: `ancleto-upgrade` −20% en skill y references; 6 skills medianas −8%) + sección en el README con el costo medido de los MCP (~5.800 tokens por request con el perfil mínimo de engram + caveman) y cómo reducirlo.
+- ✅ Feature v0.6.10: Publish automatizado: el workflow se dispara al pushear el tag `v*`, verifica que el tarball sea descargable desde npm (evita publicaciones rotas) y crea el GitHub Release usando como descripción el mensaje del tag anotado. (Motivo: npm quedó con 0.6.9 sin tarball y 0.6.8 sin release.)
 
 ## Estado actual (v0.6.5)
 

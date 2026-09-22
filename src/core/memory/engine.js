@@ -106,7 +106,7 @@ export function createMemoryEngine(dbPath = defaultMemoryDbPath()) {
     const type = input.type
     const content = String(input.content || '')
     const justification = String(input.justification || '')
-    const scope = String(input.scope || 'repo')
+    const scope = String(input.scope || 'project')
     if (!memory_key) throw new Error('memory_key es obligatorio')
     if (type !== 'rule' && type !== 'decision') throw new Error(`type invalido: ${type}`)
     if (!content.trim()) throw new Error('content es obligatorio')

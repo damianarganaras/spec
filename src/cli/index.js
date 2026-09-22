@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
+import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, stopBanner } from './ui.js'
@@ -26,8 +27,9 @@ const HELP = `ancleto - orquestador SDD liviano con subagentes optimizados para 
 Uso:
   ancleto install [--project <dir>]   Instala agents/commands/skills en opencode
                                    (global por defecto, o en .opencode/ del proyecto)
-                                   Configura los MCP engram + caveman por defecto
+                                   Configura el MCP de memoria propia + caveman por defecto
   ancleto install --no-mcp           Igual que install pero sin tocar config MCP
+  ancleto install --with-engram      Ademas configura el MCP externo engram (memoria opcional)
   ancleto install --tier <nivel>     normal | minimo | gratis (wizard interactivo en TTY)
   ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (wizard si no esta guardado)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
@@ -42,6 +44,8 @@ Uso:
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
   ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FTS5, unicidad)
                                     y reconstruye el indice FTS5 con --rebuild
+  ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE
+                                        expone searchMemory, recordRule y recordDecision
   ancleto check                         Verifica integridad de archivos instalados vs manifiesto
   ancleto doctor                        Diagnostica el entorno (Node, node:sqlite, opencode.json)
   ancleto --help                      Esta ayuda
@@ -107,18 +111,27 @@ function resolveBin(name, fallbacks = []) {
   return null
 }
 
-function buildDefaultMcp() {
+function resolveSelfCommand() {
+  return [process.execPath, join(__dirname, 'index.js'), 'mcp']
+}
+
+function buildDefaultMcp({ withEngram = false } = {}) {
   const mcp = {}
 
-  const engramFallbacks = [
-    join(homedir(), 'go', 'bin', binName('engram')),
-    join(homedir(), '.local', 'bin', binName('engram'))
-  ]
-  const engramBin = resolveBin('engram', engramFallbacks)
-  if (engramBin) {
-    mcp.engram = { type: 'local', enabled: true, command: [engramBin, 'mcp', '--tools=agent'] }
-  } else {
-    console.warn('ancleto: no se encontro engram (memoria) en PATH; se omitio su MCP')
+  // Memoria propia del framework: SQLite (.ancleto/memory.db) expuesta como tools MCP
+  mcp['ancleto-memory'] = { type: 'local', enabled: true, command: resolveSelfCommand() }
+
+  if (withEngram) {
+    const engramFallbacks = [
+      join(homedir(), 'go', 'bin', binName('engram')),
+      join(homedir(), '.local', 'bin', binName('engram'))
+    ]
+    const engramBin = resolveBin('engram', engramFallbacks)
+    if (engramBin) {
+      mcp.engram = { type: 'local', enabled: true, command: [engramBin, 'mcp', '--tools=agent'] }
+    } else {
+      console.warn('ancleto: no se encontro engram en PATH; se omitio su MCP')
+    }
   }
 
   const cavemanFallbacks = [
@@ -368,7 +381,7 @@ async function install(args) {
   const pi = args.indexOf('--project')
   const project = pi >= 0 ? args[pi + 1] : null
   const withMcp = !args.includes('--no-mcp')
-  let mcpMap = withMcp ? buildDefaultMcp() : {}
+  let mcpMap = withMcp ? buildDefaultMcp({ withEngram: args.includes('--with-engram') }) : {}
 
   const agentFlag = scanAgentFlag(args)
   let tier = scanTierFlag(args)
@@ -914,6 +927,9 @@ switch (cmd) {
     break
   case 'doctor':
     await doctorCommand()
+    break
+  case 'mcp':
+    await serveMemoryMcp()
     break
   case '--version':
   case '-v':

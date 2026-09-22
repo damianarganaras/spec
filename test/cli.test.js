@@ -159,6 +159,33 @@ describe('CLI install', () => {
     })
   })
 
+  it('configura el MCP de memoria propia y deja engram como opcional', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8'))
+      assert.ok(cfg.mcp['ancleto-memory'], 'ancleto-memory presente')
+      assert.equal(cfg.mcp['ancleto-memory'].type, 'local')
+      assert.equal(cfg.mcp['ancleto-memory'].enabled, true)
+      assert.deepEqual(cfg.mcp['ancleto-memory'].command.slice(-1), ['mcp'])
+      assert.equal(cfg.mcp.engram, undefined, 'engram no se agrega sin --with-engram')
+    })
+  })
+
+  it('install --with-engram agrega el MCP externo', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--tier', 'gratis', '--with-engram'], dir)
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8'))
+      assert.ok(cfg.mcp['ancleto-memory'], 'ancleto-memory presente')
+      if (cfg.mcp.engram) {
+        assert.deepEqual(cfg.mcp.engram.command.slice(1), ['mcp', '--tools=agent'])
+      } else {
+        assert.match(r.stderr + r.stdout, /no se encontro engram/)
+      }
+    })
+  })
+
   it('install global respeta XDG_CONFIG_HOME', () => {
     withDir((dir) => {
       const xdg = join(dir, 'xdg')

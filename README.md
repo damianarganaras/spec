@@ -101,25 +101,23 @@ ancleto install --no-mcp
 ancleto update
 ```
 
-> El instalador configura por defecto los MCP locales **engram** y **caveman**. Si un binario no está en tu sistema, se omite con un warning sin interrumpir el flujo.
+> El instalador configura por defecto el MCP de **memoria propia** (`ancleto-memory`) y **caveman**. El MCP externo **engram** ya no se agrega por defecto: sumalo con `--with-engram` si además querés esa memoria. Si un binario no está en tu sistema, se omite con un warning sin interrumpir el flujo.
 
 ### Costo en tokens de los MCP
 
-Los MCP no son gratis en contexto: la lista de herramientas de cada servidor viaja en **cada** request, se usen o no. Medición local con el perfil mínimo de cada uno:
+Los MCP no son gratis en contexto: la lista de herramientas de cada servidor viaja en **cada** request, se usen o no. Medición local:
 
 | MCP | Herramientas | Tokens por request |
 |---|---|---|
-| engram (`--tools=agent`) | 18 | ~4.900 |
+| `ancleto-memory` (memoria propia) | 3 | ~500 |
 | caveman | 5 | ~830 |
-| **Total** | 23 | **~5.800** |
+| engram (solo con `--with-engram`) | 18 | ~4.900 |
 
-Cómo bajarlo si no los usás:
+Cómo bajarlo:
 
-- Instalá con `--no-mcp`.
-- O deshabilitá un servidor en tu `opencode.json`: `"mcp": { "engram": { "enabled": false } }`.
-- Engram permite elegir herramientas puntuales: `--tools=agent` ya es el perfil mínimo; las más pesadas de ese perfil son `mem_save` (~920), `mem_compare` (~590) y `mem_session_summary` (~490).
-
-> La memoria del framework (`.ancleto/memory.db`) es independiente de engram: funciona sin él. En los tiers `minimo` y `gratis` este overhead pesa proporcionalmente más que en `normal`.
+- Instalá con `--no-mcp` si no querés ninguno.
+- Evitá `--with-engram` salvo que uses esa memoria: es el que más pesa (9× la memoria propia).
+- Podés deshabilitar cualquier servidor en tu `opencode.json`: `"mcp": { "engram": { "enabled": false } }`.
 
 ---
 
@@ -192,6 +190,8 @@ ancleto memory context [--scope <project|feature|task>] [--out <archivo>]
 ancleto memory doctor [--rebuild]
                           # Diagnostica la base de memoria y reconstruye el índice FTS5
 
+ancleto mcp               # Servidor MCP de memoria propia (stdio): lo consume tu IDE
+
 ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
                           # Empaqueta el repo con Repomix según tu tier
 ```
@@ -200,17 +200,25 @@ ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-bud
 
 ## Motor de memoria persistente
 
-No hay bases de datos vectoriales: es **SQLite nativo** con búsqueda full-text (FTS5) y ranking BM25.
+No hay bases de datos vectoriales: es **SQLite nativo** con búsqueda full-text (FTS5) y ranking BM25, en `.ancleto/memory.db`.
 
-El LLM dispone de tres herramientas:
+Funciona en tres piezas que comparten el mismo archivo:
+
+| Pieza | Qué hace |
+|---|---|
+| **Almacenamiento** | Reglas y decisiones con supersesión atómica por `memory_key` (una sola activa por clave). |
+| **Tools del LLM** (`ancleto mcp`) | Servidor MCP local, sin dependencias, que expone tres herramientas a tu IDE. |
+| **CLI** | `ancleto memory context` materializa el bloque `<ProjectMemoryRules>` y `ancleto memory doctor` verifica integridad y reconstruye el índice FTS5. |
 
 | Herramienta | Función |
 |---|---|
-| `searchMemory` | Recupera contexto de decisiones previas. |
-| `recordRule` | Guarda una regla arquitectónica de forma jerárquica (proyecto → feature → tarea). |
-| `recordDecision` | Registra el *por qué* de un cambio en el código. |
+| `searchMemory` | Recupera contexto de decisiones y reglas previas (búsqueda léxica BM25). |
+| `recordRule` | Guarda una regla o restricción permanente. |
+| `recordDecision` | Registra el *por qué* de una decisión. |
 
-El orquestador inyecta los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` en el system prompt de tu agente desde el día cero —incluso sin reglas previas— para que no repita errores ya resueltos.
+Cada entrada tiene un `scope`: `project` (default, entra en `<ProjectMemoryRules>`), `feature` o `task`. El orquestador inyecta los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` en el system prompt de tu agente desde el día cero —incluso sin reglas previas— para que no repita errores ya resueltos.
+
+> El mismo motor se puede consultar a mano desde la terminal: `ancleto memory context --scope project`.
 
 ---
 

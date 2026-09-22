@@ -7,7 +7,7 @@ const MIGRATIONS = [
     id TEXT PRIMARY KEY,
     memory_key TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('rule', 'decision')),
-    scope TEXT NOT NULL DEFAULT 'repo',
+    scope TEXT NOT NULL DEFAULT 'project',
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'deleted')),
     content TEXT NOT NULL,
     justification TEXT NOT NULL DEFAULT '',

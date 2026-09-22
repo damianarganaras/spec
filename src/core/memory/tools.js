@@ -2,6 +2,12 @@ import { createMemoryEngine } from './engine.js'
 
 const KEY_DESCRIPTION = 'Clave conceptual estable (ej. "api-error-format"). Reusala para actualizar: la nueva version supersede automaticamente la anterior.'
 
+const SCOPE_SCHEMA = {
+  type: 'string',
+  enum: ['project', 'feature', 'task'],
+  description: 'Ambito: project (default, entra en <ProjectMemoryRules>), feature o task para algo mas acotado.'
+}
+
 const SEARCH_SCHEMA = {
   type: 'object',
   properties: {
@@ -19,7 +25,7 @@ const RECORD_RULE_SCHEMA = {
     memory_key: { type: 'string', description: KEY_DESCRIPTION },
     content: { type: 'string', description: 'Texto de la regla.' },
     justification: { type: 'string', description: 'Por que existe esta regla.' },
-    scope: { type: 'string', description: 'Ambito de aplicacion (default "repo").' }
+    scope: SCOPE_SCHEMA
   },
   required: ['memory_key', 'content'],
   additionalProperties: false
@@ -31,7 +37,7 @@ const RECORD_DECISION_SCHEMA = {
     memory_key: { type: 'string', description: KEY_DESCRIPTION },
     content: { type: 'string', description: 'La decision tomada.' },
     justification: { type: 'string', description: 'Justificacion de la decision.' },
-    scope: { type: 'string', description: 'Ambito de aplicacion (default "repo").' }
+    scope: SCOPE_SCHEMA
   },
   required: ['memory_key', 'content'],
   additionalProperties: false

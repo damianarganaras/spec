@@ -9,10 +9,10 @@ import { fileURLToPath } from 'node:url'
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const CLI = join(TEST_DIR, '..', 'src', 'cli', 'index.js')
 
-function withDir(fn) {
+async function withDir(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'ancleto-mcp-'))
   try {
-    return fn(dir)
+    return await fn(dir)
   } finally {
     try {
       rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })

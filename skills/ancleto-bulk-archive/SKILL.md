@@ -12,7 +12,7 @@ metadata:
 
 **Artifacts language**: write every artifact in English. Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. File and directory names stay English kebab-case.
 
-Archive multiple completed changes in one operation, resolving spec conflicts against the actual implementation. No external binaries: changes come from directories, status from files, archiving is a directory move.
+Archive many completed changes at once, resolving spec conflicts against the implementation. No external binaries.
 
 **Input**: None required (prompts for selection).
 
@@ -20,26 +20,24 @@ Archive multiple completed changes in one operation, resolving spec conflicts ag
 
 ### 1. Get active changes
 
-List `aspec/changes/` dirs (excluding `archive/`); if none, inform the user and stop.
+List `aspec/changes/` dirs (excluding `archive/`); if none, inform and stop.
 
 ### 2. Prompt for change selection
 
 Ask the user to choose (runtime question tool with multi-select when available):
 
-- Show each change (all share one artifact layout)
+- Show each change
 - Include an "All changes" option
-- Allow any number of selections (1+ works, 2+ typical)
+- Allow any number of selections (1+)
 
 **IMPORTANT**: Do NOT auto-select. Always let the user choose.
 
-### 3. Batch validation — status per selected change
+### 3. Batch validation
 
-Read files per change:
+Read per change:
 
 a. **Artifacts** — which of `proposal.md`, `design.md`, `tasks.md`, `specs/` exist under `aspec/changes/<name>/`.
-
 b. **Tasks** — count `- [ ]` vs `- [x]`; if no tasks file, note "No tasks".
-
 c. **Delta specs** — list capability specs under `specs/`, extracting `### Requirement: <name>` lines.
 
 ### 4. Detect spec conflicts
@@ -53,23 +51,16 @@ api  -> [change-c]            <- OK (only 1 change)
 
 Conflict = 2+ selected changes with delta specs for the same capability.
 
-### 5. Resolve conflicts by checking the codebase
+### 5. Resolve conflicts
 
 Per conflict:
 
 a. **Read each conflicting delta spec** — what it claims to add/modify.
-
-b. **Search the codebase** for implementation evidence (code, files, functions, tests).
-
-c. **Resolution**:
-
-- Only one implemented → sync that one's specs.
-- Both implemented → apply chronologically (older first, newer overwrites).
-- Neither → skip spec sync, warn the user.
-
+b. **Search the codebase** for implementation evidence.
+c. **Resolution**: only one implemented → sync that one; both → apply chronologically (older first, newer overwrites); neither → skip sync, warn the user.
 d. **Record the resolution** (which specs apply, order, rationale).
 
-### 6. Show consolidated status table
+### 6. Status table
 
 ```
 | Change     | Artifacts | Tasks | Specs   | Conflicts | Status |
@@ -77,29 +68,25 @@ d. **Record the resolution** (which specs apply, order, rationale).
 | add-oauth  | Done      | 4/4   | 1 delta | None      | Ready  |
 ```
 
-Show conflict resolutions and warnings for incomplete changes.
+Show resolutions and warnings for incomplete changes.
 
 ### 7. Confirm the batch
 
-Ask once (runtime question tool when available): "Archive N changes?" — "Archive all N changes" / "Archive only N ready changes (skip incomplete)" / "Cancel".
+Ask once (runtime question tool when available): "Archive N changes?" — "Archive all N changes" / "Archive only N ready changes (skip incomplete)" / "Cancel". Incomplete changes are archived with warnings.
 
-If any are incomplete, make clear they'll be archived with warnings.
+### 8. Execute archive
 
-### 8. Execute the archive per confirmed change
-
-Process in the determined order (respecting conflict resolution):
+Process in the determined order:
 
 a. **Sync specs** if delta specs exist and the resolution says so: apply the delta to `aspec/specs/<capability>/spec.md` (ADDED adds; MODIFIED updates preserving unmentioned scenarios; REMOVED deletes; RENAMED renames via `FROM:`/`TO:`). Track sync.
-
-b. **Archive**: create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), move the directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`. If the target exists, fail that change (record the error) but continue with others.
-
+b. **Archive**: create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), move to `aspec/changes/archive/YYYY-MM-DD-<name>/`. If the target exists, fail that change (record the error) but continue.
 c. **Track outcomes**: success, failed (with error), skipped.
 
-### 9. Record conflict resolutions and lessons
+### 9. Record lessons
 
 Per resolved conflict and durable lesson:
 
-- Resolutions/design decisions (which change won, why, codebase evidence) → `recordDecision`:
+- Resolutions/decisions (which change won, why, evidence) → `recordDecision`:
   ```
   recordDecision({ memory_key: "<kebab-topic>", content: "<resolution>", justification: "<codebase evidence>" })
   ```
@@ -123,11 +110,11 @@ Spec sync: N delta specs synced, M conflicts resolved
 
 ## Guardrails
 
-- Allow any number of changes (1+ fine, 2+ typical).
-- Always prompt for selection, never auto-select.
-- Detect conflicts early; resolve via the codebase, applying specs chronologically when both are implemented.
+- Any number of changes (1+ fine, 2+ typical).
+- Prompt for selection; never auto-select.
+- Detect conflicts early; resolve via the codebase (chronological when both implemented).
 - Skip spec sync only when implementation is missing (warn the user).
-- Show per-change status before confirming; one confirmation for the batch.
+- Show per-change status before one batch confirmation.
 - Track and report all outcomes (success/skip/fail).
-- Archive target uses the current date (`YYYY-MM-DD-<name>`); if it exists, fail that change but continue with others.
+- Archive target: current date (`YYYY-MM-DD-<name>`); if it exists, fail that change but continue others.
 - `recordRule`/`recordDecision` accept only `memory_key`, `content`, `justification`, `scope`. Never send `source`, `confidence`, `status` or `id` — the runtime manages those.

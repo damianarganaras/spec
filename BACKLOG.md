@@ -56,6 +56,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ Releases v0.6.3/v0.6.4: rebrand de skills/commands (`openspec-*`/`/opsx-*` → `ancleto-*`/`/cleto-*`) + fix MCP binaries portables.
 - ✅ Feature v0.6.5: Rebrand total openspec → aspec — directorio de changes `aspec/` (antes `openspec/`) con migración automática en `ancleto upgrade`, sin referencias al CLI externo.
 - ✅ Feature v0.6.7: Tier `gratis` prefiere Muse Spark 1.3 Free (`opencode/muse-spark-1.3-contributor-free`): se pregunta en el wizard interactivo, se persiste en `.ancletorc` (`gratisModel`), con detección por `opencode models` en modo no interactivo y fallback a `opencode/big-pickle`; wizard interactivo también en `ancleto install` (banner + menús Agente/Tier).
+- ✅ Feature v0.6.9: Optimización fina de skills (2da pasada: `ancleto-upgrade` −20% en skill y references; 6 skills medianas −8%) + sección en el README con el costo medido de los MCP (~5.800 tokens por request con el perfil mínimo de engram + caveman) y cómo reducirlo.
 
 ## Estado actual (v0.6.5)
 

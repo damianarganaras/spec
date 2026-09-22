@@ -103,6 +103,24 @@ ancleto update
 
 > El instalador configura por defecto los MCP locales **engram** y **caveman**. Si un binario no está en tu sistema, se omite con un warning sin interrumpir el flujo.
 
+### Costo en tokens de los MCP
+
+Los MCP no son gratis en contexto: la lista de herramientas de cada servidor viaja en **cada** request, se usen o no. Medición local con el perfil mínimo de cada uno:
+
+| MCP | Herramientas | Tokens por request |
+|---|---|---|
+| engram (`--tools=agent`) | 18 | ~4.900 |
+| caveman | 5 | ~830 |
+| **Total** | 23 | **~5.800** |
+
+Cómo bajarlo si no los usás:
+
+- Instalá con `--no-mcp`.
+- O deshabilitá un servidor en tu `opencode.json`: `"mcp": { "engram": { "enabled": false } }`.
+- Engram permite elegir herramientas puntuales: `--tools=agent` ya es el perfil mínimo; las más pesadas de ese perfil son `mem_save` (~920), `mem_compare` (~590) y `mem_session_summary` (~490).
+
+> La memoria del framework (`.ancleto/memory.db`) es independiente de engram: funciona sin él. En los tiers `minimo` y `gratis` este overhead pesa proporcionalmente más que en `normal`.
+
 ---
 
 ## Configuración y tiers de costo

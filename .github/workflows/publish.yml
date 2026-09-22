@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -23,38 +24,58 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
+      - name: Resolve tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${VERSION}"
+          fi
+          echo "PKG_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          echo "tag a publicar: ${TAG} (version ${VERSION})"
+
       - run: npm ci
 
       - run: node --test test/*.test.js
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Publish to npm (skipped if the version already exists)
+        run: |
+          if npm view "@ancleto/spec@${PKG_VERSION}" version >/dev/null 2>&1; then
+            echo "ya publicado: ${PKG_VERSION} — se omite npm publish"
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Verify published tarball
+      - name: Verify published tarball (patient, non-blocking)
+        continue-on-error: true
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          URL="https://registry.npmjs.org/@ancleto/spec/-/spec-${VERSION}.tgz"
-          for attempt in 1 2 3 4 5 6; do
+          URL="https://registry.npmjs.org/@ancleto/spec/-/spec-${PKG_VERSION}.tgz"
+          for attempt in $(seq 1 12); do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "$URL")
             if [ "$CODE" = "200" ]; then
               echo "tarball OK: $URL"
               exit 0
             fi
-            echo "intento ${attempt}: HTTP ${CODE} — reintentando en 5s"
-            sleep 5
+            echo "intento ${attempt}/12: HTTP ${CODE}"
+            sleep 20
           done
-          echo "ERROR: el tarball de ${VERSION} no es descargable desde npm" >&2
-          exit 1
+          echo "::warning::el tarball de ${PKG_VERSION} todavia no es descargable; npm puede tardar en propagar. Verificalo mas tarde (no bloquea el Release)."
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (skipped if it already exists)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          NOTES=$(git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)')
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "el Release ${TAG} ya existe — se omite"
+            exit 0
+          fi
+          NOTES=$(git for-each-ref "refs/tags/${TAG}" --format='%(contents)')
           if [ -z "$NOTES" ]; then
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+            gh release create "$TAG" --title "$TAG" --generate-notes
           else
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "$NOTES"
+            gh release create "$TAG" --title "$TAG" --notes "$NOTES"
           fi

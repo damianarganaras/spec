@@ -12,7 +12,7 @@ metadata:
 
 **Artifacts language**: write every artifact in English. Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. File and directory names stay English kebab-case.
 
-Archive a completed change: check completion, sync delta specs, move the directory. No external binaries: status comes from files, archiving is a directory move.
+Archive a completed change: check completion, sync delta specs, move the directory. No external binaries.
 
 **Input**: Optionally a change name (e.g., `add-auth`); if omitted, infer from context. If ambiguous, list `aspec/changes/` dirs (excluding `archive/`) and ask the user to select.
 
@@ -24,8 +24,8 @@ Archive a completed change: check completion, sync delta specs, move the directo
 
 Read `aspec/changes/<name>/tasks.md` (when present); count `- [ ]` (incomplete) vs `- [x]` (complete).
 
-- **Incomplete tasks**: show a warning with the count, prompt for confirmation, proceed only if confirmed.
-- **No tasks file**: proceed without a task-related warning.
+- **Incomplete tasks**: warn with the count, prompt for confirmation, proceed only if confirmed.
+- **No tasks file**: proceed without a task warning.
 
 ### 2. Assess delta spec sync state
 
@@ -44,10 +44,10 @@ Check for delta specs at `aspec/changes/<name>/specs/`; if none, proceed without
 
 ### 3. Perform the archive
 
-Create `aspec/changes/archive/` if absent. Target name uses the current date: `YYYY-MM-DD-<change-name>`.
+Create `aspec/changes/archive/` if absent. Target: `YYYY-MM-DD-<change-name>` (current date).
 
 - **Target exists**: fail, suggesting a rename or different date.
-- **Otherwise**: delete scaffold-only files (e.g., `aspec/changes/<name>/context.md` — never preserved), then move the whole change directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`.
+- **Otherwise**: delete scaffold-only files (e.g., `aspec/changes/<name>/context.md` — never preserved), then move the change directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`.
 
 ### 4. Capture lessons into persistent memory
 

@@ -7,73 +7,66 @@ description: Clarification-needed triage helper. Use when the request sits betwe
 
 ## Goal
 
-Reduce ambiguity during triage without replacing the orchestrator or starting a spec workflow.
+Reduce triage ambiguity; don't replace the orchestrator or start a spec workflow.
 
 ## Use only when
 
-- the request is not clearly `direct-implementation`, `direct-test-only`, or `spec-required`
-- it is unclear whether the change affects visible behavior, acceptance criteria, or product code
-- a single high-value clarification can materially improve classification confidence
+- the request isn't clearly `direct-implementation`, `direct-test-only`, or `spec-required`
+- unclear whether it affects visible behavior, acceptance criteria, or product code
+- one high-value clarification could materially improve confidence
 
 ## Do not use when
 
-- the request already fits one category clearly
-- the request is already clearly large enough for `spec-required`
-- the user explicitly asked to open the structured/spec path
+- the request already fits one category
+- already clearly large enough for `spec-required`
+- the user explicitly asked for the structured/spec path
 
 ## Inputs to preserve
 
 - the user's original wording
-- any repo-specific context already gathered by the orchestrator
-- any existing constraints, references, or acceptance criteria already present in the request
+- repo context already gathered by the orchestrator
+- existing constraints, references, or acceptance criteria in the request
 
 ## Repository-context boundary
 
 Triage classifies the request; it does not reconstruct the repository.
 
-If repository context is needed to classify safely, do not sweep source files, broaden a
-search, or inspect the implementation yourself. Ask the orchestrator to delegate one focused
-question to `@technical-discovery`. That subagent reads the repository's technical-discovery
-documents and returns the relevant, cited context for triage.
+If repository context is needed to classify safely, don't sweep source files or inspect the implementation. Ask the orchestrator to delegate one focused question to `@technical-discovery`, which reads the repository's technical-discovery documents and returns cited context.
 
-Never replace unavailable technical-discovery documents with a manual repository scan. Use the
-context already provided, ask the one permitted clarification question when it resolves the
-dominant ambiguity, or favor `spec-required` when material uncertainty remains.
+Never replace unavailable technical-discovery documents with a manual repository scan. Use provided context, ask the one permitted clarification question when it resolves the dominant ambiguity, or favor `spec-required` when material uncertainty remains.
 
 ## Internal evaluation
 
-Before asking anything, evaluate these questions silently:
+Evaluate silently before asking:
 
-1. Is the request strictly about tests, or is product code likely to change?
-2. Is the expected behavior already clear, or would implementation require assumptions?
-3. Could the change alter visible behavior, business rules, contracts, shared types, architecture, or integrations?
-4. Is the request small and local, or does it risk expanding once implementation starts?
-5. If the team guessed wrong and under-classified it, would that create rework or architecture risk?
-6. Is the change low-risk, or does its small size hide a behavior change or high-stakes logic (auth, payments, data integrity, security, shared contracts)? If small but high-risk, prefer `spec-required`.
+1. Strictly tests, or product code likely to change?
+2. Expected behavior clear, or implementation needs assumptions?
+3. Could it alter visible behavior, business rules, contracts, shared types, architecture, or integrations?
+4. Small and local, or at risk of expanding once implementation starts?
+5. If under-classified, would that create rework or architecture risk?
+6. Low-risk, or does small size hide a behavior change or high-stakes logic (auth, payments, data integrity, security, shared contracts)? If small but high-risk, prefer `spec-required`.
 
 ## Classification rules
 
-Classify without asking a question whenever possible:
+Classify without asking whenever possible:
 
-- choose `direct-test-only` when the request is clearly limited to tests for existing behavior
-- choose `direct-implementation` when the change is small, local, and the expected result is already clear
-- choose `spec-required` when the request affects visible behavior, business rules, shared contracts, architecture, or scope is already meaningfully broad
+- choose `direct-test-only` when the request is limited to tests for existing behavior
+- choose `direct-implementation` when the change is small, local, and its expected result is clear
+- choose `spec-required` when the request affects visible behavior, business rules, shared contracts, architecture, or is already broad
 
 ## Single-question policy
 
-Ask at most one question.
-
-That question must:
+Ask at most one question. It must:
 
 - target the highest-value ambiguity only
 - be short and concrete
-- help separate exactly one boundary, such as:
+- separate exactly one boundary, such as:
   - test-only vs product change
   - local bugfix vs behavior change
   - small direct change vs structured/spec change
 
 Do not ask multi-part questions.
-Do not ask for implementation details unless they are required to classify safely.
+Do not ask for implementation details unless required to classify safely.
 Do not start an interview.
 
 ## Fallback policy
@@ -84,14 +77,14 @@ When in doubt, prefer the safer classification over an under-scoped direct path.
 
 ## Expected outcome
 
-After applying this skill, the orchestrator should do exactly one of these:
+After applying this skill, the orchestrator should do exactly one of:
 
 1. classify directly as `direct-test-only`
 2. classify directly as `direct-implementation`
 3. classify directly as `spec-required`
 4. ask one concise clarification question
 
-If option 4 happened and the answer still does not remove the main ambiguity, classify as `spec-required`.
+If option 4 happened and the answer still leaves the main ambiguity, classify as `spec-required`.
 
 ## What not to do
 

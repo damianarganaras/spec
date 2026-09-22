@@ -1,9 +1,5 @@
 # Templates — aspec artifacts
 
-Exact templates for the four generated artifacts; fill each `{...}` placeholder.
-
----
-
 ## proposal.md
 
 ```markdown
@@ -11,37 +7,27 @@ Exact templates for the four generated artifacts; fill each `{...}` placeholder.
 
 ## Context
 
-{Installed version + migration reason (EOL, perf, compatibility, features); key changelog
-points if docs exist.}
+{Installed version, reason, key changelog points.}
 
 ## Analysis coverage
 
-- source files analyzed: {source_files_scanned}
-- test files analyzed: {test_files_scanned}
-- config files analyzed: {config_files_scanned}
-- files with matches: {files_with_matches}
-- files without matches: {files_without_matches}
+- analyzed: {source_files_scanned} source / {test_files_scanned} tests / {config_files_scanned} config
+- with/without matches: {files_with_matches}/{files_without_matches}
 
 ## Change scope
 
-### Affected dependencies — {N} packages in {M} package.json
+**Dependencies** — {N} in {M} package.json:
 
 | package.json | Package | Current version | Target version |
 | ------------ | ------- | --------------- | -------------- |
 
 {One row per DEPENDENCY_CHANGES[]}
 
-### Config files to modify — {N} files
+**Config files** — {N}: {change per file; if none: "None."}
 
-{Change per file; if none: "None."}
+**Source** — {N}: {files + breaking change; if none: "None."}
 
-### Source code with breaking changes — {N} files
-
-{Affected files + breaking change; if none: "None."}
-
-### Tests with breaking changes — {N} files
-
-{Affected test files; if none: "None."}
+**Tests** — {N}: {files; if none: "None."}
 
 ## Breaking-change assessment
 
@@ -77,28 +63,28 @@ Source: {DOCS_URL | "Web search: {query}" | "Internal knowledge base"}
 
 #### Scenario: dependencies installed
 
-- **WHEN** dependencies are installed for the affected package
+- **WHEN** dependencies are installed
 - **THEN** `{package_name}` resolves to `^{TARGET_VERSION}.0.0`
 
 ### Requirement: Configuration
 
 - REQ-C-{N}: The system SHALL {required change} in `{file}`
 
-{Per CONFIG_CHANGES[]; empty → "No configuration requirements."}
+{Per CONFIG_CHANGES[]; empty → "None."}
 
 ### Requirement: Source code
 
 - REQ-S-{N} [{break_id}]: The system SHALL {required code change}
   Evidence: `{file}:{line_number}` ({confidence})
 
-{Per BREAKING_CHANGES_IN_CODE[]; empty → "No source-code requirements."}
+{Per BREAKING_CHANGES_IN_CODE[]; empty → "None."}
 
 ### Requirement: Tests
 
 - REQ-T-{N} [{break_id}]: The system SHALL {required test change}
   Evidence: `{file}:{line_number}` ({confidence})
 
-{Per BREAKING_CHANGES_IN_TESTS[]; empty → "No test requirements."}
+{Per BREAKING_CHANGES_IN_TESTS[]; empty → "None."}
 
 ### Requirement: Verification
 
@@ -110,7 +96,7 @@ Source: {DOCS_URL | "Web search: {query}" | "Internal knowledge base"}
 
 ### Requirement: Analysis coverage
 
-- REQ-X-001: The analysis SHALL include every eligible source file (`.ts`, `.tsx`, `.js`), excluding `node_modules`, `dist` and generated artifacts
+- REQ-X-001: The analysis SHALL include every eligible source file (`.ts`, `.tsx`, `.js`) except `node_modules` and `dist`
 - REQ-X-002: The analysis SHALL include every eligible test file (`*.spec.*`, `*.test.*`)
 - REQ-X-003: The result SHALL report coverage metrics (`source_files_scanned`, `test_files_scanned`, `config_files_scanned`)
 ```
@@ -132,16 +118,13 @@ Source: {DOCS_URL | "Web search: {query}" | "Internal knowledge base"}
   ```bash
   npm install
   ```
-````
 
 ## Phase 2: Infrastructure and runtime
 
-{Only if IS_RUNTIME = true; one T-I task per file found}
+{IS_RUNTIME = true only; repeat per file}
 
 - [ ] **T-I-001** {Create | Update} `.nvmrc` with value `{TARGET_VERSION}`
-
-- [ ] **T-I-002** Update `nodeVersion` in `{CI_FILE}` from `{current}` to `{TARGET_VERSION}.x`
-
+- [ ] **T-I-002** Update `nodeVersion` in `{CI_FILE}`: `{current}` → `{TARGET_VERSION}.x`
 - [ ] **T-I-003** Update the base image in `{Dockerfile}`:
   ```dockerfile
   # Before
@@ -149,17 +132,14 @@ Source: {DOCS_URL | "Web search: {query}" | "Internal knowledge base"}
   # After
   FROM node:{TARGET_VERSION}-alpine
   ```
-  _(Match the existing variant: alpine, slim, bullseye, etc.)_
-
+  _(Match the existing variant: alpine, slim, bullseye.)_
 - [ ] **T-I-004** Update `Runtime` in `{appSettings.json}` to `NODEJS_{TARGET_VERSION}_X`
 
-{If IS_RUNTIME = false:}
-_(Not applicable to library migrations)_
+{IS_RUNTIME = false → _(Not applicable)_}
 
 ## Phase 3: Build and test configuration
 
-- [ ] **T-C-{N}** {Concrete change description}
-      File: `{file}`
+- [ ] **T-C-{N}** {Concrete change} — `{file}`
   ```
   // Before
   {current_value}
@@ -167,8 +147,7 @@ _(Not applicable to library migrations)_
   {target_value}
   ```
 
-{Per CONFIG_CHANGES[]; empty →}
-_(No configuration changes detected)_
+{Per CONFIG_CHANGES[]; empty → _(none detected)_}
 
 ## Phase 4: Breaking changes in source code
 
@@ -177,8 +156,7 @@ _(No configuration changes detected)_
       Affected files:
   - `{file}:{line_number}` ({confidence}) — `{snippet}`
 
-{Per BREAKING_CHANGES_IN_CODE[], one sub-bullet per file; empty →}
-_(No breaking changes detected in source code for this migration)_
+{Per BREAKING_CHANGES_IN_CODE[]; empty → _(none detected)_}
 
 ## Phase 5: Breaking changes in tests
 
@@ -187,46 +165,37 @@ _(No breaking changes detected in source code for this migration)_
       Affected files:
   - `{file}:{line_number}` ({confidence}) — `{snippet}`
 
-{Per BREAKING_CHANGES_IN_TESTS[], one sub-bullet per file; empty →}
-_(No breaking changes detected in tests for this migration)_
+{Per BREAKING_CHANGES_IN_TESTS[]; empty → _(none detected)_}
 
 ## Phase 6: Verification
 
-- [ ] **T-V-001** Verify TypeScript compilation:
+- [ ] **T-V-001** TypeScript compiles:
   ```bash
   npx tsc --noEmit
   # Nx monorepos: npx nx affected --target=typecheck
   ```
-
-- [ ] **T-V-002** Verify build:
+- [ ] **T-V-002** Build passes:
   ```bash
   npm run build
   # Nx monorepos: npx nx affected --target=build
   ```
-
-- [ ] **T-V-003** Run the linter:
+- [ ] **T-V-003** Lint passes:
   ```bash
   npm run lint
   # Nx monorepos: npx nx affected:lint
   ```
-
-- [ ] **T-V-004** Run the test suite:
+- [ ] **T-V-004** Tests pass:
   ```bash
   npm test
   # Nx monorepos: npx nx affected --target=test
   ```
-
-- [ ] **T-V-005** Run tests in CI mode:
-
+- [ ] **T-V-005** CI tests:
   ```bash
   npm run test:ci
   ```
+- [ ] **T-V-900** Coverage: confirm file counts; classify `UNSURE_MATCHES[]`.
 
-- [ ] **T-V-900** Validate scan coverage:
-  - confirm scanned file counts (source/tests/config)
-  - review `UNSURE_MATCHES[]` and classify each case
-
-{T-V-002..T-V-005 only when the matching script exists in SCRIPTS_AVAILABLE[]}
+{T-V-002..T-V-005 only when the script exists}
 
 ````
 
@@ -239,49 +208,41 @@ _(No breaking changes detected in tests for this migration)_
 
 ## Migration strategy
 
-{Phase order: dependencies first (surface compilation errors before touching code), then
-infrastructure, config, code. Main risk and mitigation.}
+{Phase order + main risk/mitigation.}
 
 ## Technical decisions
 
 ### Version range — `^{TARGET_VERSION}.0.0`
 
-Caret (`^`) instead of an exact pin receives patches and minors automatically while keeping
-major stability. `>=` is avoided so the next major is not accepted by accident.
+Caret keeps major stability while taking patches/minors; `>=` avoided to reject the next major.
 
 ### Configuration changes
 
-{Per CONFIG_CHANGE: technical reasoning. E.g. MIDDY7-001: "Jest needs transformIgnorePatterns
-because @middy v7 ships pure ESM and does not transpile node_modules; without it, tests fail
-with a SyntaxError on import."}
+{Per CONFIG_CHANGE: technical reasoning.}
 
 ### Breaking changes — impact analysis
 
-{Per breaking change: technical impact and why the fix is correct, not a workaround.}
-{If none: "No breaking changes were detected in this repository for this migration. Risk is low."}
+{Per breaking change: impact + why the fix is correct. If none: "None detected."}
 
 ### Ecosystem compatibility
 
-{Related dependencies that may be affected (e.g. Middy v7 third-party middlewares). If none:
-"No ecosystem dependencies with incompatibility risk were identified."}
+{Related dependencies at risk. If none: "None identified."}
 
 ### Analysis quality
 
-- Coverage: {source_files_scanned} source, {test_files_scanned} tests, {config_files_scanned} config
-- High-confidence matches: {N}
-- Medium-confidence matches: {N}
-- Low-confidence matches: {N}
-- Manual review strategy for low confidence: {criterion applied}
+- Coverage: {source_files_scanned}/{test_files_scanned}/{config_files_scanned}
+- Matches: {N} high / {N} medium / {N} low
+- Low-confidence review: {criterion}
 
 ## Change table
 
 | File | Field / Pattern | Before | After |
 |------|-----------------|--------|-------|
-{One row per change in DEPENDENCY_CHANGES[], CONFIG_CHANGES[], BREAKING_CHANGES_IN_CODE[], BREAKING_CHANGES_IN_TESTS[]}
+{Per change: DEPENDENCY_CHANGES[], CONFIG_CHANGES[], BREAKING_CHANGES_IN_CODE[], BREAKING_CHANGES_IN_TESTS[]}
 
 ## References
 
-- {DOCS_URL if available}
-- {Additional links found during the analysis}
-- Internal knowledge base consulted: {relevant break_ids from known-breaks.md}
+- {DOCS_URL}
+- {Additional links}
+- Knowledge base: {break_ids from known-breaks.md}
 ```

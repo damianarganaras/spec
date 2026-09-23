@@ -286,20 +286,68 @@ El orquestador del trabajo respondio las 15 preguntas. Lo mas valioso: **se auto
 
 ---
 
-## 9. Pendientes
+## 9. Cruce #4: puntos de dolor propios (builds, contexto, idioma, output, guardrails)
+
+Tercera consulta al orquestador, sobre **los dolores que ya medimos nosotros**. Su respuesta fue consistentemente honesta ("no verificado", "no comprobado"). Lo mas valioso: **casi todos los huecos que el reporta, nosotros ya los tenemos cerrados o especificados** — y aparecieron **3 dolores nuevos a revisar en nuestro repo**.
+
+### Comparacion por foco
+
+| Foco | El (entorno del trabajo) | Nosotros | Veredicto |
+|---|---|---|---|
+| **Builds/assets** | **No definido**. Coder sin bash; tester "candidato", CI no verificado | **Resuelto en #13**: el coder buildea y valida con bash acotado; el tester sigue haciendo la validacion formal | ✅ **Vamos adelante** |
+| **Recall vacio** | Solo "no relevant memories"; no explica el por que | Igual (gap reconocido) | ⚠️ Pendiente chico |
+| **Busqueda por parafrasis** | Engram (FTS5) no garantiza; mem0 puede dar 0 | Medido: mismo problema (#14) | ⚠️ Pendiente |
+| **Dedup de memorias** | **No hay politica** engram vs mem0; tension contractual | **Una sola memoria** (SQLite) + **supersesion atomica por `memory_key`** | ✅ **Mejor diseno** |
+| **working-context ausente** | No existe y el orquestador no avisa | **Arreglado en #10**: se materializa en `init`/`install`/`upgrade` | ✅ **Vamos adelante** |
+| **Quien crea AGENTS/PRODUCT** | No comprobado; solo evidencia de bloque `LOCKED` reinstalado | **Arreglado en #15**: `init` los crea **sin pisar** lo existente (fusiona `LOCKED`) | ✅ **Vamos adelante** |
+| **AGENTS propio existente** | No comprobado si mergea o pisa | **Respetado y fusionado** (`mergeLocked` + preserve) | ✅ **Mejor** |
+| **Idioma** | Sin politica global; mezcla (AGENTS en ingles, discovery en espanol) | Politica explicita: **artefactos en ingles con keywords literales**, memoria/seed/respuestas en espanol | ✅ **Mejor** |
+| **Keywords de specs** | No verificado; "la inconsistencia es plausible" | Medida y cubierta por guard tests (#21 pendiente el chequeo al cerrar) | ⚠️ Parcial |
+| **Limite de output** | **No hay limite global**; riesgo real de inflar contexto | **Tampoco** (los contratos piden "short structured summary" pero sin tope) | 🔴 **Dolor compartido** |
+| **Filtrado de output de subagente** | Llega entero al orquestador, sin filtrado | Igual: el resultado vuelve entero | 🔴 **Dolor compartido** |
+| **Contar tokens** | Sin telemetria | Sin telemetria | 🔴 **Idea nueva** |
+| **Skills: metadata vs cuerpo** | **29 skills**; metadata breve siempre, cuerpo on-demand | 18 skills; mismo modelo (metadata ~1.000 tok/req, cuerpo on-demand) | ✅ Similar |
+| **Duplicacion skills/comandos** | Solapamiento `ln-*` vs `openspec-*` sin saber si son wrappers | **Resuelto**: 12 comandos son wrappers finos de las skills (fuente unica) | ✅ **Mejor** |
+| **Guard tests de skills** | Sin guard tests automaticos | **7 guard tests** (idioma, refs, wrappers, permisos) | ✅ **Mejor** |
+| **Resistencia a checkpoints** | Fuerte contractual + permisos; sin prueba adversarial | Igual; **sin prueba adversarial** | ⚠️ Compartido |
+| **Conflictos de memoria** | Engram tiene `judgment_required`/relations; mem0 puede duplicar | Supersesion por key (mas simple, sin relaciones) | ✅/⚠️ distinto |
+| **Reintentos** | Especificado: reportar y **detenerse**, sin retry automatico | Igual (`MUST REPORT subagent failures and wait`) | ✅ Alineado |
+| **Fuente de verdad en git** | No verificado | Coffice la tenia **gitignored** (`/aspec`) | ⚠️ Decision del proyecto |
+
+### 3 dolores nuevos detectados (a evaluar en nuestro repo)
+
+| # | Dolor | Evidencia |
+|---|---|---|
+| **D1** | **No hay tope de output de subagentes.** Los contratos piden *"short structured summary"* pero sin limite numerico. Un `@tester` con Validation Ledger largo, o un `@reviewer` con muchos findings, inflan el contexto del orquestador en cada hop. | `agents/orchestrator.md` usa "short structured" sin cifra; el propio orquestador admite "riesgo real de inflar contexto" |
+| **D2** | **El output de un subagente llega entero** al orquestador, sin filtrado. No hay paso intermedio que lo resuma/recorte. | Coincide con lo que el orquestador del trabajo reporta |
+| **D3** | **Sin telemetria de tokens.** No podemos saber cuanto contexto consume una sesion, ni comparar antes/despues de optimizar. | Ambos entornos carecen de esto |
+
+> D1 y D2 son la contraparte de la optimizacion que ya hicimos en skills/commands (los outputs vuelven completos, aunque las instrucciones esten comprimidas). D3 es instrumentacion.
+
+### Otras observaciones utiles
+
+- **Su stack de memoria tiene 3 sistemas** (engram, mem0, OpenSpec) y **sin politica de dedup** — nosotros tenemos **uno** con supersesion. Es una ventaja concreta de nuestro diseno.
+- **Tiene 29 skills** con solapamiento `ln-*`/`openspec-*` sin saber si son wrappers. Nosotros 18, con los comandos ya reducidos a wrappers y guard tests que lo verifican.
+- **Su AGENTS.md se auto-reinstala como bloque LOCKED** y no hay evidencia de preservacion de secciones propias; el nuestro **fusiona y preserva** explicitamente.
+
+---
+
+## 10. Pendientes
 
 - [x] **Recibidas las respuestas del agente** con evidencia cruda (19/19). Hallazgo #2 **descartado** (las tools funcionaban); aparecieron **3 bugs nuevos** (B1/B2/B3) y **5 gaps nuevos** (G8–G12).
 - [x] **Cruce #2** con la matriz real de permisos (§7): confirmado que **`@coder` sin shell** es el problema central (#13), y que **Repomix no consume contexto** por defecto.
 - [x] **Cruce #3** (§8): el entorno del trabajo tiene **los mismos dos problemas** (coder sin bash, working-context ausente) — eran del diseno compartido, no bugs nuestros. **Ya resueltos con #13 y #10.**
+- [x] **Cruce #4** (§9): relevados los dolores propios. Casi todos los huecos que el reporta los tenemos cerrados; aparecieron **3 dolores nuevos** (D1 tope de output, D2 filtrado entre subagentes, D3 telemetria de tokens).
 - [x] Issues abiertos en el Kanban (epica #9 + 12 sub-issues). **Cerrados:** #10, #11, #12, #13, #15, #19, #20.
-- [ ] Pendiente decidir **F9** (semantica de `searchMemory`) cuando se retome #14. El cruce #3 confirma que el problema es compartido: ni engram (FTS5) ni mem0 garantizan recall por parafrasis.
-- [ ] Mejora candidata (nueva, del cruce #3): cuando el Recall vuelve vacio, `@memory-keeper`/orquestador **no explican el por que**. Podria reportar "sin coincidencias lexicas — proba terminos exactos" en vez de solo "no relevant memories".
+- [ ] Pendiente decidir **F9** (semantica de `searchMemory`) cuando se retome #14. El cruce #3/#4 confirma que el problema es compartido: ni engram (FTS5) ni mem0 garantizan recall por parafrasis.
+- [ ] Mejora candidata: cuando el Recall vuelve vacio, explicar el por que ("sin coincidencias lexicas — proba terminos exactos") en vez de solo "no relevant memories".
+- [ ] **Evaluar los 3 dolores nuevos** (D1/D2/D3): tope de output de subagentes, filtrado del retorno hacia el orquestador, y telemetria de tokens. Candidatos a issue si el usuario los prioriza.
 - [ ] Recordar: el proyecto de prueba tiene `/aspec` en su `.gitignore`, un `openspec/` legacy, y tareas de verificacion en dispositivo real pendientes (6/7/8/11 del change PWA).
 - [ ] Recordar: el stack del trabajo incluye **mem0 (litellm)** ademas de engram — tercer sistema de memoria ajeno al nuestro. No es parte del framework.
 
 ---
 
-## 10. Anexo: evidencia cruda del agente (para no perderla)
+## 11. Anexo: evidencia cruda del agente (para no perderla)
 
 **Tools cargadas:** `searchMemory`/`recordRule`/`recordDecision` (ancleto-memory) + `mem_*` (engram) + `caveman_*`. Todas presentes.
 

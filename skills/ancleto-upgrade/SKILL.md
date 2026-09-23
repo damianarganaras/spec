@@ -19,7 +19,7 @@ metadata:
 
 # ancleto-upgrade
 
-**Artifacts language**: write every artifact in English. Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. File and directory names stay English kebab-case.
+**Artifacts language**: write artifact content in the user's conversation language (or the project's configured `language` in `.ancletorc`). Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) and file/directory names are literal and MUST NOT be translated.
 
 Generate an aspec change migrating any library/runtime to a new major version; never edit code.
 

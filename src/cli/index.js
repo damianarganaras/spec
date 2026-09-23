@@ -32,14 +32,15 @@ Uso:
   ancleto install --no-mcp           Igual que install pero sin tocar config MCP
   ancleto install --with-engram      Ademas configura el MCP externo engram (memoria opcional)
   ancleto install --tier <nivel>     normal | minimo | gratis (wizard interactivo en TTY)
+  ancleto install --lang <codigo>    auto | es | en | pt (idioma de los artifacts; auto = idioma de la conversacion)
   ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (wizard si no esta guardado)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
                                    Parado en un proyecto con .ancletorc opera sobre ese proyecto;
                                    usa --global para forzar el alcance global
   ancleto upgrade [--agent <nombre>]  Re-aplica templates (LOCKED) y skills sobre el proyecto actual
-  ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>]
-                                    Crea .ancletorc en el repositorio actual
-                                    (interactivo en TTY: banner + menu; Azure desactivado por defecto)
+  ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>] [--lang <codigo>]
+                                     Crea .ancletorc en el repositorio actual
+                                     (interactivo en TTY: banner + menu; Azure desactivado por defecto)
   ancleto discovery --check           Estado del seed (READY/STALE/PARTIAL/MISSING)
   ancleto discovery [--compress] [--include G] [--ignore G] [--token-budget N]
                                    Empaca el repo con Repomix y guarda estado
@@ -622,6 +623,22 @@ function scanTierFlag(args) {
   return t
 }
 
+const SUPPORTED_LANGS = ['auto', 'es', 'en', 'pt']
+
+function scanLangFlag(args) {
+  const l = flagValue(args, '--lang')
+  if (!l) return null
+  if (!SUPPORTED_LANGS.includes(l)) {
+    console.error(`ancleto: idioma invalido: ${l} (${SUPPORTED_LANGS.join('|')})`)
+    process.exit(1)
+  }
+  return l
+}
+
+function langLabel(code) {
+  return { auto: 'automatico (idioma de la conversacion)', es: 'espanol', en: 'ingles', pt: 'portugues' }[code] || code
+}
+
 async function resolveAgent(args, existing, allowAsk = Boolean(process.stdin.isTTY)) {
   const flag = scanAgentFlag(args)
   if (flag) return flag
@@ -820,9 +837,10 @@ async function install(args) {
     : null
 
   let agent = agentFlag || (existingRc?.agent && SUPPORTED_AGENTS.includes(existingRc.agent) ? existingRc.agent : null)
+  let language = scanLangFlag(args) || (existingRc?.language && SUPPORTED_LANGS.includes(existingRc.language) ? existingRc.language : null)
 
   let bannerShown = false
-  const isInteractive = Boolean(process.stdout.isTTY) && ((projectDir && !agent) || !tier)
+  const isInteractive = Boolean(process.stdout.isTTY) && ((projectDir && !agent) || !tier || !language)
   if (isInteractive) {
     await showBanner()
     bannerShown = true
@@ -833,8 +851,13 @@ async function install(args) {
       const current = TIERS[storedTier] ? storedTier : ''
       tier = await selectOption('Tier de costo', Object.keys(TIERS), Math.max(0, Object.keys(TIERS).indexOf(current)))
     }
+    if (!language) {
+      const picked = await selectOption('Idioma de los artifacts', SUPPORTED_LANGS.map(langLabel), 0)
+      language = SUPPORTED_LANGS[SUPPORTED_LANGS.map(langLabel).indexOf(picked)] || 'auto'
+    }
     stopBanner()
   }
+  if (!language) language = 'auto'
 
   if (projectDir && !agent) agent = DEFAULT_AGENT
   if (!tier) tier = TIERS[storedTier] ? storedTier : 'normal'
@@ -862,6 +885,7 @@ async function install(args) {
     const agentSkillsDir = await installAgentSkills(projectDir, agent)
     await writeManifest(projectDir, {
       agent,
+      language,
       ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {}),
       installedPaths: {
         templates: ['AGENTS.md', 'PRODUCT.md'],
@@ -942,13 +966,15 @@ async function initProject(args) {
   const withAzure = args.includes('--with-azure')
   const agentFlag = scanAgentFlag(args)
   const tierFlag = scanTierFlag(args)
+  const langFlag = scanLangFlag(args)
   const existing = await readAncletorc(projectDir)
   const azure = existing?.azure ?? { enabled: false }
   const discovery = existing?.discovery ?? { outputDir: 'docs/technical-discovery', exclude: [] }
   const tierFile = join(projectDir, '.opencode', '.ancleto-tier')
 
-  let agent, tier
-  const isInteractive = Boolean(process.stdout.isTTY) && (!agentFlag || !tierFlag)
+  let agent, tier, language
+  language = langFlag || (existing?.language && SUPPORTED_LANGS.includes(existing.language) ? existing.language : null)
+  const isInteractive = Boolean(process.stdout.isTTY) && (!agentFlag || !tierFlag || !language)
   if (isInteractive) {
     await showBanner()
     const agentIdx = Math.max(0, SUPPORTED_AGENTS.indexOf(existing?.agent))
@@ -956,6 +982,10 @@ async function initProject(args) {
     const tierIdx = Math.max(0, Object.keys(TIERS).indexOf(TIERS[storedTier] ? storedTier : ''))
     agent = agentFlag || await selectOption('Agente/IDE', SUPPORTED_AGENTS, agentIdx)
     tier = tierFlag || await selectOption('Tier de costo', Object.keys(TIERS), tierIdx)
+    if (!language) {
+      const picked = await selectOption('Idioma de los artifacts', SUPPORTED_LANGS.map(langLabel), 0)
+      language = SUPPORTED_LANGS[SUPPORTED_LANGS.map(langLabel).indexOf(picked)] || 'auto'
+    }
     if (withAzure) {
       azure.enabled = true
     } else {
@@ -965,6 +995,7 @@ async function initProject(args) {
   } else {
     agent = await resolveAgent(args, existing?.agent, false)
     tier = tierFlag
+    if (!language) language = 'auto'
     if (withAzure) azure.enabled = true
   }
 
@@ -973,13 +1004,13 @@ async function initProject(args) {
     await writeFile(tierFile, tier + '\n')
   }
 
-  const manifest = await writeManifest(projectDir, { azure, discovery, agent })
+  const manifest = await writeManifest(projectDir, { azure, discovery, agent, language })
   await copyTemplates(projectDir)
   await scaffoldAspec(projectDir)
   await refreshWorkingContext(projectDir)
   await registerProject(projectDir, { agent, tier: tier || null })
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
-  console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''}`)
+  console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''} (Idioma: ${language})`)
 }
 
 const DEFAULT_IGNORES = ['node_modules', '.git', 'dist']

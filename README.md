@@ -178,7 +178,7 @@ El registro es tuyo y local: no viaja con el repo ni se comparte. `ANCLETO_PROJE
 En la primera ejecución, un **wizard interactivo** te guía por los pasos de configuración (agente/IDE y nivel de gasto). También podés pasarlos por flags:
 
 ```bash
-ancleto init --agent opencode --tier normal
+ancleto init --agent opencode --tier normal --lang es
 ```
 
 | Tier | Qué hace |
@@ -188,6 +188,17 @@ ancleto init --agent opencode --tier normal
 | `gratis` | Modelos gratuitos, empaquetado agresivo y límite estricto de tokens. Prefiere **Muse Spark 1.3 Free** si tu cuenta lo tiene habilitado; si no, usa `opencode/big-pickle`. |
 
 La configuración se preserva en `.ancletorc` (raíz del proyecto) y `.ancleto-tier` (junto a la configuración instalada).
+
+### Idioma de los artifacts
+
+El contenido de `proposal.md`, `design.md`, `tasks.md` y `specs/` se escribe en el idioma de tu conversación (`auto`, el default) o en el código que fijes con `--lang`:
+
+```bash
+ancleto init --lang auto   # detecta el idioma de tus primeros mensajes y lo guarda
+ancleto init --lang es     # fija español para ese proyecto
+```
+
+Con `auto`, el orquestador detecta el idioma en tus primeros hasta 3 mensajes y lo persiste en `.ancletorc` → `language`. Podés volver a `auto` o fijar otro código cuando quieras (`auto | es | en | pt`). Lo que **nunca** se traduce: los keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`) y los nombres de archivos y directorios.
 
 ---
 
@@ -226,10 +237,10 @@ ancleto discovery         # Genera .discovery-map.json y empaqueta el repo
 ## Referencia de comandos CLI
 
 ```bash
-ancleto init [--agent <nombre>] [--tier <nivel>] [--with-azure]
+ancleto init [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--with-azure]
                           # Configura el proyecto (interactivo en TTY)
 
-ancleto install [--project <dir>] [--tier <nivel>] [--agent <nombre>] [--no-mcp]
+ancleto install [--project <dir>] [--tier <nivel>] [--agent <nombre>] [--lang <codigo>] [--no-mcp]
                           # Instala agentes, skills y templates
 
 ancleto update            # Re-instala la última versión sobre lo existente

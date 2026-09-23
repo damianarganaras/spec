@@ -19,9 +19,9 @@ Read `AGENTS.md` at the repo root for project-specific conventions, tech stack, 
 
 ## Language Requirement
 
-- All artifact content MUST be written in English
-- Keywords are literal and MUST NOT be translated: `Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED Requirements`, `MODIFIED Requirements`, `REMOVED Requirements`, `RENAMED Requirements`
-- File names and directory names MUST remain in English, following aspec conventions
+- Write artifact content in the user's conversation language (or the project's configured `language` in `.ancletorc`)
+- Keywords are literal and MUST NOT be translated: `Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`, `ADDED Requirements`, `MODIFIED Requirements`, `REMOVED Requirements`, `RENAMED Requirements`
+- File names and directory names are literal and MUST NOT be translated: English kebab-case, following aspec conventions
 
 ## Primary Responsibility
 

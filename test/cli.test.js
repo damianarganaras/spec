@@ -1288,3 +1288,41 @@ describe('CLI update scoped por cwd (regresion)', () => {
     })
   })
 })
+
+describe('CLI idioma de artifacts (--lang)', () => {
+  it('--lang invalido falla claro', () => {
+    withDir((dir) => {
+      const r = run(['install', '--lang', 'de'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /idioma invalido/)
+    })
+  })
+
+  it('init --lang es persiste language en .ancletorc', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'opencode', '--lang', 'es'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).language, 'es')
+      assert.match(r.stdout, /Idioma: es/)
+    })
+  })
+
+  it('init sin --lang ni TTY usa auto', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'opencode'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).language, 'auto')
+    })
+  })
+
+  it('install --project --lang respeta el codigo y no pregunta si ya existe', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'proj')
+      mkdirSync(proj, { recursive: true })
+      run(['install', '--project', proj, '--no-mcp', '--lang', 'pt'], dir)
+      assert.equal(readRc(proj).language, 'pt')
+      run(['install', '--project', proj, '--no-mcp'], dir)
+      assert.equal(readRc(proj).language, 'pt')
+    })
+  })
+})

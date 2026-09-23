@@ -124,7 +124,17 @@ Azure DevOps is optional and **disabled by default**. Before any Work Item intak
 
 ### Resolved Context Envelope
 
-Keep this envelope for the entire session. Do not reconstruct it from memory or reduce it to a prose summary. When a Work Item was resolved, it contains its id, title, type, project, full normalized description, and full acceptance criteria. Add the original user request, enumerated requirements, explicit restrictions, and later user decisions or exclusions.
+Keep this envelope for the entire session. Do not reconstruct it from memory or reduce it to a prose summary. When a Work Item was resolved, it contains its id, title, type, project, full normalized description, and full acceptance criteria. Add the original user request, enumerated requirements, explicit restrictions, and later user decisions or exclusions. Carry the resolved artifacts language (`language`) in the envelope as well.
+
+### Artifacts Language
+
+Resolve the working language for artifact content once per session:
+
+- Read `language` from `.ancletorc` at the repo root.
+- If it is `auto`, detect the language from the user's first up to 3 messages in this session. If the user never deviates, that language governs.
+- Persist it: the first write-capable delegation in the session (`@spec-writer` when spec generation runs, otherwise `@coder`) MUST update `.ancletorc` → `language` with the resolved code, but only when it is currently `auto`. This is silent bookkeeping — never ask the user for it. An explicit configured code is never overwritten.
+- Pass the resolved `language` in the Resolved Context Envelope to every subagent that writes artifacts.
+- Artifact content uses the resolved language; keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) and file/directory names stay literal English.
 
 Pass the relevant envelope verbatim when delegating: `@coder` receives the implementation scope; `@tester` receives it plus the coder's modified files and risks; `@reviewer` receives it plus task-owned files and the Validation Ledger. Do not omit numbered requirements, paths, commands, acceptance criteria, or explicit exclusions. Only `@context-resolver` may fetch a Work Item. If a subagent says it lacks context, supply the envelope or stop; never tell it to query Azure DevOps.
 

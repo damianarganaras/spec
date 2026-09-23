@@ -10,7 +10,7 @@ metadata:
 
 # aspec New
 
-**Artifacts language**: write every artifact in English. Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. File and directory names stay English kebab-case.
+**Artifacts language**: write artifact content in the user's conversation language (or the project's configured `language` in `.ancletorc`). Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) and file/directory names are literal and MUST NOT be translated.
 
 Start a new change with a filesystem-native, artifact-driven flow. No external binaries: every step is a direct file operation.
 

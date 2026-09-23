@@ -36,32 +36,45 @@ const CONTENT_FILES = [
 ]
 
 describe('content guards — idioma de artefactos', () => {
-  it('spec-writer exige artefactos en ingles', () => {
+  it('spec-writer escribe contenido en el idioma de la conversacion, keywords literales', () => {
     const t = readFileSync(join(ROOT, 'agents', 'spec-writer.md'), 'utf8')
-    assert.match(t, /All artifact content MUST be written in English/)
-    assert.doesNotMatch(t, /artifact content MUST be written in Spanish/)
+    assert.match(t, /conversation language/)
     assert.match(t, /MUST NOT be translated/)
+    assert.match(t, /WHEN`\/`THEN`\/`AND`/)
+    assert.doesNotMatch(t, /All artifact content MUST be written in English/, 'no debe quedar la regla vieja')
   })
 
-  it('documenter exige specs en ingles', () => {
+  it('documenter escribe contenido en el idioma de la conversacion', () => {
     const t = readFileSync(join(ROOT, 'agents', 'documenter.md'), 'utf8')
+    assert.match(t, /conversation language/)
     assert.match(t, /MUST NOT be translated/)
+    assert.doesNotMatch(t, /spec artifacts are written in English/, 'no debe quedar la regla vieja')
   })
 
-  it('las skills que escriben artefactos declaran el idioma', () => {
+  it('las skills que escriben artefactos declaran el idioma configurable', () => {
     for (const s of ARTIFACT_SKILLS) {
       const p = join(ROOT, 'skills', s, 'SKILL.md')
       assert.ok(existsSync(p), `falta ${s}`)
       const t = readFileSync(p, 'utf8')
       assert.match(t, /\*\*Artifacts language\*\*/, `${s} sin linea de idioma`)
+      assert.match(t, /conversation language/, `${s} sin idioma de conversacion`)
       assert.match(t, /MUST NOT be translated/, `${s} sin regla de keywords literales`)
+      assert.doesNotMatch(t, /write every artifact in English/, `${s} con la regla vieja`)
     }
   })
 
-  it('templates/AGENTS.md declara el idioma de los artifacts', () => {
+  it('templates/AGENTS.md declara el idioma en un bloque LOCKED', () => {
     const t = readFileSync(join(ROOT, 'templates', 'AGENTS.md'), 'utf8')
     assert.match(t, /Idioma de los artifacts/)
     assert.match(t, /no se traducen/)
+    assert.match(t, /<!-- LOCKED: artifacts-language -->/)
+  })
+
+  it('el orchestrator resuelve y propaga el idioma de los artifacts', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'orchestrator.md'), 'utf8')
+    assert.match(t, /### Artifacts Language/)
+    assert.match(t, /first up to 3 messages/)
+    assert.match(t, /Resolved Context Envelope/)
   })
 
   it('templates/AGENTS.md define la frontera memoria del repo vs del agente (issue #16)', () => {

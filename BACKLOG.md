@@ -68,6 +68,9 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   por agente #25, destilado del retorno del orquestador #26), cierre (STALE al archivar #17,
   guía de `.gitignore` #18, keywords canónicos con `ancleto specs check` #21) y telemetría de
   tokens por sesión con `ancleto stats` #27.
+- ✅ Idioma configurable de los artifacts: `language` en `.ancletorc` (`auto | es | en | pt`),
+  pregunta interactiva en `init`/`install` (`--lang`), detección en los primeros 3 mensajes con
+  persistencia automática en modo `auto`, y keywords/nombres de archivo siempre literales en inglés.
 
 ## Estado actual
 

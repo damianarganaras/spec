@@ -71,9 +71,13 @@ comparte.
 - **Cambios con scope incierto / arquitectura**: Crear artifacts en `aspec/changes/<name>/`.
 - **Cambios menores / fixes**: Implementación directa.
 - **Cierre**: Archivar con `/cleto-archive` al finalizar.
+
+<!-- LOCKED: artifacts-language -->
 - **Idioma de los artifacts**: el contenido de `proposal.md`, `design.md`, `tasks.md` y `specs/` se escribe
-  en **inglés**. Los keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`, `ADDED/MODIFIED/REMOVED/RENAMED
-  Requirements`) son literales y **no se traducen**. Nombres de archivos y directorios: inglés kebab-case.
+  en el idioma de la conversación con el usuario (o en el `language` configurado en `.ancletorc`).
+  Los keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`, `ADDED/MODIFIED/REMOVED/RENAMED
+  Requirements`) y los nombres de archivos y directorios son literales en inglés y **no se traducen**.
+<!-- /LOCKED: artifacts-language -->
 
 ## Tools de Soporte
 

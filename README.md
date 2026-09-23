@@ -23,6 +23,7 @@
 - [Características principales](#características-principales)
 - [Requisitos](#requisitos)
 - [Instalación](#instalación)
+- [Guía de .gitignore](#guía-de-gitignore)
 - [Configuración y tiers de costo](#configuración-y-tiers-de-costo)
 - [Uso rápido](#uso-rápido)
 - [Referencia de comandos CLI](#referencia-de-comandos-cli)
@@ -118,6 +119,20 @@ Cómo bajarlo:
 - Instalá con `--no-mcp` si no querés ninguno.
 - Evitá `--with-engram` salvo que uses esa memoria: es el que más pesa (9× la memoria propia).
 - Podés deshabilitar cualquier servidor en tu `opencode.json`: `"mcp": { "engram": { "enabled": false } }`.
+
+---
+
+## Guía de .gitignore
+
+El framework **no gestiona tu `.gitignore`**: es una decisión del proyecto. Como referencia, esta es la combinación que funciona bien con Ancleto:
+
+| Ruta | Recomendación | Por qué |
+|---|---|---|
+| `aspec/` | **Versionar** | Es la fuente-de-verdad: specs y el historial de changes archivados. Si se ignora, el equipo pierde el por qué de las decisiones y los agentes no tienen contexto estable. |
+| `.ancleto/` | **Ignorar** | Base SQLite local (memoria del repo y working-context). Es de tu máquina; cada integrante la regenera. |
+| `.ancletorc` | **Decisión del equipo** | Versionarlo alinea la configuración del proyecto (agente, tier, discovery). Ignoralo si cada integrante lo personaliza. |
+
+> Error común: gitignorear `aspec/` junto con `.ancleto/`. La memoria local es descartable; la fuente-de-verdad, no.
 
 ---
 

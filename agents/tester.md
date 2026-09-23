@@ -167,6 +167,8 @@ After validation, return a short structured summary including:
 - failed verification items, if any
 - untested gaps or assumptions, if any
 
+**Output cap**: Validation Ledger entries are one line each — never paste command output; collapse repeated `passed` runs of the same command into one line with a count; keep at most 15 lines, preserving every failure and every task-owned test result. Summary max 10 lines; offer full detail on request.
+
 ## Important
 
 - Prefer the smallest useful test change that validates the approved behavior

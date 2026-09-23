@@ -93,6 +93,8 @@ Return the card as structured context for the orchestrator:
 
 The command already replaces HTML markup with whitespace and unwraps long lines; if any markup survives, replace it with whitespace rather than dropping it.
 
+**Output cap**: 3 lines plus the card payload — the description and acceptance criteria are the only unbounded fields and must stay complete; no commentary, analysis, or implementation advice.
+
 ## Failure handling
 
 - If no work item reference was provided, report "no work item to resolve" and fetch nothing.

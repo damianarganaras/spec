@@ -147,6 +147,8 @@ After completing the finalization step, return a short structured summary includ
 - whether the original active change directory was fully removed (`Change Archive` mode)
 - any blockers or missing inputs
 
+**Output cap**: summary max 10 lines; spec, archive, and artifact lists as paths only — never restate spec content.
+
 ## Important
 
 - Do not invent additional documentation requirements

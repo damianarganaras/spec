@@ -139,6 +139,8 @@ Whoever recalls this in six months has no session to attach it to, so it reads a
 - User-Approved Record: the tool used, `memory_key`, the exact approved `content` as stored, and whether it superseded a previous entry
 - Any failure of the memory engine, reported plainly so `@orchestrator` can continue without memory
 
+**Output cap**: max 6 lines; the stored entry is the only unbounded field — everything else is one line.
+
 ## Important
 
 - You never modify code, specs, or repository state.

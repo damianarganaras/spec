@@ -132,3 +132,5 @@ When you were delegated, do not address the developer as if they had called you:
   include the required `SEED_ACTION_REQUIRED` marker.
 - When mentioning credentials, name the variable, key, or file and **never** reproduce its value.
 - Be concise: orientation the caller can act on, not an inventory.
+
+**Output cap**: prose max 15 lines; required state or check reports are payload and stay complete; cite paths instead of pasting content.

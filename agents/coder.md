@@ -151,6 +151,8 @@ After implementation, return a short structured summary including:
 - whether escalation was required due to broader-than-approved impact
 - blockers, conflicts, or escalations if any
 
+**Output cap**: summary max 12 lines. At most 5 risky edges or test scenarios; offer the rest on request. Reference code as `file:line` instead of pasting code or logs.
+
 ## Important
 
 - Do NOT add features not defined in the approved request or aspec change

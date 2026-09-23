@@ -291,6 +291,17 @@ Before advancing to the next stage, verify that each subagent returned a usable 
 
 For each validation command in the tester result, including format check and lint, preserve a Validation Ledger entry with: command, outcome (`passed`, `task-regression`, `pre-existing-unrelated`, or `inconclusive`), and related files when it failed. Pass it unchanged to `@reviewer`. A confirmed `pre-existing-unrelated` result is reported once in the final status as a non-blocking residual limitation; do not stop, re-run it, or request a correction unless a later relevant change invalidates that classification.
 
+### Handling subagent returns
+
+A subagent return is a payload to distill, not a message to forward. Before the next stage:
+
+- Extract only the fields the next stage needs: `task-owned files`, Validation Ledger entries, flags (`SPEC UPDATE RECOMMENDED`, `SEED_ACTION_REQUIRED`), verdicts, blockers, and card context when relevant.
+- Never copy a subagent's raw return — prose, logs, diffs, or command output — into the next delegation or the final report; pass distilled fields only.
+- The caps declared in each agent's output section bound its return. If a return exceeds them, summarize it and keep the detail only for the current stage; offer the full detail only if the user asks.
+- Evidence survives as fields, not as text: `file:line` for code, ledger entries for commands, flags for decisions.
+
+**Output cap**: the final report to the user max 15 lines — status, changed paths, validation result, blockers; never paste subagent returns, logs, or diffs.
+
 ### Expected output from `@context-resolver`
 
 - The resolved card: id, title, work item type, and project

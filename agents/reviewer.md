@@ -165,6 +165,8 @@ Return a short structured report with:
 - missing or inconclusive command evidence that requires focused verification by `@tester`, or "none"
 - overall review verdict
 
+**Output cap**: at most 5 findings per severity (`CRITICAL`, `WARNING`, `SUGGESTION`); if more exist, keep the 5 highest-impact and state the count of the rest, offering detail on request. `Summary` max 5 lines. Cite `file:line`; never paste diffs or code.
+
 Use this format:
 
 ```md

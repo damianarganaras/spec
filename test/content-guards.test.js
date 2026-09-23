@@ -147,3 +147,53 @@ describe('content guards - matriz de permisos de agentes (issue #13)', () => {
     assert.match(t, /does not replace the `@tester` stage/)
   })
 })
+
+describe('content guards - tope de output y destilado del retorno (issues #25 y #26)', () => {
+  const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
+
+  const OUTPUT_CONTRACT_AGENTS = [
+    'coder',
+    'tester',
+    'reviewer',
+    'spec-writer',
+    'documenter',
+    'memory-keeper',
+    'context-resolver',
+    'technical-discovery',
+    'technical-seed-writer'
+  ]
+
+  it('cada contrato de salida declara un tope explicito con cifras (D1)', () => {
+    for (const name of OUTPUT_CONTRACT_AGENTS) {
+      const t = readAgent(name)
+      const m = t.match(/\*\*Output cap\*\*:([^\n]*)/)
+      assert.ok(m, `${name} no declara **Output cap**`)
+      assert.match(m[1], /\d/, `${name}: el tope debe incluir al menos una cifra`)
+    }
+  })
+
+  it('el tope vive dentro de la seccion de output de cada agente (D1)', () => {
+    for (const name of OUTPUT_CONTRACT_AGENTS) {
+      const t = readAgent(name)
+      const section = t.search(/^## Output( Expectations)?$/m)
+      assert.ok(section >= 0, `${name} no tiene seccion de output`)
+      const cap = t.indexOf('**Output cap**')
+      assert.ok(cap > section, `${name}: **Output cap** debe estar dentro de la seccion de output`)
+    }
+  })
+
+  it('el orchestrator destila el retorno de subagentes antes de reinyectarlo (D2)', () => {
+    const t = readAgent('orchestrator')
+    assert.match(t, /### Handling subagent returns/)
+    assert.match(t, /Never copy a subagent's raw return/)
+    assert.match(t, /distilled fields only/)
+    assert.match(t, /\*\*Output cap\*\*/)
+  })
+
+  it('el destilado preserva los campos criticos del flujo (D2)', () => {
+    const t = readAgent('orchestrator')
+    for (const field of ['task-owned files', 'Validation Ledger', 'SPEC UPDATE RECOMMENDED', 'SEED_ACTION_REQUIRED']) {
+      assert.ok(t.includes(field), `falta ${field} en el contrato de destilado`)
+    }
+  })
+})

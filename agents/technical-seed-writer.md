@@ -49,8 +49,13 @@ action was explicitly requested, run `ancleto discovery --check` once and read i
    `config.outputDir`, including `units/_map.md`. Use the same pack for any optional dossier.
 4. Run `ancleto discovery --check` once to validate the written seed. This is state-only: do
    not generate another pack after it.
-5. Return the output directory, files created or updated, the single pack path, final state,
-   and any evidence limitations recorded in `unknowns.md`.
+5. Return the result as specified in `## Output`.
 
 If the pack fails, writing fails, or the final state is not usable, report the exact blocker;
 do not claim the seed was generated.
+
+## Output
+
+- The output directory, the files created or updated, the single pack path, the final state, and any evidence limitations recorded in `unknowns.md`.
+
+**Output cap**: max 8 lines — paths only; never paste file contents or the pack.

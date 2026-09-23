@@ -96,6 +96,8 @@ After writing the artifacts, respond with a short structured summary including:
 - short scope summary
 - open questions, assumptions, or risks
 
+**Output cap**: summary max 10 lines; at most 5 open questions, assumptions, or risks combined (offer the rest on request); paths only — never restate artifact content.
+
 ## Important
 
 - Prefer the smallest correct aspec change that captures the intended behavior

@@ -197,3 +197,29 @@ describe('content guards - tope de output y destilado del retorno (issues #25 y 
     }
   })
 })
+
+describe('content guards - frescura del seed al archivar (issue #17)', () => {
+  it('la skill ancleto-archive chequea STALE y ofrece regenerar sin automatico', () => {
+    const t = readFileSync(join(ROOT, 'skills', 'ancleto-archive', 'SKILL.md'), 'utf8')
+    assert.match(t, /ancleto discovery --check/)
+    assert.match(t, /Never regenerate automatically/)
+    assert.match(t, /If the user declines, continue the archive/)
+  })
+
+  it('el orchestrator chequea la frescura del seed antes de archivar', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'orchestrator.md'), 'utf8')
+    assert.match(t, /Check the seed freshness before closing/)
+    assert.match(t, /state is `STALE`/)
+    assert.match(t, /never automatic; if the user declines, continue the archive/)
+  })
+})
+
+describe('content guards - guia de .gitignore (issue #18)', () => {
+  it('README documenta la guia y que la decision es del proyecto', () => {
+    const t = readFileSync(join(ROOT, 'README.md'), 'utf8')
+    assert.match(t, /## Guía de \.gitignore/)
+    assert.match(t, /es una decisión del proyecto/i)
+    assert.match(t, /`aspec\/`/)
+    assert.match(t, /`\.ancleto\/`/)
+  })
+})

@@ -42,14 +42,24 @@ Check for delta specs at `aspec/changes/<name>/specs/`; if none, proceed without
   - `## RENAMED Requirements` → rename using the `FROM:`/`TO:` pair.
 - Proceed to archive regardless of the choice.
 
-### 3. Perform the archive
+### 3. Check technical seed freshness
+
+If the `ancleto` CLI is available in this project, run `ancleto discovery --check` (read-only) and read its JSON `state`.
+
+- **`STALE`**: warn that the technical seed is out of date for the current code, and offer to regenerate it now (follow the `ancleto-technical-discovery` skill) or to continue archiving with the stale seed.
+- **Any other state**: continue without comment.
+- Never regenerate automatically — regenerate only with the user's explicit approval.
+- If the user declines, continue the archive normally and record the stale seed in the summary.
+- If the CLI is unavailable, skip this step.
+
+### 4. Perform the archive
 
 Create `aspec/changes/archive/` if absent. Target: `YYYY-MM-DD-<change-name>` (current date).
 
 - **Target exists**: fail, suggesting a rename or different date.
 - **Otherwise**: delete scaffold-only files (e.g., `aspec/changes/<name>/context.md` — never preserved), then move the change directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`.
 
-### 4. Capture lessons into persistent memory
+### 5. Capture lessons into persistent memory
 
 Record what this change taught:
 
@@ -64,7 +74,7 @@ Record what this change taught:
 
 Record only durable lessons — decisions whose reasons aren't visible in the result, constraints, verified workarounds. Never workflow meta. If nothing meets the bar, record nothing and say so.
 
-### 5. Display summary
+### 6. Display summary
 
 ```
 ## Archive Complete
@@ -75,12 +85,15 @@ Record only durable lessons — decisions whose reasons aren't visible in the re
 **Memories recorded:** <list, or "None">
 ```
 
-If warnings applied (incomplete tasks, skipped sync), show an "Archive Complete (with warnings)" variant listing them.
+When the seed was `STALE`, add a `**Seed:**` line: `Regenerated` or `Stale — regeneration declined`.
+
+If warnings applied (incomplete tasks, skipped sync, stale seed), show an "Archive Complete (with warnings)" variant listing them.
 
 ## Guardrails
 
 - Always prompt for change selection if not provided.
 - Don't block archiving on warnings — inform and confirm.
+- Never regenerate the technical seed automatically: offer it, and continue the archive if the user declines.
 - If the target archive directory exists, fail instead of overwriting.
 - Delete scaffold-only files (`context.md`) before moving; never archive them.
 - `recordRule`/`recordDecision` accept only `memory_key`, `content`, `justification`, `scope`. Never send `source`, `confidence`, `status` or `id` — the runtime manages those.

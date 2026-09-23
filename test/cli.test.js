@@ -1202,6 +1202,48 @@ describe('CLI projects update (actualizacion desde la lista)', () => {
   })
 })
 
+describe('CLI discovery --help y --check config', () => {
+  it('discovery --help muestra ayuda y NO genera pack', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'opencode'], dir)
+      const r = run(['discovery', '--help'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /ancleto discovery/)
+      assert.match(r.stdout, /--check/)
+      assert.match(r.stdout, /El seed en si lo genera la skill/)
+      assert.doesNotMatch(r.stdout, /pack generado/)
+    })
+  })
+
+  it('discovery --check devuelve config (outputDir, exclude, tier)', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'opencode'], dir)
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.schemaVersion, 2)
+      assert.ok(j.state)
+      assert.equal(j.config.outputDir, 'docs/technical-discovery')
+      assert.deepEqual(j.config.exclude, [])
+      assert.ok('tier' in j.config)
+    })
+  })
+
+  it('--check respeta outputDir de .ancletorc', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'opencode'], dir)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.discovery = { outputDir: 'docs/seed-custom', exclude: ['tmp/**'] }
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['discovery', '--check'], dir)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.config.outputDir, 'docs/seed-custom')
+      assert.deepEqual(j.config.exclude, ['tmp/**'])
+    })
+  })
+})
+
 describe('CLI update scoped por cwd (regresion)', () => {
   const regEnv = (dir) => ({ ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
 

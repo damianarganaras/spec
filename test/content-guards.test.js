@@ -268,3 +268,15 @@ describe('content guards - registro de proyectos', () => {
     assert.match(t, /~\/\.config\/ancleto\/projects\.json/)
   })
 })
+
+describe('content guards - discovery --check devuelve config', () => {
+  it('README documenta el estado completo del check', () => {
+    const t = readFileSync(join(ROOT, 'README.md'), 'utf8')
+    assert.match(t, /ancleto discovery --check # Estado del technical seed \(READY \/ STALE \/ PARTIAL \/ MISSING\) \+ config/)
+  })
+
+  it('la skill technical-discovery usa la config del check report', () => {
+    const t = readFileSync(join(ROOT, 'skills', 'ancleto-technical-discovery', 'SKILL.md'), 'utf8')
+    assert.match(t, /ancleto discovery --check/)
+  })
+})

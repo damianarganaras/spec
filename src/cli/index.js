@@ -1073,7 +1073,9 @@ function flagValue(args, flag) {
 }
 
 async function checkDiscovery() {
-  const { outputDir } = await loadDiscoveryConfig()
+  const config = await loadDiscoveryConfig()
+  const { outputDir } = config
+  const tier = readProjectTier(process.cwd())
   const present = await presentDocs(outputDir)
   let state, action, message, missingDocs
   if (present.length === 0) {
@@ -1116,7 +1118,12 @@ async function checkDiscovery() {
     state,
     recommendedAction: action,
     message,
-    missingDocs
+    missingDocs,
+    config: {
+      outputDir,
+      exclude: config.exclude,
+      tier
+    }
   }, null, 2))
 }
 
@@ -1173,6 +1180,19 @@ async function packDiscovery(flags) {
 async function discovery(flags) {
   if (flags.includes('--check')) {
     await checkDiscovery()
+    return
+  }
+  if (flags.includes('--help') || flags.includes('-h')) {
+    console.log(`ancleto discovery [--compress] [--include G] [--ignore G] [--token-budget N]
+  Genera el pack Repomix del repo y guarda el estado del seed.
+
+  --check           Estado del seed en JSON (READY/STALE/PARTIAL/MISSING) + config
+  --compress        Pack comprimido (tree-sitter)
+  --include <glob>  Incluir solo paths que matcheen
+  --ignore <glob>   Excluir paths (ademas de los de .ancletorc)
+  --token-budget N  Presupuesto de tokens del tier
+
+  El seed en si lo genera la skill ancleto-technical-discovery a partir del pack.`)
     return
   }
   await packDiscovery(flags)

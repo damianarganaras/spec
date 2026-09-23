@@ -209,7 +209,7 @@ ancleto init              # Crea .ancletorc, aspec/, AGENTS.md y PRODUCT.md
 ### 2. Descubrir contexto técnico
 
 ```bash
-ancleto discovery --check # Estado del technical seed (READY / STALE)
+ancleto discovery --check # Estado del technical seed (READY / STALE / PARTIAL / MISSING) + config
 ancleto discovery         # Genera .discovery-map.json y empaqueta el repo
 ```
 

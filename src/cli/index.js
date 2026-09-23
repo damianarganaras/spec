@@ -315,8 +315,8 @@ async function installAgentSkills(projectDir, agent) {
 
 const CHANGES_ROOT = 'aspec'
 
-const DEFAULT_ASPEC_CONFIG = `# OpenSpec project configuration
-# Generado por @ancleto/spec (G5) — editalo libremente, no se sobrescribe en reinstalaciones.
+const DEFAULT_ASPEC_CONFIG = `# aspec project configuration
+# Generado por @ancleto/spec (G5) - editalo libremente, no se sobrescribe en reinstalaciones.
 schema: spec-driven-development
 `
 
@@ -877,8 +877,30 @@ async function checkCommand() {
     }
   }
 
+  const warnings = await checkTierOrphan(cwd)
+
   console.log(`ancleto: check -> ${missing} faltantes, ${orphans} huerfanos`)
+  for (const w of warnings) console.log(`  ⚠ ${w}`)
   process.exit(missing > 0 ? 1 : 0)
+}
+
+// Avisa si hay un tier del proyecto sin agentes locales donde aplicarlo:
+// el tier solo se aplica a los agentes instalados en el proyecto, no a los globales.
+async function checkTierOrphan(cwd) {
+  const warnings = []
+  const tierFile = join(cwd, '.opencode', '.ancleto-tier')
+  if (!(await exists(tierFile))) return warnings
+  const tier = (await readFile(tierFile, 'utf8')).trim()
+  if (!TIERS[tier]) return warnings
+  const localAgents = join(cwd, '.opencode', 'agents')
+  let count = 0
+  if (await exists(localAgents)) {
+    count = (await readdir(localAgents)).filter((f) => f.endsWith('.md')).length
+  }
+  if (count === 0) {
+    warnings.push(`tier "${tier}" sin agentes locales donde aplicarlo — este proyecto usa los agentes globales. Corre 'ancleto install --project .' para que el tier aplique, o borra .opencode/.ancleto-tier.`)
+  }
+  return warnings
 }
 
 async function doctorCommand() {

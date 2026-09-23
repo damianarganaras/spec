@@ -247,6 +247,36 @@ describe('CLI check (G3)', () => {
       assert.equal(r.status, 1)
     })
   })
+
+  it('sano con agentes locales NO avisa tier huerfano', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /tier .* sin agentes locales/)
+    })
+  })
+
+  it('avisa tier huerfano sin fallar cuando no hay agentes locales', () => {
+    withDir((dir) => {
+      run(['init', '--tier', 'gratis'], dir)
+      // escenario de riesgo: el tier quedo pero los agentes locales ya no estan
+      rmSync(join(dir, '.opencode', 'agents'), { recursive: true, force: true })
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /⚠ tier "gratis" sin agentes locales/)
+      assert.match(r.stdout, /0 faltantes/)
+    })
+  })
+
+  it('init deja agentes locales, asi que el tier NO queda huerfano', () => {
+    withDir((dir) => {
+      run(['init', '--tier', 'gratis'], dir)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /sin agentes locales/)
+    })
+  })
 })
 
 describe('CLI doctor (G4)', () => {
@@ -307,6 +337,15 @@ describe('CLI scaffold aspec (G5)', () => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
       assert.ok(existsSync(join(dir, 'aspec', 'config.yaml')))
       assert.ok(existsSync(join(dir, 'aspec', 'changes')))
+    })
+  })
+
+  it('el config.yaml generado menciona aspec, no OpenSpec', () => {
+    withDir((dir) => {
+      run(['init'], dir)
+      const cfg = readFileSync(join(dir, 'aspec', 'config.yaml'), 'utf8')
+      assert.match(cfg, /aspec project configuration/)
+      assert.doesNotMatch(cfg, /OpenSpec/)
     })
   })
 })

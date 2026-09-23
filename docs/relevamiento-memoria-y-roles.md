@@ -253,18 +253,53 @@ Segunda consulta al orquestador: se le pidio la lista de agentes con responsabil
 
 ---
 
-## 8. Pendientes
+## 8. Cruce #3: respuestas de auditoria del entorno del trabajo
 
-- [x] **Recibidas las respuestas del agente** con evidencia cruda (19/19). Hallazgo #2 **descartado** (las tools funcionaban); aparecieron **3 bugs nuevos** (B1/B2/B3) y **5 gaps nuevos** (G8–G12).
-- [x] **Cruce #2** con la matriz real de permisos (§7): confirmado que **`@coder` sin shell** es el problema central (#13), y que **Repomix no consume contexto** por defecto.
-- [x] Issues abiertos en el Kanban (epica #9 + 12 sub-issues). **Cerrados:** #10, #11, #12, #15, #19, #20.
-- [ ] **Decidir F3/#13** (rol del coder) — **opcion elegida: (a)** darle `bash` acotado, igual que el orquestador del trabajo. **En curso.**
-- [ ] Pendiente decidir **F9** (semantica de `searchMemory`) cuando se retome #14.
-- [ ] Recordar: el proyecto de prueba tiene `/aspec` en su `.gitignore`, un `openspec/` legacy, y tareas de verificacion en dispositivo real pendientes (6/7/8/11 del change PWA).
+El orquestador del trabajo respondio las 15 preguntas. Lo mas valioso: **se auto-limito a lo verificable** ("no voy a inventar los permisos restantes", "no pude confirmar ni refutar") — un comportamiento sano que vale registrar. Resumen y contraste con nosotros:
+
+### Respuestas claves
+
+| # | Pregunta | Su respuesta | Contraste con nuestro repo |
+|---|---|---|---|
+| 1 | Frontmatter literal | Solo pudo abrir `orchestrator` y `coder`; ambos con `bash: false`. Los otros 8 **no auditados**. | Nosotros tenemos el frontmatter de los 10 y **ya corregimos el coder** (#13) |
+| 2 | ¿`@coder` ejecuta comandos? | **No** — `bash: false`, y el contrato dice "You do not have Bash". No probo el build (no quiso pedir una accion que no puede) | **Igual que era el nuestro antes de #13**. Ahora si puede |
+| 3 | ¿Quien genera bundles/assets? | **Nadie definido**. Coder no ejecuta; tester es el candidato; CI/CD "no verificado" | Lo mismo. Con #13 el coder ya puede buildear; el tester valida |
+| 4 | ¿Se persuade al orchestrator? | No: `write/edit/bash: false` + prohibicion contractual. **Sin prueba adversarial** | Nosotros: mismo `write/edit/bash: false`; tampoco testeado adversarialmente |
+| 5 | `reviewer` CRITICAL → ¿frena? | Contrato dice MUST STOP; **caso esperado, no ejecucion historica** | Nosotros: misma regla contractual |
+| 6 | Checkpoint direct-implementation | Contrato inequivoco: espera respuesta explicita, no asume silencio. Sin evidencia de violacion | Idem nuestro |
+| 7 | `searchMemory` natural language | Distingue **engram** (FTS5, modo all/any) de **mem0 recall** (semantico pero puede dar 0 por umbral). **Sin garantia de recall por parafrasis** | Nosotros medimos lo mismo: `como instalar la pwa...` → 0. Ver #14 |
+| 8 | `.ancleto/working-context.md` | **No existe y nadie lo genera** ("el contexto se resuelve con OpenSpec, seed y memoria") | **Nuestro gap G1**, ya arreglado en #10 (`init`/`install`/`upgrade` lo materializan) |
+| 9 | Recall vacio | Reporta "no relevant memories" y sigue; **no diagnostica el por que** | Nosotros: idem. Mejorable |
+| 10 | Contexto, tokens, tope | Carga on-demand; **tope de 3 archivos**; sin presupuesto de tokens declarado | Nosotros: mismo tope de 3 archivos |
+| 11 | Seed STALE | Usa con advertencia y **ofrece** regenerar (gated por aprobacion); nunca automatico | Nosotros: mismo diseno. Gap G5 = falta atarlo al archive (#17) |
+| 12 | Archivo entero vs fragmento | Sin politica universal; depende de la herramienta/pregunta. Tope: 3 archivos | Idem |
+| 13 | ¿`spec-writer` escribe memoria? | **No auditado** (no abrio su frontmatter). Contrato: solo `memory-keeper`; posible honor-system | **Nuestro: `spec-writer` NO tiene tools de memoria** (`write:true`, sin `searchMemory`/`recordRule`/`recordDecision`) → enforcement real, no honor-system |
+| 14 | Bug del sistema | No lo arregla: clasifica, pide aclaracion/aprobacion, delega a coder | Idem |
+| 15 | Keywords de specs | **No verificado** por el limite de lectura; no puede confirmar ni refutar | Nosotros medimos inconsistencia real (issue #21) |
+
+### Lo que este cruce nos ensena
+
+1. **Su entorno tiene exactamente los mismos dos problemas que el nuestro** (coder sin bash, working-context ausente). No son bugs nuestros: son del diseno compartido. **Ya los resolvimos en #13 y #10.**
+2. **Nuestro enforcement de memoria es mas fuerte que el suyo**: su `spec-writer` podria tener las tools de memoria (no auditado, posible honor-system); **el nuestro no las tiene declaradas** — no puede escribir memoria ni queriendo.
+3. **`mem0` (litellm) aparece en su configuracion** (`litellm_mem0-recall`/`litellm_mem0-remember`, ambos `false` en orchestrator/coder). Nosotros no usamos mem0: nuestro motor es SQLite propio. Es un tercer sistema de memoria en su stack.
+4. **Su honestidad de alcance** ("no voy a inventar", "no pude confirmar ni refutar") es el comportamiento correcto: un agente que reporta el limite en vez de rellenar con inferencia. Vale como criterio.
 
 ---
 
-## 9. Anexo: evidencia cruda del agente (para no perderla)
+## 9. Pendientes
+
+- [x] **Recibidas las respuestas del agente** con evidencia cruda (19/19). Hallazgo #2 **descartado** (las tools funcionaban); aparecieron **3 bugs nuevos** (B1/B2/B3) y **5 gaps nuevos** (G8–G12).
+- [x] **Cruce #2** con la matriz real de permisos (§7): confirmado que **`@coder` sin shell** es el problema central (#13), y que **Repomix no consume contexto** por defecto.
+- [x] **Cruce #3** (§8): el entorno del trabajo tiene **los mismos dos problemas** (coder sin bash, working-context ausente) — eran del diseno compartido, no bugs nuestros. **Ya resueltos con #13 y #10.**
+- [x] Issues abiertos en el Kanban (epica #9 + 12 sub-issues). **Cerrados:** #10, #11, #12, #13, #15, #19, #20.
+- [ ] Pendiente decidir **F9** (semantica de `searchMemory`) cuando se retome #14. El cruce #3 confirma que el problema es compartido: ni engram (FTS5) ni mem0 garantizan recall por parafrasis.
+- [ ] Mejora candidata (nueva, del cruce #3): cuando el Recall vuelve vacio, `@memory-keeper`/orquestador **no explican el por que**. Podria reportar "sin coincidencias lexicas — proba terminos exactos" en vez de solo "no relevant memories".
+- [ ] Recordar: el proyecto de prueba tiene `/aspec` en su `.gitignore`, un `openspec/` legacy, y tareas de verificacion en dispositivo real pendientes (6/7/8/11 del change PWA).
+- [ ] Recordar: el stack del trabajo incluye **mem0 (litellm)** ademas de engram — tercer sistema de memoria ajeno al nuestro. No es parte del framework.
+
+---
+
+## 10. Anexo: evidencia cruda del agente (para no perderla)
 
 **Tools cargadas:** `searchMemory`/`recordRule`/`recordDecision` (ancleto-memory) + `mem_*` (engram) + `caveman_*`. Todas presentes.
 

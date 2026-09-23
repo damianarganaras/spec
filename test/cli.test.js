@@ -786,3 +786,90 @@ describe('CLI install wizard (v0.6.6)', () => {
     })
   })
 })
+
+describe('CLI specs check (issue #21)', () => {
+  const writeSpec = (dir, rel, content) => {
+    const p = join(dir, rel)
+    mkdirSync(dirname(p), { recursive: true })
+    writeFileSync(p, content)
+  }
+
+  const CANONICAL = `# Reset Order
+
+## ADDED Requirements
+
+### Requirement: Reset order
+
+The system SHALL reset the order.
+
+#### Scenario: Basic reset
+
+- **WHEN** the user resets
+- **THEN** the order is cleared
+`
+
+  const TRANSLATED = `# Reset Order
+
+#### RF1: Reset del pedido
+
+- **Dado** un pedido activo
+- **Cuando** el usuario resetea
+- **Entonces** el pedido se limpia
+`
+
+  it('detecta un spec traducido y sale con exit 1', () => {
+    withDir((dir) => {
+      writeSpec(dir, join('aspec', 'specs', 'reset-order', 'spec.md'), TRANSLATED)
+      const r = run(['specs', 'check', '--json'], dir)
+      assert.equal(r.status, 1)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.ok, false)
+      assert.equal(j.nonCanonical.length, 1)
+      assert.match(j.nonCanonical[0].file, /reset-order\/spec\.md/)
+      assert.ok(j.nonCanonical[0].missing.includes('### Requirement:'))
+      assert.ok(j.nonCanonical[0].unexpected.some((h) => h.includes('RF1')))
+    })
+  })
+
+  it('pasa con specs canonicos', () => {
+    withDir((dir) => {
+      writeSpec(dir, join('aspec', 'specs', 'reset-order', 'spec.md'), CANONICAL)
+      const r = run(['specs', 'check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /canonicos/)
+    })
+  })
+
+  it('--change revisa tambien los deltas del change', () => {
+    withDir((dir) => {
+      writeSpec(dir, join('aspec', 'specs', 'reset-order', 'spec.md'), CANONICAL)
+      writeSpec(dir, join('aspec', 'changes', 'reset-flow', 'specs', 'reset-order', 'spec.md'), TRANSLATED)
+      const r = run(['specs', 'check', '--change', 'reset-flow', '--json'], dir)
+      assert.equal(r.status, 1)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.scanned, 2)
+      assert.match(j.nonCanonical[0].file, /changes\/reset-flow/)
+    })
+  })
+
+  it('--change inexistente falla claro', () => {
+    withDir((dir) => {
+      const r = run(['specs', 'check', '--change', 'nope'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /no existe el change/)
+    })
+  })
+
+  it('un delta REMOVED/RENAMED-only es canonico (sin scenarios)', () => {
+    withDir((dir) => {
+      writeSpec(dir, join('aspec', 'specs', 'reset-order', 'spec.md'), CANONICAL)
+      writeSpec(
+        dir,
+        join('aspec', 'changes', 'drop-legacy', 'specs', 'reset-order', 'spec.md'),
+        '## REMOVED Requirements\n\n### Requirement: Legacy reset\n\n## RENAMED Requirements\n\n- FROM: `### Requirement: Old Name`\n- TO: `### Requirement: New Name`\n'
+      )
+      const r = run(['specs', 'check', '--change', 'drop-legacy'], dir)
+      assert.equal(r.status, 0)
+    })
+  })
+})

@@ -201,6 +201,9 @@ ancleto upgrade           # Re-aplica templates y skills respetando tus personal
 
 ancleto check             # Verifica la integridad de la instalación (faltantes / huérfanos)
 
+ancleto specs check [--change <nombre>] [--json]
+                          # Valida keywords canónicos en aspec/specs y en los deltas de un change
+
 ancleto doctor            # Diagnostica el entorno (Node, node:sqlite, opencode.json)
 
 ancleto memory context [--scope <project|feature|task>] [--out <archivo>]

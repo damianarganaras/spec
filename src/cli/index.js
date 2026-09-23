@@ -4,7 +4,7 @@ import { cp, mkdir, access, writeFile, readFile, readdir, rename } from 'node:fs
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createInterface } from 'node:readline'
-import { join, dirname, resolve, basename } from 'node:path'
+import { join, dirname, resolve, basename, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
@@ -40,6 +40,9 @@ Uso:
   ancleto discovery --check           Estado del seed (READY/STALE/PARTIAL/MISSING)
   ancleto discovery [--compress] [--include G] [--ignore G] [--token-budget N]
                                    Empaca el repo con Repomix y guarda estado
+  ancleto specs check [--change <name>] [--json]
+                                   Valida keywords canonicos (### Requirement:, WHEN, THEN)
+                                   en aspec/specs y, con --change, en los deltas del change
   ancleto memory context [--scope X] [--out file]
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
   ancleto memory list [--type X] [--scope X] [--all] [--json]
@@ -980,6 +983,77 @@ async function checkTierOrphan(cwd) {
   return warnings
 }
 
+// Un spec es canonico cuando usa los keywords literales en ingles. Detecta specs
+// traducidos (p. ej. "#### RF1:" + "**Dado**/**Cuando**/**Entonces**"), que rompen
+// la cobertura por keywords y el merge de deltas.
+function specIssues(content) {
+  const missing = []
+  if (!/^###\s+Requirement:/m.test(content)) missing.push('### Requirement:')
+  if (/^####\s+Scenario:/m.test(content)) {
+    if (!/\bWHEN\b/.test(content)) missing.push('WHEN')
+    if (!/\bTHEN\b/.test(content)) missing.push('THEN')
+  }
+  const unexpected = []
+  const re = /^####\s+(.+)$/gm
+  let m
+  while ((m = re.exec(content)) !== null) {
+    if (!/^Scenario\b/.test(m[1])) unexpected.push(`#### ${m[1]}`)
+  }
+  return { missing, unexpected }
+}
+
+async function collectSpecFiles(dir) {
+  const out = []
+  if (!(await exists(dir))) return out
+  for (const e of await readdir(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name)
+    if (e.isDirectory()) out.push(...(await collectSpecFiles(p)))
+    else if (e.name === 'spec.md') out.push(p)
+  }
+  return out
+}
+
+async function specsCheckCommand(args) {
+  const cwd = process.cwd()
+  const asJson = args.includes('--json')
+  const ci = args.indexOf('--change')
+  const change = ci >= 0 ? args[ci + 1] : null
+  const files = await collectSpecFiles(join(cwd, CHANGES_ROOT, 'specs'))
+  if (change) {
+    const changeDir = join(cwd, CHANGES_ROOT, 'changes', change)
+    if (!(await exists(changeDir))) {
+      console.error(`ancleto: no existe el change "${change}" en ${CHANGES_ROOT}/changes/`)
+      process.exit(1)
+    }
+    files.push(...(await collectSpecFiles(join(changeDir, 'specs'))))
+  }
+  const findings = []
+  for (const f of files) {
+    const { missing, unexpected } = specIssues(await readFile(f, 'utf8'))
+    if (missing.length || unexpected.length) {
+      findings.push({ file: relative(cwd, f).replace(/\\/g, '/'), missing, unexpected })
+    }
+  }
+  const ok = findings.length === 0
+  if (asJson) {
+    console.log(JSON.stringify({ ok, scanned: files.length, nonCanonical: findings }, null, 2))
+  } else if (files.length === 0) {
+    console.log('ancleto: no hay specs para revisar')
+  } else {
+    for (const f of files) {
+      const rel = relative(cwd, f).replace(/\\/g, '/')
+      const found = findings.find((x) => x.file === rel)
+      if (found) {
+        console.log(`  ✖ ${rel} (revisar: ${[...found.missing, ...found.unexpected].join(', ')})`)
+      } else {
+        console.log(`  ✔ ${rel}`)
+      }
+    }
+    console.log(ok ? `ancleto: ${files.length} spec(s) canonicos` : `ancleto: ${findings.length} de ${files.length} spec(s) sin keywords canonicos`)
+  }
+  process.exit(ok ? 0 : 1)
+}
+
 async function doctorCommand() {
   let fatal = false
 
@@ -1044,6 +1118,9 @@ switch (cmd) {
     break
   case 'check':
     await checkCommand()
+    break
+  case 'specs':
+    await specsCheckCommand(rest)
     break
   case 'doctor':
     await doctorCommand()

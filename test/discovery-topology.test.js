@@ -60,18 +60,30 @@ describe('Discovery topología (D1)', () => {
     })
   })
 
-  it('ancleto discovery --check genera .discovery-map.json de forma silenciosa', () => {
+  it('ancleto discovery --check NO modifica .discovery-map.json (read-only)', () => {
     withDir((dir) => {
       seedFixture(dir)
+      const mapPath = join(dir, '.discovery-map.json')
+      const pinned = '{\n  "pinned": true\n}\n'
+      writeFileSync(mapPath, pinned)
+      const before = readFileSync(mapPath, 'utf8')
+
       const r = run(['discovery', '--check'], dir)
       assert.equal(r.status, 0)
-      const mapPath = join(dir, '.discovery-map.json')
-      assert.ok(existsSync(mapPath))
-      const map = JSON.parse(readFileSync(mapPath, 'utf8'))
-      assert.equal(map.total_files, 5)
-      assert.deepEqual(map.tree_summary, { src: 2, docs: 1 })
-      assert.deepEqual(map.root_files, ['README.md', 'package.json'])
+      assert.equal(readFileSync(mapPath, 'utf8'), before, 'el mapa no debe cambiar con --check')
+      assert.equal(readFileSync(mapPath, 'utf8'), pinned)
       assert.doesNotMatch(r.stdout, /discovery-map/)
+    })
+  })
+
+  it('ancleto discovery --check NO crea el mapa si no existe', () => {
+    withDir((dir) => {
+      seedFixture(dir)
+      const mapPath = join(dir, '.discovery-map.json')
+      assert.equal(existsSync(mapPath), false, 'precondicion: sin mapa')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(mapPath), false, '--check no debe crear archivos')
     })
   })
 })

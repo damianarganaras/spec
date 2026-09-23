@@ -722,6 +722,7 @@ async function runRepomix(flags, tmpFile) {
 
 async function packDiscovery(flags) {
   const { outputDir } = await loadDiscoveryConfig()
+  try { writeDiscoveryMap(process.cwd()) } catch {}
   const tmpFile = join(tmpdir(), `ancleto-pack-${Date.now()}.txt`)
   await runRepomix(flags, tmpFile)
   let content = ''
@@ -749,7 +750,6 @@ async function packDiscovery(flags) {
 }
 
 async function discovery(flags) {
-  try { writeDiscoveryMap(process.cwd()) } catch {}
   if (flags.includes('--check')) {
     await checkDiscovery()
     return

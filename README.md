@@ -148,7 +148,11 @@ ancleto projects            # lista (o `ancleto list --projects`)
 ancleto projects info       # estado del proyecto actual
 ancleto projects scan "D:/Repos D/Proyectos"   # descubre y registra los que ya existen
 ancleto projects prune      # saca del registro los borrados/movidos
+ancleto projects update     # actualiza los desactualizados (selector interactivo)
+ancleto projects update --all   # los actualiza todos sin preguntar
 ```
+
+`projects update` detecta qué proyectos quedaron atrás de la versión del CLI y te deja elegir cuáles actualizar (espacio para marcar, `a` para todos, enter para confirmar). Actualiza cada uno en un proceso aislado, así que un proyecto roto no afecta a los demás. Es el equivalente cómodo de `cd <ruta> && ancleto update` para cada uno. En una terminal sin TTY lista los desactualizados y te recuerda usar `--all`.
 
 La lista muestra versión instalada, origen (por proyecto vs agentes globales), tier y agente:
 
@@ -250,6 +254,9 @@ ancleto projects prune [--dry-run] [--json]
                           # Quita del registro los proyectos borrados o movidos
 ancleto projects info [ruta] [--json]
                           # Estado de un proyecto (versión, memoria, seed, changes activos)
+ancleto projects update [--all] [--json]
+                          # Actualiza los desactualizados (selector interactivo);
+                          # --all sin preguntar. Igual que "cd <ruta> && ancleto update"
 
 ancleto doctor            # Diagnostica el entorno (Node, node:sqlite, opencode.json)
 

@@ -1118,6 +1118,90 @@ describe('CLI projects (registro de proyectos)', () => {
   })
 })
 
+describe('CLI projects update (actualizacion desde la lista)', () => {
+  const regEnv = (dir) => ({ ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
+
+  const makeOutdated = (dir, name) => {
+    const proj = join(dir, name)
+    mkdirSync(proj, { recursive: true })
+    run(['install', '--project', proj, '--no-mcp', '--tier', 'minimo'], dir, regEnv(dir))
+    const regPath = join(dir, 'registry.json')
+    const r = JSON.parse(readFileSync(regPath, 'utf8'))
+    const key = Object.keys(r.projects).find((k) => k.endsWith(`/${name}`))
+    r.projects[key].version = '0.0.1'
+    writeFileSync(regPath, JSON.stringify(r, null, 2))
+    const rcPath = join(proj, '.ancletorc')
+    const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+    rc.version = '0.0.1'
+    writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+    return proj
+  }
+
+  it('sin TTY lista los desactualizados y sugiere --all', () => {
+    withDir((dir) => {
+      makeOutdated(dir, 'alpha')
+      const r = run(['projects', 'update'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /proyectos desactualizados/)
+      assert.match(r.stdout, /--all/)
+    })
+  })
+
+  it('--all actualiza los desactualizados y deja la version al dia', () => {
+    withDir((dir) => {
+      const proj = makeOutdated(dir, 'alpha')
+      const r = run(['projects', 'update', '--all'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /1\/1 proyectos actualizados/)
+      assert.equal(JSON.parse(readFileSync(join(proj, '.ancletorc'), 'utf8')).version, PKG.version)
+    })
+  })
+
+  it('--all no toca lo que ya esta al dia', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'fresh')
+      mkdirSync(proj, { recursive: true })
+      run(['install', '--project', proj, '--no-mcp'], dir, regEnv(dir))
+      const r = run(['projects', 'update', '--all'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /al dia/)
+    })
+  })
+
+  it('--json reporta los desactualizados', () => {
+    withDir((dir) => {
+      makeOutdated(dir, 'alpha')
+      const r = run(['projects', 'update', '--json'], dir, regEnv(dir))
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.outdated.length, 1)
+      assert.equal(j.outdated[0].version, '0.0.1')
+    })
+  })
+
+  it('un proyecto muerto no rompe el update de los vivos', () => {
+    withDir((dir) => {
+      const proj = makeOutdated(dir, 'alpha')
+      const dead = join(dir, 'dead')
+      mkdirSync(dead, { recursive: true })
+      run(['install', '--project', dead, '--no-mcp'], dir, regEnv(dir))
+      rmSync(join(dead, '.ancletorc'), { force: true })
+      const r = run(['projects', 'update', '--all'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /1\/1 proyectos actualizados/)
+      assert.equal(JSON.parse(readFileSync(join(proj, '.ancletorc'), 'utf8')).version, PKG.version)
+    })
+  })
+
+  it('list --update es equivalente a projects update', () => {
+    withDir((dir) => {
+      makeOutdated(dir, 'alpha')
+      const r = run(['projects', 'list', '--update', '--all'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /proyectos actualizados/)
+    })
+  })
+})
+
 describe('CLI update scoped por cwd (regresion)', () => {
   const regEnv = (dir) => ({ ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
 

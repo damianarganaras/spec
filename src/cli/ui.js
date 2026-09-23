@@ -179,3 +179,79 @@ export async function selectOption(message, options, initial = 0) {
   if (result === SIGINT) process.exit(0)
   return result === undefined ? options[start] : result
 }
+
+// Seleccion multiple: flechas para moverse, espacio para marcar/desmarcar,
+// `a` para todos/ninguno, enter para confirmar. Devuelve indices marcados.
+export async function selectMultiple(message, options, preselected = []) {
+  const stdin = process.stdin
+  const out = process.stdout
+  if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
+    return { cancelled: false, indices: [...preselected].sort((a, b) => a - b) }
+  }
+
+  const selected = new Set(preselected)
+  let index = 0
+  let rendered = 0
+  const mark = (i) => (selected.has(i) ? `${CYAN}◉${RESET}` : `${BOLD}◯${RESET}`)
+  const draw = () => {
+    if (rendered > 0) out.write(`\x1b[${rendered}A`)
+    let buf = ''
+    for (let i = 0; i < options.length; i++) {
+      const pointer = i === index ? `${CYAN}❯${RESET}` : ' '
+      const label = i === index ? `${BOLD}${options[i]}${RESET}` : options[i]
+      buf += `\x1b[2K  ${pointer} ${mark(i)} ${label}\n`
+    }
+    buf += `\x1b[2K  ${'\x1b[2m'}espacio marca · a todos · enter confirma${RESET}\n`
+    out.write(buf)
+    rendered = options.length + 1
+  }
+
+  const SIGINT = Symbol('SIGINT')
+  let resolveKey
+  const key = new Promise((resolve) => { resolveKey = resolve })
+  const onData = (chunk) => {
+    const s = chunk.toString('utf8')
+    if (s === '\u0003') {
+      stopBanner()
+      resolveKey(SIGINT)
+    } else if (s === '\u001b[A') {
+      index = (index - 1 + options.length) % options.length
+      draw()
+    } else if (s === '\u001b[B') {
+      index = (index + 1) % options.length
+      draw()
+    } else if (s === ' ') {
+      if (selected.has(index)) selected.delete(index)
+      else selected.add(index)
+      draw()
+    } else if (s === 'a' || s === 'A') {
+      if (selected.size === options.length) selected.clear()
+      else for (let i = 0; i < options.length; i++) selected.add(i)
+      draw()
+    } else if (s === '\r' || s === '\n') {
+      resolveKey('confirm')
+    }
+  }
+
+  let result
+  try {
+    out.write(`${CYAN}?${RESET} ${BOLD}${message}${RESET}\n`)
+    stdin.setRawMode(true)
+    stdin.resume()
+    stdin.on('data', onData)
+    draw()
+    if (activeBanner) activeBanner.below += 2 + options.length
+    result = await key
+    out.write('\n')
+    if (activeBanner) activeBanner.below += 1
+  } catch {
+    result = undefined
+  } finally {
+    stdin.removeListener('data', onData)
+    try { stdin.setRawMode(false) } catch {}
+    stdin.pause()
+  }
+  if (result === SIGINT) process.exit(0)
+  if (result === undefined) return { cancelled: true, indices: [] }
+  return { cancelled: false, indices: [...selected].sort((a, b) => a - b) }
+}

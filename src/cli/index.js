@@ -13,7 +13,7 @@ import { memoryDoctor } from '../core/memory/doctor.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
-import { showBanner, selectOption, stopBanner } from './ui.js'
+import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
 import { tierModels, gratisModel, envGratisModel, isKnownGratisModel, MUSE_SPARK_MODEL, GRATIS_FALLBACK_MODEL } from '../core/tier-models.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -56,6 +56,9 @@ Uso:
                                    Quita del registro los proyectos borrados o movidos
   ancleto projects info [ruta] [--json]
                                    Estado de un proyecto (version, memoria, seed, changes activos)
+  ancleto projects update [--all] [--json]
+                                   Actualiza los proyectos desactualizados (selector interactivo;
+                                   --all sin preguntar); equivalente a "cd <ruta> && ancleto update"
   ancleto list --projects [--json]  Alias de "ancleto projects list"
   ancleto memory context [--scope X] [--out file]
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
@@ -371,15 +374,81 @@ async function projectsInfo(target, { asJson, currentVersion }) {
   if (info.outdated) console.log(c.dim(`\n  actualizá con: cd "${info.path}" && ancleto update`))
 }
 
+// Actualiza proyectos desde el registro. Spawnea `ancleto update` por proyecto
+// (proceso aislado: un fallo no contamina a los demas y la salida queda por proyecto).
+async function projectsUpdate(reg, { asJson, all }) {
+  const currentVersion = await packageVersion()
+  const rows = await Promise.all(Object.values(reg.projects).map(projectStatus))
+  const dead = rows.filter((r) => !r.exists)
+  const outdated = rows.filter((r) => r.exists && r.version && r.version !== currentVersion)
+  const hintDead = () => {
+    if (dead.length) console.log(c.dim(`  (${dead.length} entrada(s) muerta(s) en el registro: corre \`ancleto projects prune\`)`))
+  }
+
+  if (outdated.length === 0) {
+    if (asJson) console.log(JSON.stringify({ ok: true, cliVersion: currentVersion, updated: [], dead: dead.map((r) => r.path), reason: 'nada desactualizado' }, null, 2))
+    else {
+      console.log(c.green('ancleto: todos los proyectos activos estan al dia'))
+      hintDead()
+    }
+    return
+  }
+
+  let targets
+  if (all) {
+    targets = outdated
+  } else if (!process.stdout.isTTY) {
+    if (asJson) console.log(JSON.stringify({ ok: true, cliVersion: currentVersion, outdated: outdated.map((r) => ({ path: r.path, version: r.version })), dead: dead.map((r) => r.path), action: 'usa --all para actualizar sin interaccion' }, null, 2))
+    else {
+      console.log(`${c.bold('ancleto: proyectos desactualizados')} ${c.dim(`(${outdated.length})`)}`)
+      for (const r of outdated) console.log(`  ${c.red(r.version)} → ${c.green(currentVersion)}  ${r.path}`)
+      console.log(c.dim('\n  sin TTY no puedo preguntar: corre `ancleto projects update --all` para actualizarlos todos'))
+      hintDead()
+    }
+    return
+  } else {
+    if (dead.length) {
+      console.log(c.dim(`ancleto: ${dead.length} entrada(s) muerta(s) en el registro (ignoradas; limpialas con \`ancleto projects prune\`)`))
+    }
+    const labels = outdated.map((r) => `${padVisible(r.path.split('/').filter(Boolean).pop() || r.path, 22)} ${c.red(r.version)} → ${c.green(currentVersion)}  ${c.dim(r.path)}`)
+    const { cancelled, indices } = await selectMultiple(`Proyectos a actualizar (${outdated.length} desactualizados)`, labels, outdated.map((_, i) => i))
+    if (cancelled || indices.length === 0) {
+      console.log(c.dim('ancleto: nada seleccionado, no se actualizo ningun proyecto'))
+      return
+    }
+    targets = indices.map((i) => outdated[i])
+  }
+
+  const selfCli = fileURLToPath(import.meta.url)
+  const results = []
+  console.log('')
+  for (const r of targets) {
+    process.stdout.write(`  ${c.cyan('→')} ${r.path} ... `)
+    const res = spawnSync(process.execPath, [selfCli, 'update'], { cwd: r.path, encoding: 'utf8', env: process.env })
+    const okRun = res.status === 0
+    const out = `${res.stdout || ''}${res.stderr || ''}`.trim()
+    console.log(okRun ? c.green('ok') : c.red('fallo'))
+    results.push({ path: r.path, from: r.version, to: okRun ? currentVersion : null, ok: okRun, output: out.split('\n').slice(-3).join('\n') })
+    if (!okRun) console.log(c.dim(`    ${out.split('\n').slice(-1)[0] || 'sin salida'}`))
+  }
+  const okCount = results.filter((x) => x.ok).length
+  console.log('')
+  console.log(`ancleto: ${okCount}/${results.length} proyectos actualizados a v${currentVersion}`)
+  if (asJson) console.log(JSON.stringify({ ok: okCount === results.length, cliVersion: currentVersion, updated: results }, null, 2))
+}
+
 async function projectsCommand(args) {
   const sub = args.find((a) => !a.startsWith('-')) || 'list'
   const flags = args.filter((a) => a.startsWith('-'))
   const asJson = flags.includes('--json')
   const dryRun = flags.includes('--dry-run')
+  const all = flags.includes('--all')
   const currentVersion = await packageVersion()
   switch (sub) {
     case 'list': {
-      await projectsList(await readProjectsRegistry(), { asJson, currentVersion })
+      const reg = await readProjectsRegistry()
+      await projectsList(reg, { asJson, currentVersion })
+      if (flags.includes('--update')) await projectsUpdate(reg, { asJson, all })
       break
     }
     case 'scan': {
@@ -398,9 +467,13 @@ async function projectsCommand(args) {
       await projectsInfo(target, { asJson, currentVersion })
       break
     }
+    case 'update': {
+      await projectsUpdate(await readProjectsRegistry(), { asJson, all })
+      break
+    }
     default:
       console.error(`ancleto: subcomando desconocido: projects ${sub}`)
-      console.error('ancleto: uso: ancleto projects [list|scan <raiz>|prune|info <ruta>] [--json] [--dry-run]')
+      console.error('ancleto: uso: ancleto projects [list|scan <raiz>|prune|info <ruta>|update] [--update] [--all] [--json] [--dry-run]')
       process.exit(1)
   }
 }

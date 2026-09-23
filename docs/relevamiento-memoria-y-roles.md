@@ -203,17 +203,68 @@ Se agruparon así; la clave es pedir **output crudo**, no resúmenes.
 
 ---
 
-## 7. Pendientes
+## 7. Cruce #2: matriz real de permisos (contrato vs frontmatter)
 
-- [x] **Recibidas las respuestas del agente** con evidencia cruda (19/19). Hallazgo #2 **descartado** (las tools funcionaban); aparecieron **3 bugs nuevos** (B1/B2/B3) y **5 gaps nuevos** (G8–G12).
-- [ ] **Volcar esto al BACKLOG** cuando el usuario lo indique (candidatos: sección `v0.7.0` o épica nueva "Memory & Roles hardening"; F1–F12 ya están redactados para copiar).
-- [ ] Decidir **F1** (auto-generación del working-context), **F3** (rol del coder) y **F9** (semántica de `searchMemory`), que son los tres cambios de comportamiento.
-- [ ] Recordar: el proyecto de prueba tiene `/aspec` en su `.gitignore`, un `openspec/` legacy, y tareas de verificación en dispositivo real pendientes (6/7/8/11 del change PWA).
-- [ ] Nota de higiene: el proyecto tenía `.ancletorc` y `.discovery-map.json` modificados **por la propia auditoría** (B1) — conviene revisar si dejarlos así.
+Segunda consulta al orquestador: se le pidio la lista de agentes con responsabilidades y **permisos** ("cuales tienen bash"), y respondio con el **contrato en prosa**. Se contrasto contra el `frontmatter` real de cada `agents/*.md` de este repo.
+
+### Matriz verificada
+
+| Agente | Contrato que declaro el agente | `frontmatter` real del repo | Coincide |
+|---|---|---|---|
+| orchestrator | No implementa, no usa bash | `read:true write:false edit:false bash:false` | ✅ |
+| **coder** | "puede usar herramientas para implementar **y validar**" | **`read:true write:true edit:true bash:false`** | ❌ **no puede ejecutar nada** |
+| tester | Corre tests, format-check y lint | `write:true edit:true bash:true` (`'*':allow`, `'*az *':deny`) | ✅ |
+| reviewer | Solo lectura/analisis | `read:true write:false edit:false bash:false` | ✅ |
+| documenter | Escribe solo documentacion/archivo | `write:true edit:true bash:true` (allow salvo `az`) | ✅ |
+| context-resolver | Solo lectura de la tarjeta | `bash:true` pero `'*':deny` + 1 grep en allowlist | ✅ |
+| technical-discovery | Solo lectura + estado del seed | `bash:true` pero `'*':deny` + `'ancleto discovery --check':allow` | ✅ |
+| technical-seed-writer | Escribe solo el seed | `write:true edit:true bash:true` | ✅ |
+| spec-writer | Escribe solo artefactos de change | `write:true bash:false` | ✅ |
+| memory-keeper | Unico que toca memoria | `write:false edit:false` + `searchMemory`/`recordRule`/`recordDecision` | ✅ |
+
+### El hallazgo central
+
+**El contrato del agente dice que `@coder` implementa y valida, pero su `frontmatter` no le da shell.** Es la misma friccion #1 que reporto en App Coffice ("no puedo correr `npm run build`", 5 veces). Ademas:
+
+- El agente **no sabe** que esta limitado: describe el contrato, no su propia configuracion. Si le preguntas "¿podes buildear?", responde que si — hasta que lo intenta.
+- **Repomix no consume nada por defecto**: esta solo como herramienta on-demand de `ancleto discovery` (via `npx`). No es dependencia ni pesa en el contexto. Confirmado: no aparece en `agents/`/`skills/`/`templates/`.
+
+### Implicancia
+
+`coder` sin shell es un **problema doble**: (a) no puede verificar su propio trabajo, (b) empuja el build/assets a un agente fuera de rol. Es el issue **#13**, y este cruce lo confirma con evidencia independiente (dos entornos distintos, misma limitacion).
+
+### Preguntas de auditoria #2 enviadas (para cuando responda)
+
+1. `tools:`/`permission:` **literal** de cada agente (no la descripcion).
+2. ¿`@coder` puede ejecutar comandos? ¿Que error exacto da en un build?
+3. ¿Quien genera los artefactos de build si el coder no puede?
+4. ¿Se puede convencer al orquestador de implementar directo (resistencia del guardrail)?
+5. Cuando `reviewer` marca CRITICAL, ¿frena o sigue? Caso concreto.
+6. En el checkpoint de `direct-implementation`, ¿espera o asume "si" por silencio?
+7. `searchMemory` en lenguaje natural: ¿funciona o solo terminos exactos?
+8. `.ancleto/working-context.md`: ¿existe? ¿quien lo genera y cuando?
+9. Cuando el Recall vuelve vacio, ¿explica por que o sigue?
+10. Contexto inicial del repo: ¿cuantos tokens y con que tope?
+11. ¿Detecta el seed STALE y lo regenera, o usa info vieja?
+12. ¿Quien decide leer archivo entero vs fragmento? ¿Limite de archivos?
+13. Si `@spec-writer` escribe memoria, ¿esta bloqueado tecnicamente o es honor-system?
+14. Si encuentra un bug del sistema, ¿lo arregla o escala?
+15. Los specs, ¿salen con keywords en ingles (`Requirement`, `WHEN`, `THEN`)?
 
 ---
 
-## 8. Anexo: evidencia cruda del agente (para no perderla)
+## 8. Pendientes
+
+- [x] **Recibidas las respuestas del agente** con evidencia cruda (19/19). Hallazgo #2 **descartado** (las tools funcionaban); aparecieron **3 bugs nuevos** (B1/B2/B3) y **5 gaps nuevos** (G8–G12).
+- [x] **Cruce #2** con la matriz real de permisos (§7): confirmado que **`@coder` sin shell** es el problema central (#13), y que **Repomix no consume contexto** por defecto.
+- [x] Issues abiertos en el Kanban (epica #9 + 12 sub-issues). **Cerrados:** #10, #11, #12, #15, #19, #20.
+- [ ] **Decidir F3/#13** (rol del coder) — **opcion elegida: (a)** darle `bash` acotado, igual que el orquestador del trabajo. **En curso.**
+- [ ] Pendiente decidir **F9** (semantica de `searchMemory`) cuando se retome #14.
+- [ ] Recordar: el proyecto de prueba tiene `/aspec` en su `.gitignore`, un `openspec/` legacy, y tareas de verificacion en dispositivo real pendientes (6/7/8/11 del change PWA).
+
+---
+
+## 9. Anexo: evidencia cruda del agente (para no perderla)
 
 **Tools cargadas:** `searchMemory`/`recordRule`/`recordDecision` (ancleto-memory) + `mem_*` (engram) + `caveman_*`. Todas presentes.
 

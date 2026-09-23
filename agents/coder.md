@@ -8,7 +8,17 @@ tools:
   read: true
   write: true
   edit: true
-  bash: false
+  bash: true
+permission:
+  bash:
+    '*': allow
+    '*az *': deny
+    '*git push*': deny
+    '*git reset*': deny
+    '*git checkout*': deny
+    '*git rebase*': deny
+    '*rm -rf*': deny
+    '*npm publish*': deny
 ---
 
 # Coder Agent
@@ -103,12 +113,14 @@ Follow the conventions in:
 - If the smallest correct implementation appears to require broader scope than the approved change, stop and escalate back to `@orchestrator` instead of proceeding
 - If solving the task would require changing shared helpers, shared utils, or broader logic used by other areas, escalate back to `@orchestrator` unless that broader scope was explicitly approved
 - If an implementation choice would materially change the technical approach compared to the approved change inputs, escalate instead of guessing
-- Do not validate by browsing external or production URLs unless `@orchestrator` explicitly requests it
+- Do not validate by browsing external, staging, or production URLs
 - Keep all created or modified files consistent with the project's Prettier formatting and relevant ESLint rules
 - Limit formatting and lint-related fixes to the files you changed
 - Do not expand scope to clean up unrelated lint or formatting issues elsewhere in the repo
 - Read only relevant files; avoid unnecessary codebase exploration
-- You do not have Bash. Do not run commands or external requests; only `@context-resolver` resolves Work Items
+- You have Bash for **building and validating your own work** (install, build, typecheck, lint, run a scoped test or script) and for inspecting the repo. Use the smallest command that proves your change works. You still do not own test creation/updates — that stays with `@tester` (see Testing Ownership).
+- Do **not** use Bash for: network or external requests (`curl`, `wget`, fetching remote URLs), resolving Work Items (only `@context-resolver` does that — and `az` is denied), publishing (`npm publish`), rewriting git history (`git push`, `git reset`, `git rebase`, `git checkout`), or destructive filesystem operations (`rm -rf`). These are denied by policy; if you think one is needed, escalate.
+- Do not validate by hitting external, staging, or production URLs.
 - Keep implementation aligned with the current project structure
 - If tasks exist, follow them sequentially and update them as work is completed
 - Do not add or modify tests by default in any path (`spec-required` or `direct-implementation`), even if tests are mentioned in `tasks.md`

@@ -98,3 +98,37 @@ describe('content guards — referencias validas', () => {
     }
   })
 })
+
+describe('content guards - matriz de permisos de agentes (issue #13)', () => {
+  const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
+
+  it('coder tiene bash con allowlist y deny de lo destructivo', () => {
+    const t = readAgent('coder')
+    assert.match(t, /^tools:\n(?:.*\n)*?  bash: true$/m, 'coder debe tener bash: true')
+    assert.match(t, /permission:\n  bash:/, 'coder debe declarar permission.bash')
+    assert.match(t, /'\*': allow/, 'coder: allow base')
+    for (const denied of ['*az *', '*git push*', '*git reset*', '*git checkout*', '*git rebase*', '*rm -rf*', '*npm publish*']) {
+      assert.ok(t.includes(`'${denied}': deny`), `coder debe denegar ${denied}`)
+    }
+  })
+
+  it('coder documenta el uso de bash y sus limites', () => {
+    const t = readAgent('coder')
+    assert.match(t, /You have Bash for \*\*building and validating/)
+    assert.match(t, /Do \*\*not\*\* use Bash for:/)
+    assert.doesNotMatch(t, /You do not have Bash/, 'no debe quedar la regla vieja')
+  })
+
+  it('orchestrator, reviewer y spec-writer siguen sin bash', () => {
+    for (const name of ['orchestrator', 'reviewer', 'spec-writer']) {
+      const t = readAgent(name)
+      assert.match(t, /^tools:\n(?:.*\n)*?  bash: false$/m, `${name} debe seguir sin bash`)
+    }
+  })
+
+  it('el orchestrator refleja que el coder self-valida sin reemplazar al tester', () => {
+    const t = readAgent('orchestrator')
+    assert.match(t, /`@coder` owns feature implementation and may build\/validate its own work/)
+    assert.match(t, /does not replace the `@tester` stage/)
+  })
+})

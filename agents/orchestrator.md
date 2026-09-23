@@ -390,8 +390,8 @@ Typical completion signals:
 
 For `spec-required` changes, implementation and testing are separate responsibilities by default.
 
-- `@coder` owns feature implementation
-- `@tester` owns unit-test creation or updates and verification
+- `@coder` owns feature implementation and may build/validate its own work (it has scoped Bash for that: install, build, typecheck, lint, scoped runs). Its self-validation does not replace the `@tester` stage.
+- `@tester` owns unit-test creation or updates and the formal verification, including the non-writing format check and lint on the final combined file set
 - `@reviewer` provides an optional independent review stage when needed
 
 Do not treat the `@tester` stage as a passive smoke check for structured work. Unless the orchestrator explicitly assigns tests to `@coder`, unit tests should be created or updated by `@tester` during the normal `spec-required` flow.

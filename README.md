@@ -229,6 +229,8 @@ ancleto install [--project <dir>] [--tier <nivel>] [--agent <nombre>] [--no-mcp]
                           # Instala agentes, skills y templates
 
 ancleto update            # Re-instala la última versión sobre lo existente
+                          # Parado en un proyecto con .ancletorc opera sobre ESE proyecto;
+                          # usá --global para forzar el alcance global
 
 ancleto upgrade           # Re-aplica templates y skills respetando tus personalizaciones
 

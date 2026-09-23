@@ -1117,3 +1117,48 @@ describe('CLI projects (registro de proyectos)', () => {
     })
   })
 })
+
+describe('CLI update scoped por cwd (regresion)', () => {
+  const regEnv = (dir) => ({ ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
+
+  it('update parado en un proyecto con .ancletorc lo actualiza y registra (no global)', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'proj')
+      mkdirSync(proj, { recursive: true })
+      run(['init', '--agent', 'opencode'], proj, regEnv(dir))
+      const before = readRc(proj).version
+      const r = run(['update', '--no-mcp'], proj, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /instalado en .*proj/)
+      assert.doesNotMatch(r.stdout, /disponible en todos tus proyectos/)
+      assert.equal(readRc(proj).version, PKG.version)
+      assert.notEqual(readRc(proj).version, undefined)
+      const reg = JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8'))
+      assert.equal(Object.keys(reg.projects).length, 1)
+      assert.equal(Object.values(reg.projects)[0].path.endsWith('/proj'), true)
+      void before
+    })
+  })
+
+  it('update fuera de un proyecto sigue siendo global', () => {
+    withDir((dir) => {
+      const empty = join(dir, 'empty')
+      mkdirSync(empty, { recursive: true })
+      const r = run(['update', '--no-mcp'], empty, { ...regEnv(dir), XDG_CONFIG_HOME: join(dir, 'xdg') })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /disponible en todos tus proyectos/)
+      assert.equal(existsSync(join(dir, 'registry.json')), false, 'no registra nada')
+    })
+  })
+
+  it('--global fuerza alcance global aunque haya .ancletorc', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'proj')
+      mkdirSync(proj, { recursive: true })
+      run(['init', '--agent', 'opencode'], proj, regEnv(dir))
+      const r = run(['update', '--no-mcp', '--global'], proj, { ...regEnv(dir), XDG_CONFIG_HOME: join(dir, 'xdg') })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /disponible en todos tus proyectos/)
+    })
+  })
+})

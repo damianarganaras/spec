@@ -34,6 +34,8 @@ Uso:
   ancleto install --tier <nivel>     normal | minimo | gratis (wizard interactivo en TTY)
   ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (wizard si no esta guardado)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
+                                   Parado en un proyecto con .ancletorc opera sobre ese proyecto;
+                                   usa --global para forzar el alcance global
   ancleto upgrade [--agent <nombre>]  Re-aplica templates (LOCKED) y skills sobre el proyecto actual
   ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>]
                                     Crea .ancletorc en el repositorio actual
@@ -716,22 +718,28 @@ async function copyTemplates(projectDir) {
 
 async function install(args) {
   const pi = args.indexOf('--project')
-  const project = pi >= 0 ? args[pi + 1] : null
+  const explicitProject = pi >= 0 ? args[pi + 1] : null
   const withMcp = !args.includes('--no-mcp')
   let mcpMap = withMcp ? buildDefaultMcp({ withEngram: args.includes('--with-engram') }) : {}
 
   const agentFlag = scanAgentFlag(args)
   let tier = scanTierFlag(args)
 
-  if (project) {
-    const dir = resolve(project)
-    if (!(await exists(dir))) {
-      console.error(`ancleto: el directorio no existe: ${dir}`)
+  let projectDir
+  if (explicitProject) {
+    projectDir = resolve(explicitProject)
+    if (!(await exists(projectDir))) {
+      console.error(`ancleto: el directorio no existe: ${projectDir}`)
       process.exit(1)
     }
+  } else if (!args.includes('--global') && (await exists(join(process.cwd(), '.ancletorc')))) {
+    // Estar parado en un proyecto ancleto implica operar sobre ese proyecto.
+    // `--global` fuerza el alcance global cuando el repo tambien tiene .ancletorc.
+    projectDir = process.cwd()
+  } else {
+    projectDir = null
   }
 
-  const projectDir = project ? resolve(project) : null
   const target = projectDir ? join(projectDir, '.opencode') : globalConfigDir()
   const existingRc = projectDir ? await readAncletorc(projectDir) : null
   const storedTier = (await exists(tierStatePath(target)))

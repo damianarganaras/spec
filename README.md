@@ -26,6 +26,7 @@
 - [Guía de .gitignore](#guía-de-gitignore)
 - [Configuración y tiers de costo](#configuración-y-tiers-de-costo)
 - [Uso rápido](#uso-rápido)
+- [Proyectos con ancleto](#proyectos-con-ancleto)
 - [Referencia de comandos CLI](#referencia-de-comandos-cli)
 - [Motor de memoria persistente](#motor-de-memoria-persistente)
 - [Comandos del ciclo SDD en tu IDE](#comandos-del-ciclo-sdd-en-tu-ide)
@@ -138,6 +139,36 @@ El framework **no gestiona tu `.gitignore`**: es una decisión del proyecto. Com
 
 ---
 
+## Proyectos con ancleto
+
+Cuando instalás ancleto **en un proyecto** (`install --project`, `init` o `update`), el CLI lo anota en un registro global (`~/.config/ancleto/projects.json`). Así podés ver de un vistazo todos los proyectos que lo usan, sin importar desde qué terminal estés:
+
+```bash
+ancleto projects            # lista (o `ancleto list --projects`)
+ancleto projects info       # estado del proyecto actual
+ancleto projects scan "D:/Repos D/Proyectos"   # descubre y registra los que ya existen
+ancleto projects prune      # saca del registro los borrados/movidos
+```
+
+La lista muestra versión instalada, origen (por proyecto vs agentes globales), tier y agente:
+
+```
+ancleto: proyectos (2 activos de 3 registrados · CLI v0.6.28)
+
+   PROYECTO        VERSIÓN   ORIGEN    TIER      AGENTE     RUTA
+  ● App Coffice    0.6.28    scoped    minimo    opencode   D:/Repos D/Proyectos/App Coffice
+  ● spec           0.6.28    scoped    normal    opencode   D:/Repos D/Proyectos/ancleto/spec
+  ✖ Volatile        —         muerto    —         —          D:/Repos D/tmp/volatile
+```
+
+- `●` verde: instalación por proyecto · `○` amarillo: usa agentes globales · `✖` rojo: ruta inexistente (candidata a `prune`).
+- Versión en rojo = desactualizada respecto del CLI instalado.
+- `--json` en todos para scripting.
+
+El registro es tuyo y local: no viaja con el repo ni se comparte. `ANCLETO_PROJECTS_FILE` permite apuntarlo a otro lado.
+
+---
+
 ## Configuración y tiers de costo
 
 En la primera ejecución, un **wizard interactivo** te guía por los pasos de configuración (agente/IDE y nivel de gasto). También podés pasarlos por flags:
@@ -208,6 +239,15 @@ ancleto specs check [--change <nombre>] [--json]
 
 ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
                           # Tokens por sesión de opencode (rollup de subagentes; --session desglosa por agente)
+
+ancleto projects [list] [--json]
+                          # Lista los proyectos que usan ancleto (versión, tier, origen, ruta)
+ancleto projects scan <raíz> [--dry-run] [--json]
+                          # Descubre y registra proyectos ancleto bajo una raíz
+ancleto projects prune [--dry-run] [--json]
+                          # Quita del registro los proyectos borrados o movidos
+ancleto projects info [ruta] [--json]
+                          # Estado de un proyecto (versión, memoria, seed, changes activos)
 
 ancleto doctor            # Diagnostica el entorno (Node, node:sqlite, opencode.json)
 

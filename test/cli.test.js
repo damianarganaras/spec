@@ -993,3 +993,127 @@ describe('CLI stats (issue #27)', () => {
     })
   })
 })
+
+describe('CLI projects (registro de proyectos)', () => {
+  const regEnv = (dir) => ({ ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
+
+  it('install --project registra el proyecto en el registro global', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'alpha')
+      mkdirSync(proj, { recursive: true })
+      const r = run(['install', '--project', proj, '--no-mcp', '--tier', 'minimo'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const reg = JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8'))
+      const entry = Object.values(reg.projects)[0]
+      assert.ok(entry, 'debe haber una entrada')
+      assert.equal(entry.tier, 'minimo')
+      assert.equal(entry.agent, 'opencode')
+      assert.equal(entry.scoped, true)
+    })
+  })
+
+  it('init registra el proyecto', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'beta')
+      mkdirSync(proj, { recursive: true })
+      const r = run(['init', '--agent', 'opencode'], proj, regEnv(dir))
+      assert.equal(r.status, 0)
+      const reg = JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8'))
+      assert.equal(Object.keys(reg.projects).length, 1)
+    })
+  })
+
+  it('re-instalar actualiza la entrada, no duplica', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'alpha')
+      mkdirSync(proj, { recursive: true })
+      run(['install', '--project', proj, '--no-mcp', '--tier', 'minimo'], dir, regEnv(dir))
+      run(['install', '--project', proj, '--no-mcp', '--tier', 'normal'], dir, regEnv(dir))
+      const reg = JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8'))
+      assert.equal(Object.keys(reg.projects).length, 1)
+      assert.equal(Object.values(reg.projects)[0].tier, 'normal')
+      assert.ok(Object.values(reg.projects)[0].registeredAt, 'conserva registeredAt')
+    })
+  })
+
+  it('projects lista con --json y detecta el directorio actual', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'alpha')
+      mkdirSync(proj, { recursive: true })
+      run(['install', '--project', proj, '--no-mcp', '--tier', 'minimo'], dir, regEnv(dir))
+      const r = run(['projects', 'list', '--json'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.count, 1)
+      assert.equal(j.projects[0].exists, true)
+      assert.equal(j.projects[0].tier, 'minimo')
+    })
+  })
+
+  it('list --projects es alias de projects list', () => {
+    withDir((dir) => {
+      const r = run(['list', '--projects', '--json'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.equal(JSON.parse(r.stdout).ok, true)
+    })
+  })
+
+  it('projects scan descubre y registra, con --dry-run no escribe', () => {
+    withDir((dir) => {
+      const a = join(dir, 'root', 'alpha')
+      const b = join(dir, 'root', 'nested', 'beta')
+      mkdirSync(a, { recursive: true })
+      mkdirSync(b, { recursive: true })
+      run(['install', '--project', a, '--no-mcp'], dir, regEnv(dir))
+      run(['install', '--project', b, '--no-mcp'], dir, regEnv(dir))
+      rmSync(join(dir, 'registry.json'), { force: true })
+      const dry = run(['projects', 'scan', join(dir, 'root'), '--dry-run', '--json'], dir, regEnv(dir))
+      const dj = JSON.parse(dry.stdout)
+      assert.equal(dj.added.length, 2)
+      assert.equal(existsSync(join(dir, 'registry.json')), false, 'dry-run no escribe')
+      const real = run(['projects', 'scan', join(dir, 'root'), '--json'], dir, regEnv(dir))
+      assert.equal(JSON.parse(real.stdout).added.length, 2)
+      assert.equal(JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8')).projects
+        ? Object.keys(JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8')).projects).length
+        : 0, 2)
+    })
+  })
+
+  it('projects prune quita entradas muertas', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'gone')
+      mkdirSync(proj, { recursive: true })
+      run(['init', '--agent', 'opencode'], proj, regEnv(dir))
+      rmSync(proj, { recursive: true, force: true })
+      const dry = run(['projects', 'prune', '--dry-run', '--json'], dir, regEnv(dir))
+      assert.equal(JSON.parse(dry.stdout).pruned, 1)
+      assert.equal(Object.keys(JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8')).projects).length, 1)
+      const real = run(['projects', 'prune', '--json'], dir, regEnv(dir))
+      assert.equal(JSON.parse(real.stdout).pruned, 1)
+      assert.equal(Object.keys(JSON.parse(readFileSync(join(dir, 'registry.json'), 'utf8')).projects).length, 0)
+    })
+  })
+
+  it('projects info reporta estado del proyecto', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'alpha')
+      mkdirSync(proj, { recursive: true })
+      run(['install', '--project', proj, '--no-mcp', '--tier', 'minimo'], dir, regEnv(dir))
+      const r = run(['projects', 'info', proj, '--json'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.agent, 'opencode')
+      assert.equal(j.tier, 'minimo')
+      assert.equal(j.scoped, true)
+      assert.equal(j.activeChanges, 0)
+    })
+  })
+
+  it('projects info sin .ancletorc falla claro', () => {
+    withDir((dir) => {
+      const r = run(['projects', 'info', dir, '--json'], dir, regEnv(dir))
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /no parece un proyecto ancleto/)
+    })
+  })
+})

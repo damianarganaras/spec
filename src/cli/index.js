@@ -47,6 +47,14 @@ Uso:
   ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
                                    Tokens por sesion de opencode (entrada/salida/razonamiento/cache),
                                    con rollup de subagentes y desglose por agente con --session
+  ancleto projects [list] [--json] Lista los proyectos que usan ancleto (version, tier, origen, ruta)
+  ancleto projects scan <raiz> [--dry-run] [--json]
+                                   Descubre y registra proyectos ancleto bajo una raiz
+  ancleto projects prune [--dry-run] [--json]
+                                   Quita del registro los proyectos borrados o movidos
+  ancleto projects info [ruta] [--json]
+                                   Estado de un proyecto (version, memoria, seed, changes activos)
+  ancleto list --projects [--json]  Alias de "ancleto projects list"
   ancleto memory context [--scope X] [--out file]
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
   ancleto memory list [--type X] [--scope X] [--all] [--json]
@@ -100,6 +108,301 @@ function globalConfigDir() {
     ? join(process.env.XDG_CONFIG_HOME, 'opencode')
     : join(homedir(), '.config', 'opencode')
 }
+
+// Registro global de proyectos que usan ancleto (no depende de opencode).
+function projectsRegistryPath() {
+  if (process.env.ANCLETO_PROJECTS_FILE) return process.env.ANCLETO_PROJECTS_FILE
+  const base = process.env.XDG_CONFIG_HOME ? join(process.env.XDG_CONFIG_HOME, 'ancleto') : join(homedir(), '.config', 'ancleto')
+  return join(base, 'projects.json')
+}
+
+function normKey(p) {
+  return normPath(resolve(p))
+}
+
+async function readProjectsRegistry() {
+  const file = projectsRegistryPath()
+  if (!(await exists(file))) return { schemaVersion: 1, projects: {} }
+  try {
+    const data = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    return { schemaVersion: 1, projects: data.projects || {} }
+  } catch (err) {
+    console.warn(`ancleto: registro de proyectos ilegible (${file}): ${err.message}`)
+    return { schemaVersion: 1, projects: {} }
+  }
+}
+
+async function writeProjectsRegistry(reg) {
+  const file = projectsRegistryPath()
+  await mkdir(dirname(file), { recursive: true })
+  await writeFile(file, JSON.stringify(reg, null, 2) + '\n')
+  return file
+}
+
+async function registerProject(projectDir, { agent, tier } = {}) {
+  const abs = resolve(projectDir)
+  const rc = await readAncletorc(abs)
+  const tierFile = join(abs, '.opencode', '.ancleto-tier')
+  const localTier = (await exists(tierFile)) ? (await readFile(tierFile, 'utf8')).trim() : null
+  const hasScopedAgents = await exists(join(abs, '.opencode', 'agents'))
+  const entry = {
+    path: abs.replace(/\\/g, '/'),
+    version: await packageVersion(),
+    agent: agent || rc?.agent || 'opencode',
+    tier: tier || localTier || null,
+    scoped: hasScopedAgents,
+    registeredAt: new Date().toISOString()
+  }
+  const reg = await readProjectsRegistry()
+  const key = normKey(abs)
+  entry.registeredAt = reg.projects[key]?.registeredAt || entry.registeredAt
+  entry.lastSeen = new Date().toISOString()
+  reg.projects[key] = entry
+  await writeProjectsRegistry(reg)
+}
+
+async function unregisterProject(projectDir) {
+  const reg = await readProjectsRegistry()
+  const key = normKey(projectDir)
+  if (!reg.projects[key]) return false
+  delete reg.projects[key]
+  await writeProjectsRegistry(reg)
+  return true
+}
+
+// Color helpers (respetan NO_COLOR y TTY).
+const useColor = () => process.stdout.isTTY && !process.env.NO_COLOR
+function paint(code, s) {
+  return useColor() ? `\x1b[${code}m${s}\x1b[0m` : String(s)
+}
+const c = {
+  dim: (s) => paint('2', s),
+  bold: (s) => paint('1', s),
+  green: (s) => paint('32', s),
+  yellow: (s) => paint('33', s),
+  red: (s) => paint('31', s),
+  cyan: (s) => paint('36', s)
+}
+const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, '')
+function padVisible(s, width) {
+  const len = stripAnsi(s).length
+  return s + ' '.repeat(Math.max(0, width - len))
+}
+
+// Descubre proyectos ancleto bajo una raiz (busca .ancletorc, con profundidad acotada).
+async function discoverProjectsUnder(root, maxDepth = 3) {
+  const found = []
+  const skip = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', 'vendor'])
+  async function walk(dir, depth) {
+    let entries
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    if (entries.some((e) => e.isFile() && (e.name === '.ancletorc' || e.name === '.ancletorc'))) found.push(dir)
+    if (depth >= maxDepth) return
+    for (const e of entries) {
+      if (!e.isDirectory() || skip.has(e.name) || e.name.startsWith('.')) continue
+      await walk(join(dir, e.name), depth + 1)
+    }
+  }
+  await walk(resolve(root), 0)
+  return found
+}
+
+// Lee el estado real de un proyecto registrado (o descubre que ya no existe).
+async function projectStatus(entry) {
+  const abs = entry.path
+  if (!(await exists(abs))) return { ...entry, exists: false }
+  const rc = await readAncletorc(abs)
+  if (!rc) return { ...entry, exists: false, reason: 'sin .ancletorc' }
+  const tierFile = join(abs, '.opencode', '.ancleto-tier')
+  const tier = (await exists(tierFile)) ? (await readFile(tierFile, 'utf8')).trim() : null
+  const scoped = await exists(join(abs, '.opencode', 'agents'))
+  return {
+    ...entry,
+    exists: true,
+    path: abs.replace(/\\/g, '/'),
+    version: rc.version || entry.version || null,
+    agent: rc.agent || entry.agent || null,
+    tier,
+    scoped
+  }
+}
+
+async function projectsList(reg, { asJson, currentVersion }) {
+  const rows = await Promise.all(Object.values(reg.projects).map(projectStatus))
+  rows.sort((a, b) => String(a.path).localeCompare(String(b.path)))
+  if (asJson) {
+    console.log(JSON.stringify({ ok: true, cliVersion: currentVersion, registry: projectsRegistryPath(), count: rows.length, projects: rows }, null, 2))
+    return rows
+  }
+  if (rows.length === 0) {
+    console.log('ancleto: no hay proyectos registrados todavia')
+    console.log(c.dim('  registra uno con: ancleto install --project <ruta>  ·  o descubre con: ancleto projects scan <raiz>'))
+    return rows
+  }
+  const live = rows.filter((r) => r.exists)
+  console.log(`${c.bold('ancleto: proyectos')} ${c.dim(`(${live.length} activos de ${rows.length} registrados · CLI v${currentVersion})`)}`)
+  console.log('')
+  const header = ['', padVisible('PROYECTO', 22), padVisible('VERSIÓN', 10), padVisible('ORIGEN', 10), padVisible('TIER', 9), padVisible('AGENTE', 10), 'RUTA']
+  console.log(c.dim(`  ${header.join(' ')}`))
+  for (const r of rows) {
+    const name = r.path.split('/').filter(Boolean).pop() || r.path
+    if (!r.exists) {
+      console.log(`  ${c.red('✖')} ${padVisible(c.red(name.slice(0, 21)), 22)} ${padVisible(c.dim('—'), 10)} ${padVisible(c.red('muerto'), 10)} ${padVisible('—', 9)} ${padVisible('—', 10)} ${c.dim(r.path)}`)
+      continue
+    }
+    const outdated = r.version && currentVersion && r.version !== currentVersion
+    const marker = r.scoped ? c.green('●') : c.yellow('○')
+    const ver = outdated ? c.red(r.version) : c.green(r.version || '—')
+    const origin = r.scoped ? c.green('scoped') : c.yellow('global')
+    console.log(`  ${marker} ${padVisible(c.bold(name.slice(0, 21)), 22)} ${padVisible(ver, 10)} ${padVisible(origin, 10)} ${padVisible(r.tier || c.dim('—'), 9)} ${padVisible(r.agent || '—', 10)} ${r.path}`)
+  }
+  console.log('')
+  console.log(c.dim('  ● instalación por proyecto   ○ usa agentes globales   versión en rojo = desactualizada'))
+  return rows
+}
+
+async function projectsScan(root, { asJson, dryRun }) {
+  if (!root) {
+    console.error('ancleto: uso: ancleto projects scan <raiz> [--dry-run] [--json]')
+    process.exit(1)
+  }
+  if (!(await exists(root))) {
+    console.error(`ancleto: no existe la raiz "${root}"`)
+    process.exit(1)
+  }
+  const found = await discoverProjectsUnder(root)
+  const reg = await readProjectsRegistry()
+  const added = []
+  const known = []
+  for (const dir of found) {
+    const key = normKey(dir)
+    if (reg.projects[key]) {
+      known.push(dir)
+      continue
+    }
+    added.push(dir)
+    if (!dryRun) await registerProject(dir)
+  }
+  if (asJson) {
+    console.log(JSON.stringify({ ok: true, root: resolve(root), found: found.length, added: added.map((p) => p.replace(/\\/g, '/')), known: known.map((p) => p.replace(/\\/g, '/')), dryRun: !!dryRun }, null, 2))
+    return
+  }
+  console.log(`${c.bold('ancleto: scan')} ${c.dim(resolve(root).replace(/\\/g, '/'))}`)
+  console.log(`  ${c.dim('encontrados:')} ${found.length} proyectos con .ancletorc`)
+  for (const p of added) console.log(`  ${dryRun ? c.yellow('·') : c.green('+')} ${p.replace(/\\/g, '/')}`)
+  for (const p of known) console.log(`  ${c.dim('=')} ${c.dim(p.replace(/\\/g, '/'))}`)
+  if (dryRun) console.log(c.dim('\n  --dry-run: no se registro nada'))
+  else console.log(c.dim(`\n  registrados: ${added.length} nuevos`))
+}
+
+async function projectsPrune({ asJson, dryRun }) {
+  const reg = await readProjectsRegistry()
+  const removed = []
+  for (const [key, entry] of Object.entries(reg.projects)) {
+    const st = await projectStatus(entry)
+    if (!st.exists) {
+      removed.push({ key, path: entry.path, reason: st.reason || 'ruta inexistente' })
+      if (!dryRun) delete reg.projects[key]
+    }
+  }
+  if (!dryRun && removed.length) await writeProjectsRegistry(reg)
+  if (asJson) {
+    console.log(JSON.stringify({ ok: true, pruned: removed.length, removed, dryRun: !!dryRun }, null, 2))
+    return
+  }
+  if (removed.length === 0) {
+    console.log(c.dim('ancleto: no hay entradas muertas en el registro'))
+    return
+  }
+  console.log(`${c.bold('ancleto: prune')}${dryRun ? ` ${c.dim('(dry-run)')}` : ''}`)
+  for (const r of removed) console.log(`  ${dryRun ? c.yellow('·') : c.red('−')} ${r.path} ${c.dim(`(${r.reason})`)}`)
+  console.log(dryRun ? c.dim(`\n  --dry-run: se quitarian ${removed.length}`) : c.dim(`\n  removidos: ${removed.length}`))
+}
+
+async function projectsInfo(target, { asJson, currentVersion }) {
+  const abs = resolve(target || process.cwd())
+  const rc = await readAncletorc(abs)
+  if (!rc) {
+    console.error(`ancleto: "${abs}" no parece un proyecto ancleto (sin .ancletorc)`)
+    process.exit(1)
+  }
+  const st = await projectStatus({ path: abs, ...rc })
+  const hasMemory = await exists(join(abs, '.ancleto', 'memory.db'))
+  const hasSeedIndex = await exists(join(abs, rc.discovery?.outputDir || 'docs/technical-discovery', 'index.md'))
+  const hasWorkingContext = await exists(join(abs, '.ancleto', 'working-context.md'))
+  const activeChangesDir = join(abs, CHANGES_ROOT, 'changes')
+  let activeChanges = 0
+  if (await exists(activeChangesDir)) {
+    const entries = await readdir(activeChangesDir, { withFileTypes: true })
+    activeChanges = entries.filter((e) => e.isDirectory() && e.name !== 'archive').length
+  }
+  const info = {
+    path: abs.replace(/\\/g, '/'),
+    version: st.version,
+    outdated: st.version && currentVersion ? st.version !== currentVersion : false,
+    agent: st.agent,
+    tier: st.tier,
+    scoped: st.scoped,
+    azureEnabled: !!rc.azure?.enabled,
+    memoryDb: hasMemory,
+    technicalSeed: hasSeedIndex,
+    workingContext: hasWorkingContext,
+    activeChanges
+  }
+  if (asJson) {
+    console.log(JSON.stringify({ ok: true, cliVersion: currentVersion, ...info }, null, 2))
+    return
+  }
+  console.log(`${c.bold((abs.split(/[\\/]/).filter(Boolean).pop() || abs))} ${c.dim(info.path)}`)
+  console.log('')
+  console.log(`  versión      ${info.outdated ? c.red(`${info.version} → ${currentVersion} disponible`) : c.green(info.version || '—')}`)
+  console.log(`  instalación  ${info.scoped ? c.green('por proyecto (scoped)') : c.yellow('agentes globales')}`)
+  console.log(`  tier / agente ${info.tier || c.dim('—')} / ${info.agent || '—'}`)
+  console.log(`  Azure DevOps ${info.azureEnabled ? c.green('habilitado') : c.dim('deshabilitado')}`)
+  console.log(`  memoria      ${info.memoryDb ? c.green('sí (.ancleto/memory.db)') : c.dim('no')}`)
+  console.log(`  seed técnico ${info.technicalSeed ? c.green('generado') : c.dim('sin generar')}`)
+  console.log(`  changes      ${info.activeChanges > 0 ? c.cyan(`${info.activeChanges} activo(s)`) : c.dim('ninguno')}`)
+  if (info.outdated) console.log(c.dim(`\n  actualizá con: cd "${info.path}" && ancleto update`))
+}
+
+async function projectsCommand(args) {
+  const sub = args.find((a) => !a.startsWith('-')) || 'list'
+  const flags = args.filter((a) => a.startsWith('-'))
+  const asJson = flags.includes('--json')
+  const dryRun = flags.includes('--dry-run')
+  const currentVersion = await packageVersion()
+  switch (sub) {
+    case 'list': {
+      await projectsList(await readProjectsRegistry(), { asJson, currentVersion })
+      break
+    }
+    case 'scan': {
+      const idx = args.indexOf('scan')
+      const root = args[idx + 1] && !args[idx + 1].startsWith('-') ? args[idx + 1] : null
+      await projectsScan(root, { asJson, dryRun })
+      break
+    }
+    case 'prune': {
+      await projectsPrune({ asJson, dryRun })
+      break
+    }
+    case 'info': {
+      const idx = args.indexOf('info')
+      const target = args[idx + 1] && !args[idx + 1].startsWith('-') ? args[idx + 1] : null
+      await projectsInfo(target, { asJson, currentVersion })
+      break
+    }
+    default:
+      console.error(`ancleto: subcomando desconocido: projects ${sub}`)
+      console.error('ancleto: uso: ancleto projects [list|scan <raiz>|prune|info <ruta>] [--json] [--dry-run]')
+      process.exit(1)
+  }
+}
+
 
 function binName(base) {
   return process.platform === 'win32' ? `${base}.exe` : base
@@ -494,6 +797,8 @@ async function install(args) {
   await applyTier(join(target, 'agents'), tier, models)
   await writeFile(tierStatePath(target), tier + '\n')
 
+  if (projectDir) await registerProject(projectDir, { agent, tier })
+
   let azureMcp = false
   if (projectDir && withMcp) {
     const rc = await readAncletorc(projectDir)
@@ -591,6 +896,7 @@ async function initProject(args) {
   await copyTemplates(projectDir)
   await scaffoldAspec(projectDir)
   await refreshWorkingContext(projectDir)
+  await registerProject(projectDir, { agent, tier: tier || null })
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
   console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''}`)
 }
@@ -1362,6 +1668,17 @@ switch (cmd) {
     break
   case 'stats':
     await statsCommand(rest)
+    break
+  case 'projects':
+    await projectsCommand(rest)
+    break
+  case 'list':
+    // Alias conveniente: `ancleto list --projects`
+    if (rest.includes('--projects')) await projectsCommand(rest.filter((a) => a !== '--projects'))
+    else {
+      console.error('ancleto: uso: ancleto list --projects [--json]  (o ancleto projects)')
+      process.exit(1)
+    }
     break
   case 'doctor':
     await doctorCommand()

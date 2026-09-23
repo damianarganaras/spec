@@ -258,3 +258,13 @@ describe('content guards - telemetria de tokens (issue #27)', () => {
     assert.match(t, /Solo funciona con opencode/)
   })
 })
+
+describe('content guards - registro de proyectos', () => {
+  it('README documenta ancleto projects y su registro local', () => {
+    const t = readFileSync(join(ROOT, 'README.md'), 'utf8')
+    assert.match(t, /## Proyectos con ancleto/)
+    assert.match(t, /ancleto projects scan/)
+    assert.match(t, /ancleto projects prune/)
+    assert.match(t, /~\/\.config\/ancleto\/projects\.json/)
+  })
+})

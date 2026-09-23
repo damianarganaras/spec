@@ -50,6 +50,22 @@ conflicto, prevalece el diseño vigente.
 - Si la memoria contradice el estado actual del código o los guardrails de este archivo,
   reportá la discrepancia en lugar de aplicarla a ciegas.
 
+<!-- LOCKED: memory-boundary -->
+### Frontera: memoria del repo vs memoria del agente
+
+Hay **dos memorias distintas** y no se mezclan:
+
+| Memoria | Qué guarda | Dónde vive | Herramientas |
+|---|---|---|---|
+| **Del repositorio** | Reglas y decisiones **del proyecto**: convenciones, contratos, por qué se eligió algo | `.ancleto/memory.db` (versionable con el equipo) | `searchMemory`, `recordRule`, `recordDecision` |
+| **Del agente** (si está habilitada) | Notas **de sesión/agente**: observaciones transitorias, contexto entre compactaciones | Servicio externo del agente | Las de ese servicio (p. ej. engram) |
+
+Regla: **una entrada vive en una sola memoria, nunca en ambas.** Si es una decisión o regla
+que un futuro agente del equipo debería encontrar → memoria del repo. Si es una nota personal
+de la sesión → memoria del agente. Ante la duda, va al repo: es la que sobrevive al repo y se
+comparte.
+<!-- /LOCKED: memory-boundary -->
+
 ## Flujo Spec-Driven (aspec)
 
 - **Cambios con scope incierto / arquitectura**: Crear artifacts en `aspec/changes/<name>/`.

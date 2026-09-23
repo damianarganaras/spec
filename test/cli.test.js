@@ -495,6 +495,28 @@ describe('CLI LOCKED blocks (G7)', () => {
       assert.match(r.stderr, /no se pudo actualizar el bloque LOCKED "test-block"/)
     })
   })
+
+  it('inserta un bloque LOCKED nuevo del template sin tocar el resto (issue #16)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      // simular version anterior: sin el bloque memory-boundary
+      const withBoundary = readFileSync(path, 'utf8')
+      const stripped = withBoundary.replace(/<!-- LOCKED: memory-boundary -->[\s\S]*?<!-- \/LOCKED: memory-boundary -->\r?\n?/, '')
+      assert.notEqual(stripped, withBoundary, 'precondicion: se quito el bloque')
+      writeFileSync(path, stripped)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      const updated = readFileSync(path, 'utf8')
+      assert.match(updated, /<!-- LOCKED: memory-boundary -->/)
+      assert.match(updated, /Frontera: memoria del repo vs memoria del agente/)
+      assert.match(updated, /<!-- \/LOCKED: memory-boundary -->/)
+      // no duplica y conserva el otro bloque LOCKED
+      assert.equal((updated.match(/LOCKED: memory-boundary -->/g) || []).length, 2) // apertura + cierre
+      assert.match(updated, /<!-- LOCKED: test-block -->/)
+    })
+  })
 })
 
 describe('CLI azure MCP (G8)', () => {

@@ -352,13 +352,38 @@ function mergeLocked(source, local, filename) {
   let result = local
   for (const [name, sourceBlock] of blocks) {
     const replaced = replaceLockedBlock(result, name, sourceBlock)
-    if (replaced === null) {
-      console.warn(`ancleto: no se pudo actualizar el bloque LOCKED "${name}" en ${filename} (tags ausentes o mal formados)`)
-    } else {
+    if (replaced !== null) {
       result = replaced
+      continue
+    }
+    // Si el nombre del bloque aparece igual en el archivo (p. ej. tag de cierre faltante),
+    // esta mal formado: se avisa y NO se toca, para no duplicar contenido.
+    const nameSeen = new RegExp(`<!--\\s*LOCKED:\\s*${escapeRe(name)}\\s*-->`).test(result)
+    if (nameSeen) {
+      console.warn(`ancleto: no se pudo actualizar el bloque LOCKED "${name}" en ${filename} (tags ausentes o mal formados)`)
+      continue
+    }
+    // El bloque es nuevo (feature agregada al template): se inserta sin tocar el resto.
+    const anchor = findInsertAnchor(result, source, name)
+    if (anchor === null) {
+      console.warn(`ancleto: no se pudo insertar el bloque LOCKED "${name}" en ${filename}`)
+    } else {
+      result = result.slice(0, anchor) + sourceBlock + '\n\n' + result.slice(anchor)
     }
   }
   return result
+}
+
+// Punto de insercion para un bloque LOCKED nuevo: justo antes del bloque LOCKED
+// que lo sigue en el template, o al final del archivo si es el ultimo.
+function findInsertAnchor(local, source, name) {
+  const order = [...extractLockedBlocks(source).keys()]
+  const nextInSource = order[order.indexOf(name) + 1]
+  if (nextInSource && extractLockedBlocks(local).has(nextInSource)) {
+    const at = local.search(new RegExp(`<!--\\s*LOCKED:\\s*${escapeRe(nextInSource)}\\s*-->`))
+    if (at >= 0) return at
+  }
+  return local.length
 }
 
 async function copyTemplates(projectDir) {

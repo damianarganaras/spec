@@ -63,6 +63,21 @@ describe('content guards — idioma de artefactos', () => {
     assert.match(t, /Idioma de los artifacts/)
     assert.match(t, /no se traducen/)
   })
+
+  it('templates/AGENTS.md define la frontera memoria del repo vs del agente (issue #16)', () => {
+    const t = readFileSync(join(ROOT, 'templates', 'AGENTS.md'), 'utf8')
+    assert.match(t, /Frontera: memoria del repo vs memoria del agente/)
+    assert.match(t, /una entrada vive en una sola memoria/i)
+    assert.match(t, /\.ancleto\/memory\.db/)
+    assert.match(t, /engram/)
+  })
+
+  it('memory-keeper referencia la frontera de memoria (issue #16)', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'memory-keeper.md'), 'utf8')
+    assert.match(t, /\*\*Boundary:\*\*/)
+    assert.match(t, /never duplicated there/)
+    assert.match(t, /engram/)
+  })
 })
 
 describe('content guards — referencias validas', () => {

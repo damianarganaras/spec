@@ -228,6 +228,8 @@ Cada entrada tiene un `scope`: `project` (default, entra en `<ProjectMemoryRules
 
 > El mismo motor se puede consultar a mano desde la terminal: `ancleto memory context --scope project`. El archivo `.ancleto/working-context.md` que lee el orquestador se regenera solo en `init`, `install --project` y `upgrade`.
 
+**Dos memorias, sin mezcla.** La memoria **del repositorio** (esta, `.ancleto/memory.db`) guarda reglas y decisiones del proyecto y se comparte con el equipo. Si el runtime expone además una memoria **del agente** (por ejemplo engram, habilitable con `--with-engram`), esa guarda notas de sesión, no del repo. **Una entrada vive en una sola**: si un futuro agente del equipo debería encontrarla, va al repo.
+
 ---
 
 ## Comandos del ciclo SDD en tu IDE

@@ -7,7 +7,7 @@ import { createInterface } from 'node:readline'
 import { join, dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
-import { createMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
+import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
@@ -42,6 +42,8 @@ Uso:
                                    Empaca el repo con Repomix y guarda estado
   ancleto memory context [--scope X] [--out file]
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
+  ancleto memory list [--type X] [--scope X] [--all] [--json]
+                                    Lista los nodos de memoria (read-only, no toca la DB)
   ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FTS5, unicidad)
                                     y reconstruye el indice FTS5 con --rebuild
   ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE
@@ -815,10 +817,59 @@ async function memoryDoctorCmd(flags) {
   process.exit(healthy ? 0 : 1)
 }
 
+async function memoryListCmd(flags) {
+  const dbPath = defaultMemoryDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exit(0)
+  }
+  const type = flagValue(flags, '--type')
+  const scope = flagValue(flags, '--scope')
+  const status = flags.includes('--all') ? null : 'active'
+  if (type && type !== 'rule' && type !== 'decision') {
+    console.error(`ancleto: --type invalido: ${type} (rule|decision)`)
+    process.exit(1)
+  }
+  if (scope && !['project', 'feature', 'task'].includes(scope)) {
+    console.error(`ancleto: --scope invalido: ${scope} (project|feature|task)`)
+    process.exit(1)
+  }
+
+  // read-only: el engine abre la DB sin migrar y sin escribir (no toca el WAL)
+  const engine = createReadonlyMemoryEngine(dbPath)
+  let nodes
+  try {
+    nodes = engine.listNodes({ type, scope, status })
+  } catch (err) {
+    console.error(`ancleto: no se pudo leer la memoria: ${err.message}`)
+    process.exit(1)
+  } finally {
+    engine.close()
+  }
+
+  if (flags.includes('--json')) {
+    console.log(JSON.stringify(nodes, null, 2))
+    return
+  }
+  if (nodes.length === 0) {
+    console.log('ancleto: sin nodos para ese filtro')
+    return
+  }
+  for (const n of nodes) {
+    console.log(`  [${n.type}/${n.scope}${n.status === 'active' ? '' : '/' + n.status}] ${n.memory_key}`)
+    console.log(`      ${n.content}`)
+  }
+  console.log(`ancleto: ${nodes.length} nodo(s)`)
+}
+
 async function memoryCmd(args) {
   const [sub, ...flags] = args
   if (sub === 'context') {
     await memoryContext(flags)
+    return
+  }
+  if (sub === 'list') {
+    await memoryListCmd(flags)
     return
   }
   if (sub === 'doctor') {
@@ -827,6 +878,7 @@ async function memoryCmd(args) {
   }
   console.error(`ancleto: subcomando de memory desconocido: ${sub || '(ninguno)'}`)
   console.error('ancleto: uso: ancleto memory context [--scope X] [--out file]')
+  console.error('ancleto: uso: ancleto memory list [--type X] [--scope X] [--all] [--json]')
   console.error('ancleto: uso: ancleto memory doctor [--rebuild]')
   process.exit(1)
 }

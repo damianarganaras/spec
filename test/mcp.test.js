@@ -119,3 +119,111 @@ describe('MCP de memoria propia (ancleto mcp)', () => {
     })
   })
 })
+
+describe('CLI memory list (issue #12)', () => {
+  it('lista nodos activos y filtra por type/scope', async () => {
+    await withDir(async (dir) => {
+      const { close, send } = mcpClient(dir)
+      try {
+        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'r-proj', content: 'Regla de proyecto.' } })
+        await send(2, 'tools/call', { name: 'recordDecision', arguments: { memory_key: 'd-feat', content: 'Decision de feature.', scope: 'feature' } })
+      } finally {
+        close()
+      }
+
+      const all = runCli(['memory', 'list'], dir)
+      assert.equal(all.status, 0)
+      assert.match(all.stdout, /r-proj/)
+      assert.match(all.stdout, /d-feat/)
+      assert.match(all.stdout, /2 nodo\(s\)/)
+
+      const rules = runCli(['memory', 'list', '--type', 'rule'], dir)
+      assert.match(rules.stdout, /r-proj/)
+      assert.doesNotMatch(rules.stdout, /d-feat/)
+
+      const feat = runCli(['memory', 'list', '--scope', 'feature'], dir)
+      assert.match(feat.stdout, /d-feat/)
+      assert.doesNotMatch(feat.stdout, /r-proj/)
+
+      const json = runCli(['memory', 'list', '--json'], dir)
+      const parsed = JSON.parse(json.stdout)
+      assert.equal(parsed.length, 2)
+      assert.ok(parsed.every((n) => n.memory_key && n.type && n.scope))
+    })
+  })
+
+  it('memory list es read-only: no modifica el WAL ni la DB', async () => {
+    await withDir(async (dir) => {
+      const { close, send } = mcpClient(dir)
+      try {
+        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'ro-1', content: 'Regla para read-only.' } })
+      } finally {
+        close()
+      }
+
+      // Esperar a que el MCP hijo termine de cerrar (checkpoint) antes de medir.
+      const settle = async () => {
+        const { statSync } = await import('node:fs')
+        const path = join(dir, '.ancleto', 'memory.db-wal')
+        let prev = -1
+        for (let i = 0; i < 20; i++) {
+          const size = existsSync(path) ? statSync(path).size : 0
+          if (size === prev) return size
+          prev = size
+          await new Promise((r) => setTimeout(r, 50))
+        }
+        return prev
+      }
+      const before = await settle()
+
+      const r = runCli(['memory', 'list'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /ro-1/)
+
+      const after = await settle()
+      assert.equal(after, before, `memory list no debe tocar el WAL (antes ${before}, despues ${after})`)
+
+      // y los datos siguen intactos
+      const again = runCli(['memory', 'list', '--json'], dir)
+      assert.equal(JSON.parse(again.stdout).length, 1)
+    })
+  })
+
+  it('memory list avisa si el repo no tiene memoria', async () => {
+    await withDir(async (dir) => {
+      const r = runCli(['memory', 'list'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stderr, /no hay memoria en este repo/)
+    })
+  })
+
+  it('memory list rechaza filtros invalidos', async () => {
+    await withDir(async (dir) => {
+      const { close, send } = mcpClient(dir)
+      try { await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'x', content: 'x' } }) } finally { close() }
+      assert.equal(runCli(['memory', 'list', '--type', 'nope'], dir).status, 1)
+      assert.equal(runCli(['memory', 'list', '--scope', 'nope'], dir).status, 1)
+    })
+  })
+
+  it('memory doctor deja el WAL fusionado (checkpoint)', async () => {
+    await withDir(async (dir) => {
+      const { close, send } = mcpClient(dir)
+      try {
+        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'ck-1', content: 'Regla para checkpoint.' } })
+      } finally {
+        close()
+      }
+      const walPath = join(dir, '.ancleto', 'memory.db-wal')
+      const { statSync } = await import('node:fs')
+      const before = existsSync(walPath) ? statSync(walPath).size : 0
+
+      const r = runCli(['memory', 'doctor'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /Checkpoint WAL: WAL fusionado/)
+
+      const after = existsSync(walPath) ? statSync(walPath).size : 0
+      assert.ok(after < before || after === 0, `el WAL debe reducirse (antes ${before}, despues ${after})`)
+    })
+  })
+})

@@ -51,6 +51,7 @@ export function createMemoryServer({ dbPath = defaultMemoryDbPath() } = {}) {
 
   function close() {
     if (engine) {
+      engine.checkpoint()
       engine.close()
       engine = null
       handlers = null

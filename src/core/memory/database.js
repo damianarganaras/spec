@@ -38,9 +38,13 @@ const MIGRATIONS = [
   END`
 ]
 
-export function openDatabase(dbPath, { migrate = true } = {}) {
-  mkdirSync(dirname(dbPath), { recursive: true })
-  const db = new DatabaseSync(dbPath)
+export function openDatabase(dbPath, { migrate = true, readonly = false } = {}) {
+  if (!readonly) mkdirSync(dirname(dbPath), { recursive: true })
+  const db = new DatabaseSync(dbPath, { readOnly: readonly })
+  if (readonly) {
+    db.exec('PRAGMA busy_timeout = 5000')
+    return db
+  }
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA foreign_keys = ON')
   db.exec('PRAGMA busy_timeout = 5000')
@@ -48,4 +52,14 @@ export function openDatabase(dbPath, { migrate = true } = {}) {
     for (const sql of MIGRATIONS) db.exec(sql)
   }
   return db
+}
+
+// Fuerza el merge del WAL dentro del .db para que una copia del archivo no pierda datos.
+export function checkpointDatabase(db) {
+  try {
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    return true
+  } catch {
+    return false
+  }
 }

@@ -388,8 +388,9 @@ describe('memory doctor (v0.3.0 item 4)', () => {
 
       const result = memoryDoctor(dbPath)
       assert.equal(result.healthy, true)
-      assert.equal(result.checks.length, 3)
+      assert.equal(result.checks.length, 4)
       assert.ok(result.checks.every((c) => c.ok))
+      assert.ok(result.checks.some((c) => c.name === 'Checkpoint WAL' && c.ok))
     })
   })
 

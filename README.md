@@ -191,8 +191,12 @@ ancleto doctor            # Diagnostica el entorno (Node, node:sqlite, opencode.
 ancleto memory context [--scope <project|feature|task>] [--out <archivo>]
                           # Muestra el bloque de memoria activa del proyecto
 
+ancleto memory list [--type rule|decision] [--scope project|feature|task] [--all] [--json]
+                          # Lista los nodos de memoria (read-only: no toca la base)
+
 ancleto memory doctor [--rebuild]
-                          # Diagnostica la base de memoria y reconstruye el índice FTS5
+                          # Diagnostica la base de memoria, reconstruye el índice FTS5 y
+                          # fusiona el WAL en el .db (deja la base segura para copiar)
 
 ancleto mcp               # Servidor MCP de memoria propia (stdio): lo consume tu IDE
 
@@ -212,7 +216,7 @@ Funciona en tres piezas que comparten el mismo archivo:
 |---|---|
 | **Almacenamiento** | Reglas y decisiones con supersesión atómica por `memory_key` (una sola activa por clave). |
 | **Tools del LLM** (`ancleto mcp`) | Servidor MCP local, sin dependencias, que expone tres herramientas a tu IDE. |
-| **CLI** | `ancleto memory context` materializa el bloque `<ProjectMemoryRules>` y `ancleto memory doctor` verifica integridad y reconstruye el índice FTS5. |
+| **CLI** | `ancleto memory context` materializa el bloque `<ProjectMemoryRules>`, `ancleto memory list` permite inspeccionar los nodos sin escribir, y `ancleto memory doctor` verifica integridad, reconstruye el índice FTS5 y fusiona el WAL. |
 
 | Herramienta | Función |
 |---|---|

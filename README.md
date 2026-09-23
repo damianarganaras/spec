@@ -220,7 +220,7 @@ Funciona en tres piezas que comparten el mismo archivo:
 
 | Herramienta | Función |
 |---|---|
-| `searchMemory` | Recupera contexto de decisiones y reglas previas (búsqueda léxica BM25). |
+| `searchMemory` | Recupera decisiones y reglas previas. Búsqueda léxica (FTS5/BM25) con fallback tolerante: intenta términos exactos y, si no hay coincidencia, reintenta por prefijos, así el lenguaje natural también encuentra. |
 | `recordRule` | Guarda una regla o restricción permanente. |
 | `recordDecision` | Registra el *por qué* de una decisión. |
 

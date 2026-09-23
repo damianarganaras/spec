@@ -15,9 +15,33 @@ const SCOPE_HIERARCHY = {
 
 const PUBLIC_COLUMNS = 'n.memory_key, n.type, n.scope, n.content, n.justification, n.created_at'
 
+const STOPWORDS = new Set([
+  'como', 'cómo', 'the', 'a', 'an', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas',
+  'en', 'y', 'o', 'que', 'qué', 'por', 'para', 'con', 'sin', 'sobre', 'al', 'se', 'su', 'sus',
+  'mi', 'mis', 'tu', 'tus', 'es', 'son', 'era', 'fue', 'hay', 'esta', 'está', 'este', 'esta', 'estos',
+  'to', 'of', 'in', 'on', 'for', 'with', 'and', 'or', 'is', 'are', 'was', 'were', 'be', 'how', 'why',
+  'when', 'where', 'what', 'which', 'that', 'this', 'these', 'those'
+])
+
+function tokenize(input) {
+  return String(input)
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((t) => t.length >= 3 && !STOPWORDS.has(t))
+}
+
+// AND (frase exacta por terminos) — preciso, pero falla con lenguaje natural.
 function ftsQuery(input) {
   const terms = String(input).trim().split(/\s+/).filter(Boolean)
+  if (terms.length === 0) return ''
   return terms.map((t) => '"' + t.replace(/"/g, '""') + '"').join(' ')
+}
+
+// OR con prefijos — tolerante: recupera cuando el AND no encontro nada.
+function ftsQueryLoose(input) {
+  const terms = tokenize(input)
+  if (terms.length === 0) return ''
+  return [...new Set(terms)].map((t) => '"' + t.replace(/"/g, '""') + '"*').join(' OR ')
 }
 
 function publicNode(row) {
@@ -104,10 +128,29 @@ function buildEngine(db) {
     const lim = Math.min(Math.max(Number(limit) || 10, 1), 50)
     const base = `SELECT ${PUBLIC_COLUMNS} FROM memory_fts f JOIN memory_nodes n ON n.rowid = f.rowid
        WHERE memory_fts MATCH ? AND n.status = 'active'`
-    const rows = type
-      ? db.prepare(`${base} AND n.type = ? ORDER BY rank LIMIT ?`).all(q, type, lim)
-      : db.prepare(`${base} ORDER BY rank LIMIT ?`).all(q, lim)
-    return rows.map(publicNode)
+    const run = (match, loose) => {
+      const sql = type
+        ? db.prepare(`${base} AND n.type = ? ORDER BY rank LIMIT ?`)
+        : db.prepare(`${base} ORDER BY rank LIMIT ?`)
+      // FTS5 no acepta parametros en ORDER BY rank; el prefijo '*' va dentro del MATCH.
+      try {
+        return type ? sql.all(match, type, lim) : sql.all(match, lim)
+      } catch {
+        return null
+      }
+    }
+
+    // 1) intento preciso (AND): respeta busquedas por terminos exactos.
+    let rows = run(q)
+    if (rows && rows.length > 0) return rows.map(publicNode)
+
+    // 2) fallback tolerante (OR con prefijos): cubre consultas en lenguaje natural.
+    const loose = ftsQueryLoose(query)
+    if (loose && loose !== q) {
+      const looseRows = run(loose)
+      if (looseRows && looseRows.length > 0) return looseRows.map(publicNode)
+    }
+    return []
   }
 
   function recordNode(input, context = {}) {

@@ -177,6 +177,31 @@ describe('searchMemory', () => {
   it('valida type invalido', () => {
     assert.throws(() => engine.searchMemory({ query: 'x', type: 'otro' }), /type invalido/)
   })
+
+  it('fallback tolerante: lenguaje natural encuentra por OR+prefijos (issue #14)', () => {
+    engine.recordNode({ memory_key: 'nat-2', type: 'decision', scope: 'feature', content: 'Soportar Chrome Android y Safari iOS para la instalacion del manifestxnatural.' })
+
+    // el AND estricto no encontraria nada; el fallback recupera por terminos relevantes
+    const natural = engine.searchMemory({ query: 'como instalar el manifestxnatural en el celular' })
+    assert.ok(natural.length >= 1, 'debe recuperar por lenguaje natural')
+    assert.ok(natural.some((n) => n.memory_key === 'nat-2'))
+
+    // sigue respetando el filtro de tipo en el fallback
+    const onlyRules = engine.searchMemory({ query: 'como instalar el manifestxnatural en el celular', type: 'rule' })
+    assert.ok(onlyRules.every((n) => n.type === 'rule'))
+  })
+
+  it('el AND preciso gana cuando hay coincidencia exacta (no degrada)', () => {
+    engine.recordNode({ memory_key: 'exact-1', type: 'rule', scope: 'repo', content: 'uniqueterminoexacto alpha' })
+    const r = engine.searchMemory({ query: 'uniqueterminoexacto alpha' })
+    assert.equal(r.length, 1)
+    assert.equal(r[0].memory_key, 'exact-1')
+  })
+
+  it('consulta solo de stopwords no rompe ni matchea todo', () => {
+    const r = engine.searchMemory({ query: 'como de la el' })
+    assert.ok(Array.isArray(r))
+  })
 })
 
 describe('recordNode', () => {

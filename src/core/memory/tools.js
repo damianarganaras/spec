@@ -46,7 +46,7 @@ const RECORD_DECISION_SCHEMA = {
 export const memoryTools = [
   {
     name: 'searchMemory',
-    description: 'Busca en la memoria del proyecto (BM25). Devuelve reglas y decisiones activas.',
+    description: 'Busca en la memoria del proyecto (BM25). Devuelve reglas y decisiones activas. Acepta lenguaje natural: intenta terminos exactos y, si no hay coincidencia, reintenta por prefijos.',
     inputSchema: SEARCH_SCHEMA
   },
   {

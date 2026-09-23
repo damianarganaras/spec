@@ -249,3 +249,12 @@ describe('content guards - keywords canonicos en specs (issue #21)', () => {
     assert.match(t, /verify every generated spec uses the canonical keywords/)
   })
 })
+
+describe('content guards - telemetria de tokens (issue #27)', () => {
+  it('README documenta ancleto stats y su alcance (opencode)', () => {
+    const t = readFileSync(join(ROOT, 'README.md'), 'utf8')
+    assert.match(t, /ancleto stats/)
+    assert.match(t, /tokens de entrada\/salida\/razonamiento\/cache/)
+    assert.match(t, /Solo funciona con opencode/)
+  })
+})

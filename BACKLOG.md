@@ -62,6 +62,12 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ Feature v0.6.15: Fix del helper `withDir` en los tests MCP (no esperaba callbacks `async` y borraba el cwd del servidor hijo antes del spawn: verde en Windows, rojo en Linux). Se reprodujo y validó con Node 24 en WSL. El CI lo atajó **antes** de publicar una versión rota.
 - ✅ Issue #13 (v0.6.22): `@coder` recupera `bash` **acotado** — allow base + deny de lo destructivo (`az`, `git push/reset/checkout/rebase`, `rm -rf`, `npm publish`). Ahora puede buildear y validar su propio trabajo sin reemplazar al `@tester`; el `@orchestrator` lo refleja en la política de testing. Tests guard de la matriz de permisos.
 - ✅ Relevamiento §7 (cruce #2): matriz real de permisos contrastada contra el contrato — confirmado que el coder sin shell era el problema central y que **Repomix no consume contexto** por defecto (on-demand de `ancleto discovery`).
+- ✅ Épica **Memory & Roles hardening** (kanban #9, cerrada en v0.6.28): 12 issues + D1/D2/D3 —
+  memoria (frontera repo/agente #16, working-context en init/install/upgrade #10, `searchMemory`
+  tolerante #14, `memory list` read-only #12), roles (bash acotado del `@coder` #13, tope de output
+  por agente #25, destilado del retorno del orquestador #26), cierre (STALE al archivar #17,
+  guía de `.gitignore` #18, keywords canónicos con `ancleto specs check` #21) y telemetría de
+  tokens por sesión con `ancleto stats` #27.
 
 ## Estado actual
 
@@ -69,12 +75,11 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 
 - Working tree **limpio**; `main` y `development` apuntan al mismo commit.
 - Épicas cerradas: **v0.4.x** (CLI Integrity), **v0.5.0** (Agentic OpenSpec Engine: S1+S2+S3),
-  **v0.6.0** (Discovery Engine v2.0: D1+D2+D3) y los hitos posteriores: hotfixes **v0.6.1/v0.6.2**,
-  rebrand **v0.6.3-v0.6.5**, inglés+compresión **v0.6.6**, modelos y Muse Spark **v0.6.7**,
-  README **v0.6.8/v0.6.9**, pipeline de publish **v0.6.10-v0.6.13**, memoria cableada al runtime
-  **v0.6.14** y fix de tests **v0.6.15**.
-- Suite: **111 tests** `node --test` en verde (memory-engine 37 + cli 47 + discovery-topology 2 +
-  discovery-tier 9 + content-guards 7 + tier-models 6 + mcp 3), verificado en Windows y Linux.
+  **v0.6.0** (Discovery Engine v2.0: D1+D2+D3), los hitos **v0.6.1-v0.6.15** (hotfixes, rebrand,
+  inglés+compresión, modelos y Muse Spark, README, pipeline de publish, memoria cableada al runtime)
+  y la épica **Memory & Roles hardening** (kanban #9, cerrada en v0.6.28).
+- Suite: **158 tests** `node --test` en verde (memory-engine 40 + cli 67 + discovery-topology 3 +
+  discovery-tier 9 + content-guards 25 + tier-models 6 + mcp 8), verificado en Windows y Linux.
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD: `publish.yml` se dispara **al pushear el tag** `v*` (o a mano), publica a npm, verifica el
   tarball con un canary corto y crea el Release con el mensaje del tag.

@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { DatabaseSync } from 'node:sqlite'
 import { createMemoryEngine } from '../src/core/memory/engine.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
@@ -870,6 +871,125 @@ The system SHALL reset the order.
       )
       const r = run(['specs', 'check', '--change', 'drop-legacy'], dir)
       assert.equal(r.status, 0)
+    })
+  })
+})
+
+describe('CLI stats (issue #27)', () => {
+  const NOW = Date.parse('2026-09-20T12:00:00')
+  const MODEL = JSON.stringify({ id: 'test-model', providerID: 'test' })
+
+  function makeStatsDb(dir) {
+    const dbPath = join(dir, 'opencode-fixture.db')
+    const db = new DatabaseSync(dbPath)
+    db.exec(`CREATE TABLE session (
+      id TEXT PRIMARY KEY, parent_id TEXT, title TEXT, directory TEXT, agent TEXT, model TEXT,
+      cost REAL, tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER,
+      tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_created INTEGER, time_updated INTEGER
+    )`)
+    db.exec('CREATE TABLE message (id TEXT, session_id TEXT, data TEXT)')
+    return { db, dbPath }
+  }
+
+  function addSession(db, s) {
+    db.prepare(
+      `INSERT INTO session (id, parent_id, title, directory, agent, model, cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, time_created, time_updated)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      s.id,
+      s.parent_id ?? null,
+      s.title ?? null,
+      s.directory ?? null,
+      s.agent ?? null,
+      s.model ?? null,
+      s.cost ?? 0,
+      s.tokens_input ?? 0,
+      s.tokens_output ?? 0,
+      s.tokens_reasoning ?? 0,
+      s.tokens_cache_read ?? 0,
+      s.tokens_cache_write ?? 0,
+      s.time_created ?? NOW,
+      s.time_updated ?? NOW
+    )
+  }
+
+  function addMessage(db, sessionId, agent, tokens) {
+    db.prepare('INSERT INTO message (id, session_id, data) VALUES (?, ?, ?)').run(
+      `msg_${Math.random().toString(36).slice(2)}`,
+      sessionId,
+      JSON.stringify({
+        role: 'assistant',
+        agent,
+        tokens: { input: tokens.input, output: tokens.output, reasoning: tokens.reasoning ?? 0, cache: { read: tokens.cacheRead ?? 0, write: 0 } }
+      })
+    )
+  }
+
+  it('lista sesiones del directorio con rollup de subagentes', () => {
+    withDir((dir) => {
+      const { db, dbPath } = makeStatsDb(dir)
+      addSession(db, { id: 'ses_root', title: 'Sesion principal', directory: dir, agent: 'build', model: MODEL, tokens_input: 1000, tokens_output: 100, cost: 0.5 })
+      addSession(db, { id: 'ses_child', parent_id: 'ses_root', title: 'Subagente', directory: dir, agent: 'coder', tokens_input: 500, tokens_output: 50, cost: 0.1 })
+      addSession(db, { id: 'ses_other', title: 'Otra', directory: 'D:/otro/lado', agent: 'build', tokens_input: 9999 })
+      db.close()
+      const r = run(['stats', '--json'], dir, { ANCLETO_OPENCODE_DB: dbPath })
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.scope, 'directory')
+      assert.equal(j.sessions.length, 1)
+      assert.equal(j.sessions[0].id, 'ses_root')
+      assert.equal(j.sessions[0].tokens.input, 1500)
+      assert.equal(j.sessions[0].tokens.output, 150)
+      assert.equal(j.sessions[0].subagentSessions, 1)
+      assert.equal(j.totals.input, 1500)
+    })
+  })
+
+  it('--session desglosa tokens por agente (ignora mensajes de usuario)', () => {
+    withDir((dir) => {
+      const { db, dbPath } = makeStatsDb(dir)
+      addSession(db, { id: 'ses_root', directory: dir, agent: 'build', model: MODEL, tokens_input: 300 })
+      addSession(db, { id: 'ses_child', parent_id: 'ses_root', directory: dir, agent: 'coder' })
+      addMessage(db, 'ses_root', 'build', { input: 100, output: 10, reasoning: 5, cacheRead: 50 })
+      addMessage(db, 'ses_root', 'build', { input: 100, output: 10 })
+      addMessage(db, 'ses_child', 'coder', { input: 200, output: 20, cacheRead: 80 })
+      db.prepare('INSERT INTO message (id, session_id, data) VALUES (?, ?, ?)').run('msg_user', 'ses_root', JSON.stringify({ role: 'user' }))
+      db.close()
+      const r = run(['stats', '--session', 'ses_root', '--json'], dir, { ANCLETO_OPENCODE_DB: dbPath })
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.scope, 'session')
+      assert.equal(j.session.subagentSessions, 1)
+      const build = j.byAgent.find((a) => a.agent === 'build')
+      const coder = j.byAgent.find((a) => a.agent === 'coder')
+      assert.equal(build.input, 200)
+      assert.equal(build.messages, 2)
+      assert.equal(build.cacheRead, 50)
+      assert.equal(coder.input, 200)
+      assert.equal(coder.messages, 1)
+      assert.equal(j.byAgent.length, 2)
+    })
+  })
+
+  it('--since filtra por fecha de creacion', () => {
+    withDir((dir) => {
+      const { db, dbPath } = makeStatsDb(dir)
+      addSession(db, { id: 'ses_old', directory: dir, time_created: Date.parse('2026-08-01T10:00:00'), tokens_input: 10 })
+      addSession(db, { id: 'ses_new', directory: dir, time_created: Date.parse('2026-09-21T10:00:00'), tokens_input: 20 })
+      db.close()
+      const r = run(['stats', '--json', '--since', '2026-09-01'], dir, { ANCLETO_OPENCODE_DB: dbPath })
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.sessions.length, 1)
+      assert.equal(j.sessions[0].id, 'ses_new')
+    })
+  })
+
+  it('sin base de opencode falla claro', () => {
+    withDir((dir) => {
+      const r = run(['stats'], dir, { ANCLETO_OPENCODE_DB: join(dir, 'no-existe.db') })
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /no se encontro la base de sesiones/)
     })
   })
 })

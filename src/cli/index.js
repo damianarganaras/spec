@@ -4,6 +4,7 @@ import { cp, mkdir, access, writeFile, readFile, readdir, rename } from 'node:fs
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createInterface } from 'node:readline'
+import { DatabaseSync } from 'node:sqlite'
 import { join, dirname, resolve, basename, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
@@ -43,6 +44,9 @@ Uso:
   ancleto specs check [--change <name>] [--json]
                                    Valida keywords canonicos (### Requirement:, WHEN, THEN)
                                    en aspec/specs y, con --change, en los deltas del change
+  ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
+                                   Tokens por sesion de opencode (entrada/salida/razonamiento/cache),
+                                   con rollup de subagentes y desglose por agente con --session
   ancleto memory context [--scope X] [--out file]
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
   ancleto memory list [--type X] [--scope X] [--all] [--json]
@@ -1054,6 +1058,240 @@ async function specsCheckCommand(args) {
   process.exit(ok ? 0 : 1)
 }
 
+function opencodeDbPath() {
+  return process.env.ANCLETO_OPENCODE_DB || join(homedir(), '.local', 'share', 'opencode', 'opencode.db')
+}
+
+function fmtTokens(n) {
+  if (!n) return '0'
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`
+  return String(n)
+}
+
+function fmtCost(c) {
+  return c && c < 0.01 ? `$${c.toFixed(4)}` : `$${(c || 0).toFixed(2)}`
+}
+
+function fmtDate(ms) {
+  const d = new Date(ms || 0)
+  const p = (x) => String(x).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+const normPath = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+
+function sessionModel(model) {
+  try {
+    const m = JSON.parse(model || '{}')
+    return m.id ? `${m.id}${m.providerID ? ` (${m.providerID})` : ''}` : ''
+  } catch {
+    return ''
+  }
+}
+
+function buildSessionTree(sessions) {
+  const byId = new Map(sessions.map((s) => [s.id, s]))
+  const children = new Map()
+  for (const s of sessions) {
+    if (!s.parent_id) continue
+    if (!children.has(s.parent_id)) children.set(s.parent_id, [])
+    children.get(s.parent_id).push(s)
+  }
+  const cache = new Map()
+  const totalsOf = (id) => {
+    if (cache.has(id)) return cache.get(id)
+    const own = byId.get(id)
+    const t = {
+      input: own?.tokens_input || 0,
+      output: own?.tokens_output || 0,
+      reasoning: own?.tokens_reasoning || 0,
+      cacheRead: own?.tokens_cache_read || 0,
+      cacheWrite: own?.tokens_cache_write || 0,
+      cost: own?.cost || 0,
+      sessions: own ? 1 : 0
+    }
+    for (const c of children.get(id) || []) {
+      const ct = totalsOf(c.id)
+      t.input += ct.input
+      t.output += ct.output
+      t.reasoning += ct.reasoning
+      t.cacheRead += ct.cacheRead
+      t.cacheWrite += ct.cacheWrite
+      t.cost += ct.cost
+      t.sessions += ct.sessions
+    }
+    cache.set(id, t)
+    return t
+  }
+  const subtreeIds = (id) => [id, ...(children.get(id) || []).flatMap((c) => subtreeIds(c.id))]
+  return { byId, totalsOf, subtreeIds }
+}
+
+function sessionInfo(s, totals) {
+  return {
+    id: s.id,
+    title: s.title || null,
+    agent: s.agent || null,
+    model: sessionModel(s.model) || null,
+    subagentSessions: Math.max(0, totals.sessions - 1),
+    timeCreated: s.time_created || null,
+    timeUpdated: s.time_updated || null,
+    cost: totals.cost,
+    tokens: {
+      input: totals.input,
+      output: totals.output,
+      reasoning: totals.reasoning,
+      cacheRead: totals.cacheRead,
+      cacheWrite: totals.cacheWrite
+    }
+  }
+}
+
+async function statsCommand(args) {
+  const asJson = args.includes('--json')
+  const all = args.includes('--all')
+  const si = args.indexOf('--session')
+  const sessionId = si >= 0 ? args[si + 1] : null
+  const li = args.indexOf('--limit')
+  const limit = li >= 0 ? Number.parseInt(args[li + 1], 10) : 10
+  if (li >= 0 && (!Number.isFinite(limit) || limit < 1)) {
+    console.error('ancleto: --limit requiere un entero >= 1')
+    process.exit(1)
+  }
+  const sinceIdx = args.indexOf('--since')
+  const sinceRaw = sinceIdx >= 0 ? args[sinceIdx + 1] : null
+  let since = null
+  if (sinceRaw) {
+    const t = Date.parse(`${sinceRaw}T00:00:00`)
+    if (Number.isNaN(t)) {
+      console.error('ancleto: --since requiere formato YYYY-MM-DD')
+      process.exit(1)
+    }
+    since = t
+  }
+
+  const dbPath = opencodeDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no se encontro la base de sesiones de opencode en ${dbPath}`)
+    console.error('ancleto: ancleto stats solo funciona con opencode (podes apuntar ANCLETO_OPENCODE_DB a la base)')
+    process.exit(1)
+  }
+  const db = new DatabaseSync(dbPath, { readOnly: true })
+  let allSessions
+  try {
+    allSessions = db.prepare('SELECT * FROM session').all()
+  } catch (err) {
+    console.error(`ancleto: no se pudo leer la base de sesiones: ${err.message}`)
+    process.exit(1)
+  }
+  const tree = buildSessionTree(allSessions)
+  const cwd = process.cwd()
+
+  if (sessionId) {
+    const root = tree.byId.get(sessionId)
+    if (!root) {
+      console.error(`ancleto: no existe la sesion "${sessionId}"`)
+      process.exit(1)
+    }
+    const ids = tree.subtreeIds(sessionId)
+    let messages = []
+    try {
+      messages = db.prepare(`SELECT data FROM message WHERE session_id IN (${ids.map(() => '?').join(',')})`).all(...ids)
+    } catch {
+      messages = []
+    }
+    const byAgent = new Map()
+    for (const row of messages) {
+      let d
+      try {
+        d = JSON.parse(row.data)
+      } catch {
+        continue
+      }
+      if (d.role !== 'assistant' || !d.tokens) continue
+      const key = d.agent || '(desconocido)'
+      const agg = byAgent.get(key) || { agent: key, messages: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+      agg.messages++
+      agg.input += d.tokens.input || 0
+      agg.output += d.tokens.output || 0
+      agg.reasoning += d.tokens.reasoning || 0
+      agg.cacheRead += d.tokens.cache?.read || 0
+      agg.cacheWrite += d.tokens.cache?.write || 0
+      byAgent.set(key, agg)
+    }
+    const agents = [...byAgent.values()].sort((a, b) => b.input - a.input)
+    const totals = tree.totalsOf(sessionId)
+    db.close()
+    if (asJson) {
+      console.log(JSON.stringify({ ok: true, scope: 'session', session: sessionInfo(root, totals), byAgent: agents, totals }, null, 2))
+      return
+    }
+    console.log(`ancleto: sesion ${root.id}`)
+    console.log(`  titulo: ${root.title || '(sin titulo)'}`)
+    console.log(`  agente: ${root.agent || '-'} · modelo: ${sessionModel(root.model) || '-'}`)
+    console.log(`  creada: ${fmtDate(root.time_created)} · ultima actividad: ${fmtDate(root.time_updated)}`)
+    console.log(`  sesiones incluidas: ${totals.sessions} (raiz + subagentes)`)
+    console.log('')
+    console.log('  agente        mensajes   entrada   salida    razon     cache-read')
+    for (const a of agents) {
+      console.log(`  ${String(a.agent).padEnd(13)} ${String(a.messages).padEnd(10)} ${fmtTokens(a.input).padEnd(9)} ${fmtTokens(a.output).padEnd(9)} ${fmtTokens(a.reasoning).padEnd(9)} ${fmtTokens(a.cacheRead)}`)
+    }
+    console.log('')
+    console.log(`  totales: entrada ${fmtTokens(totals.input)} · salida ${fmtTokens(totals.output)} · razon ${fmtTokens(totals.reasoning)} · cache ${fmtTokens(totals.cacheRead)} · costo ${fmtCost(totals.cost)}`)
+    return
+  }
+
+  let roots = allSessions.filter((s) => !s.parent_id)
+  let scope = 'all'
+  if (!all) {
+    scope = 'directory'
+    const cwdN = normPath(cwd)
+    const inDir = (d) => {
+      const dn = normPath(d)
+      return dn === cwdN || dn.startsWith(`${cwdN}/`) || cwdN.startsWith(`${dn}/`)
+    }
+    roots = roots.filter((s) => inDir(s.directory))
+  }
+  if (since !== null) roots = roots.filter((s) => (s.time_created || 0) >= since)
+  roots.sort((a, b) => (b.time_updated || 0) - (a.time_updated || 0))
+  const shown = roots.slice(0, limit)
+  const rows = shown.map((s) => ({ ...sessionInfo(s, tree.totalsOf(s.id)), directory: s.directory }))
+  const totals = rows.reduce(
+    (acc, r) => {
+      acc.input += r.tokens.input
+      acc.output += r.tokens.output
+      acc.reasoning += r.tokens.reasoning
+      acc.cacheRead += r.tokens.cacheRead
+      acc.cacheWrite += r.tokens.cacheWrite
+      acc.cost += r.cost
+      return acc
+    },
+    { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0 }
+  )
+  db.close()
+
+  if (asJson) {
+    console.log(JSON.stringify({ ok: true, scope, directory: scope === 'directory' ? cwd.replace(/\\/g, '/') : null, since: sinceRaw || null, sessions: rows, totals }, null, 2))
+    return
+  }
+  if (rows.length === 0) {
+    console.log(`ancleto: no hay sesiones${scope === 'directory' ? ' para este directorio' : ''}${sinceRaw ? ` desde ${sinceRaw}` : ''}`)
+    if (scope === 'directory') console.log('ancleto: proba --all para ver todas las sesiones de la maquina')
+    return
+  }
+  console.log(`ancleto: stats (opencode)${scope === 'directory' ? ` — ${cwd.replace(/\\/g, '/')}` : ' — todas las sesiones'}${sinceRaw ? ` — desde ${sinceRaw}` : ''}`)
+  console.log('')
+  console.log('  fecha              agente        entrada   salida    razon     cache     costo    titulo')
+  for (const r of rows) {
+    console.log(`  ${fmtDate(r.timeUpdated).padEnd(18)} ${String(r.agent || '-').padEnd(13)} ${fmtTokens(r.tokens.input).padEnd(9)} ${fmtTokens(r.tokens.output).padEnd(9)} ${fmtTokens(r.tokens.reasoning).padEnd(9)} ${fmtTokens(r.tokens.cacheRead).padEnd(9)} ${fmtCost(r.cost).padEnd(8)} ${String(r.title || '').slice(0, 42)}`)
+  }
+  console.log('')
+  const shownLabel = roots.length > rows.length ? `${rows.length} de ${roots.length} sesiones` : rows.length === 1 ? '1 sesion' : `${rows.length} sesiones`
+  console.log(`  totales (${shownLabel}): entrada ${fmtTokens(totals.input)} · salida ${fmtTokens(totals.output)} · razon ${fmtTokens(totals.reasoning)} · cache ${fmtTokens(totals.cacheRead)} · costo ${fmtCost(totals.cost)}`)
+}
+
 async function doctorCommand() {
   let fatal = false
 
@@ -1121,6 +1359,9 @@ switch (cmd) {
     break
   case 'specs':
     await specsCheckCommand(rest)
+    break
+  case 'stats':
+    await statsCommand(rest)
     break
   case 'doctor':
     await doctorCommand()

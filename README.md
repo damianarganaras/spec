@@ -120,6 +120,8 @@ Cómo bajarlo:
 - Evitá `--with-engram` salvo que uses esa memoria: es el que más pesa (9× la memoria propia).
 - Podés deshabilitar cualquier servidor en tu `opencode.json`: `"mcp": { "engram": { "enabled": false } }`.
 
+Para medir el consumo **real** por sesión (no estimado): `ancleto stats` lee la base de sesiones de opencode y reporta tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Con `--session <id>` desglosa por agente y con `--since YYYY-MM-DD` permite comparar antes/después de una optimización. Solo funciona con opencode.
+
 ---
 
 ## Guía de .gitignore
@@ -203,6 +205,9 @@ ancleto check             # Verifica la integridad de la instalación (faltantes
 
 ancleto specs check [--change <nombre>] [--json]
                           # Valida keywords canónicos en aspec/specs y en los deltas de un change
+
+ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
+                          # Tokens por sesión de opencode (rollup de subagentes; --session desglosa por agente)
 
 ancleto doctor            # Diagnostica el entorno (Node, node:sqlite, opencode.json)
 

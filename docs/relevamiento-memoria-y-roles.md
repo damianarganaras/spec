@@ -338,7 +338,7 @@ Tercera consulta al orquestador, sobre **los dolores que ya medimos nosotros**. 
 - [x] **Cruce #2** con la matriz real de permisos (§7): confirmado que **`@coder` sin shell** es el problema central (#13), y que **Repomix no consume contexto** por defecto.
 - [x] **Cruce #3** (§8): el entorno del trabajo tiene **los mismos dos problemas** (coder sin bash, working-context ausente) — eran del diseno compartido, no bugs nuestros. **Ya resueltos con #13 y #10.**
 - [x] **Cruce #4** (§9): relevados los dolores propios. Casi todos los huecos que el reporta los tenemos cerrados; aparecieron **3 dolores nuevos** (D1 tope de output, D2 filtrado entre subagentes, D3 telemetria de tokens).
-- [x] Issues abiertos en el Kanban (epica #9 + 12 sub-issues). **Cerrados:** #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #25, #26.
+- [x] Issues abiertos en el Kanban (epica #9 + 12 sub-issues). **Cerrados:** #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #25, #26.
 - [ ] Pendiente decidir **F9** (semantica de `searchMemory`) cuando se retome #14. El cruce #3/#4 confirma que el problema es compartido: ni engram (FTS5) ni mem0 garantizan recall por parafrasis.
 - [ ] Mejora candidata: cuando el Recall vuelve vacio, explicar el por que ("sin coincidencias lexicas — proba terminos exactos") en vez de solo "no relevant memories".
 - [x] **Evaluar los 3 dolores nuevos** (D1/D2/D3): tope de output de subagentes, filtrado del retorno hacia el orquestador, y telemetria de tokens. → issues **#25** (D1), **#26** (D2), **#27** (D3). **D1 y D2 resueltos en v0.6.25**; D3 queda en #27.

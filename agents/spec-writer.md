@@ -44,8 +44,9 @@ using the `ancleto-workflow` skill and the conventions of:
    - `design.md`
    - `tasks.md`
    - `specs/{capability}/spec.md` as needed
-6. When the delegation says the context was produced without a technical seed, declare that in the generated artifacts.
-7. Return a brief summary with generated paths, scope, and open questions or risks
+6. Before returning, verify every generated spec uses the canonical keywords (`### Requirement:`, `#### Scenario:`, `**WHEN**`/`**THEN**`, `SHALL`); fix any translated heading or keyword in place — never leave a spec with translated keywords.
+7. When the delegation says the context was produced without a technical seed, declare that in the generated artifacts.
+8. Return a brief summary with generated paths, scope, and open questions or risks
 
 ## Change Naming
 

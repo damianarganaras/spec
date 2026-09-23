@@ -105,12 +105,13 @@ Do not treat archive as a blind file move.
    - `tasks.md`
    - `specs/` when the change includes delta specs
 3. Determine whether the change includes spec deltas that must be reflected in `aspec/specs/`
-4. If needed, update the relevant source-of-truth specs so they reflect the completed change
-5. If the change is not ready for archive, stop and report the inconsistency clearly
-6. If the change is ready, archive it to `aspec/changes/archive/{YYYY-MM-DD}-{change-name}/`
-7. Remove the original active change directory from `aspec/changes/{change-name}/` after a successful archive
-8. If any files or folders remain in the original active change directory, report them as cleanup issues instead of leaving silent residue
-9. Return a short structured summary of the finalization and archive result
+4. When deltas exist, run `ancleto specs check --change {change-name} --json` before merging. If a delta spec or its target source-of-truth spec is non-canonical (translated keywords), stop and report it instead of merging into it
+5. If needed, update the relevant source-of-truth specs so they reflect the completed change
+6. If the change is not ready for archive, stop and report the inconsistency clearly
+7. If the change is ready, archive it to `aspec/changes/archive/{YYYY-MM-DD}-{change-name}/`
+8. Remove the original active change directory from `aspec/changes/{change-name}/` after a successful archive
+9. If any files or folders remain in the original active change directory, report them as cleanup issues instead of leaving silent residue
+10. Return a short structured summary of the finalization and archive result
 
 ## Source-of-Truth Rules
 

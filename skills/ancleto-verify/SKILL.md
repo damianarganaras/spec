@@ -26,6 +26,12 @@ Read under `aspec/changes/<name>/`: `tasks.md` (required), plus `proposal.md`, `
 
 **Tasks:** parse checkboxes (`- [ ]` incomplete vs `- [x]` complete) and count. Each incomplete → CRITICAL: "Complete task: `<description>`" or "Mark as done if already implemented".
 
+**Canonical spec keywords:** run `ancleto specs check --change <name> --json` when the CLI is available. For every reported file:
+- Delta spec (`aspec/changes/<name>/specs/...`) → CRITICAL: "Non-canonical spec: `<file>` (missing: `<keywords>`)" + "Normalize `<file>` to the canonical English keywords before archiving".
+- Source-of-truth spec (`aspec/specs/...`) → WARNING with the same recommendation.
+
+A non-canonical spec cannot be matched for coverage or merged reliably, so report it before the checks below.
+
 **Spec coverage:** for each `### Requirement:` in `specs/`, search the codebase for related keywords. Unimplemented → CRITICAL: "Requirement not found: `<requirement name>`" + "Implement requirement: `<description>`".
 
 ### 3. Correctness

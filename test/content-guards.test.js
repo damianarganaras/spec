@@ -223,3 +223,29 @@ describe('content guards - guia de .gitignore (issue #18)', () => {
     assert.match(t, /`\.ancleto\/`/)
   })
 })
+
+describe('content guards - keywords canonicos en specs (issue #21)', () => {
+  it('verify detecta specs no canonicos al verificar', () => {
+    const t = readFileSync(join(ROOT, 'skills', 'ancleto-verify', 'SKILL.md'), 'utf8')
+    assert.match(t, /ancleto specs check --change <name> --json/)
+    assert.match(t, /Non-canonical spec:/)
+    assert.match(t, /WARNING with the same recommendation/)
+  })
+
+  it('archive chequea keywords antes de sincronizar deltas', () => {
+    const t = readFileSync(join(ROOT, 'skills', 'ancleto-archive', 'SKILL.md'), 'utf8')
+    assert.match(t, /ancleto specs check --change <name> --json/)
+    assert.match(t, /Never merge into a non-canonical spec silently/)
+  })
+
+  it('documenter corre el chequeo antes de mergear deltas', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'documenter.md'), 'utf8')
+    assert.match(t, /ancleto specs check --change \{change-name\} --json/)
+    assert.match(t, /stop and report it instead of merging into it/)
+  })
+
+  it('spec-writer se autoverifica antes de devolver', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'spec-writer.md'), 'utf8')
+    assert.match(t, /verify every generated spec uses the canonical keywords/)
+  })
+})

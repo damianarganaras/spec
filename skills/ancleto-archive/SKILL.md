@@ -31,6 +31,8 @@ Read `aspec/changes/<name>/tasks.md` (when present); count `- [ ]` (incomplete) 
 
 Check for delta specs at `aspec/changes/<name>/specs/`; if none, proceed without a sync prompt.
 
+**Canonical keywords first:** when delta specs exist and the CLI is available, run `ancleto specs check --change <name> --json`. If a delta spec or its target source-of-truth spec is non-canonical (translated keywords), warn that requirement blocks cannot be matched reliably and ask whether to normalize the affected spec first or archive without syncing that capability. Never merge into a non-canonical spec silently.
+
 **If delta specs exist:**
 
 - Diff each delta against its main spec at `aspec/specs/<capability>/spec.md`; show a combined summary of adds/modifications/removals/renames.

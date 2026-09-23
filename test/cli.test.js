@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createMemoryEngine } from '../src/core/memory/engine.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const CLI = join(TEST_DIR, '..', 'src', 'cli', 'index.js')
@@ -306,6 +307,85 @@ describe('CLI scaffold aspec (G5)', () => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
       assert.ok(existsSync(join(dir, 'aspec', 'config.yaml')))
       assert.ok(existsSync(join(dir, 'aspec', 'changes')))
+    })
+  })
+})
+
+describe('CLI init + templates y working-context (v0.6.18 / issues #15 y #10)', () => {
+  it('init crea AGENTS.md y PRODUCT.md', () => {
+    withDir((dir) => {
+      const r = run(['init'], dir)
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, 'AGENTS.md')), 'AGENTS.md')
+      assert.ok(existsSync(join(dir, 'PRODUCT.md')), 'PRODUCT.md')
+    })
+  })
+
+  it('init NO pisa un AGENTS.md propio del proyecto', () => {
+    withDir((dir) => {
+      const custom = '# Mis convenciones\n\nContenido del equipo que no se debe perder.\n'
+      writeFileSync(join(dir, 'AGENTS.md'), custom)
+      const r = run(['init'], dir)
+      assert.equal(r.status, 0)
+      const after = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
+      assert.match(after, /Contenido del equipo que no se debe perder/)
+      assert.equal(after.includes('## Context Hierarchy'), false, 'no se pisó con el template')
+    })
+  })
+
+  it('init NO crea working-context.md si el repo no tiene memoria', () => {
+    withDir((dir) => {
+      const r = run(['init'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(join(dir, '.ancleto', 'working-context.md')), false)
+    })
+  })
+
+  it('init materializa las reglas del proyecto en working-context.md', () => {
+    withDir((dir) => {
+      run(['init'], dir)
+      mkdirSync(join(dir, '.ancleto'), { recursive: true })
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      const engine = createMemoryEngine(dbPath)
+      engine.recordNode({ memory_key: 'regla-de-prueba', type: 'rule', scope: 'project', content: 'Siempre validar la entrada.' })
+      engine.close()
+
+      const r = run(['init'], dir)
+      assert.equal(r.status, 0)
+      const wc = readFileSync(join(dir, '.ancleto', 'working-context.md'), 'utf8')
+      assert.match(wc, /<ProjectMemoryRules>/)
+      assert.match(wc, /regla-de-prueba/)
+      assert.match(wc, /Siempre validar la entrada/)
+    })
+  })
+
+  it('init deja working-context.md vacio si hay memoria pero ninguna regla activa', () => {
+    withDir((dir) => {
+      run(['init'], dir)
+      mkdirSync(join(dir, '.ancleto'), { recursive: true })
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      const engine = createMemoryEngine(dbPath)
+      engine.recordNode({ memory_key: 'solo-decision', type: 'decision', scope: 'project', content: 'No es regla.' })
+      engine.close()
+
+      const r = run(['init'], dir)
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.ancleto', 'working-context.md')), 'archivo creado')
+      assert.equal(readFileSync(join(dir, '.ancleto', 'working-context.md'), 'utf8'), '')
+    })
+  })
+
+  it('upgrade regenera el working-context', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      const engine = createMemoryEngine(dbPath)
+      engine.recordNode({ memory_key: 'regla-upgrade', type: 'rule', scope: 'project', content: 'Regla para el upgrade.' })
+      engine.close()
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /working-context\.md regenerado/)
+      assert.match(readFileSync(join(dir, '.ancleto', 'working-context.md'), 'utf8'), /regla-upgrade/)
     })
   })
 })

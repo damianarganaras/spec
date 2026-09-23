@@ -147,8 +147,12 @@ El ciclo diario consiste en preparar el terreno técnico para tu agente y despu�
 
 ```bash
 cd tu-proyecto
-ancleto init              # Crea .ancletorc, AGENTS.md y PRODUCT.md
+ancleto init              # Crea .ancletorc, aspec/, AGENTS.md y PRODUCT.md
 ```
+
+`init` **no pisa** lo que ya existe: si tu repo tiene su propio `AGENTS.md` o `PRODUCT.md`, los respeta (solo fusiona los bloques `<!-- LOCKED -->` del template). Además materializa `.ancleto/working-context.md` con tus reglas activas cuando hay memoria — es el bloque que el orquestador inyecta al arrancar.
+
+> ¿Querés que el proyecto lleve **su propia** copia de agents/skills (sin depender de la instalación global)? Sumá `ancleto install --project .`.
 
 ### 2. Descubrir contexto técnico
 
@@ -218,7 +222,7 @@ Funciona en tres piezas que comparten el mismo archivo:
 
 Cada entrada tiene un `scope`: `project` (default, entra en `<ProjectMemoryRules>`), `feature` o `task`. El orquestador inyecta los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` en el system prompt de tu agente desde el día cero —incluso sin reglas previas— para que no repita errores ya resueltos.
 
-> El mismo motor se puede consultar a mano desde la terminal: `ancleto memory context --scope project`.
+> El mismo motor se puede consultar a mano desde la terminal: `ancleto memory context --scope project`. El archivo `.ancleto/working-context.md` que lee el orquestador se regenera solo en `init`, `install --project` y `upgrade`.
 
 ---
 

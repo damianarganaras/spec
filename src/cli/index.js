@@ -440,6 +440,7 @@ async function install(args) {
   if (projectDir) {
     await copyTemplates(projectDir)
     await scaffoldAspec(projectDir)
+    await refreshWorkingContext(projectDir)
     const agentSkillsDir = await installAgentSkills(projectDir, agent)
     await writeManifest(projectDir, {
       agent,
@@ -499,6 +500,7 @@ async function upgradeCmd(args) {
   const agent = await resolveAgent(args, rc.agent)
   await copyTemplates(projectDir)
   const agentSkillsDir = await installAgentSkills(projectDir, agent)
+  const wentContext = await refreshWorkingContext(projectDir)
   const manifest = await writeManifest(projectDir, {
     agent,
     installedPaths: {
@@ -511,6 +513,7 @@ async function upgradeCmd(args) {
   console.log(`ancleto: upgrade completo (v${manifest.version}, agente: ${agent})`)
   console.log('  ✔ templates re-aplicados (bloques LOCKED actualizados, EXTENSIBLE intacto)')
   console.log(`  ✔ skills actualizadas en ${agentSkillsDir} (${ANCLETO_SKILLS.length} skills)`)
+  console.log(wentContext ? '  ✔ working-context.md regenerado' : '  ✔ working-context.md sin reglas activas (vacio)')
   console.log('  ✔ manifiesto .ancletorc actualizado')
 }
 
@@ -551,7 +554,9 @@ async function initProject(args) {
   }
 
   const manifest = await writeManifest(projectDir, { azure, discovery, agent })
+  await copyTemplates(projectDir)
   await scaffoldAspec(projectDir)
+  await refreshWorkingContext(projectDir)
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
   console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''}`)
 }
@@ -750,6 +755,22 @@ async function discovery(flags) {
     return
   }
   await packDiscovery(flags)
+}
+
+async function refreshWorkingContext(projectDir, scope = 'project') {
+  const dbPath = defaultMemoryDbPath(projectDir)
+  if (!(await exists(dbPath))) return null
+  const engine = createMemoryEngine(dbPath)
+  let block
+  try {
+    block = engine.buildWorkingContext(scope)
+  } finally {
+    engine.close()
+  }
+  const out = join(projectDir, '.ancleto', 'working-context.md')
+  await mkdir(dirname(out), { recursive: true })
+  await writeFile(out, block === null ? '' : block + '\n')
+  return block === null ? null : out
 }
 
 async function memoryContext(flags) {

@@ -1127,9 +1127,11 @@ async function computeSources() {
 
 async function hashSources(sources) {
   const h = createHash('sha256')
+  const fileHashes = {}
   for (const rel of sources) {
     try {
       const content = await readFile(join(process.cwd(), rel))
+      fileHashes[rel] = createHash('sha256').update(content).digest('hex').slice(0, 16)
       h.update(rel)
       h.update('\0')
       h.update(String(content.length))
@@ -1138,7 +1140,71 @@ async function hashSources(sources) {
       h.update('\n')
     } catch {}
   }
-  return h.digest('hex')
+  return { hash: h.digest('hex'), fileHashes }
+}
+
+// Archivos cuyo cambio altera la arquitectura (configs de runtime, entry points).
+const MATERIAL_FILE_RES = [
+  /^package\.json$/,
+  /^tsconfig(\..+)?\.json$/,
+  /^jsconfig\.json$/,
+  /^(vite|webpack|rollup|next|nuxt|astro|svelte|tailwind)\.config\.[cm]?[jt]s$/,
+  /^docker-compose\.ya?ml$/,
+  /^Dockerfile$/,
+  /^index\.html$/,
+  /^src\/(main|index)\.[cm]?[jt]sx?$/
+]
+
+function isMaterialFile(rel) {
+  return MATERIAL_FILE_RES.some((re) => re.test(rel))
+}
+
+// Area = directorio de primer nivel; los archivos raiz son su propia area.
+function areaOf(rel) {
+  const i = rel.indexOf('/')
+  return i === -1 ? rel : rel.slice(0, i)
+}
+
+function computeImpact(stored, sources, fileHashes) {
+  const storedList = new Set(stored.sources || [])
+  const currentList = new Set(sources)
+  const storedFiles = stored.fileHashes || null
+  const changedAreas = new Set()
+  const materialReasons = []
+  const notes = []
+
+  for (const rel of sources) {
+    if (!storedList.has(rel)) {
+      changedAreas.add(areaOf(rel))
+      if (isMaterialFile(rel)) materialReasons.push(`archivo material nuevo: ${rel}`)
+    }
+  }
+  for (const rel of storedList) {
+    if (!currentList.has(rel)) {
+      changedAreas.add(areaOf(rel))
+      if (isMaterialFile(rel)) materialReasons.push(`archivo material eliminado: ${rel}`)
+    }
+  }
+  if (storedFiles) {
+    for (const rel of sources) {
+      if (storedFiles[rel] && storedFiles[rel] !== fileHashes[rel]) {
+        changedAreas.add(areaOf(rel))
+        if (isMaterialFile(rel)) materialReasons.push(`archivo material modificado: ${rel}`)
+      }
+    }
+  }
+
+  const storedAreas = new Set([...storedList].map(areaOf))
+  const currentAreas = new Set(sources.map(areaOf))
+  for (const a of currentAreas) if (!storedAreas.has(a)) materialReasons.push(`area raiz nueva: ${a}`)
+  for (const a of storedAreas) if (!currentAreas.has(a)) materialReasons.push(`area raiz eliminada: ${a}`)
+
+  if (!storedFiles && changedAreas.size === 0) {
+    notes.push('estado previo sin hashes por archivo: el cambio de contenido no se puede atribuir a un area')
+  }
+
+  const impact = materialReasons.length ? 'material' : changedAreas.size || notes.length ? 'minor' : 'none'
+  return { impact, changedAreas: [...changedAreas].sort(), materialReasons, notes }
 }
 
 function statePath(outputDir) {
@@ -1163,7 +1229,7 @@ async function checkDiscovery() {
   const { outputDir } = config
   const tier = readProjectTier(process.cwd())
   const present = await presentDocs(outputDir)
-  let state, action, message, missingDocs
+  let state, action, message, missingDocs, impact = 'none', changedAreas = [], materialReasons = [], notes = []
   if (present.length === 0) {
     state = 'MISSING'
     action = 'generate'
@@ -1176,35 +1242,50 @@ async function checkDiscovery() {
     message = `Faltan ${missingDocs.length} documentos del seed.`
   } else {
     const sources = await computeSources()
-    const hash = await hashSources(sources)
-    let storedHash = null
+    const { hash, fileHashes } = await hashSources(sources)
+    let stored = null
     const sp = statePath(outputDir)
     if (await exists(sp)) {
       try {
-        storedHash = JSON.parse((await readFile(sp, 'utf8')).replace(/^\uFEFF/, '')).hash
+        stored = JSON.parse((await readFile(sp, 'utf8')).replace(/^\uFEFF/, ''))
       } catch {}
     }
-    if (!storedHash) {
+    if (!stored?.hash) {
       state = 'STALE'
+      impact = 'material'
       action = 'regenerate'
       message = 'Seed completo pero sin estado registrado — frescura desconocida.'
-    } else if (storedHash === hash) {
+    } else if (stored.hash === hash) {
       state = 'READY'
       action = 'continue'
       message = 'El seed esta al dia.'
     } else {
+      const diff = computeImpact(stored, sources, fileHashes)
+      impact = diff.impact
+      changedAreas = diff.changedAreas
+      materialReasons = diff.materialReasons
+      notes = diff.notes
       state = 'STALE'
-      action = 'regenerate'
-      message = 'El repositorio cambio desde el ultimo pack.'
+      if (impact === 'material') {
+        action = 'regenerate'
+        message = 'El repositorio cambio en areas materiales (config/entry points/estructura).'
+      } else {
+        action = 'continue'
+        message = 'Cambios menores desde el ultimo pack; el seed sigue siendo util.'
+      }
     }
     missingDocs = []
   }
   console.log(JSON.stringify({
     schemaVersion: 2,
     state,
+    impact,
     recommendedAction: action,
     message,
     missingDocs,
+    changedAreas,
+    materialReasons,
+    notes,
     config: {
       outputDir,
       exclude: config.exclude,
@@ -1249,12 +1330,13 @@ async function packDiscovery(flags) {
     process.exit(1)
   }
   const sources = await computeSources()
-  const hash = await hashSources(sources)
+  const { hash, fileHashes } = await hashSources(sources)
   await mkdir(outputDir, { recursive: true })
   await writeFile(statePath(outputDir), JSON.stringify({
     version: 1,
     generatedAt: new Date().toISOString(),
     sources,
+    fileHashes,
     hash,
     packTokens: tokens
   }, null, 2) + '\n')

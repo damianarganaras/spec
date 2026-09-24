@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
+import { createHash } from 'node:crypto'
 import { createMemoryEngine } from '../src/core/memory/engine.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
@@ -1323,6 +1324,118 @@ describe('CLI idioma de artifacts (--lang)', () => {
       assert.equal(readRc(proj).language, 'pt')
       run(['install', '--project', proj, '--no-mcp'], dir)
       assert.equal(readRc(proj).language, 'pt')
+    })
+  })
+})
+
+describe('CLI discovery --check impact (minor vs material)', () => {
+  const DOCS = ['index.md', 'overview.md', 'setup.md', 'inventory.md', 'integrations.md', 'decisions.md', 'unknowns.md', 'units/_map.md']
+
+  function seedFixture(dir, files, { withHashes = true, hash = null } = {}) {
+    const docsDir = join(dir, 'docs', 'technical-discovery')
+    mkdirSync(join(docsDir, 'units'), { recursive: true })
+    for (const d of DOCS) writeFileSync(join(docsDir, d), '# doc\n')
+    writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, discovery: { outputDir: 'docs/technical-discovery', exclude: [] } }, null, 2))
+    for (const [rel, content] of Object.entries(files)) {
+      const p = join(dir, rel)
+      mkdirSync(dirname(p), { recursive: true })
+      writeFileSync(p, content)
+    }
+    const sources = ['.ancletorc', ...Object.keys(files)].sort()
+    const h = createHash('sha256')
+    const fileHashes = {}
+    for (const rel of sources) {
+      const content = readFileSync(join(dir, rel))
+      fileHashes[rel] = createHash('sha256').update(content).digest('hex').slice(0, 16)
+      h.update(rel)
+      h.update('\0')
+      h.update(String(content.length))
+      h.update('\0')
+      h.update(content)
+      h.update('\n')
+    }
+    const state = {
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      sources,
+      hash: hash || h.digest('hex'),
+      packTokens: 1
+    }
+    if (withHashes) state.fileHashes = fileHashes
+    writeFileSync(join(docsDir, '.discovery-state.json'), JSON.stringify(state, null, 2))
+    return docsDir
+  }
+
+  const BASE = { 'src/app.js': 'console.log(1)\n', 'package.json': '{"name":"x"}\n' }
+
+  it('sin cambios: READY, impact none', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      const r = run(['discovery', '--check'], dir)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+    })
+  })
+
+  it('cambio de contenido en src: STALE minor, no ofrece regenerar', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+      const r = run(['discovery', '--check'], dir)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.deepEqual(j.changedAreas, ['src'])
+      assert.equal(j.recommendedAction, 'continue')
+    })
+  })
+
+  it('package.json modificado: STALE material', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      writeFileSync(join(dir, 'package.json'), '{"name":"x","version":"1.0.0"}\n')
+      const r = run(['discovery', '--check'], dir)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.some((m) => m.includes('package.json')))
+    })
+  })
+
+  it('directorio raiz nuevo: STALE material', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      mkdirSync(join(dir, 'tools'), { recursive: true })
+      writeFileSync(join(dir, 'tools', 'x.js'), 'x\n')
+      const r = run(['discovery', '--check'], dir)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.impact, 'material')
+      assert.ok(j.materialReasons.some((m) => m.includes('area raiz nueva: tools')))
+    })
+  })
+
+  it('archivo nuevo dentro de un area existente: minor', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      writeFileSync(join(dir, 'src', 'util.js'), 'x\n')
+      const r = run(['discovery', '--check'], dir)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.impact, 'minor')
+      assert.deepEqual(j.changedAreas, ['src'])
+    })
+  })
+
+  it('estado viejo sin fileHashes: minor con nota, no material', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE, { withHashes: false, hash: 'deadbeef' })
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(3)\n')
+      const r = run(['discovery', '--check'], dir)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.ok(j.notes.some((n) => n.includes('sin hashes por archivo')))
     })
   })
 })

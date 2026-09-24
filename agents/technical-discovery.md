@@ -127,7 +127,7 @@ When you were delegated, do not address the developer as if they had called you:
 - **Answer in Spanish.** Paths, file names, and identifiers stay as they are.
 - Cite the paths that support each claim.
 - State which source you used and whether seed inspection was required.
-- When seed inspection was required, return the resolved state with its `impact`, and the complete unchanged check report if a seed action is needed.
+- When seed inspection was required, return the resolved state with its `impact` and `affectedDocs`, and the complete unchanged check report if a seed action is needed.
 - Declare — when they apply — the stale nodes, any direct code read, and any gap left by the budget.
 - If the seed state prevented the answer, state that no repository sweep was performed and
   include the required `SEED_ACTION_REQUIRED` marker.

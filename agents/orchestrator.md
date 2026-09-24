@@ -71,7 +71,7 @@ The orchestrator never executes `ancleto discovery --check`. When the technical 
 
 For `MISSING` and `PARTIAL`, never generate automatically. Ask for explicit user approval before invoking `@technical-seed-writer`. If approved, pass the complete check report returned by `@technical-discovery` and the action `generate` or `complete`. If declined, continue only when the request can be handled safely without broad repository context; otherwise report the limitation and stop.
 
-For `STALE`, delegate `regenerate` to `@technical-seed-writer` only after explicit user approval. When `impact` is `minor`, keep working from the seed and mention the drift in the summary. A concrete gap found while working — needed info the seed does not cover — may justify offering regeneration even with `minor` impact, always with approval.
+For `STALE`, delegate `regenerate` to `@technical-seed-writer` only after explicit user approval. When `impact` is `minor`, keep working from the seed and mention the drift in the summary. A concrete gap found while working — needed info the seed does not cover — may justify offering regeneration even with `minor` impact, always with approval. When the report lists `affectedDocs`, pass them so an approved regeneration stays scoped to those documents.
 
 `@technical-discovery` owns read-only repository orientation and seed-state inspection. `@technical-seed-writer` owns all seed generation, completion, and regeneration. Never substitute an unavailable seed with a manual repository scan.
 

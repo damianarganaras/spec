@@ -51,6 +51,11 @@ do not split it or create child documents.
 
 Run `ancleto discovery --check` once more and apply `validation-checklist.md`. This is a
 state-only validation; it must not be followed by another Repomix command. For stale nodes,
-regenerate only the affected documents using one new global generation on a later request.
+regenerate only the affected documents using one new global generation on a later request:
+when the check report lists `affectedDocs`, those are the only documents to rewrite.
 If a unit has no dossier, update its row in `units/_map.md` and only the root documents whose
 content changed.
+
+After any generation, write `seed-map.json` in `config.outputDir` mapping every seed document
+to the source areas (first-level directories or root file names) it draws evidence from, so a
+later `--check` can scope the next regeneration.

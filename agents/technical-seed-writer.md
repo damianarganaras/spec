@@ -45,11 +45,11 @@ action was explicitly requested, run `ancleto discovery --check` once and read i
 1. For `READY`, do not rewrite the seed; report that it is already available.
 2. For `MISSING`, `PARTIAL`, or an accepted `STALE` regeneration, execute the skill's single global Repomix command exactly once. It must use the resolved `config.exclude` values and
    must not run `--include`, an uncompressed preliminary pack, or another compressed pack.
-3. Read that pack and immediately write every required seed document in Spanish under
-   `config.outputDir`, including `units/_map.md`. Use the same pack for any optional dossier.
-4. Run `ancleto discovery --check` once to validate the written seed. This is state-only: do
+3. Read that pack and write the seed documents under `config.outputDir`, including `units/_map.md`. When the passed report has `impact: minor` with a non-empty `affectedDocs` list, rewrite ONLY those documents and leave every other seed document untouched. Otherwise (full regeneration), write every required seed document. Use the same pack for any optional dossier.
+4. Write `seed-map.json` in `config.outputDir` mapping every seed document to the source areas it draws evidence from. Areas are first-level directories (or root file names), the same convention the CLI uses. Example: `{ "version": 1, "generatedAt": "...", "docs": { "overview.md": ["src", "package.json"] } }`.
+5. Run `ancleto discovery --check` once to validate the written seed. This is state-only: do
    not generate another pack after it.
-5. Return the result as specified in `## Output`.
+6. Return the result as specified in `## Output`.
 
 If the pack fails, writing fails, or the final state is not usable, report the exact blocker;
 do not claim the seed was generated.

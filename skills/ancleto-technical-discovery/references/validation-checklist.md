@@ -9,4 +9,5 @@
 - [ ] `decisions.md` concentrates rules, risks, and coupling without duplicating the overview.
 - [ ] `inventory.md` declares directories or globs, not file lists.
 - [ ] `unknowns.md` records what could not be verified.
+- [ ] `seed-map.json` exists and maps each seed document to its source areas.
 - [ ] No secret values are present.

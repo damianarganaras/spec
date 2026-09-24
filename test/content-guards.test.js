@@ -297,6 +297,31 @@ describe('content guards - seed: sin oferta con impact minor (Release 1)', () =>
     const t = readFileSync(join(ROOT, 'agents', 'technical-discovery.md'), 'utf8')
     assert.match(t, /stale with material impact/)
     assert.match(t, /`STALE` with `impact: minor`/)
+    assert.match(t, /with its `impact` and `affectedDocs`/)
+  })
+})
+
+describe('content guards - regeneracion parcial (Release 2)', () => {
+  it('seed-writer reescribe solo affectedDocs con impact minor y escribe seed-map', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'technical-seed-writer.md'), 'utf8')
+    assert.match(t, /`impact: minor` with a non-empty `affectedDocs` list, rewrite ONLY those documents/)
+    assert.match(t, /Write `seed-map\.json` in `config\.outputDir`/)
+  })
+
+  it('la pipeline exige seed-map.json tras generar', () => {
+    const t = readFileSync(join(ROOT, 'skills', 'ancleto-technical-discovery', 'references', 'generation-pipeline.md'), 'utf8')
+    assert.match(t, /when the check report lists `affectedDocs`, those are the only documents to rewrite/)
+    assert.match(t, /write `seed-map\.json` in `config\.outputDir`/)
+  })
+
+  it('el checklist valida seed-map.json', () => {
+    const t = readFileSync(join(ROOT, 'skills', 'ancleto-technical-discovery', 'references', 'validation-checklist.md'), 'utf8')
+    assert.match(t, /`seed-map\.json` exists and maps each seed document to its source areas/)
+  })
+
+  it('el orchestrator pasa affectedDocs en la regeneracion aprobada', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'orchestrator.md'), 'utf8')
+    assert.match(t, /pass them so an approved regeneration stays scoped to those documents/)
   })
 })
 

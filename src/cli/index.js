@@ -33,12 +33,13 @@ Uso:
   ancleto install --with-engram      Ademas configura el MCP externo engram (memoria opcional)
   ancleto install --tier <nivel>     normal | minimo | gratis (wizard interactivo en TTY)
   ancleto install --lang <codigo>    auto | es | en | pt (idioma de los artifacts; auto = idioma de la conversacion)
+  ancleto install --exclude <globs>  Paths excluidos del discovery, coma-separados (ej: "**/*.png,docs")
   ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (wizard si no esta guardado)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
                                    Parado en un proyecto con .ancletorc opera sobre ese proyecto;
                                    usa --global para forzar el alcance global
   ancleto upgrade [--agent <nombre>]  Re-aplica templates (LOCKED) y skills sobre el proyecto actual
-  ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>] [--lang <codigo>]
+  ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--exclude <globs>]
                                      Crea .ancletorc en el repositorio actual
                                      (interactivo en TTY: banner + menu; Azure desactivado por defecto)
   ancleto discovery --check           Estado del seed (READY/STALE/PARTIAL/MISSING)
@@ -639,6 +640,47 @@ function langLabel(code) {
   return { auto: 'automatico (idioma de la conversacion)', es: 'espanol', en: 'ingles', pt: 'portugues' }[code] || code
 }
 
+const EXCLUDE_PRESETS = [
+  { key: 'tests', label: 'tests (*.test.*, *.spec.*, __tests__)', recommended: true, globs: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**'] },
+  { key: 'assets', label: 'assets pesados (*.png, *.jpg, *.svg, *.ico, public/)', recommended: true, globs: ['**/*.png', '**/*.jpg', '**/*.svg', '**/*.ico', 'public'] },
+  { key: 'docs', label: 'documentacion (docs/)', recommended: false, globs: ['docs'] },
+  { key: 'data', label: 'migraciones y seeds', recommended: false, globs: ['**/migrations/**', '**/seeds/**'] },
+  { key: 'lockfiles', label: 'lockfiles (package-lock, yarn.lock, pnpm-lock)', recommended: true, globs: ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'] }
+]
+
+function parseExcludeFlag(value) {
+  return String(value)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+// null = flag ausente; [] = limpiar exclusiones; [...] = globs.
+function scanExcludeFlag(args) {
+  const i = args.indexOf('--exclude')
+  if (i < 0) return null
+  const next = args[i + 1]
+  if (!next || next.startsWith('--')) return []
+  return parseExcludeFlag(next)
+}
+
+// Une los grupos elegidos con los globs propios del proyecto (los que no son de un preset).
+function applyExcludePresets(existing, keys) {
+  const presetGlobs = new Set(EXCLUDE_PRESETS.flatMap((p) => p.globs))
+  const custom = (existing || []).filter((g) => !presetGlobs.has(g))
+  const chosen = EXCLUDE_PRESETS.filter((p) => keys.includes(p.key)).flatMap((p) => p.globs)
+  return [...custom, ...chosen]
+}
+
+async function askExcludePresets(existing) {
+  const presetGlobs = new Set(EXCLUDE_PRESETS.flatMap((p) => p.globs))
+  const hasPreset = (existing || []).some((g) => presetGlobs.has(g))
+  const preselected = EXCLUDE_PRESETS.map((p, i) => (hasPreset ? (p.globs.some((g) => (existing || []).includes(g)) ? i : -1) : p.recommended ? i : -1)).filter((i) => i >= 0)
+  const { cancelled, indices } = await selectMultiple('Que excluir del discovery (ademas de node_modules, dist, build)', EXCLUDE_PRESETS.map((p) => p.label), preselected)
+  if (cancelled) return existing || []
+  return applyExcludePresets(existing, indices.map((i) => EXCLUDE_PRESETS[i].key))
+}
+
 async function resolveAgent(args, existing, allowAsk = Boolean(process.stdin.isTTY)) {
   const flag = scanAgentFlag(args)
   if (flag) return flag
@@ -838,9 +880,12 @@ async function install(args) {
 
   let agent = agentFlag || (existingRc?.agent && SUPPORTED_AGENTS.includes(existingRc.agent) ? existingRc.agent : null)
   let language = scanLangFlag(args) || (existingRc?.language && SUPPORTED_LANGS.includes(existingRc.language) ? existingRc.language : null)
+  const excludeFlag = scanExcludeFlag(args)
+  const existingDiscovery = existingRc?.discovery || { outputDir: 'docs/technical-discovery', exclude: [] }
+  let excludeChoice = excludeFlag
 
   let bannerShown = false
-  const isInteractive = Boolean(process.stdout.isTTY) && ((projectDir && !agent) || !tier || !language)
+  const isInteractive = Boolean(process.stdout.isTTY) && ((projectDir && !agent) || !tier || !language || (projectDir && excludeChoice === null && (existingDiscovery.exclude || []).length === 0))
   if (isInteractive) {
     await showBanner()
     bannerShown = true
@@ -854,6 +899,9 @@ async function install(args) {
     if (!language) {
       const picked = await selectOption('Idioma de los artifacts', SUPPORTED_LANGS.map(langLabel), 0)
       language = SUPPORTED_LANGS[SUPPORTED_LANGS.map(langLabel).indexOf(picked)] || 'auto'
+    }
+    if (projectDir && excludeChoice === null && (existingDiscovery.exclude || []).length === 0) {
+      excludeChoice = await askExcludePresets(existingDiscovery.exclude || [])
     }
     stopBanner()
   }
@@ -886,6 +934,7 @@ async function install(args) {
     await writeManifest(projectDir, {
       agent,
       language,
+      ...(excludeChoice !== null ? { discovery: { ...existingDiscovery, exclude: excludeChoice } } : {}),
       ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {}),
       installedPaths: {
         templates: ['AGENTS.md', 'PRODUCT.md'],
@@ -969,12 +1018,14 @@ async function initProject(args) {
   const langFlag = scanLangFlag(args)
   const existing = await readAncletorc(projectDir)
   const azure = existing?.azure ?? { enabled: false }
-  const discovery = existing?.discovery ?? { outputDir: 'docs/technical-discovery', exclude: [] }
+  let discovery = existing?.discovery ?? { outputDir: 'docs/technical-discovery', exclude: [] }
   const tierFile = join(projectDir, '.opencode', '.ancleto-tier')
+  const excludeFlag = scanExcludeFlag(args)
+  let excludeChoice = excludeFlag
 
   let agent, tier, language
   language = langFlag || (existing?.language && SUPPORTED_LANGS.includes(existing.language) ? existing.language : null)
-  const isInteractive = Boolean(process.stdout.isTTY) && (!agentFlag || !tierFlag || !language)
+  const isInteractive = Boolean(process.stdout.isTTY) && (!agentFlag || !tierFlag || !language || (excludeChoice === null && (discovery.exclude || []).length === 0))
   if (isInteractive) {
     await showBanner()
     const agentIdx = Math.max(0, SUPPORTED_AGENTS.indexOf(existing?.agent))
@@ -985,6 +1036,9 @@ async function initProject(args) {
     if (!language) {
       const picked = await selectOption('Idioma de los artifacts', SUPPORTED_LANGS.map(langLabel), 0)
       language = SUPPORTED_LANGS[SUPPORTED_LANGS.map(langLabel).indexOf(picked)] || 'auto'
+    }
+    if (excludeChoice === null && (discovery.exclude || []).length === 0) {
+      excludeChoice = await askExcludePresets(discovery.exclude || [])
     }
     if (withAzure) {
       azure.enabled = true
@@ -998,6 +1052,7 @@ async function initProject(args) {
     if (!language) language = 'auto'
     if (withAzure) azure.enabled = true
   }
+  if (excludeChoice !== null) discovery = { ...discovery, exclude: excludeChoice }
 
   if (tier) {
     await mkdir(join(projectDir, '.opencode'), { recursive: true })

@@ -200,6 +200,16 @@ ancleto init --lang es     # fija español para ese proyecto
 
 Con `auto`, el orquestador detecta el idioma en tus primeros hasta 3 mensajes y lo persiste en `.ancletorc` → `language`. Podés volver a `auto` o fijar otro código cuando quieras (`auto | es | en | pt`). Lo que **nunca** se traduce: los keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`) y los nombres de archivos y directorios.
 
+### Exclusiones del discovery
+
+En la instalación interactiva elegís qué excluir del seed técnico con un menú (tests, assets pesados, docs, migraciones/seeds, lockfiles). Excluir reduce el tamaño del pack y estabiliza la detección de cambios:
+
+```bash
+ancleto init --exclude "**/*.test.*,**/*.png,docs"   # sin menú, directo
+```
+
+Se guarda en `.ancletorc` → `discovery.exclude` y se preserva en `update`/`upgrade`.
+
 ---
 
 ## Uso rápido
@@ -237,10 +247,10 @@ ancleto discovery         # Genera .discovery-map.json y empaqueta el repo
 ## Referencia de comandos CLI
 
 ```bash
-ancleto init [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--with-azure]
+ancleto init [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--exclude <globs>] [--with-azure]
                           # Configura el proyecto (interactivo en TTY)
 
-ancleto install [--project <dir>] [--tier <nivel>] [--agent <nombre>] [--lang <codigo>] [--no-mcp]
+ancleto install [--project <dir>] [--tier <nivel>] [--agent <nombre>] [--lang <codigo>] [--exclude <globs>] [--no-mcp]
                           # Instala agentes, skills y templates
 
 ancleto update            # Re-instala la última versión sobre lo existente

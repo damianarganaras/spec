@@ -1326,3 +1326,47 @@ describe('CLI idioma de artifacts (--lang)', () => {
     })
   })
 })
+
+describe('CLI exclusiones del discovery (--exclude)', () => {
+  const regEnv = (dir) => ({ ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
+
+  it('init --exclude persiste los globs en .ancletorc', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'opencode', '--exclude', '**/*.png,docs'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.deepEqual(readRc(dir).discovery.exclude, ['**/*.png', 'docs'])
+      assert.equal(readRc(dir).discovery.outputDir, 'docs/technical-discovery')
+    })
+  })
+
+  it('install --project --exclude persiste sin pisar outputDir', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'proj')
+      mkdirSync(proj, { recursive: true })
+      run(['init', '--agent', 'opencode'], proj, regEnv(dir))
+      const r = run(['install', '--project', proj, '--no-mcp', '--exclude', 'yarn.lock'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const d = readRc(proj).discovery
+      assert.deepEqual(d.exclude, ['yarn.lock'])
+      assert.equal(d.outputDir, 'docs/technical-discovery')
+    })
+  })
+
+  it('sin --exclude conserva el exclude existente', () => {
+    withDir((dir) => {
+      const proj = join(dir, 'proj')
+      mkdirSync(proj, { recursive: true })
+      run(['init', '--agent', 'opencode', '--exclude', 'docs'], proj, regEnv(dir))
+      run(['install', '--project', proj, '--no-mcp'], dir, regEnv(dir))
+      assert.deepEqual(readRc(proj).discovery.exclude, ['docs'])
+    })
+  })
+
+  it('exclude vacio explicito limpia la lista', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'opencode', '--exclude', 'docs'], dir, regEnv(dir))
+      run(['init', '--agent', 'opencode', '--exclude', ''], dir, regEnv(dir))
+      assert.deepEqual(readRc(dir).discovery.exclude, [])
+    })
+  })
+})

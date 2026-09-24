@@ -210,6 +210,18 @@ ancleto init --exclude "**/*.test.*,**/*.png,docs"   # sin menú, directo
 
 Se guarda en `.ancletorc` → `discovery.exclude` y se preserva en `update`/`upgrade`.
 
+### Frescura del seed (impact)
+
+`ancleto discovery --check` no solo dice si el seed está `STALE`: dice **qué tan grave** es el cambio con `impact`:
+
+| `impact` | Significado | Qué pasa |
+|---|---|---|
+| `none` | Sin cambios | El agente trabaja normal |
+| `minor` | Cambios fuera de áreas materiales (un componente, un estilo) | El agente trabaja y lo anota en el resumen; **no ofrece regenerar** |
+| `material` | Cambió un config de runtime, un entry point o apareció un directorio raíz nuevo | El agente **ofrece regenerar** (solo con tu aprobación) |
+
+La excepción: si el agente detecta un **hueco concreto** (info que el seed debería tener y no tiene, como una paleta nueva sin unidad), puede ofrecer regenerar aunque el `impact` sea `minor` — siempre con tu aprobación. Nunca regenera solo.
+
 ---
 
 ## Uso rápido

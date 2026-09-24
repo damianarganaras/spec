@@ -71,6 +71,10 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ Idioma configurable de los artifacts: `language` en `.ancletorc` (`auto | es | en | pt`),
   pregunta interactiva en `init`/`install` (`--lang`), detección en los primeros 3 mensajes con
   persistencia automática en modo `auto`, y keywords/nombres de archivo siempre literales en inglés.
+- ✅ Release 1 del seed incremental: menú interactivo de exclusiones del discovery en `init`/`install`
+  (`--exclude`; tests, assets, docs, migraciones/seeds, lockfiles) e `impact` (`none | minor | material`)
+  en `ancleto discovery --check` que silencia la oferta de regenerar con cambios menores. Pendiente
+  Release 2: estado por área + `seed-map.json` + regeneración parcial.
 
 ## Estado actual
 

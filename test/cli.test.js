@@ -1331,7 +1331,7 @@ describe('CLI idioma de artifacts (--lang)', () => {
 describe('CLI discovery --check impact (minor vs material)', () => {
   const DOCS = ['index.md', 'overview.md', 'setup.md', 'inventory.md', 'integrations.md', 'decisions.md', 'unknowns.md', 'units/_map.md']
 
-  function seedFixture(dir, files, { withHashes = true, hash = null } = {}) {
+  function seedFixture(dir, files, { withHashes = true, hash = null, seedMap = null } = {}) {
     const docsDir = join(dir, 'docs', 'technical-discovery')
     mkdirSync(join(docsDir, 'units'), { recursive: true })
     for (const d of DOCS) writeFileSync(join(docsDir, d), '# doc\n')
@@ -1363,6 +1363,7 @@ describe('CLI discovery --check impact (minor vs material)', () => {
     }
     if (withHashes) state.fileHashes = fileHashes
     writeFileSync(join(docsDir, '.discovery-state.json'), JSON.stringify(state, null, 2))
+    if (seedMap) writeFileSync(join(docsDir, 'seed-map.json'), typeof seedMap === 'string' ? seedMap : JSON.stringify(seedMap, null, 2))
     return docsDir
   }
 
@@ -1436,6 +1437,44 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       assert.equal(j.impact, 'minor')
       assert.equal(j.recommendedAction, 'continue')
       assert.ok(j.notes.some((n) => n.includes('sin hashes por archivo')))
+    })
+  })
+
+  it('con seed-map: affectedDocs cruza areas cambiadas con documentos', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE, {
+        seedMap: { version: 1, generatedAt: 'x', docs: { 'overview.md': ['src', 'package.json'], 'units/palette.md': ['src'], 'setup.md': ['package.json'] } }
+      })
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+      const r = run(['discovery', '--check'], dir)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.affectedDocs, ['overview.md', 'units/palette.md'])
+      assert.equal(j.recommendedAction, 'continue')
+    })
+  })
+
+  it('sin seed-map: affectedDocs vacio', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+      const r = run(['discovery', '--check'], dir)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.seedMapPresent, false)
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('seed-map malformado: se ignora sin romper el check', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE, { seedMap: 'esto no es json{' })
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.seedMapPresent, false)
+      assert.deepEqual(j.affectedDocs, [])
     })
   })
 })

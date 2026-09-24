@@ -1207,6 +1207,28 @@ function computeImpact(stored, sources, fileHashes) {
   return { impact, changedAreas: [...changedAreas].sort(), materialReasons, notes }
 }
 
+// seed-map.json lo escribe la skill al generar: cada documento → areas de
+// primer nivel (o archivos raiz) de las que saco evidencia. Misma convencion que areaOf.
+async function readSeedMap(outputDir) {
+  try {
+    const raw = await readFile(join(outputDir, 'seed-map.json'), 'utf8')
+    const parsed = JSON.parse(raw.replace(/^\uFEFF/, ''))
+    if (!parsed || typeof parsed.docs !== 'object' || parsed.docs === null) return null
+    return parsed.docs
+  } catch {
+    return null
+  }
+}
+
+function affectedDocsFor(seedMap, changedAreas) {
+  if (!seedMap || !changedAreas.length) return []
+  const out = new Set()
+  for (const [doc, areas] of Object.entries(seedMap)) {
+    if (Array.isArray(areas) && areas.some((a) => changedAreas.includes(a))) out.add(doc)
+  }
+  return [...out].sort()
+}
+
 function statePath(outputDir) {
   return join(outputDir, '.discovery-state.json')
 }
@@ -1229,7 +1251,7 @@ async function checkDiscovery() {
   const { outputDir } = config
   const tier = readProjectTier(process.cwd())
   const present = await presentDocs(outputDir)
-  let state, action, message, missingDocs, impact = 'none', changedAreas = [], materialReasons = [], notes = []
+  let state, action, message, missingDocs, impact = 'none', changedAreas = [], materialReasons = [], notes = [], affectedDocs = [], seedMapPresent = false
   if (present.length === 0) {
     state = 'MISSING'
     action = 'generate'
@@ -1265,6 +1287,9 @@ async function checkDiscovery() {
       changedAreas = diff.changedAreas
       materialReasons = diff.materialReasons
       notes = diff.notes
+      const seedMap = await readSeedMap(outputDir)
+      seedMapPresent = seedMap !== null
+      affectedDocs = affectedDocsFor(seedMap, changedAreas)
       state = 'STALE'
       if (impact === 'material') {
         action = 'regenerate'
@@ -1286,6 +1311,8 @@ async function checkDiscovery() {
     changedAreas,
     materialReasons,
     notes,
+    affectedDocs,
+    seedMapPresent,
     config: {
       outputDir,
       exclude: config.exclude,

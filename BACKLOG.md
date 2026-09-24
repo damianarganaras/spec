@@ -73,8 +73,11 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   persistencia automática en modo `auto`, y keywords/nombres de archivo siempre literales en inglés.
 - ✅ Release 1 del seed incremental: menú interactivo de exclusiones del discovery en `init`/`install`
   (`--exclude`; tests, assets, docs, migraciones/seeds, lockfiles) e `impact` (`none | minor | material`)
-  en `ancleto discovery --check` que silencia la oferta de regenerar con cambios menores. Pendiente
-  Release 2: estado por área + `seed-map.json` + regeneración parcial.
+  en `ancleto discovery --check` que silencia la oferta de regenerar con cambios menores.
+- ✅ Release 2 del seed incremental: `affectedDocs` en `--check` (cruce de áreas cambiadas con
+  `seed-map.json`, que escribe la skill) y regeneración parcial — con `impact: minor` se reescriben
+  solo los documentos afectados. Sin bump de formato: los `fileHashes` ya llevan la info por área,
+  un `version: 2` sería dato redundante.
 
 ## Estado actual
 

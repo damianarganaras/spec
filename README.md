@@ -222,6 +222,10 @@ Se guarda en `.ancletorc` → `discovery.exclude` y se preserva en `update`/`upg
 
 La excepción: si el agente detecta un **hueco concreto** (info que el seed debería tener y no tiene, como una paleta nueva sin unidad), puede ofrecer regenerar aunque el `impact` sea `minor` — siempre con tu aprobación. Nunca regenera solo.
 
+### Regeneración parcial
+
+`--check` también devuelve `affectedDocs`: los documentos del seed cuyas áreas cambiaron. Cuando aprobás una regeneración sobre un reporte `minor`, el seed-writer **reescribe solo esos documentos** y deja el resto intacto (un solo pack igual, pero sin reescribir los 8 documentos + dossiers). El mapeo vive en `seed-map.json` dentro del directorio del seed y lo mantiene la skill al generar; sin ese archivo el chequeo degrada a lista vacía y la regeneración es completa.
+
 ---
 
 ## Uso rápido

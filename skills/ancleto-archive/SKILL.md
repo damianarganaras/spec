@@ -46,9 +46,10 @@ Check for delta specs at `aspec/changes/<name>/specs/`; if none, proceed without
 
 ### 3. Check technical seed freshness
 
-If the `ancleto` CLI is available in this project, run `ancleto discovery --check` (read-only) and read its JSON `state`.
+If the `ancleto` CLI is available in this project, run `ancleto discovery --check` (read-only) and read its JSON `state` and `impact`.
 
-- **`STALE`**: warn that the technical seed is out of date for the current code, and offer to regenerate it now (follow the `ancleto-technical-discovery` skill) or to continue archiving with the stale seed.
+- **`STALE` with `impact: material`**: warn that the technical seed is out of date in material areas, and offer to regenerate it now (follow the `ancleto-technical-discovery` skill) or to continue archiving with the stale seed.
+- **`STALE` with `impact: minor`**: continue without offering — the seed is still usable; record the drift in the summary.
 - **Any other state**: continue without comment.
 - Never regenerate automatically — regenerate only with the user's explicit approval.
 - If the user declines, continue the archive normally and record the stale seed in the summary.

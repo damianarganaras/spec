@@ -222,8 +222,8 @@ describe('content guards - frescura del seed al archivar (issue #17)', () => {
   it('el orchestrator chequea la frescura del seed antes de archivar', () => {
     const t = readFileSync(join(ROOT, 'agents', 'orchestrator.md'), 'utf8')
     assert.match(t, /Check the seed freshness before closing/)
-    assert.match(t, /state is `STALE`/)
-    assert.match(t, /never automatic; if the user declines, continue the archive/)
+    assert.match(t, /state is `STALE` with `impact: material`/)
+    assert.match(t, /with `impact: minor`, continue the archive normally/)
   })
 })
 
@@ -269,6 +269,34 @@ describe('content guards - telemetria de tokens (issue #27)', () => {
     assert.match(t, /ancleto stats/)
     assert.match(t, /tokens de entrada\/salida\/razonamiento\/cache/)
     assert.match(t, /Solo funciona con opencode/)
+  })
+})
+
+describe('content guards - seed: sin oferta con impact minor (Release 1)', () => {
+  it('el orchestrator no ofrece regenerar con impact minor', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'orchestrator.md'), 'utf8')
+    assert.match(t, /`STALE` \(minor\)/)
+    assert.match(t, /do not offer regeneration/)
+    assert.match(t, /state is `STALE` with `impact: material`/)
+  })
+
+  it('la skill archive continua sin ofrecer con impact minor', () => {
+    const t = readFileSync(join(ROOT, 'skills', 'ancleto-archive', 'SKILL.md'), 'utf8')
+    assert.match(t, /`STALE` with `impact: minor`/)
+    assert.match(t, /continue without offering/)
+    assert.match(t, /`STALE` with `impact: material`/)
+  })
+
+  it('la skill technical-discovery distingue minor de material', () => {
+    const t = readFileSync(join(ROOT, 'skills', 'ancleto-technical-discovery', 'SKILL.md'), 'utf8')
+    assert.match(t, /`STALE` with `impact: minor`/)
+    assert.match(t, /`STALE` with `impact: material`/)
+  })
+
+  it('technical-discovery emite el marker solo con impacto material', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'technical-discovery.md'), 'utf8')
+    assert.match(t, /stale with material impact/)
+    assert.match(t, /`STALE` with `impact: minor`/)
   })
 })
 

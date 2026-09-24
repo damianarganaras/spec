@@ -76,7 +76,8 @@ Inspect seed state only when `docs/technical-discovery/` is the selected source.
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `READY`   | answer from the seed                                                                                                                                        |
 | `PARTIAL` | use an available document only when it safely answers the focused question; otherwise report the missing documents and request completion                   |
-| `STALE`   | answer with an explicit freshness warning when the evidence is sufficient; request regeneration only when stale evidence could materially affect the answer |
+| `STALE` with `impact: minor` | answer noting the freshness drift; do not request regeneration — the seed is still usable                                                       |
+| `STALE` with `impact: material` | answer with an explicit freshness warning when the evidence is sufficient; request regeneration only when stale evidence could materially affect the answer |
 | `MISSING` | report that broad repository context is unavailable and request generation                                                                                  |
 
 You **report** states and recommend actions. You never resolve them: generating or regenerating
@@ -117,7 +118,7 @@ Any request to create, modify, or implement — including writing aspec artifact
 | Situation                              | Action                                                                                                                             |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | request to create / modify / implement | return the context and escalate the request to the `@orchestrator`                                                                 |
-| seed missing, partial, or stale        | report the state and emit the corresponding `SEED_ACTION_REQUIRED` marker for `@orchestrator` to delegate `@technical-seed-writer` |
+| seed missing, partial, or stale with material impact | report the state and emit the corresponding `SEED_ACTION_REQUIRED` marker for `@orchestrator` to delegate `@technical-seed-writer` |
 
 When you were delegated, do not address the developer as if they had called you: your output is context for the calling agent.
 
@@ -126,7 +127,7 @@ When you were delegated, do not address the developer as if they had called you:
 - **Answer in Spanish.** Paths, file names, and identifiers stay as they are.
 - Cite the paths that support each claim.
 - State which source you used and whether seed inspection was required.
-- When seed inspection was required, return the resolved state and the complete unchanged check report if a seed action is needed.
+- When seed inspection was required, return the resolved state with its `impact`, and the complete unchanged check report if a seed action is needed.
 - Declare — when they apply — the stale nodes, any direct code read, and any gap left by the budget.
 - If the seed state prevented the answer, state that no repository sweep was performed and
   include the required `SEED_ACTION_REQUIRED` marker.

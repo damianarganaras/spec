@@ -41,7 +41,8 @@ further or create one subagent per unit: generation happens in one sequential ex
 | --- | --- |
 | `READY` | Read `index.md` and at most two documents it routes to. |
 | `PARTIAL` | Complete only the missing documents. |
-| `STALE` | Regenerate only the affected focused dossier; update a transversal decision when it changed. |
+| `STALE` with `impact: minor` | Answer from the seed and note the freshness drift; do not regenerate or run another pack for it. |
+| `STALE` with `impact: material` | Regenerate only the affected focused dossier; update a transversal decision when it changed. |
 | `MISSING` | Generate the concise seed. |
 
 Never replace a missing seed with a manual repository sweep.

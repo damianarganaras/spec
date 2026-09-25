@@ -764,6 +764,17 @@ describe('CLI init --tier (v0.6.2)', () => {
       assert.equal(existsSync(join(dir, '.opencode', '.ancleto-tier')), false)
     })
   })
+
+  it('init sin tier respeta el tier guardado y no pierde los modelos aplicados', () => {
+    withDir((dir) => {
+      assert.equal(run(['init', '--tier', 'minimo'], dir).status, 0)
+      const r = run(['init'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /Tier: minimo/)
+      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orchestrator, /model: opencode-go\/deepseek-v4\.1-flash/)
+    })
+  })
 })
 
 describe('CLI install wizard (v0.6.6)', () => {

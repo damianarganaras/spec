@@ -1049,6 +1049,12 @@ async function initProject(args) {
   } else {
     agent = await resolveAgent(args, existing?.agent, false)
     tier = tierFlag
+    if (!tier) {
+      // Paridad con install: sin flag se respeta el tier guardado. Sin esto un
+      // re-init pelado re-copiaba los agents de origen y perdia los modelos aplicados.
+      const stored = (await exists(tierFile)) ? (await readFile(tierFile, 'utf8')).trim() : null
+      if (stored && TIERS[stored]) tier = stored
+    }
     if (!language) language = 'auto'
     if (withAzure) azure.enabled = true
   }

@@ -1,0 +1,29 @@
+{
+  "last_updated": "2026-09-25T14:03:25.066Z",
+  "total_files": 488,
+  "tree_summary": {
+    ".github": 1,
+    ".opencode": 59,
+    "agents": 10,
+    "aspec": 1,
+    "commands": 12,
+    "docs": 4,
+    "documentation": 340,
+    "skills": 32,
+    "src": 10,
+    "templates": 2,
+    "test": 7
+  },
+  "root_files": [
+    ".ancletorc",
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "BACKLOG.md",
+    "DESIGN-memory-engine-v0.2.0.md",
+    "PRODUCT.md",
+    "README.md",
+    "package-lock.json",
+    "package.json"
+  ]
+}

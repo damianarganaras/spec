@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-25T14:03:34Z",
+  "docs": {
+    "index.md": ["README.md", "package.json"],
+    "overview.md": ["src", "package.json", "README.md", "agents", "commands", "skills", "templates", "aspec", "test"],
+    "setup.md": ["package.json", "README.md", "AGENTS.md", "aspec", "test", ".github"],
+    "decisions.md": ["README.md", "BACKLOG.md", "DESIGN-memory-engine-v0.2.0.md", "AGENTS.md", "src", "agents"],
+    "integrations.md": ["README.md", "package.json", "src", ".github", ".opencode", "documentation"],
+    "inventory.md": ["package.json", ".discovery-map.json", ".github", ".opencode", "documentation"],
+    "unknowns.md": ["README.md", "BACKLOG.md", "PRODUCT.md"],
+    "units/_map.md": ["src", "agents", "commands", "skills", "templates", "test"],
+    "units/memory-engine.md": ["src", "DESIGN-memory-engine-v0.2.0.md", "test"],
+    "units/discovery-engine.md": ["src", "test", "README.md"],
+    "units/cli-install.md": ["src", "templates", "test", "README.md", "BACKLOG.md"]
+  }
+}

@@ -333,7 +333,7 @@ Funciona en tres piezas que comparten el mismo archivo:
 | `recordRule` | Guarda una regla o restricción permanente. |
 | `recordDecision` | Registra el *por qué* de una decisión. |
 
-Cada entrada tiene un `scope`: `project` (default, entra en `<ProjectMemoryRules>`), `feature` o `task`. El orquestador inyecta los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` en el system prompt de tu agente desde el día cero —incluso sin reglas previas— para que no repita errores ya resueltos.
+Cada entrada tiene un `scope`: `project` (default), `feature` o `task`. Solo las **reglas** activas con scope `project` entran en `<ProjectMemoryRules>`; las **decisiones** con scope `project` se recuperan reactivamente con `searchMemory` y no se inyectan de forma proactiva. El orquestador inyecta los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` en el system prompt de tu agente desde el día cero —incluso sin reglas previas— para que no repita errores ya resueltos.
 
 > El mismo motor se puede consultar a mano desde la terminal: `ancleto memory context --scope project`. El archivo `.ancleto/working-context.md` que lee el orquestador se regenera solo en `init`, `install --project` y `upgrade`.
 

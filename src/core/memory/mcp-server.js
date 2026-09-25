@@ -1,5 +1,6 @@
 import { createMemoryEngine, defaultMemoryDbPath } from './engine.js'
 import { memoryTools, createMemoryToolHandlers } from './tools.js'
+import { resolveMemoryProjectRoot } from './working-context.js'
 
 const PROTOCOL_VERSION = '2024-11-05'
 const SERVER_INFO = { name: 'ancleto-memory', version: '1.0.0' }
@@ -7,11 +8,12 @@ const SERVER_INFO = { name: 'ancleto-memory', version: '1.0.0' }
 export function createMemoryServer({ dbPath = defaultMemoryDbPath() } = {}) {
   let engine = null
   let handlers = null
+  const projectRoot = resolveMemoryProjectRoot(dbPath)
 
   function toolkit() {
     if (!engine) {
       engine = createMemoryEngine(dbPath)
-      handlers = createMemoryToolHandlers(engine, { source: 'mcp:ancleto-memory' })
+      handlers = createMemoryToolHandlers(engine, { source: 'mcp:ancleto-memory', projectRoot })
     }
     return handlers
   }

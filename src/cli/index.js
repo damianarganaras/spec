@@ -9,6 +9,7 @@ import { join, dirname, resolve, basename, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
+import { writeWorkingContext } from '../core/memory/working-context.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
@@ -1419,16 +1420,11 @@ async function refreshWorkingContext(projectDir, scope = 'project') {
   const dbPath = defaultMemoryDbPath(projectDir)
   if (!(await exists(dbPath))) return null
   const engine = createMemoryEngine(dbPath)
-  let block
   try {
-    block = engine.buildWorkingContext(scope)
+    return writeWorkingContext(engine, projectDir, scope)
   } finally {
     engine.close()
   }
-  const out = join(projectDir, '.ancleto', 'working-context.md')
-  await mkdir(dirname(out), { recursive: true })
-  await writeFile(out, block === null ? '' : block + '\n')
-  return block === null ? null : out
 }
 
 async function memoryContext(flags) {

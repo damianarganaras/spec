@@ -130,8 +130,8 @@ function buildEngine(db) {
        WHERE memory_fts MATCH ? AND n.status = 'active'`
     const run = (match, loose) => {
       const sql = type
-        ? db.prepare(`${base} AND n.type = ? ORDER BY rank LIMIT ?`)
-        : db.prepare(`${base} ORDER BY rank LIMIT ?`)
+        ? db.prepare(`${base} AND n.type = ? ORDER BY rank, n.rowid LIMIT ?`)
+        : db.prepare(`${base} ORDER BY rank, n.rowid LIMIT ?`)
       // FTS5 no acepta parametros en ORDER BY rank; el prefijo '*' va dentro del MATCH.
       try {
         return type ? sql.all(match, type, lim) : sql.all(match, lim)

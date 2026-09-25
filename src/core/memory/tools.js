@@ -1,11 +1,12 @@
 import { createMemoryEngine } from './engine.js'
+import { shouldRefreshWorkingContext, writeWorkingContext } from './working-context.js'
 
 const KEY_DESCRIPTION = 'Clave conceptual estable (ej. "api-error-format"). Reusala para actualizar: la nueva version supersede automaticamente la anterior.'
 
 const SCOPE_SCHEMA = {
   type: 'string',
   enum: ['project', 'feature', 'task'],
-  description: 'Ambito: project (default, entra en <ProjectMemoryRules>), feature o task para algo mas acotado.'
+  description: 'Ambito: project (default; las reglas con scope project entran en <ProjectMemoryRules>, las decisiones se recuperan reactivamente con searchMemory), feature o task para algo mas acotado.'
 }
 
 const SEARCH_SCHEMA = {
@@ -62,10 +63,23 @@ export const memoryTools = [
 ]
 
 export function createMemoryToolHandlers(engine, runtimeContext = {}) {
+  function record(args, type, defaultSource) {
+    const result = engine.recordNode({ ...args, type }, { ...runtimeContext, source: runtimeContext.source || defaultSource })
+    if (runtimeContext.projectRoot && shouldRefreshWorkingContext(result)) {
+      try {
+        writeWorkingContext(engine, runtimeContext.projectRoot)
+      } catch (err) {
+        // stderr: stdout es el canal JSON-RPC del server MCP.
+        console.warn(`ancleto: no se pudo refrescar el working-context: ${err.message}`)
+      }
+    }
+    return result
+  }
+
   return {
     searchMemory: (args) => engine.searchMemory(args),
-    recordRule: (args) => engine.recordNode({ ...args, type: 'rule' }, { ...runtimeContext, source: runtimeContext.source || 'tool:recordRule' }),
-    recordDecision: (args) => engine.recordNode({ ...args, type: 'decision' }, { ...runtimeContext, source: runtimeContext.source || 'tool:recordDecision' })
+    recordRule: (args) => record(args, 'rule', 'tool:recordRule'),
+    recordDecision: (args) => record(args, 'decision', 'tool:recordDecision')
   }
 }
 

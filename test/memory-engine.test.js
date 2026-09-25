@@ -204,6 +204,143 @@ describe('searchMemory', () => {
   })
 })
 
+// memory-search-order-tiebreak: orden total por `rank, n.rowid` (ascendente) en
+// ambas ramas de `run` (pass 1 AND y pass 2 OR con prefijos).
+describe('searchMemory — desempate determinista (memory-search-order-tiebreak)', () => {
+  function withSearchEngine(fn) {
+    const dir = mkdtempSync(join(tmpdir(), 'ancleto-tie-'))
+    const dbPath = join(dir, 'memory.db')
+    const eng = createMemoryEngine(dbPath)
+    try {
+      return fn(eng, dbPath)
+    } finally {
+      eng.close()
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+    }
+  }
+
+  function rawAt(dbPath, sql, ...params) {
+    const db = openDatabase(dbPath)
+    try {
+      return db.prepare(sql).all(...params)
+    } finally {
+      db.close()
+    }
+  }
+
+  it('empate de bm25 con truncamiento: subconjunto y orden deterministas, rowid ascendente', () => {
+    withSearchEngine((eng, dbPath) => {
+      const content = 'zqtiebreak contenido identico de longitud fija'
+      const keys = ['tie-1', 'tie-2', 'tie-3', 'tie-4', 'tie-5']
+      for (const k of keys) {
+        eng.recordNode({ memory_key: k, type: 'rule', scope: 'project', content })
+      }
+
+      // premisa: los matches tienen exactamente el mismo score bm25 (empate real)
+      const scores = rawAt(dbPath,
+        `SELECT bm25(memory_fts) AS score FROM memory_fts JOIN memory_nodes n ON n.rowid = memory_fts.rowid
+         WHERE memory_fts MATCH ?`,
+        '"zqtiebreak"').map((r) => r.score)
+      assert.equal(scores.length, keys.length)
+      assert.equal(new Set(scores).size, 1)
+
+      const limit = 2
+      const first = eng.searchMemory({ query: 'zqtiebreak', limit })
+      const second = eng.searchMemory({ query: 'zqtiebreak', limit })
+
+      assert.equal(first.length, limit)
+      // determinismo: misma query sobre el mismo estado -> mismo subconjunto y orden
+      assert.deepEqual(first.map((n) => n.memory_key), second.map((n) => n.memory_key))
+
+      // desempate por rowid ascendente: sobrevive el subconjunto de menor rowid
+      const expected = rawAt(dbPath,
+        `SELECT memory_key FROM memory_nodes WHERE content = ? ORDER BY rowid ASC`, content
+      ).slice(0, limit).map((r) => r.memory_key)
+      assert.deepEqual(first.map((n) => n.memory_key), expected)
+    })
+  })
+
+  it('el fallback tolerante (pass 2, OR con prefijos) usa el mismo desempate', () => {
+    withSearchEngine((eng, dbPath) => {
+      const content = 'zqfbterm contenido identico de longitud fija'
+      const keys = ['fb-1', 'fb-2', 'fb-3', 'fb-4']
+      for (const k of keys) {
+        eng.recordNode({ memory_key: k, type: 'rule', scope: 'project', content })
+      }
+
+      const query = 'zqfbterm zqfbnonexistente'
+      // premisa: el AND estricto (pass 1) no matchea; solo el OR+prefijos (pass 2) recupera
+      const strict = rawAt(dbPath,
+        `SELECT COUNT(*) AS c FROM memory_fts WHERE memory_fts MATCH ?`, '"zqfbterm" "zqfbnonexistente"')
+      assert.equal(strict[0].c, 0)
+      const loose = rawAt(dbPath,
+        `SELECT COUNT(*) AS c FROM memory_fts WHERE memory_fts MATCH ?`, '"zqfbterm"* OR "zqfbnonexistente"*')
+      assert.ok(loose[0].c >= keys.length, 'el fallback OR debe recuperar los nodos')
+
+      const limit = 2
+      const first = eng.searchMemory({ query, limit })
+      const second = eng.searchMemory({ query, limit })
+
+      assert.equal(first.length, limit)
+      assert.deepEqual(first.map((n) => n.memory_key), second.map((n) => n.memory_key))
+
+      const expected = rawAt(dbPath,
+        `SELECT memory_key FROM memory_nodes WHERE content = ? ORDER BY rowid ASC`, content
+      ).slice(0, limit).map((r) => r.memory_key)
+      assert.deepEqual(first.map((n) => n.memory_key), expected)
+    })
+  })
+
+  it('sin truncamiento (matches <= limit) devuelve el mismo conjunto completo', () => {
+    withSearchEngine((eng, dbPath) => {
+      const content = 'zqsetreg contenido de regresion'
+      const keys = ['sr-1', 'sr-2', 'sr-3']
+      for (const k of keys) {
+        eng.recordNode({ memory_key: k, type: 'rule', scope: 'project', content })
+      }
+
+      const found = eng.searchMemory({ query: 'zqsetreg', limit: 50 })
+      const allMatches = rawAt(dbPath,
+        `SELECT n.memory_key FROM memory_fts f JOIN memory_nodes n ON n.rowid = f.rowid
+         WHERE memory_fts MATCH ? AND n.status = 'active'`,
+        '"zqsetreg"').map((r) => r.memory_key)
+
+      assert.equal(found.length, keys.length)
+      assert.equal(allMatches.length, keys.length)
+      assert.deepEqual(found.map((n) => n.memory_key).sort(), allMatches.slice().sort())
+    })
+  })
+
+  it('el filtro type acota el conjunto y aplica el desempate dentro del tipo', () => {
+    withSearchEngine((eng, dbPath) => {
+      const content = 'zqtypefiltro contenido identico de longitud fija'
+      for (const k of ['tf-r1', 'tf-r2', 'tf-r3']) {
+        eng.recordNode({ memory_key: k, type: 'rule', scope: 'project', content })
+      }
+      for (const k of ['tf-d1', 'tf-d2']) {
+        eng.recordNode({ memory_key: k, type: 'decision', scope: 'project', content })
+      }
+
+      const limit = 2
+      const rules = eng.searchMemory({ query: 'zqtypefiltro', type: 'rule', limit })
+      assert.equal(rules.length, limit)
+      assert.ok(rules.every((n) => n.type === 'rule'))
+
+      const expectedRules = rawAt(dbPath,
+        `SELECT memory_key FROM memory_nodes WHERE content = ? AND type = 'rule' ORDER BY rowid ASC`, content
+      ).slice(0, limit).map((r) => r.memory_key)
+      assert.deepEqual(rules.map((n) => n.memory_key), expectedRules)
+
+      const decisions = eng.searchMemory({ query: 'zqtypefiltro', type: 'decision' })
+      assert.equal(decisions.length, 2)
+      assert.ok(decisions.every((n) => n.type === 'decision'))
+
+      const all = eng.searchMemory({ query: 'zqtypefiltro' })
+      assert.equal(all.length, 5)
+    })
+  })
+})
+
 describe('recordNode', () => {
   it('valida entradas minimas', () => {
     assert.throws(() => engine.recordNode({}), /memory_key es obligatorio/)

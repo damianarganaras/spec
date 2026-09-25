@@ -1059,8 +1059,24 @@ async function initProject(args) {
     await writeFile(tierFile, tier + '\n')
   }
 
-  const manifest = await writeManifest(projectDir, { azure, discovery, agent, language })
+  // Paridad con install: el tier elegido tambien reescribe los modelos de los
+  // agentes locales. Antes quedaba huerfano (tier declarado, modelos de otro tier).
+  let gratisModelChoice = null
+  if (tier === 'gratis') {
+    const persisted = isKnownGratisModel(existing?.gratisModel) ? existing.gratisModel : null
+    gratisModelChoice = persisted || gratisModel()
+  }
+  const manifest = await writeManifest(projectDir, {
+    azure,
+    discovery,
+    agent,
+    language,
+    ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {})
+  })
   await copyTemplates(projectDir)
+  if (tier) {
+    await applyTier(join(projectDir, '.opencode', 'agents'), tier, tierModels(tier, TIERS, gratisModelChoice))
+  }
   await scaffoldAspec(projectDir)
   await refreshWorkingContext(projectDir)
   await registerProject(projectDir, { agent, tier: tier || null })

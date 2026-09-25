@@ -738,6 +738,25 @@ describe('CLI init --tier (v0.6.2)', () => {
     })
   })
 
+  it('init --tier minimo aplica los modelos del tier a los agentes locales', () => {
+    withDir((dir) => {
+      const r = run(['init', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orchestrator, /model: opencode-go\/deepseek-v4\.1-flash/)
+    })
+  })
+
+  it('init --tier gratis aplica el modelo gratis y lo persiste en .ancletorc', () => {
+    withDir((dir) => {
+      const r = run(['init', '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orchestrator, /model: opencode\/big-pickle/)
+      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
+    })
+  })
+
   it('init sin tier no escribe .ancleto-tier (fallback silencioso)', () => {
     withDir((dir) => {
       const r = run(['init', '--agent', 'opencode'], dir)

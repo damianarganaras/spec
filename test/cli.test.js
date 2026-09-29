@@ -431,32 +431,182 @@ describe('CLI init + templates y working-context (v0.6.18 / issues #15 y #10)', 
   })
 })
 
-describe('CLI upgrade migracion openspec -> aspec (v0.6.5)', () => {
-  it('migra openspec/ a aspec/ preservando contenido', () => {
+describe('CLI migracion openspec -> aspec (copia no destructiva)', () => {
+  it('upgrade migra openspec/ a aspec/ preservando contenido y conserva openspec/ como backup', () => {
     withDir((dir) => {
       writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
       mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
       writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# demo\n')
       const r = run(['upgrade'], dir)
       assert.equal(r.status, 0)
-      assert.equal(existsSync(join(dir, 'openspec')), false)
       assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n')
-      assert.match(r.stdout, /migrados/)
+      assert.equal(readFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n', 'openspec/ se conserva como backup')
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), 'marcador escrito')
+      assert.match(r.stdout, /migrado/)
     })
   })
 
-  it('no pisa aspec/ existente y avisa', () => {
+  it('aspec/ con contenido real coexiste con openspec/: no migra y advierte', () => {
     withDir((dir) => {
       writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
       mkdirSync(join(dir, 'openspec'), { recursive: true })
       writeFileSync(join(dir, 'openspec', 'old.txt'), 'viejo\n')
-      mkdirSync(join(dir, 'aspec'), { recursive: true })
-      writeFileSync(join(dir, 'aspec', 'keep.txt'), 'nuevo\n')
+      mkdirSync(join(dir, 'aspec', 'changes', 'existing'), { recursive: true })
+      writeFileSync(join(dir, 'aspec', 'changes', 'existing', 'spec.md'), '# existente\n')
       const r = run(['upgrade'], dir)
       assert.equal(r.status, 0)
-      assert.equal(readFileSync(join(dir, 'openspec', 'old.txt'), 'utf8'), 'viejo\n')
-      assert.equal(readFileSync(join(dir, 'aspec', 'keep.txt'), 'utf8'), 'nuevo\n')
       assert.match(r.stderr, /no se migro/)
+      assert.equal(existsSync(join(dir, 'aspec', 'old.txt')), false, 'no copia contenido legacy')
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'existing', 'spec.md'), 'utf8'), '# existente\n')
+      assert.equal(readFileSync(join(dir, 'openspec', 'old.txt'), 'utf8'), 'viejo\n', 'openspec/ intacta')
+      assert.equal(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), false, 'sin marcador')
+    })
+  })
+
+  it('aspec/ solo-scaffold se migra encima y conserva el config.yaml previo', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
+      mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# demo\n')
+      mkdirSync(join(dir, 'aspec', 'changes'), { recursive: true })
+      writeFileSync(join(dir, 'aspec', 'config.yaml'), '# config previo del equipo\n')
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /migrado/)
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n')
+      assert.equal(readFileSync(join(dir, 'aspec', 'config.yaml'), 'utf8'), '# config previo del equipo\n', 'config.yaml no se pisa')
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')))
+      assert.ok(existsSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md')), 'openspec/ se conserva')
+    })
+  })
+
+  it('aspec/ con solo config.yaml (sin changes/) se trata como scaffold y migra', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
+      mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# demo\n')
+      mkdirSync(join(dir, 'aspec'), { recursive: true })
+      writeFileSync(join(dir, 'aspec', 'config.yaml'), '# config previo\n')
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /migrado/)
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n')
+      assert.equal(readFileSync(join(dir, 'aspec', 'config.yaml'), 'utf8'), '# config previo\n', 'config.yaml no se pisa')
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')))
+    })
+  })
+
+  it('segunda corrida tras migrar es no-op silenciosa (idempotencia por marcador)', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
+      mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# demo\n')
+
+      const first = run(['upgrade'], dir)
+      assert.equal(first.status, 0)
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), 'marcador escrito')
+
+      // Sentinel nuevo: con el marcador presente NO debe recopiarse a aspec/.
+      writeFileSync(join(dir, 'openspec', 'extra.txt'), 'no copiar\n')
+      const second = run(['upgrade'], dir)
+      assert.equal(second.status, 0)
+      assert.doesNotMatch(second.stderr, /no se migro/, 'sin advertencia')
+      assert.doesNotMatch(second.stdout, /contenido migrado/, 'sin reporte de recopia')
+      assert.equal(existsSync(join(dir, 'aspec', 'extra.txt')), false, 'no recopia')
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n')
+      assert.equal(readFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n', 'openspec/ se conserva')
+    })
+  })
+
+  it('init con openspec/ preexistente migra por copia antes del scaffold', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# demo\n')
+      const r = run(['init'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /migrado/)
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n')
+      assert.ok(existsSync(join(dir, 'aspec', 'config.yaml')), 'scaffold posterior')
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')))
+      assert.ok(existsSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md')), 'backup')
+    })
+  })
+
+  it('un directorio vacio bajo aspec/changes cuenta como contenido real (conservador)', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
+      mkdirSync(join(dir, 'openspec'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'old.txt'), 'viejo\n')
+      mkdirSync(join(dir, 'aspec', 'changes', 'placeholder'), { recursive: true })
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stderr, /no se migro/)
+      assert.equal(existsSync(join(dir, 'aspec', 'old.txt')), false, 'no migra')
+      assert.equal(readFileSync(join(dir, 'openspec', 'old.txt'), 'utf8'), 'viejo\n')
+      assert.equal(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), false, 'sin marcador')
+    })
+  })
+
+  // (b) Verificacion: openspec/config.yaml legacy sin aspec/ previo.
+  it('init migra openspec/config.yaml cuando aspec/ no existe y el scaffold no lo pisa', () => {
+    withDir((dir) => {
+      const legacyCfg = 'schema: legacy-openspec\nversion: 1\n'
+      mkdirSync(join(dir, 'openspec'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'config.yaml'), legacyCfg)
+
+      const r = run(['init'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /migrado/)
+      const cfgPath = join(dir, 'aspec', 'config.yaml')
+      assert.equal(readFileSync(cfgPath, 'utf8'), legacyCfg, 'config legacy preservado (no el default)')
+      assert.doesNotMatch(readFileSync(cfgPath, 'utf8'), /aspec project configuration/, 'no es el default del scaffold')
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), 'marcador escrito')
+      assert.equal(readFileSync(join(dir, 'openspec', 'config.yaml'), 'utf8'), legacyCfg, 'openspec/ conserva backup')
+
+      // El scaffold posterior (segunda corrida) sigue sin pisarlo.
+      const r2 = run(['init'], dir)
+      assert.equal(r2.status, 0)
+      assert.equal(readFileSync(cfgPath, 'utf8'), legacyCfg, 'scaffold posterior no pisa config migrado')
+    })
+  })
+
+  // W1: el skip de cp force:false omite un archivo homonimo ya presente en aspec/.
+  it('cp force:false omite archivos existentes en aspec/ con el mismo nombre', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
+      // aspec/ solo-scaffold: config.yaml propio y changes/ vacio (sin contenido real).
+      mkdirSync(join(dir, 'aspec', 'changes'), { recursive: true })
+      writeFileSync(join(dir, 'aspec', 'config.yaml'), '# config equipo\n')
+      // legacy con un config.yaml homonimo (contenido distinto) y contenido nuevo.
+      mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'config.yaml'), '# config legacy\n')
+      writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# demo\n')
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /migrado/)
+      assert.equal(readFileSync(join(dir, 'aspec', 'config.yaml'), 'utf8'), '# config equipo\n', 'homonimo existente se omite')
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n', 'contenido nuevo si se copia')
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')))
+      assert.equal(readFileSync(join(dir, 'openspec', 'config.yaml'), 'utf8'), '# config legacy\n', 'openspec/ intacta')
+    })
+  })
+
+  // W1 (variante bajo changes/): mismo path en ambas ramas no se pisa de forma destructiva.
+  it('un archivo homonimo bajo changes/ en aspec/ no se pisa (coexistencia)', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')
+      mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# legacy distinto\n')
+      mkdirSync(join(dir, 'aspec', 'changes', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), '# propio del equipo\n')
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stderr, /no se migro/)
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# propio del equipo\n', 'homonimo en aspec/ intacto')
+      assert.equal(readFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# legacy distinto\n', 'openspec/ intacta')
+      assert.equal(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), false, 'sin marcador')
     })
   })
 })

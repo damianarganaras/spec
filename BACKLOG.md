@@ -78,6 +78,13 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   `seed-map.json`, que escribe la skill) y regeneración parcial — con `impact: minor` se reescriben
   solo los documentos afectados. Sin bump de formato: los `fileHashes` ya llevan la info por área,
   un `version: 2` sería dato redundante.
+- ✅ Release **v0.6.38** — fix de aislamiento del cwd en las pruebas de `buildWorkingContext`
+  (`test/memory-engine.test.js`): las 16 llamadas pasan la raíz explícita (8 del engine compartido
+  + 4 vía `withEngine` propagando su `dir` + 4 que ya la pasaban), sin tocar `src/`. Conteos reales
+  **6 → 2 → 0** fallos, suite **44/44**. Change SDD `fix-memory-engine-test-isolation` (proposal →
+  design → tasks → implementación → validación → review → archive). Tag `v0.6.38` creado sobre el
+  merge `development→main`. **Sin publicación nueva en npm** (el `package.json` quedó en `0.6.37` y
+  el workflow omite `npm publish` si la versión ya existe; solo se creó el Release de GitHub).
 
 ## Estado actual
 
@@ -88,7 +95,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   **v0.6.0** (Discovery Engine v2.0: D1+D2+D3), los hitos **v0.6.1-v0.6.15** (hotfixes, rebrand,
   inglés+compresión, modelos y Muse Spark, README, pipeline de publish, memoria cableada al runtime)
   y la épica **Memory & Roles hardening** (kanban #9, cerrada en v0.6.28).
-- Suite: **158 tests** `node --test` en verde (memory-engine 40 + cli 67 + discovery-topology 3 +
+- Suite: **162 tests** `node --test` en verde (memory-engine 44 + cli 67 + discovery-topology 3 +
   discovery-tier 9 + content-guards 25 + tier-models 6 + mcp 8), verificado en Windows y Linux.
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD: `publish.yml` se dispara **al pushear el tag** `v*` (o a mano), publica a npm, verifica el
@@ -98,10 +105,20 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 
 ## En curso / próximo
 
+- [ ] **Validar comportamiento de Antigravity IDE vs Antigravity CLI** — verificar si se comportan igual; el tema "Linux + Antigravity" va junto con este item.
+- [ ] **Migración openspec→aspec** *(en progreso)* — candidato ya cubierto por el change `migrate-openspec-to-aspec`; el change ya arrancó.
+- [ ] **`install --project` no ejecuta la detección/migración legacy `openspec/` → `aspec/`** — `install --project` también llama `scaffoldAspec` (`src/cli/index.js:930-933`) pero quedó fuera de scope del change `migrate-openspec-to-aspec`; evaluar extenderlo.
+
 ## v0.7.0 - Multi-Agent Adaptability & Memory Ops (Planeado)
 - [ ] **M1 (Export/Import):** Commands `ancleto memory export` e `import` para respaldar/compartir reglas y decisiones activas en JSON/SQL sanitizado.
 - [ ] **M2 (Garbage Collection):** Subcomando `ancleto memory gc [--dry-run]` para purgar nodos superseídos antiguos y ejecutar VACUUM/REINDEX en node:sqlite.
 - [ ] **A1 (Frontmatter Adapters):** Transformador dinámico de metadatos en `installAgentSkills` para adaptar el frontmatter de las skills según el IDE configurado (`agent` en `.ancletorc`).
+
+## Candidatos de proceso y configuración (detectados en el cierre de v0.6.38)
+
+- [ ] **B2 — `ancleto doctor` advierte gates declarados-ausentes:** el contrato (`AGENTS.md`) exige `npm run typecheck`, `npm run lint` y `npm test` como validaciones obligatorias, pero un proyecto puede no tener scripts ni configs (ESLint/Prettier/tsconfig) y entonces esos gates no existen — el tester/coder deben reportarlos como "gate ausente" en cada change. Propuesta: que `ancleto doctor` (o `check`) detecte y advierta cuando el contrato declara gates que el tooling real del proyecto no provee, o que el template `AGENTS.md` se genere condicionado al tooling detectado.
+- [ ] **B3 — Branch protection real en `main`, o aclarar que es honor-based:** `BACKLOG.md` y `AGENTS.md` declaran `main` como protegida y prohíben commits directos a `main`/`master`, pero el remoto no aplica branch protection real (un `git push origin main` y un merge fast-forward `development→main` pasan sin PR). Propuesta: habilitar branch protection real en GitHub (requiere PR + review) o documentar explícitamente que el guardrail es honor-based y no enforceado.
+- [ ] **B4 — Modo "scope extension" en `@spec-writer`:** cuando un change necesita ampliar su alcance a mitad de camino (p. ej. la opción B de `fix-memory-engine-test-isolation`), hoy hay que re-delegar al spec-writer completo para re-sincronizar todos los artifacts. Propuesta: un modo de extensión de alcance que toque solo las secciones afectadas (proposal/spec/design/tasks), conservando el resto del trabajo ya aprobado.
 
 ## Futuro (sin fecha) - Contexto colaborativo para equipos (Idea)
 

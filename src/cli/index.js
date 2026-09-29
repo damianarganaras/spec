@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs'
-import { cp, mkdir, access, writeFile, readFile, readdir, rename } from 'node:fs/promises'
+import { cp, mkdir, access, writeFile, readFile, readdir } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createInterface } from 'node:readline'
@@ -776,6 +776,39 @@ async function scaffoldAspec(projectDir) {
   }
 }
 
+const LEGACY_OPENSPEC_DIR = 'openspec'
+const MIGRATION_MARKER = '.migrated-from-openspec'
+
+// "Contenido real" = al menos una entrada bajo changes/ o specs/. Un config.yaml
+// solo (o el scaffold vacio) no cuenta como real: no bloquea la migracion.
+async function hasRealContent(aspecDir) {
+  for (const sub of ['changes', 'specs']) {
+    try {
+      if ((await readdir(join(aspecDir, sub))).length > 0) return true
+    } catch {
+      // subcarpeta inexistente o ilegible: no aporta contenido real
+    }
+  }
+  return false
+}
+
+// Migra la carpeta legacy openspec/ a aspec/ por copia recursiva (no destructiva).
+// Unico dueno del invariante: la invocan init y upgrade antes del scaffold.
+async function migrateLegacyOpenspec(projectDir) {
+  const legacyDir = join(projectDir, LEGACY_OPENSPEC_DIR)
+  if (!(await exists(legacyDir))) return // sin legacy: no-op silencioso
+  const aspecDir = join(projectDir, CHANGES_ROOT)
+  const marker = join(aspecDir, MIGRATION_MARKER)
+  if (await exists(marker)) return // ya migrada: no-op silencioso
+  if (await hasRealContent(aspecDir)) {
+    console.warn('ancleto: aspec/ ya tiene contenido real — no se migro openspec/ (revisar manualmente; openspec/ se conserva)')
+    return
+  }
+  await cp(legacyDir, aspecDir, { recursive: true, force: false })
+  await writeFile(marker, '# Generado por ancleto: esta aspec/ ya fue migrada desde openspec/\n')
+  console.log('ancleto: contenido migrado de openspec/ a aspec/ (openspec/ se conserva como backup)')
+}
+
 function extractLockedBlocks(content) {
   const blocks = new Map()
   const re = /<!--\s*LOCKED:\s*([\w-]+)\s*-->([\s\S]*?)<!--\s*\/LOCKED:\s*\1\s*-->/g
@@ -983,14 +1016,7 @@ async function upgradeCmd(args) {
     console.error("Error: No se encontro .ancletorc. Ejecuta 'ancleto init' primero.")
     process.exit(1)
   }
-  const legacyChanges = join(projectDir, 'openspec')
-  const changesRoot = join(projectDir, CHANGES_ROOT)
-  if ((await exists(legacyChanges)) && !(await exists(changesRoot))) {
-    await rename(legacyChanges, changesRoot)
-    console.log('ancleto: changes migrados de openspec/ a aspec/')
-  } else if ((await exists(legacyChanges)) && (await exists(changesRoot))) {
-    console.warn('ancleto: existen openspec/ y aspec/ — no se migro nada (revisar manualmente)')
-  }
+  await migrateLegacyOpenspec(projectDir)
   const agent = await resolveAgent(args, rc.agent)
   await copyTemplates(projectDir)
   const agentSkillsDir = await installAgentSkills(projectDir, agent)
@@ -1084,6 +1110,7 @@ async function initProject(args) {
   if (tier) {
     await applyTier(join(projectDir, '.opencode', 'agents'), tier, tierModels(tier, TIERS, gratisModelChoice))
   }
+  await migrateLegacyOpenspec(projectDir)
   await scaffoldAspec(projectDir)
   await refreshWorkingContext(projectDir)
   await registerProject(projectDir, { agent, tier: tier || null })

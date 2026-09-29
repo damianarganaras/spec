@@ -7,7 +7,6 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 ## Hecho ✅
 
 - ✅ Paquete `@ancleto/spec@0.1.0` publicado en npm + repo `github.com/damianarganaras/spec`
-- ✅ Rebranding completo LN → ancleto (sin referencias corporativas)
 - ✅ Modelos de los 10 agents adaptados al catálogo opencode-go (costo/tokens)
 - ✅ CLI: `install [--project]`, `update`, `init [--with-azure]`, `--no-mcp`, `--tier`
 - ✅ MCP **engram** + **caveman** configurados por defecto al instalar (fusión no destructiva)
@@ -16,8 +15,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ KB MCP neutralizado (cleto-*, kb-context.md)
 - ✅ Templates `AGENTS.md` / `PRODUCT.md` para proyectos nuevos (`CONTRIBUTING.md` eliminado: sus validaciones y reglas de commit pasaron a `AGENTS.md`)
 - ✅ Rama `development` + `main` protegida
-- ✅ Relevamiento de `lnx` CLI (fuente en `documentation/lnx-cli/`)
-- ✅ **G1**: skills `triage-clarifier`, `ancleto-recall`, `ancleto-sync-specs` portadas (adaptadas, sin branding LN)
+- ✅ **G1**: skills `triage-clarifier`, `ancleto-recall`, `ancleto-sync-specs` portadas (adaptadas)
 - ✅ **G2**: motor `ancleto discovery` (MVP) — pack con Repomix (`npx` o PATH, `--include/--ignore/--compress/--token-budget`), `--check` por hash de contenido (READY/STALE/PARTIAL/MISSING), estado en `.discovery-state.json`, zero-deps
 - ✅ **M1 — Motor de Memoria Persistente SQLite+FTS5 (v0.2.0)**:
   `src/core/memory/database.js` (node:sqlite `DatabaseSync`, PRAGMAs `WAL`/`foreign_keys`/`busy_timeout=5000`,
@@ -43,7 +41,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - ✅ **CI/CD**: workflow `publish.yml` de GitHub Actions — `on.release.types: [published]`, runner
   `ubuntu-latest`, checkout@v5 + setup-node@v5 (runtime node24), `npm ci`, `node --test`,
   `npm publish` con `NODE_AUTH_TOKEN`. `package-lock.json` generado (zero-deps, requerido por `npm ci`).
-- ✅ **Documentación del framework** en `docs/` (equivalente a los GEN-*.pdf de LN, basada
+- ✅ **Documentación del framework** en `docs/` (equivalente a los GEN-*.pdf, basada
   en el sistema ancleto): `ancleto-cli-framework.md`, `guia-configuracion.md`,
   `skill-ancleto-upgrade.md`.
 - ✅ **Fix CLI versión**: `ancleto --version` lee `package.json` en runtime (antes hardcodeado en 0.1.1, quedaba desincronizado con cada bump).

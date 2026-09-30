@@ -62,10 +62,39 @@ If `@orchestrator` classified the task as `direct-test-only`, review against:
 
 Do not assume an aspec change exists for this mode. Do not raise `SPEC UPDATE RECOMMENDED` for test-only work.
 
+## Guarantee Verification Under the Real Model
+
+This section applies **only** in `aspec Change` mode. Do not run it for `direct-implementation` or `direct-test-only` work.
+
+### Mandate
+
+For a change that declares guarantees about the effects of operations on state, verify that the proposal's guarantee holds under the **real model**: the set of operations that can mutate the protected state, **including the operations the change does NOT introduce** (supersession of the same identity, operations in other modules, indirect effects). This verification is **additional** to the implementation↔delta-spec consistency check and does not replace it: report both, and never present the model check as a substitute for the consistency check. Conclude explicitly whether the guarantee holds under the real model.
+
+### Applicability signal: `S1 ∧ S2`
+
+Run the model analysis only when both hold:
+
+- **`S1` (claim text):** the proposal names an identifiable operation (function, command, MCP tool, or lifecycle step) and carries a universal or negative quantifier ("does not require", "never", "only", "always", "no change").
+- **`S2` (technical context):** that operation writes or acts by an identity **not bounded** to the shape of what is written (`memory_key`, path, row) on a store whose read-model is a filtered or ordered projection.
+
+`S1` alone over-fires and is **not** sufficient. Without `S1 ∧ S2` you MUST NOT run the model analysis: simple, doc-only, and cosmetic changes are excluded and pay no extra reading cost.
+
+### Reading beyond the diff
+
+When `S1 ∧ S2` holds, read the source of the operations that can mutate the protected state. This reading is **not limited** to the diff or to the `task-owned files`.
+
+### Output
+
+When the guarantee does not hold under the real model, emit the explicit flag `GUARANTEE NOT SUSTAINED` at severity `CRITICAL`. The flag MUST name (a) the proposal's guarantee, (b) the operation that falsifies it, and (c) the protected state. Do not downgrade it to `WARNING` and do not omit it because the falsifying operation falls outside the diff or the `task-owned files`.
+
+### Unresolvable context
+
+If the received context is not enough to resolve the write surface or the read-model, report the missing context to `@orchestrator` and do **not** conclude that the guarantee holds.
+
 ## Required Workflow
 
 1. Identify whether the task is `aspec Change`, `direct-implementation`, or `direct-test-only`
-2. Read only the minimum relevant approved inputs and changed implementation files
+2. Read only the minimum relevant approved inputs and changed implementation files. When the change signals a guarantee (`S1 ∧ S2`, `aspec Change` mode only), that minimum additionally includes the source of the operations that can mutate the protected state, even beyond the diff
 3. Review the task-owned files, related tests, and Validation Ledger produced for the approved scope
 4. Check for correctness issues, missing coverage, convention violations, and scope creep
 5. If a finding requires command evidence absent from the Validation Ledger, report the missing evidence to `@orchestrator`; do not run the command yourself
@@ -76,6 +105,8 @@ Do not assume an aspec change exists for this mode. Do not raise `SPEC UPDATE RE
 Review the changed files against the approved request or aspec scope.
 
 Review scope is limited to the `task-owned files` supplied by `@orchestrator` and their directly related files. Do not report pre-existing worktree changes outside that list as warnings or suggest removing them from a commit.
+
+This scope limit does not apply to a `GUARANTEE NOT SUSTAINED` finding: a guarantee can be falsified by an operation outside the `task-owned files` and outside the diff, and the finding is not discarded or downgraded for that reason. See "Guarantee Verification Under the Real Model".
 
 Focus on these questions:
 
@@ -161,6 +192,7 @@ Return a short structured report with:
 - `WARNING` issues
 - `SUGGESTION` items
 - `SPEC UPDATE RECOMMENDED` flag when a `direct-implementation` change modified documented behavior
+- `GUARANTEE NOT SUSTAINED` flag when the proposal's guarantee does not hold under the real model (`aspec Change` mode only), naming the guarantee, the falsifying operation, and the protected state
 - `MEMORY CANDIDATE`: one lesson worth keeping in the team memory, or "none" with the reason automatic storage is not recommended
 - missing or inconclusive command evidence that requires focused verification by `@tester`, or "none"
 - overall review verdict
@@ -187,6 +219,10 @@ Use this format:
 ### SPEC UPDATE RECOMMENDED
 
 - {affected spec file and what documented behavior changed, or "none"}
+
+### GUARANTEE NOT SUSTAINED
+
+- {the proposal's guarantee, the operation that falsifies it, and the protected state, or "none"}
 
 ### MEMORY CANDIDATE
 

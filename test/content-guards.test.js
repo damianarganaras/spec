@@ -205,7 +205,7 @@ describe('content guards - tope de output y destilado del retorno (issues #25 y 
 
   it('el destilado preserva los campos criticos del flujo (D2)', () => {
     const t = readAgent('orchestrator')
-    for (const field of ['task-owned files', 'Validation Ledger', 'SPEC UPDATE RECOMMENDED', 'SEED_ACTION_REQUIRED']) {
+    for (const field of ['task-owned files', 'Validation Ledger', 'SPEC UPDATE RECOMMENDED', 'SEED_ACTION_REQUIRED', 'GUARANTEE NOT SUSTAINED']) {
       assert.ok(t.includes(field), `falta ${field} en el contrato de destilado`)
     }
   })
@@ -344,5 +344,78 @@ describe('content guards - discovery --check devuelve config', () => {
   it('la skill technical-discovery usa la config del check report', () => {
     const t = readFileSync(join(ROOT, 'skills', 'ancleto-technical-discovery', 'SKILL.md'), 'utf8')
     assert.match(t, /ancleto discovery --check/)
+  })
+})
+
+describe('content guards - garantía del proposal vs modelo real (reviewer-guarantee-vs-model)', () => {
+  const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
+
+  it('el reviewer declara el flag GUARANTEE NOT SUSTAINED como CRITICAL y nombra garantía, operación y estado', () => {
+    const t = readAgent('reviewer')
+    assert.match(t, /## Guarantee Verification Under the Real Model/)
+    assert.match(t, /`GUARANTEE NOT SUSTAINED` at severity `CRITICAL`/)
+    assert.match(
+      t,
+      /the proposal's guarantee, \(b\) the operation that falsifies it, and \(c\) the protected state/
+    )
+  })
+
+  it('el flag no se degrada a WARNING ni se omite por quedar fuera del diff o de los task-owned files', () => {
+    const t = readAgent('reviewer')
+    assert.match(t, /Do not downgrade it to `WARNING`/)
+    assert.match(
+      t,
+      /do not omit it because the falsifying operation falls outside the diff or the `task-owned files`/
+    )
+    assert.match(t, /This scope limit does not apply to a `GUARANTEE NOT SUSTAINED` finding/)
+  })
+
+  it('el reviewer declara la señal S1 ∧ S2 con ambas condiciones y que S1 sola no alcanza', () => {
+    const t = readAgent('reviewer')
+    assert.match(t, /### Applicability signal: `S1 ∧ S2`/)
+    assert.match(t, /`S1` alone over-fires and is \*\*not\*\* sufficient/)
+    assert.match(t, /writes or acts by an identity \*\*not bounded\*\*/)
+    assert.match(t, /on a store whose read-model is a filtered or ordered projection/)
+  })
+
+  it('el invariante negativo excluye changes simples, doc-only y cosmeticos', () => {
+    const t = readAgent('reviewer')
+    assert.match(t, /Without `S1 ∧ S2` you MUST NOT run the model analysis/)
+    assert.match(t, /simple, doc-only, and cosmetic changes are excluded and pay no extra reading cost/)
+  })
+
+  it('el analisis aplica solo en modo aspec Change y es adicional a la consistencia con el delta spec', () => {
+    const t = readAgent('reviewer')
+    assert.match(t, /This section applies \*\*only\*\* in `aspec Change` mode/)
+    assert.match(t, /Do not run it for `direct-implementation` or `direct-test-only` work/)
+    assert.match(
+      t,
+      /This verification is \*\*additional\*\* to the implementation↔delta-spec consistency check and does not replace it/
+    )
+  })
+
+  it('el reviewer exige leer más allá del diff y reportar el contexto faltante', () => {
+    const t = readAgent('reviewer')
+    assert.match(t, /not limited\*\* to the diff/)
+    assert.match(t, /report the missing context to `@orchestrator`/)
+  })
+
+  it('el orchestrator propaga la garantía y el estado protegido solo cuando el change declara garantías', () => {
+    const t = readAgent('orchestrator')
+    assert.match(
+      t,
+      /When the change declares effect guarantees, additionally include, as separate fields, the guarantee extracted from the proposal, the protected state, and the affected capability/
+    )
+  })
+
+  it('el orchestrator trata GUARANTEE NOT SUSTAINED como bloqueo y lo preserva en el destilado y la salida esperada', () => {
+    const t = readAgent('orchestrator')
+    assert.match(
+      t,
+      /\*\*MUST STOP\*\* if `@reviewer` reports critical issues \(including a `GUARANTEE NOT SUSTAINED` finding\)/
+    )
+    assert.match(t, /do not advance toward archive while it is present/)
+    assert.match(t, /flags \(`SPEC UPDATE RECOMMENDED`, `SEED_ACTION_REQUIRED`, `GUARANTEE NOT SUSTAINED`\)/)
+    assert.match(t, /`GUARANTEE NOT SUSTAINED` flag when the proposal's guarantee does not hold under the real model/)
   })
 })

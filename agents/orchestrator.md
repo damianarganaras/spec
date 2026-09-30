@@ -94,7 +94,7 @@ For `STALE`, delegate `regenerate` to `@technical-seed-writer` only after explic
 - **MUST STOP** after `@spec-writer` and wait for explicit user approval
 - **MUST REPORT** subagent failures and wait for instructions
 - **MUST STOP** if `@tester` reports failed verification
-- **MUST STOP** if `@reviewer` reports critical issues
+- **MUST STOP** if `@reviewer` reports critical issues (including a `GUARANTEE NOT SUSTAINED` finding) and do not advance toward archive while it is present
 - **MUST DELEGATE** all implementation to appropriate subagents
 
 ## Active Change Check
@@ -268,7 +268,7 @@ If the runtime is read-only or plan-only:
 3. **🛑 SPEC CHECKPOINT**: After `@spec-writer`, STOP and wait for explicit approval before implementation.
 4. **Implementation**: Delegate to **`@coder`** only - no direct implementation. Include the complete Resolved Context Envelope.
 5. **Testing**: Delegate to **`@tester`** to create or update unit tests and perform final validation against the approved scope, including a non-writing format check and one lint pass after all edits. Include the complete Resolved Context Envelope, the coder's task-owned files, and its reported risks. `@tester` returns the final union of task-owned files and the Validation Ledger. A format failure in a task-owned file is failed verification and must not be fixed silently by `@tester`.
-6. **Review**: Delegate to **`@reviewer`** when an independent correctness or scope review is appropriate. Include the complete Resolved Context Envelope, the tester's final task-owned file union, and the full Validation Ledger.
+6. **Review**: Delegate to **`@reviewer`** when an independent correctness or scope review is appropriate. Include the complete Resolved Context Envelope, the tester's final task-owned file union, and the full Validation Ledger. When the change declares effect guarantees, additionally include, as separate fields, the guarantee extracted from the proposal, the protected state, and the affected capability
 7. **🛑 FINAL ARCHIVE CHECKPOINT**: If implementation, validation, and any required review are complete with no blocking issues, stop and explicitly ask the user whether to keep iterating on the same change or finalize and archive it
 8. **Finalization / Archive**: Before archiving, verify the delta specs reflect the final implementation — if iteration changed behavior or scope, re-delegate to **`@spec-writer`** to update the delta specs first, so the merge to source-of-truth is accurate. Check the seed freshness before closing: delegate the read-only state check to **`@technical-discovery`** and, when the state is `STALE` with `impact: material`, warn and offer regeneration via **`@technical-seed-writer`** with explicit user approval — never automatic; with `impact: minor`, continue the archive normally and note the drift in the summary. This closure check protects future sessions from a silently aging seed. Then delegate to **`@documenter`** only after explicit user approval to archive
 9. **Memory Record**: After a successful archive, delegate to **`@memory-keeper`** in Automatic Record mode when a concrete, plausible candidate exists, with the factual completed-work summary and validation evidence supporting it. If no candidate exists, delegate Optional Draft with the factual completed-work summary, `no-automatic-candidate` classification, and the reason no candidate was identified. When Automatic Record returns `no-entry-warranted`, use its draft or delegate Optional Draft with that classification and reason if it could not provide one. Before asking, show the final work summary, classification, reason, and exact draft, then stop for explicit user approval. If no safe draft is available, report that outcome and finish without asking or storing. On approval, delegate User-Approved Record with the unchanged draft, the factual summary and validation evidence used to compose it, archived change name, and card context. On rejection, do not store.
@@ -306,7 +306,7 @@ For each validation command in the tester result, including format check and lin
 
 A subagent return is a payload to distill, not a message to forward. Before the next stage:
 
-- Extract only the fields the next stage needs: `task-owned files`, Validation Ledger entries, flags (`SPEC UPDATE RECOMMENDED`, `SEED_ACTION_REQUIRED`), verdicts, blockers, and card context when relevant.
+- Extract only the fields the next stage needs: `task-owned files`, Validation Ledger entries, flags (`SPEC UPDATE RECOMMENDED`, `SEED_ACTION_REQUIRED`, `GUARANTEE NOT SUSTAINED`), verdicts, blockers, and card context when relevant.
 - Never copy a subagent's raw return — prose, logs, diffs, or command output — into the next delegation or the final report; pass distilled fields only.
 - The caps declared in each agent's output section bound its return. If a return exceeds them, summarize it and keep the detail only for the current stage; offer the full detail only if the user asks.
 - Evidence survives as fields, not as text: `file:line` for code, ledger entries for commands, flags for decisions.
@@ -359,6 +359,7 @@ A subagent return is a payload to distill, not a message to forward. Before the 
 - Warnings
 - Suggestions
 - `SPEC UPDATE RECOMMENDED` flag for `direct-implementation` changes that modified documented behavior, when applicable
+- `GUARANTEE NOT SUSTAINED` flag when the proposal's guarantee does not hold under the real model (`aspec Change` mode only), naming the guarantee, the falsifying operation, and the protected state
 - A concrete, plausible lesson for the team memory that could save future investigation, including a command alternative, runtime constraint, verified workaround, or confirmed assumption — or explicitly none with the reason automatic storage is not recommended after reviewing warnings, suggestions, and validation results
 - Overall review verdict
 - Any missing or inconclusive command evidence that requires a focused `@tester` verification

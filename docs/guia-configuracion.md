@@ -130,3 +130,47 @@ Al completar la configuración, deberías tener:
 - La memoria es local por repositorio en `.ancleto/memory.db`; no se sube a ningún lado.
 - Requisito de Node >= 24: es vinculante para quien consuma el paquete (decidido en el
   diseño congelado v0.2.0).
+
+## 9. Perfil test vs general (test automation con Playwright)
+
+Por defecto instalás el perfil **general** (flujo SDD completo). Si el proyecto es de
+test automation con Playwright, usá el perfil **test**:
+
+```bash
+ancleto init --profile test     # o: ancleto install --project . --profile test
+```
+
+Qué cambia con `profile: test` (persistido en `.ancletorc`):
+
+- El `tester`/`reviewer` instalados traen los 4 workflows: planning (`cleto-test-proposal`),
+  generation (`cleto-test-apply`), healing (`cleto-test-heal`), coverage (`cleto-test-coverage`),
+  más `cleto-test-archive`. El `tester`/`reviewer` base del paquete queda intacto.
+- Se crea `testspec/specs/` + `testspec/changes/` para los deltas de testing
+  (o se reusa `aspec/` si el proyecto ya lo usa).
+- `AGENTS.md` suma el bloque de convenciones Playwright.
+- El orchestrator rutea: cambio test-only → tester ampliado; cambio mixto → SDD general.
+- Sin Playwright instalado, los workflows degradan a análisis sin ejecución y lo reportan.
+
+Cuándo usar cada uno: **general** para desarrollo de producto con SDD; **test** cuando el
+trabajo del proyecto es automatizar pruebas (el tier y el agente aplican igual en ambos).
+Combinable con cualquier agente (`--profile test --agent cursor`, etc.).
+
+## 10. GitHub Copilot (VS Code y Visual Studio)
+
+Si trabajás con suscripción a GitHub Copilot en lugar de opencode:
+
+```bash
+ancleto install --project . --agent copilot
+```
+
+Qué instala: los agentes y comandos como prompt files en `.github/prompts/*.prompt.md`
+(generados desde `agents/` y `commands/` en cada `install`/`upgrade`, sin doble
+mantenimiento) y el MCP en `copilot-mcp.json` con merge no destructivo. Tu
+`copilot-instructions.md` con contenido propio no se pisa nunca.
+
+Limitación real a tener en cuenta: **en Copilot el modelo lo elegís vos en el picker**;
+`--tier` no cambia modelos (no existe `model:` por agente como en opencode). El tier se
+traduce a nivel de esfuerzo: `normal` = flujo completo, `minimo` = pasos agrupados y
+económicos, `gratis` = modelo gratis de tu cuenta. El prompt del orchestrator te lo
+recuerda al empezar. Combinable con el perfil test
+(`--profile test --agent copilot`).

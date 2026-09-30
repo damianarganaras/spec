@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-09-30T19:34:11Z
-pluginVersion: 0.7.2
+generatedAt: 2026-09-30T21:41:13Z
+pluginVersion: 0.8.0
 skillVersion: '2.3'
 ---
 
@@ -37,14 +37,20 @@ resuelve el destino con `AGENT_TARGETS` (fuente única de rutas) y lo registra e
 | `antigravity` | `.agents/skills` | `.agents/agents/<n>.md` | `.agents/skills/<n>/SKILL.md` (command-skill) |
 | `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) |
 | `roo` | `.roo/skills` | — (no soportado) | — (no soportado) |
+| `copilot` | — (no soportado) | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` |
 
-Los agents de `claude`/`vscode`/`antigravity` se adaptan de frontmatter (el resto se copia
-verbatim); Antigravity además transforma tools y flags. Detalle: `units/cli-install.md`.
+Los agents de `claude`/`vscode`/`antigravity`/`copilot` se adaptan de frontmatter (el resto se
+copia verbatim); Antigravity además transforma tools y flags; Copilot comparte dir entre
+agents y commands (sin colisión) y suma la nota de picker (el tier no cambia modelos).
+Con perfil `test`, el overlay (`profiles/test/`) se materializa en los mismos destinos del
+host. Detalle: `units/cli-install.md`.
 
 ## MCP (Model Context Protocol)
 
-Configurados por `setupHostMcp` (dueño único): antigravity en `.agents/mcp_config.json`; el
-resto en `.opencode/opencode.json`. `init` y `install` los configuran; `--no-mcp` lo evita.
+Configurados por `setupHostMcp` (dueño único): antigravity en `.agents/mcp_config.json`,
+copilot en `copilot-mcp.json` (merge en install, regeneración de rotas en upgrade sin tocar
+`copilot-instructions.md`); el resto en `.opencode/opencode.json`. `init` e `install` los
+configuran; `--no-mcp` lo evita. `import` regenera entradas rotas con rutas locales.
 
 | MCP | Tipo | Rol | Default |
 |---|---|---|---|

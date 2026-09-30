@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-09-30T19:34:11Z
-pluginVersion: 0.7.2
+generatedAt: 2026-09-30T21:56:00Z
+pluginVersion: 0.8.0
 skillVersion: '2.3'
 ---
 
@@ -27,15 +27,15 @@ CLI monolítica en ESM, sin framework externo. Capas:
 
 | Capa | Ruta | Rol |
 |---|---|---|
-| CLI / orquestación | `src/cli/index.js` | Parsing de comandos, `init`/`install`/`update`/`upgrade`, instalación por host, discovery, memoria, projects, stats, doctor, MCP. |
+| CLI / orquestación | `src/cli/index.js` | Parsing de comandos, `init`/`install`/`update`/`upgrade`, instalación por host, perfiles, export/import, discovery, memoria, projects, stats, doctor, MCP. |
 | UI de terminal | `src/cli/ui.js` | Banner ASCII animado y menús TTY (Raw Mode) sin librerías; helpers de color. |
 | Discovery | `src/core/discovery.js` | Mapa topológico `.discovery-map.json`. |
 | Empaquetado y tiers | `src/core/repomix-tier.js` | Args de Repomix, ignores por tier, `--compress`, token budget. |
 | Selección de modelos | `src/core/tier-models.js` | Modelos por tier, resolución de tier gratis (Muse Spark/probe/env). |
 | Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine`, `tools`, `mcp-server`, `doctor`, `working-context`. |
-| Assets instalables | `agents/`, `commands/`, `skills/`, `templates/` | Markdown que el CLI copia al IDE del usuario (10 agents, 12 commands, 18 skills, 2 templates). |
-| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (aspec-bootstrap, memory-engine, review) + `changes/archive/`. |
-| Tests | `test/*.test.js` | Suite `node --test` (8 archivos; `BACKLOG.md` declara 162 tests al cierre de v0.6.38). |
+| Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 13 commands, 18 skills, 2 templates + perfil `test` en `profiles/test/`). |
+| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (11: agent-install-routing, antigravity-support, aspec-bootstrap, claude-support, copilot-support, legacy-import, memory-engine, project-portability, review, skill-frontmatter-adapters, test-profile) + 1 change activo + `changes/archive/` (8). |
+| Tests | `test/*.test.js` | Suite `node --test` (8 archivos, 314 tests en verde en v0.8.0). |
 
 Entry point único: `src/cli/index.js` (`bin.ancleto` y `bin.aspec`). No hay servidor ni base
 de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, pack Repomix
@@ -45,9 +45,10 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 
 - **CLI (`src/cli/index.js`)**: registra el proyecto en `~/.config/ancleto/projects.json`,
   resuelve el agente/IDE y el tier, materializa assets en el destino nativo del host
-  (`AGENT_TARGETS`), adapta el frontmatter de agents para `claude`/`vscode`/`antigravity`,
-  fusiona bloques `<!-- LOCKED -->` en templates, configura MCP (propio + caveman; engram
-  opcional) y expone los subcomandos.
+  (`AGENT_TARGETS`), adapta el frontmatter de agents para `claude`/`vscode`/`antigravity`/`copilot`,
+  aplica el overlay del perfil `test` cuando corresponde, fusiona bloques `<!-- LOCKED -->`
+  en templates, configura MCP (propio + caveman; engram opcional; `copilot-mcp.json` y
+  `.agents/mcp_config.json` según host) y expone los subcomandos.
 - **Discovery**: `--check` reporta estado del seed (`READY`/`STALE`/`PARTIAL`/`MISSING`) con
   `impact` (`none`/`minor`/`material`) y `affectedDocs`; el pack (Repomix) se genera on-demand.
 - **Memoria**: 3 tools (`searchMemory`, `recordRule`, `recordDecision`) sobre SQLite + FTS5
@@ -59,13 +60,15 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 ## Flujos principales
 
 1. **Alta de proyecto** — `ancleto init` (wizard en TTY): escribe `.ancletorc`, scaffold
-   `aspec/`, copia `AGENTS.md`/`PRODUCT.md` preservando lo existente, migra `openspec/` legacy
-   si existe, instala assets por host, aplica el tier a los agentes locales, configura el MCP
+   `aspec/` (+ `testspec/` con `--profile test`), copia `AGENTS.md`/`PRODUCT.md` preservando lo existente,
+   importa `openspec/` (legacy silencioso o externo con confirmación) si existe, instala assets
+   por host (+ overlay del perfil), aplica el tier a los agentes locales, configura el MCP
    del host y materializa `.ancleto/working-context.md`. Evidencia: `src/cli/index.js`, `README.md`.
 2. **Instalación/actualización** — `ancleto install|update|upgrade` (con `install --project`
    como paridad): materializa `agents/`, `commands/`, `skills/`, `templates/` en el destino del
-   host, adapta frontmatter, fusiona MCP de forma no destructiva, migra `openspec/` legacy y
-   re-aplica bloques `LOCKED`. Evidencia: `src/cli/index.js`, `README.md`.
+   host, adapta frontmatter, fusiona MCP de forma no destructiva, importa `openspec/` y
+   re-aplica bloques `LOCKED` (`upgrade` migratorio aun sin `.ancletorc` si hay `openspec/`).
+   Evidencia: `src/cli/index.js`, `README.md`.
 3. **Descubrimiento** — `ancleto discovery --check` (estado) y `ancleto discovery
    [--compress]` (pack Repomix con ignores del tier); el seed lo redacta la skill
    `ancleto-technical-discovery`. Evidencia: `src/cli/index.js`, `src/core/repomix-tier.js`.
@@ -75,8 +78,13 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
    `install --project`, `upgrade` y tras escrituras de memoria. Evidencia: `agents/orchestrator.md`,
    `src/core/memory/working-context.js`.
 5. **Ciclo de change** — `/cleto-new` → `/cleto-propose` → `/cleto-apply` → `/cleto-verify`
-   → `/cleto-archive`, con memoria registrada en verify/archive y archivado en
-   `aspec/changes/archive/`. Evidencia: `commands/`, `skills/`, `aspec/changes/archive/`.
+   → `/cleto-archive` (+ `/cleto-transplant` para mudar proyectos entre máquinas), con memoria
+   registrada en verify/archive y archivado en `aspec/changes/archive/`. Con perfil `test`, el
+   orchestrator rutea lo test-only al tester ampliado (`cleto-test-*`). Evidencia: `commands/`,
+   `skills/`, `aspec/changes/archive/`.
+6. **Portabilidad entre máquinas** — `ancleto export` (bundle + `manifest.json` sin rutas) y
+   `ancleto import` (regenera el MCP local + `doctor`); `import --repair` arregla un
+   `opencode.json` con rutas inexistentes. Evidencia: `src/cli/index.js`.
 
 ## Estado del repositorio
 

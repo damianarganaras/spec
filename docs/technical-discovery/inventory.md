@@ -2,31 +2,32 @@
 node: inventory
 kind: inventory
 read_when: "cobertura del repositorio por directorios y globs, y qué queda fuera"
-generatedAt: 2026-09-30T19:34:11Z
-pluginVersion: 0.7.2
+generatedAt: 2026-09-30T21:56:00Z
+pluginVersion: 0.8.0
 skillVersion: '2.3'
 ---
 
 # Inventario (orientación)
 
 Cobertura por directorio/glob, no auditoría archivo por archivo. Conteos de
-`.discovery-map.json` (root, sin ignorados de Claude/anclote; `total_files: 543`).
+`.discovery-map.json` (root, sin ignorados de Claude/anclote; `total_files: 216`).
 
 | Área | Contenido | Archivos |
 |---|---|---|
 | `src/cli/**` | `index.js` (entry point y todos los subcomandos), `ui.js` (wizard/menús). | 2 |
 | `src/core/**` | `discovery.js`, `repomix-tier.js`, `tier-models.js`, `memory/{database,engine,tools,mcp-server,doctor,working-context}.js`. | 9 |
 | `agents/*.md` | 10 subagentes instalables. | 10 |
-| `commands/*.md` | 12 comandos `/cleto-*`. | 12 |
+| `commands/*.md` | 13 comandos (`/cleto-*` del ciclo + `cleto-transplant` de portabilidad). | 13 |
 | `skills/*/SKILL.md` (+ references) | 18 skills nativas. | 32 |
 | `templates/` | `AGENTS.md`, `PRODUCT.md`. | 2 |
-| `aspec/` | `config.yaml` + `specs/` (aspec-bootstrap, memory-engine, review) + `changes/archive/`. | 40 |
-| `test/**` | `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `mcp`, `memory-engine`, `tier-models`, `working-context` (`.test.js`). | 8 |
+| `profiles/test/` | Overlay del perfil test: tester/reviewer ampliados, 5 comandos `cleto-test-*`, `AGENTS.md` con bloque LOCKED. | 8 |
+| `aspec/` | `config.yaml` + `specs/` (11 capacidades) + 1 change activo (`ancleto-vscode-extension`, diferido) + `changes/archive/` (8 changes). | 40+ |
+| `test/**` | `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `mcp`, `memory-engine`, `tier-models`, `working-context` (`.test.js`); 314 tests. | 8 |
 | `docs/**` | Documentación del framework + relevamiento (`.md`); excluida del pack. | 17 |
 | `documentation/**` | Material legado `lnx-cli/` + guías `.md`/`.pdf`; gitignored. | 340 |
 | `.github/workflows/**` | `publish.yml` (publicación a npm + Release). | 1 |
 | `.opencode/**` | Instalación local (agents/commands/skills/opencode.json/tier); gitignored. Este repo usa el host `opencode`. | 59 |
-| Raíz | `package.json`, `package-lock.json`, `README.md`, `BACKLOG.md`, `DESIGN-memory-engine-v0.2.0.md`, `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `.ancletorc`. | 11 |
+| Raíz | `package.json`, `package-lock.json`, `README.md`, `CHANGELOG.md`, `BACKLOG.md`, `DESIGN-memory-engine-v0.2.0.md`, `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `.ancletorc`. | 12 |
 
 ## Destinos por host (no presentes en este repo)
 

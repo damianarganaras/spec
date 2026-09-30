@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers y validaciones"
-generatedAt: 2026-09-30T19:34:11Z
-pluginVersion: 0.7.2
+generatedAt: 2026-09-30T21:56:00Z
+pluginVersion: 0.8.0
 skillVersion: '2.3'
 ---
 
@@ -21,10 +21,12 @@ skillVersion: '2.3'
 
 ```bash
 npm install -g @ancleto/spec      # instalación global
-ancleto init [--agent opencode|claude|vscode|antigravity|cursor|roo] [--tier normal|minimo|gratis] [--lang es|en|pt|auto] [--exclude <globs>] [--with-azure] [--no-mcp]
-ancleto install [--project <dir>] [--global] [--no-mcp] [--with-engram] [--tier ...] [--agent ...]
+ancleto init [--agent opencode|claude|vscode|antigravity|cursor|roo|copilot] [--tier normal|minimo|gratis] [--lang es|en|pt|auto] [--exclude <globs>] [--profile general|test] [--with-azure] [--no-mcp]
+ancleto install [--project <dir>] [--global] [--no-mcp] [--with-engram] [--tier ...] [--agent ...] [--profile ...]
 ancleto update                    # re-instala la última versión sobre lo existente
-ancleto upgrade [--agent <nombre>]  # re-aplica templates (LOCKED) y assets respetando personalizaciones
+ancleto upgrade [--agent <nombre>] [--profile <perfil>]  # re-aplica templates (LOCKED) y assets respetando personalizaciones
+ancleto export [--tar <file>]     # bundle portable + manifest.json sin rutas
+ancleto import <bundle> [--repair] | ancleto import --repair  # restaura regenerando el MCP local
 ancleto discovery --check         # estado del seed en JSON (READY/STALE/PARTIAL/MISSING) + config
 ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
 ancleto mcp                       # servidor MCP stdio de memoria propia
@@ -43,12 +45,15 @@ el MCP del host por defecto; `--no-mcp` lo evita.
 
 - **`.ancletorc`** (raíz): manifiesto de instalación (`schemaVersion`, `version`,
   `installedAt`, `installedPaths`) + `discovery` (`outputDir`, `exclude`), `agent`, `language`,
-  `azure.enabled`, `gratisModel`. `installedPaths` guarda la **unión de destinos realmente
+  `profile` (`general`|`test`), `azure.enabled`, `gratisModel`. `installedPaths` guarda la **unión de destinos realmente
   escritos** por host (`templates`, `agents`, `commands`, `skills`); para antigravity
   `commands` queda vacío (los commands viven como skills). Este repo: `outputDir:
   "docs/technical-discovery"`, `language: "es"`, `azure.enabled: false`, `exclude` de
   tests/imágenes/`docs`/lockfiles. **No editar a mano durante el seed**; se consume resuelto
   desde `ancleto discovery --check`.
+- **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/reviewer ampliados
+  (planning/generation/healing/coverage), comandos `cleto-test-*`, estructura `testspec/` y
+  bloque LOCKED de convenciones Playwright; instalable con cualquier host (incluido copilot).
 - **`.opencode/.ancleto-tier`**: tier del proyecto (`minimo` en este repo). El tier decide
   modelos de los agents y la agresividad del pack (`test/**`, `docs/**`, `**/*.md`,
   `--compress`). Evidencia: `src/core/repomix-tier.js`.
@@ -87,8 +92,8 @@ Evidencia: `README.md`, `src/cli/index.js`, `.github/workflows/publish.yml`.
 
 - Suite: `node --test test/*.test.js` (8 archivos: `cli`, `content-guards`, `discovery-tier`,
   `discovery-topology`, `mcp`, `memory-engine`, `tier-models`, `working-context`).
-  `BACKLOG.md` declara 162 tests en verde al cierre de v0.6.38 (sin desglosar
-  `working-context.test.js`, agregado después).
+  314 tests en verde en v0.8.0 (incluye CLI multi-host, perfil test, export/import, openspec
+  externo y copilot).
 - Validaciones obligatorias del repo (definidas en `AGENTS.md`): `npm run typecheck` o
   `npx tsc --noEmit`, `npm run lint`, `npm test`. **Observación**: este repo es JavaScript
   puro y `package.json` **no define** esos scripts; la regla es genérica del template

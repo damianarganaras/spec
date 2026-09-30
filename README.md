@@ -426,6 +426,7 @@ Una vez instalado, tu IDE expone el ciclo de vida completo como comandos barra:
 | `/cleto-ff` | Avanzar rápido con el contexto ya recuperado. |
 | `/cleto-apply` | Aplicar el código del change. |
 | `/cleto-verify` | Verificar reglas, tests y memoria antes de cerrar. |
+| `/cleto-security` | Realizar una auditoría de seguridad integral en el proyecto o change. |
 | `/cleto-sync` | Sincronizar las specs con el estado del repositorio. |
 | `/cleto-archive` | Archivar el change y registrar aprendizajes. |
 | `/cleto-continue` | Retomar un change con artefactos pendientes. |

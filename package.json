@@ -12,6 +12,7 @@
     "commands",
     "skills",
     "templates",
+    "profiles",
     "src"
   ],
   "publishConfig": {

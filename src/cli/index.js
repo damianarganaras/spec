@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs'
-import { cp, mkdir, access, writeFile, readFile, readdir } from 'node:fs/promises'
+import { cp, mkdir, access, writeFile, readFile, readdir, mkdtemp, rm } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import { DatabaseSync } from 'node:sqlite'
-import { join, dirname, resolve, basename, relative } from 'node:path'
+import { join, dirname, resolve, basename, relative, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
@@ -35,18 +35,19 @@ Uso:
   ancleto install --tier <nivel>     normal | minimo | gratis (wizard interactivo en TTY)
   ancleto install --lang <codigo>    auto | es | en | pt (idioma de los artifacts; auto = idioma de la conversacion)
   ancleto install --exclude <globs>  Paths excluidos del discovery, coma-separados (ej: "**/*.png,docs")
-  ancleto install --agent <nombre>    opencode | claude | vscode | antigravity | cursor | roo (wizard si no esta guardado)
+  ancleto install --agent <nombre>    opencode | claude | vscode | antigravity | cursor | roo | copilot (wizard si no esta guardado)
                                    Elige el layout nativo a materializar (directorio + convencion de
                                    nombre) y el adapter de frontmatter del host. NO arbitra el
                                    descubrimiento entre hosts: si dos leen el mismo directorio, eso es
                                    efecto del host (no se deduplica ni se elige "ganador").
                                    antigravity instala skills, agents adaptados y commands como skills
                                    (.agents/*) y mergea el MCP de workspace .agents/mcp_config.json.
+  ancleto install --profile <perfil>  general | test (perfil de test automation con Playwright; persiste en .ancletorc)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
                                    Parado en un proyecto con .ancletorc opera sobre ese proyecto;
                                    usa --global para forzar el alcance global
   ancleto upgrade [--agent <nombre>]  Re-aplica templates (LOCKED) y skills sobre el proyecto actual
-  ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--exclude <globs>] [--no-mcp]
+  ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--exclude <globs>] [--no-mcp] [--profile <perfil>]
                                      Crea .ancletorc en el repositorio actual y configura el MCP del host
                                      (interactivo en TTY: banner + menu; Azure desactivado por defecto)
   ancleto discovery --check           Estado del seed (READY/STALE/PARTIAL/MISSING)
@@ -78,6 +79,9 @@ Uso:
   ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE
                                         expone searchMemory, recordRule y recordDecision
   ancleto check                         Verifica integridad de archivos instalados vs manifiesto
+  ancleto export [--tar <file>]         Empaqueta lo portable del proyecto (bundle + manifest.json sin rutas)
+  ancleto import <bundle> [--repair]    Restaura el bundle regenerando el MCP local; --repair solo arregla entradas rotas
+  ancleto import --repair               Repara in place el opencode.json con command inexistente
   ancleto doctor                        Diagnostica el entorno (Node, node:sqlite, opencode.json)
   ancleto --help                      Esta ayuda
   ancleto --version                   Version del paquete
@@ -613,7 +617,7 @@ async function applyTier(agentsDir, tier, models = null) {
   }
 }
 
-const SUPPORTED_AGENTS = ['opencode', 'claude', 'vscode', 'antigravity', 'cursor', 'roo']
+const SUPPORTED_AGENTS = ['opencode', 'claude', 'vscode', 'antigravity', 'cursor', 'roo', 'copilot']
 const DEFAULT_AGENT = 'opencode'
 
 function askAgent() {
@@ -661,6 +665,43 @@ function scanLangFlag(args) {
 
 function langLabel(code) {
   return { auto: 'automatico (idioma de la conversacion)', es: 'espanol', en: 'ingles', pt: 'portugues' }[code] || code
+}
+
+const SUPPORTED_PROFILES = ['general', 'test']
+const DEFAULT_PROFILE = 'general'
+
+function scanProfileFlag(args) {
+  const p = flagValue(args, '--profile')
+  if (!p) return null
+  const norm = p.toLowerCase() === 'test:playwright' ? 'test' : p.toLowerCase()
+  if (!SUPPORTED_PROFILES.includes(norm)) {
+    console.error(`ancleto: perfil invalido: ${p} (general|test)`)
+    process.exit(1)
+  }
+  return norm
+}
+
+function validProfile(value) {
+  return SUPPORTED_PROFILES.includes(value) ? value : null
+}
+
+// Raiz de activos segun perfil: el general usa el repo; el perfil test usa
+// profiles/test/ como overlay (agents/commands/templates). skills/ es comun.
+function profileAssetsRoot(profile) {
+  return profile === 'test' ? join(ROOT, 'profiles', 'test') : ROOT
+}
+
+// Overlay del perfil test sobre los destinos nativos del host (misma ext y
+// mismo adapter que la instalacion base). El paquete base queda intacto.
+async function installProfileOverlay(projectDir, agent) {
+  const model = AGENT_TARGETS[agent] || AGENT_TARGETS[DEFAULT_AGENT]
+  for (const cat of ['agents', 'commands']) {
+    const spec = model[cat]
+    if (!spec) continue
+    const src = join(ROOT, 'profiles', 'test', cat)
+    if (!(await exists(src))) continue
+    await installAssetFiles(cat, projectDir, spec, agent, src)
+  }
 }
 
 const EXCLUDE_PRESETS = [
@@ -778,6 +819,44 @@ async function mergeAntigravityMcp(projectDir, mcpMap) {
   return { file, added }
 }
 
+// Una entrada MCP esta rota cuando su binario es una ruta inexistente en este
+// host: absoluta posix ausente, estilo Windows (caso T480) o command ausente.
+// Comandos relativos (npx, PATH) se presumen sanos.
+function mcpCommandBroken(entry) {
+  const cmd = entry?.command
+  if (!Array.isArray(cmd) || cmd.length === 0) return true
+  const bin = cmd[0]
+  if (typeof bin !== 'string' || bin.length === 0) return true
+  if (/^[A-Za-z]:[\\/]/.test(bin)) return true
+  if (isAbsolute(bin)) return !existsSync(bin)
+  return false
+}
+
+// Merge no destructivo hacia copilot-mcp.json del proyecto (nunca toca
+// copilot-instructions.md: ese archivo es del usuario).
+async function mergeCopilotMcp(projectDir, mcpMap) {
+  if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
+  const file = join(projectDir, 'copilot-mcp.json')
+  let cfg = {}
+  if (await exists(file)) {
+    try {
+      cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    } catch {
+      console.warn('ancleto: no se pudo leer copilot-mcp.json como JSON; MCP no se agrego ahi')
+      return { file, added: [] }
+    }
+  }
+  cfg.mcp = cfg.mcp || {}
+  const added = []
+  for (const [name, def] of Object.entries(mcpMap)) {
+    if (cfg.mcp[name]) continue
+    cfg.mcp[name] = def
+    added.push(name)
+  }
+  await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
+  return { file, added }
+}
+
 // D6: dueno unico del MCP de host. Antigravity mergea `.agents/mcp_config.json`;
 // el resto conserva `mergeMcp` sobre opencode.json (targetDir = .opencode del
 // proyecto o config global).
@@ -786,6 +865,36 @@ async function setupHostMcp(targetDir, mcpMap, { projectDir = null, agent = null
   if (agent === 'antigravity' && projectDir) return mergeAntigravityMcp(projectDir, mcpMap)
   await mkdir(targetDir, { recursive: true })
   return mergeMcp(targetDir, mcpMap)
+}
+
+// Regenera entradas rotas y agrega ausentes en copilot-mcp.json (para upgrade).
+async function refreshCopilotMcp(projectDir) {
+  const file = join(projectDir, 'copilot-mcp.json')
+  let cfg = {}
+  if (await exists(file)) {
+    try {
+      cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    } catch {
+      cfg = {}
+    }
+  }
+  cfg.mcp = cfg.mcp || {}
+  const fresh = buildDefaultMcp({ withEngram: Boolean(cfg.mcp.engram) })
+  const fixed = []
+  for (const [name, def] of Object.entries(cfg.mcp)) {
+    if (mcpCommandBroken(def) && fresh[name]) {
+      cfg.mcp[name] = fresh[name]
+      fixed.push(name)
+    }
+  }
+  for (const [name, def] of Object.entries(fresh)) {
+    if (!cfg.mcp[name]) {
+      cfg.mcp[name] = def
+      fixed.push(`${name} (agregado)`)
+    }
+  }
+  await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
+  return { file, fixed }
 }
 
 async function copyAssets(dest) {
@@ -826,7 +935,14 @@ const AGENT_TARGETS = {
   // Cursor y Roo: solo skills (D3/D7). .agents/skills es punto de lectura
   // compartido (D2), no destino universal.
   cursor: { skills: { dir: '.cursor/skills' }, agents: null, commands: null },
-  roo: { skills: { dir: '.roo/skills' }, agents: null, commands: null }
+  roo: { skills: { dir: '.roo/skills' }, agents: null, commands: null },
+  // Copilot: host de prompts. Agents y commands comparten .github/prompts con
+  // ext .prompt.md (sin colision: agents/*.md vs cleto-*.md). Sin skills (D12).
+  copilot: {
+    skills: null,
+    agents: { dir: '.github/prompts', ext: '.prompt.md' },
+    commands: { dir: '.github/prompts', ext: '.prompt.md' }
+  }
 }
 
 const ANCLETO_SKILLS = ['ancleto-new', 'ancleto-propose', 'ancleto-apply', 'ancleto-verify', 'ancleto-archive', 'ancleto-bulk-archive', 'ancleto-continue', 'ancleto-explore', 'ancleto-ff', 'ancleto-onboard', 'ancleto-workflow']
@@ -856,10 +972,21 @@ function serializeFrontmatter(parsed) {
 }
 
 // D4/D5: hosts cuyo formato de agents difiere del origen requieren adaptacion.
-// Claude/VS Code eliminan las claves de opencode; Antigravity usa una
+// Claude/VS Code/Copilot eliminan las claves de opencode; Antigravity usa una
 // transformacion propia (D2). El resto es identidad (preservacion verbatim).
-const AGENT_ADAPTER_HOSTS = new Set(['claude', 'vscode', 'antigravity'])
+const AGENT_ADAPTER_HOSTS = new Set(['claude', 'vscode', 'antigravity', 'copilot'])
 const AGENT_ADAPTER_DROP = new Set(['mode', 'color', 'temperature', 'permission', 'model', 'tools'])
+
+// Solo Copilot: los tiers no cambian modelos (el usuario elige en el picker);
+// el orchestrator lo recuerda al empezar.
+const COPILOT_MODEL_NOTE = `
+## Nota de modelo (solo Copilot)
+
+Elegí el modelo en el picker de Copilot antes de empezar: los tiers de ancleto
+(normal|minimo|gratis) no cambian modelos acá, solo el nivel de esfuerzo:
+normal = flujo completo, minimo = pasos agrupados y económicos, gratis = modelo
+gratis disponible en tu cuenta.
+`
 
 // D3: tabla unica (fijada contra la tabla oficial de frontmatter de Custom
 // Subagents) de ids de Antigravity. Conjunto CERRADO: solo se emiten estos ids.
@@ -994,14 +1121,17 @@ async function copyDirTransformed(srcDir, destDir, host, assetKind) {
   }
 }
 
-async function installAssetFiles(cat, projectDir, spec, host) {
+async function installAssetFiles(cat, projectDir, spec, host, srcDir = null) {
   const destDir = join(projectDir, spec.dir)
   await mkdir(destDir, { recursive: true })
-  for (const e of await readdir(join(ROOT, cat), { withFileTypes: true })) {
+  const origin = srcDir || join(ROOT, cat)
+  for (const e of await readdir(origin, { withFileTypes: true })) {
     if (!e.isFile() || !e.name.endsWith(MD_EXT)) continue
     const base = e.name.slice(0, -MD_EXT.length)
-    const content = await readFile(join(ROOT, cat, e.name), 'utf8')
-    await writeFile(join(destDir, `${base}${spec.ext}`), adaptFrontmatter(content, host, cat, base))
+    const content = await readFile(join(origin, e.name), 'utf8')
+    const adapted = adaptFrontmatter(content, host, cat, base)
+    const body = (host === 'copilot' && cat === 'agents' && base === 'orchestrator') ? adapted + COPILOT_MODEL_NOTE : adapted
+    await writeFile(join(destDir, `${base}${spec.ext}`), body)
   }
 }
 
@@ -1104,6 +1234,11 @@ async function scaffoldAspec(projectDir) {
   }
 }
 
+async function scaffoldTestspec(projectDir) {
+  await mkdir(join(projectDir, 'testspec', 'specs'), { recursive: true })
+  await mkdir(join(projectDir, 'testspec', 'changes'), { recursive: true })
+}
+
 const LEGACY_OPENSPEC_DIR = 'openspec'
 const MIGRATION_MARKER = '.migrated-from-openspec'
 
@@ -1135,6 +1270,97 @@ async function migrateLegacyOpenspec(projectDir) {
   await cp(legacyDir, aspecDir, { recursive: true, force: false })
   await writeFile(marker, '# Generado por ancleto: esta aspec/ ya fue migrada desde openspec/\n')
   console.log('ancleto: contenido migrado de openspec/ a aspec/ (openspec/ se conserva como backup)')
+}
+
+// Clasifica openspec/ pre-existente: 'none' (ausente o carpeta vacia),
+// 'external' (layout OpenSpec estandar: specs/ con archivos, o AGENTS.md con
+// firma OpenSpec) o 'legacy' (resto: rama original, intacta).
+async function detectLegacyOpenSpec(projectDir) {
+  const legacyDir = join(projectDir, LEGACY_OPENSPEC_DIR)
+  let entries = []
+  try {
+    entries = await readdir(legacyDir)
+  } catch {
+    return 'none'
+  }
+  if (entries.length === 0) return 'none' // carpeta vacia: no-op silencioso
+  try {
+    if ((await readdir(join(legacyDir, 'specs'))).length > 0) return 'external'
+  } catch {
+    // sin specs/: sigue el resto de firmas
+  }
+  for (const candidate of [join(projectDir, 'AGENTS.md'), join(legacyDir, 'AGENTS.md')]) {
+    try {
+      if (/openspec/i.test(await readFile(candidate, 'utf8'))) return 'external'
+    } catch {
+      // archivo inexistente o ilegible: no aporta firma
+    }
+  }
+  return 'legacy'
+}
+
+async function askOpenspecImport() {
+  if (!process.stdin.isTTY) return false
+  const ask = (q) => new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    rl.question(q, (a) => { rl.close(); resolve(a.trim().toLowerCase()) })
+  })
+  let answer = await ask('ancleto: Detecté un proyecto OpenSpec. ¿Importar a aspec/? [s/N/ver] (default: No): ')
+  if (answer === 'ver') {
+    console.log('ancleto: se copiaran openspec/specs y openspec/changes a aspec/ (copia no destructiva; openspec/ se conserva como backup)')
+    answer = await ask('ancleto: ¿Importar a aspec/? [s/N] (default: No): ')
+  }
+  return ['s', 'si', 'sí', 'y', 'yes'].includes(answer)
+}
+
+// Importacion semilla de un OpenSpec externo: copia specs + changes, respeta el
+// AGENTS.md (nunca se pisa en silencio) y escribe el mismo marcador de
+// idempotencia. openspec/ siempre se conserva como backup.
+async function importExternalOpenspec(projectDir) {
+  const aspecDir = join(projectDir, CHANGES_ROOT)
+  const marker = join(aspecDir, MIGRATION_MARKER)
+  if (await exists(marker)) return // ya importada: no-op silencioso
+  if (await hasRealContent(aspecDir)) {
+    console.warn('ancleto: aspec/ ya tiene contenido real — no se importo openspec/ (revisar manualmente; openspec/ se conserva)')
+    return
+  }
+  await cp(join(projectDir, LEGACY_OPENSPEC_DIR), aspecDir, { recursive: true, force: false })
+  const bundledAgents = join(projectDir, LEGACY_OPENSPEC_DIR, 'AGENTS.md')
+  if (await exists(bundledAgents)) {
+    const target = join(projectDir, 'AGENTS.md')
+    if (!(await exists(target))) {
+      await cp(bundledAgents, target)
+      console.log('ancleto: AGENTS.md de OpenSpec adoptado como base (revisarlo)')
+    } else {
+      console.warn('ancleto: se conserva el AGENTS.md local; el de OpenSpec queda en openspec/ como backup')
+    }
+  } else {
+    try {
+      if (/openspec/i.test(await readFile(join(projectDir, 'AGENTS.md'), 'utf8'))) {
+        console.log('ancleto: se respeta el AGENTS.md de OpenSpec local (bloques ancleto fusionados por LOCKED)')
+      }
+    } catch {
+      // sin AGENTS.md local: nada que respetar
+    }
+  }
+  await writeFile(marker, '# Generado por ancleto: esta aspec/ ya fue importada desde openspec/\n')
+  console.log('ancleto: contenido importado de openspec/ a aspec/ (openspec/ se conserva como backup)')
+}
+
+// Punto unico de deteccion/migracion: lo invocan init, install --project y
+// upgrade antes del scaffold. En no-TTY rige default No salvo --yes.
+async function maybeImportOpenspec(projectDir, args = []) {
+  const kind = await detectLegacyOpenSpec(projectDir)
+  if (kind === 'none') return
+  if (kind === 'legacy') {
+    await migrateLegacyOpenspec(projectDir)
+    return
+  }
+  if (args.includes('--yes') || await askOpenspecImport()) {
+    await importExternalOpenspec(projectDir)
+  } else {
+    console.log('ancleto: importacion de openspec/ omitida (openspec/ se conserva)')
+  }
 }
 
 function extractLockedBlocks(content) {
@@ -1194,10 +1420,11 @@ function findInsertAnchor(local, source, name) {
 
 // Solo mergea los templates raiz (AGENTS.md/PRODUCT.md). Los assets por host
 // los materializa installAgentAssets (dueno unico).
-async function copyTemplates(projectDir) {
+async function copyTemplates(projectDir, profile = DEFAULT_PROFILE) {
   for (const t of TEMPLATES) {
     const target = join(projectDir, t)
-    const source = await readFile(join(ROOT, 'templates', t), 'utf8')
+    const profileTemplate = join(profileAssetsRoot(profile), 'templates', t)
+    const source = await readFile(await exists(profileTemplate) ? profileTemplate : join(ROOT, 'templates', t), 'utf8')
     if (!(await exists(target))) {
       await writeFile(target, source)
       continue
@@ -1242,6 +1469,7 @@ async function install(args) {
 
   let agent = agentFlag || (existingRc?.agent && SUPPORTED_AGENTS.includes(existingRc.agent) ? existingRc.agent : null)
   let language = scanLangFlag(args) || (existingRc?.language && SUPPORTED_LANGS.includes(existingRc.language) ? existingRc.language : null)
+  const profile = scanProfileFlag(args) || validProfile(existingRc?.profile) || DEFAULT_PROFILE
   const excludeFlag = scanExcludeFlag(args)
   const existingDiscovery = existingRc?.discovery || { outputDir: 'docs/technical-discovery', exclude: [] }
   let excludeChoice = excludeFlag
@@ -1289,14 +1517,17 @@ async function install(args) {
   }
 
   if (projectDir) {
-    await copyTemplates(projectDir)
-    await migrateLegacyOpenspec(projectDir)
+    await copyTemplates(projectDir, profile)
+    await maybeImportOpenspec(projectDir, args)
     await scaffoldAspec(projectDir)
+    if (profile === 'test') await scaffoldTestspec(projectDir)
     await refreshWorkingContext(projectDir)
     const written = await installAgentAssets(projectDir, agent)
+    if (profile === 'test') await installProfileOverlay(projectDir, agent)
     await writeManifest(projectDir, {
       agent,
       language,
+      profile,
       ...(excludeChoice !== null ? { discovery: { ...existingDiscovery, exclude: excludeChoice } } : {}),
       ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {}),
       installedPaths: unionInstalledPaths(existingRc?.installedPaths, {
@@ -1306,6 +1537,9 @@ async function install(args) {
     })
   } else {
     await copyAssets(target)
+    if (agent === 'copilot') {
+      console.log('ancleto: los prompts de Copilot son por repo; corré install --project para generarlos')
+    }
   }
 
   const models = tierModels(tier, TIERS, gratisModelChoice)
@@ -1327,6 +1561,10 @@ async function install(args) {
   }
 
   const res = await setupHostMcp(target, mcpMap, { projectDir, agent })
+  if (projectDir && agent === 'copilot') {
+    const cres = await mergeCopilotMcp(projectDir, mcpMap)
+    if (cres.added.length) console.log(`ancleto: MCP configurados: ${cres.added.join(', ')} en ${cres.file}`)
+  }
   const loc = projectDir
     ? `${projectDir} (layout ${agent} + templates en la raiz)`
     : `${target} (disponible en todos tus proyectos)`
@@ -1343,16 +1581,26 @@ async function upgradeCmd(args) {
   const projectDir = process.cwd()
   const rc = await readAncletorc(projectDir)
   if (!rc) {
+    if ((await detectLegacyOpenSpec(projectDir)) !== 'none') {
+      await maybeImportOpenspec(projectDir, args)
+      await scaffoldAspec(projectDir)
+      console.log("ancleto: openspec/ migrado. Corré 'ancleto init' para completar la configuración.")
+      return
+    }
     console.error("Error: No se encontro .ancletorc. Ejecuta 'ancleto init' primero.")
     process.exit(1)
   }
-  await migrateLegacyOpenspec(projectDir)
+  await maybeImportOpenspec(projectDir, args)
   const agent = await resolveAgent(args, rc.agent)
-  await copyTemplates(projectDir)
+  const profile = scanProfileFlag(args) || validProfile(rc.profile) || DEFAULT_PROFILE
+  await copyTemplates(projectDir, profile)
+  if (profile === 'test') await scaffoldTestspec(projectDir)
   const written = await installAgentAssets(projectDir, agent)
+  if (profile === 'test') await installProfileOverlay(projectDir, agent)
   const wentContext = await refreshWorkingContext(projectDir)
   const manifest = await writeManifest(projectDir, {
     agent,
+    profile,
     installedPaths: unionInstalledPaths(rc.installedPaths, {
       templates: ['AGENTS.md', 'PRODUCT.md'],
       ...written
@@ -1361,7 +1609,15 @@ async function upgradeCmd(args) {
   const skillsDir = written.skills[0] || '.opencode/skills'
   console.log(`ancleto: upgrade completo (v${manifest.version}, agente: ${agent})`)
   console.log('  ✔ templates re-aplicados (bloques LOCKED actualizados, EXTENSIBLE intacto)')
-  console.log(`  ✔ skills actualizadas en ${skillsDir} (${ANCLETO_SKILLS.length} skills)`)
+  if (agent === 'copilot') {
+    const { file, fixed } = await refreshCopilotMcp(projectDir)
+    console.log(`  ✔ prompts regenerados en .github/prompts (copilot-instructions.md intacto)`)
+    console.log(fixed.length
+      ? `  ✔ MCP regenerados en ${file}: ${fixed.join(', ')}`
+      : `  ✔ MCP sanos en ${file}, sin cambios`)
+  } else {
+    console.log(`  ✔ skills actualizadas en ${skillsDir} (${ANCLETO_SKILLS.length} skills)`)
+  }
   console.log(wentContext ? '  ✔ working-context.md regenerado' : '  ✔ working-context.md sin reglas activas (vacio)')
   console.log('  ✔ manifiesto .ancletorc actualizado')
 }
@@ -1373,6 +1629,7 @@ async function initProject(args) {
   const agentFlag = scanAgentFlag(args)
   const tierFlag = scanTierFlag(args)
   const langFlag = scanLangFlag(args)
+  const profileFlag = scanProfileFlag(args)
   const existing = await readAncletorc(projectDir)
   const azure = existing?.azure ?? { enabled: false }
   let discovery = existing?.discovery ?? { outputDir: 'docs/technical-discovery', exclude: [] }
@@ -1382,6 +1639,7 @@ async function initProject(args) {
 
   let agent, tier, language
   language = langFlag || (existing?.language && SUPPORTED_LANGS.includes(existing.language) ? existing.language : null)
+  const profile = profileFlag || validProfile(existing?.profile) || DEFAULT_PROFILE
   const isInteractive = Boolean(process.stdout.isTTY) && (!agentFlag || !tierFlag || !language || (excludeChoice === null && (discovery.exclude || []).length === 0))
   if (isInteractive) {
     await showBanner()
@@ -1430,22 +1688,25 @@ async function initProject(args) {
     gratisModelChoice = persisted || gratisModel()
   }
   const written = await installAgentAssets(projectDir, agent)
+  if (profile === 'test') await installProfileOverlay(projectDir, agent)
   const manifest = await writeManifest(projectDir, {
     azure,
     discovery,
     agent,
     language,
+    profile,
     ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {}),
     installedPaths: unionInstalledPaths(existing?.installedPaths, {
       templates: ['AGENTS.md', 'PRODUCT.md'],
       ...written
     })
   })
-  await copyTemplates(projectDir)
+  await maybeImportOpenspec(projectDir, args)
+  await copyTemplates(projectDir, profile)
+  if (profile === 'test') await scaffoldTestspec(projectDir)
   if (tier) {
     await applyTier(join(projectDir, '.opencode', 'agents'), tier, tierModels(tier, TIERS, gratisModelChoice))
   }
-  await migrateLegacyOpenspec(projectDir)
   await scaffoldAspec(projectDir)
   await refreshWorkingContext(projectDir)
   await registerProject(projectDir, { agent, tier: tier || null })
@@ -2298,6 +2559,205 @@ async function statsCommand(args) {
   console.log(`  totales (${shownLabel}): entrada ${fmtTokens(totals.input)} · salida ${fmtTokens(totals.output)} · razon ${fmtTokens(totals.reasoning)} · cache ${fmtTokens(totals.cacheRead)} · costo ${fmtCost(totals.cost)}`)
 }
 
+const EXPORT_FORMAT = 'ancleto-export/1'
+
+async function readProjectMcp(projectDir) {
+  for (const c of ['opencode.json', 'opencode.jsonc']) {
+    const p = join(projectDir, '.opencode', c)
+    if (await exists(p)) {
+      try {
+        return { file: p, cfg: JSON.parse((await readFile(p, 'utf8')).replace(/^\uFEFF/, '')) }
+      } catch {
+        return { file: p, cfg: {} }
+      }
+    }
+  }
+  return { file: join(projectDir, '.opencode', 'opencode.json'), cfg: {} }
+}
+
+// Repara entradas rotas y agrega ausentes (solo las de intendedNames cuando se
+// indica; con null solo repara las existentes). Nunca toca las sanas.
+async function repairProjectMcp(projectDir, fresh, intendedNames = null) {
+  const { file, cfg } = await readProjectMcp(projectDir)
+  cfg.mcp = cfg.mcp || {}
+  const fixed = []
+  for (const [name, def] of Object.entries(cfg.mcp)) {
+    if (mcpCommandBroken(def) && fresh[name]) {
+      cfg.mcp[name] = fresh[name]
+      fixed.push(name)
+    }
+  }
+  if (intendedNames) {
+    for (const name of intendedNames) {
+      if (!cfg.mcp[name] && fresh[name]) {
+        cfg.mcp[name] = fresh[name]
+        fixed.push(`${name} (agregado)`)
+      }
+    }
+  }
+  await mkdir(dirname(file), { recursive: true })
+  await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
+  return { file, fixed }
+}
+
+async function exportCmd(args) {
+  const projectDir = process.cwd()
+  const rc = await readAncletorc(projectDir)
+  if (!rc) {
+    console.error("Error: No se encontro .ancletorc. Ejecuta 'ancleto init' primero.")
+    process.exit(1)
+  }
+  const { cfg } = await readProjectMcp(projectDir)
+  const mcpIntent = Object.entries(cfg.mcp || {})
+    .map(([name, def]) => ({ name, type: def?.type || 'local', enabled: def?.enabled !== false }))
+  const tierFile = join(projectDir, '.opencode', '.ancleto-tier')
+  const tier = (await exists(tierFile)) ? (await readFile(tierFile, 'utf8')).trim() : null
+  const manifest = {
+    format: EXPORT_FORMAT,
+    ancletoVersion: await packageVersion(),
+    exportedAt: new Date().toISOString(),
+    agent: rc.agent || null,
+    tier,
+    language: rc.language || 'auto',
+    profile: rc.profile || 'general',
+    ...(rc.gratisModel ? { gratisModel: rc.gratisModel } : {}),
+    flags: { azure: Boolean(rc.azure?.enabled), engram: mcpIntent.some((m) => m.name === 'engram') },
+    mcp: mcpIntent
+  }
+  const serialized = JSON.stringify(manifest)
+  if (serialized.includes(projectDir) || /[A-Za-z]:\\/.test(serialized) || serialized.includes(homedir())) {
+    console.error('ancleto: el manifiesto contiene rutas absolutas; export abortado')
+    process.exit(1)
+  }
+  const tarIdx = args.indexOf('--tar')
+  if (tarIdx >= 0 && !args[tarIdx + 1]) {
+    console.error('ancleto: --tar requiere un archivo destino')
+    process.exit(1)
+  }
+  const tarFile = tarIdx >= 0 ? resolve(args[tarIdx + 1]) : null
+  const outDir = tarFile ? await mkdtemp(join(tmpdir(), 'ancleto-export-')) : join(projectDir, 'ancleto-export')
+  await mkdir(outDir, { recursive: true })
+  // Allowlist portable: nunca se copian opencode.json (rutas absolutas),
+  // .ancleto-tier, memory.db, service.json ni la config global.
+  if (await exists(join(projectDir, '.ancletorc'))) await cp(join(projectDir, '.ancletorc'), join(outDir, '.ancletorc'))
+  for (const t of TEMPLATES) {
+    if (await exists(join(projectDir, t))) await cp(join(projectDir, t), join(outDir, t))
+  }
+  if (await exists(join(projectDir, 'aspec'))) await cp(join(projectDir, 'aspec'), join(outDir, 'aspec'), { recursive: true })
+  for (const d of ASSETS) {
+    const src = join(projectDir, '.opencode', d)
+    if (await exists(src)) await cp(src, join(outDir, '.opencode', d), { recursive: true })
+  }
+  await writeFile(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
+  if (tarFile) {
+    const r = spawnSync('tar', ['czf', tarFile, '-C', outDir, '.'], { encoding: 'utf8' })
+    if (r.status !== 0) {
+      console.error(`ancleto: no se pudo crear el tarball (${(r.stderr || '').trim() || 'tar no disponible'})`)
+      process.exit(1)
+    }
+    await rm(outDir, { recursive: true, force: true })
+    console.log(`ancleto: exportado a ${tarFile}`)
+  } else {
+    console.log(`ancleto: exportado a ${join(projectDir, 'ancleto-export')}`)
+  }
+  console.log(`ancleto: manifiesto v${manifest.ancletoVersion} con ${mcpIntent.length} MCP (solo intencion, sin rutas)`)
+}
+
+async function importCmd(args) {
+  const projectDir = process.cwd()
+  const repairOnly = args.includes('--repair')
+  const bundleArg = args.find((a) => !a.startsWith('-'))
+  if (!repairOnly && !bundleArg) {
+    console.error('ancleto: uso: ancleto import <bundle> [--repair] | ancleto import --repair')
+    process.exit(1)
+  }
+  let manifest = null
+  if (bundleArg) {
+    const resolved = resolve(bundleArg)
+    if (!existsSync(resolved)) {
+      console.error(`ancleto: bundle no encontrado: ${bundleArg}`)
+      process.exit(1)
+    }
+    let bundleDir = resolved
+    if (/\.tgz$|\.tar\.gz$/.test(resolved)) {
+      bundleDir = await mkdtemp(join(tmpdir(), 'ancleto-import-'))
+      const r = spawnSync('tar', ['xzf', resolved, '-C', bundleDir], { encoding: 'utf8' })
+      if (r.status !== 0) {
+        console.error('ancleto: no se pudo extraer el bundle')
+        process.exit(1)
+      }
+    }
+    try {
+      manifest = JSON.parse(await readFile(join(bundleDir, 'manifest.json'), 'utf8'))
+    } catch {
+      console.error('ancleto: bundle invalido (sin manifest.json)')
+      process.exit(1)
+    }
+    if (manifest.format !== EXPORT_FORMAT) {
+      console.error(`ancleto: formato de bundle no soportado: ${manifest.format}`)
+      process.exit(1)
+    }
+    const localVersion = await packageVersion()
+    if (manifest.ancletoVersion && manifest.ancletoVersion !== localVersion) {
+      console.warn(`ancleto: el bundle es de v${manifest.ancletoVersion} y el CLI es v${localVersion} (se continua igual)`)
+    }
+    const bundleRc = await readAncletorc(bundleDir)
+    if (bundleRc) {
+      await writeManifest(projectDir, {
+        ...(bundleRc.agent ? { agent: bundleRc.agent } : {}),
+        ...(bundleRc.language ? { language: bundleRc.language } : {}),
+        ...(bundleRc.profile ? { profile: bundleRc.profile } : {}),
+        ...(bundleRc.gratisModel ? { gratisModel: bundleRc.gratisModel } : {}),
+        ...(bundleRc.azure ? { azure: bundleRc.azure } : {}),
+        ...(bundleRc.discovery ? { discovery: bundleRc.discovery } : {})
+      })
+    }
+    if (await exists(join(bundleDir, 'aspec'))) {
+      await cp(join(bundleDir, 'aspec'), join(projectDir, 'aspec'), { recursive: true, force: false })
+    }
+    for (const t of TEMPLATES) {
+      const src = join(bundleDir, t)
+      if (!(await exists(src))) continue
+      const target = join(projectDir, t)
+      const content = await readFile(src, 'utf8')
+      if (!(await exists(target))) {
+        await writeFile(target, content)
+        continue
+      }
+      const current = await readFile(target, 'utf8')
+      const merged = mergeLocked(content, current, t)
+      if (merged !== current) await writeFile(target, merged)
+    }
+    for (const d of ASSETS) {
+      const src = join(bundleDir, '.opencode', d)
+      if (await exists(src)) await cp(src, join(projectDir, '.opencode', d), { recursive: true, force: false })
+    }
+    const rcNow = await readAncletorc(projectDir)
+    const agent = (rcNow?.agent && SUPPORTED_AGENTS.includes(rcNow.agent)) ? rcNow.agent : DEFAULT_AGENT
+    const importProfile = validProfile(rcNow?.profile) || DEFAULT_PROFILE
+    await installAgentAssets(projectDir, agent)
+    if (importProfile === 'test') await installProfileOverlay(projectDir, agent)
+    if (manifest.tier && TIERS[manifest.tier]) {
+      await applyTier(join(projectDir, '.opencode', 'agents'), manifest.tier, tierModels(manifest.tier, TIERS, manifest.gratisModel))
+    }
+    await scaffoldAspec(projectDir)
+    console.log(`ancleto: bundle aplicado (agente: ${agent}${manifest.tier ? `, tier: ${manifest.tier}` : ''})`)
+  }
+  const withEngram = manifest
+    ? manifest.flags?.engram === true
+    : Boolean((await readProjectMcp(projectDir)).cfg.mcp?.engram)
+  const fresh = buildDefaultMcp({ withEngram })
+  if (manifest?.flags?.azure) {
+    fresh['azure-devops'] = { type: 'local', enabled: true, command: ['npx', '-y', '@davstack/mcp-azure-devops'] }
+  }
+  const intended = manifest ? manifest.mcp.map((m) => m.name) : null
+  const { file, fixed } = await repairProjectMcp(projectDir, fresh, intended)
+  console.log(fixed.length
+    ? `ancleto: MCP regenerados en ${file}: ${fixed.join(', ')}`
+    : `ancleto: MCP sanos en ${file}, sin cambios`)
+  await doctorCommand()
+}
+
 async function doctorCommand() {
   let fatal = false
 
@@ -2382,6 +2842,12 @@ switch (cmd) {
     break
   case 'doctor':
     await doctorCommand()
+    break
+  case 'export':
+    await exportCmd(rest)
+    break
+  case 'import':
+    await importCmd(rest)
     break
   case 'mcp':
     await serveMemoryMcp()

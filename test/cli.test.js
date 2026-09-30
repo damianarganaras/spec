@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync, cpSync, copyFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync, cpSync, copyFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -865,6 +865,349 @@ describe('CLI install', () => {
       assert.deepEqual(rc.installedPaths.agents, ['.opencode/agents'])
       assert.deepEqual(rc.installedPaths.templates, ['AGENTS.md', 'PRODUCT.md'])
     })
+  })
+})
+
+
+describe('CLI test profile (test-automation-profile)', () => {
+  it('install --project --profile test instala overlay, testspec y persiste el perfil', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--profile', 'test', '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).profile, 'test')
+      assert.ok(existsSync(join(dir, 'testspec', 'specs')))
+      assert.ok(existsSync(join(dir, 'testspec', 'changes')))
+      const tester = readFileSync(join(dir, '.opencode', 'agents', 'tester.md'), 'utf8')
+      assert.match(tester, /healing/, 'tester ampliado con workflows')
+      assert.ok(existsSync(join(dir, '.opencode', 'commands', 'cleto-test-heal.md')))
+      assert.ok(existsSync(join(dir, '.opencode', 'commands', 'cleto-test-coverage.md')))
+      const rootAgents = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
+      assert.match(rootAgents, /Test automation profile/, 'bloque LOCKED del perfil en AGENTS.md')
+    })
+  })
+
+  it('perfil general no cambia nada (no-regresion)', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).profile, 'general')
+      assert.equal(existsSync(join(dir, 'testspec')), false, 'sin testspec/')
+      assert.equal(existsSync(join(dir, '.opencode', 'commands', 'cleto-test-heal.md')), false, 'sin comandos del perfil')
+      const tester = readFileSync(join(dir, '.opencode', 'agents', 'tester.md'), 'utf8')
+      assert.doesNotMatch(tester, /healing/, 'tester base intacto')
+    })
+  })
+
+  it('perfil invalido falla con exit 1', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--profile', 'noexiste', '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /perfil invalido/)
+    })
+  })
+
+  it('upgrade preserva el perfil guardado', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--profile', 'test', '--no-mcp', '--tier', 'minimo'], dir)
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).profile, 'test')
+      assert.ok(existsSync(join(dir, '.opencode', 'commands', 'cleto-test-heal.md')), 'overlay sobrevive upgrade')
+    })
+  })
+
+  it('init --profile test persiste el perfil y crea testspec', () => {
+    withDir((dir) => {
+      const r = run(['init', '--profile', 'test'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).profile, 'test')
+      assert.ok(existsSync(join(dir, 'testspec', 'changes')))
+    })
+  })
+
+  it('perfil y agente son ortogonales (assets del agente + overlay del perfil)', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--profile', 'test', '--agent', 'claude', '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      const rc = readRc(dir)
+      assert.equal(rc.profile, 'test')
+      assert.equal(rc.agent, 'claude')
+      assert.ok(existsSync(join(dir, '.claude', 'skills', 'ancleto-new', 'SKILL.md')), 'skills del agente')
+      assert.ok(existsSync(join(dir, '.claude', 'commands', 'cleto-test-heal.md')), 'overlay del perfil en el layout del host')
+    })
+  })
+})
+
+describe('CLI export/import (cross-machine-export-import)', () => {
+  function seedProject(dir) {
+    // Instala primero; los señuelos que NO deben exportarse se plantan despues
+    // (un memory.db falso rompería el install, que lo abre como SQLite).
+    const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+    assert.equal(r.status, 0)
+    // MCP local sano + señuelos que NO deben exportarse.
+    mkdirSync(join(dir, '.opencode'), { recursive: true })
+    writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({
+      mcp: {
+        'ancleto-memory': { type: 'local', enabled: true, command: [process.execPath, join(dir, 'fake-mcp.js')] },
+        custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
+      }
+    }))
+    writeFileSync(join(dir, 'service.json'), JSON.stringify({ token: 'SECRETO-NO-EXPORTAR' }))
+    mkdirSync(join(dir, '.ancleto'), { recursive: true })
+    writeFileSync(join(dir, '.ancleto', 'memory.db'), 'BINARIO-SIMULADO')
+  }
+
+  it('export genera bundle sin absolutos ni secretos y excluye sesion', () => {
+    withDir((dir) => {
+      seedProject(dir)
+      const r = run(['export'], dir)
+      assert.equal(r.status, 0)
+      const out = join(dir, 'ancleto-export')
+      const manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'))
+      assert.equal(manifest.format, 'ancleto-export/1')
+      assert.ok(manifest.mcp.some((m) => m.name === 'ancleto-memory' && m.type === 'local'), 'intencion MCP')
+      const serialized = JSON.stringify(manifest)
+      assert.equal(serialized.includes(dir), false, 'sin paths absolutos')
+      assert.equal(serialized.includes('SECRETO'), false, 'sin secretos')
+      assert.equal(serialized.includes('C:\\'), false, 'sin rutas Windows')
+      assert.ok(existsSync(join(out, '.ancletorc')), 'rc portable')
+      assert.ok(existsSync(join(out, 'aspec', 'config.yaml')), 'aspec portable')
+      assert.equal(existsSync(join(out, '.opencode', 'opencode.json')), false, 'opencode.json excluido')
+      assert.equal(existsSync(join(out, 'service.json')), false, 'service.json excluido')
+      assert.equal(existsSync(join(out, '.ancleto')), false, '.ancleto excluido')
+    })
+  })
+
+  it('export --tar genera tarball valido', () => {
+    withDir((dir) => {
+      seedProject(dir)
+      const tar = join(dir, 'bundle.tgz')
+      const r = run(['export', '--tar', tar], dir)
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(tar), 'tarball creado')
+      assert.ok(readFileSync(tar).length > 100, 'tarball con contenido')
+    })
+  })
+
+  it('import --repair regenera entradas rotas y deja sanas intactas (repro T480)', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.opencode'), { recursive: true })
+      writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({
+        mcp: {
+          'ancleto-memory': { type: 'local', enabled: true, command: ['C:\\Program Files\\nodejs\\node.exe', 'C:\\x\\index.js', 'mcp'] },
+          custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
+        }
+      }))
+      const r = run(['import', '--repair'], dir)
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8'))
+      assert.deepEqual(cfg.mcp.custom, { type: 'local', enabled: true, command: ['custom-mcp'] }, 'sana intacta')
+      assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'rota regenerada con node local')
+      assert.deepEqual(cfg.mcp['ancleto-memory'].command.slice(-1), ['mcp'], 'subcomando mcp preservado')
+    })
+  })
+
+  it('import de bundle aplica portables y regenera MCP (roundtrip)', () => {
+    withDir((dir) => {
+      const src = join(dir, 'origen')
+      mkdirSync(src, { recursive: true })
+      seedProject(src)
+      assert.equal(run(['export', '--tar', join(dir, 'b.tgz')], src).status, 0)
+      const dst = join(dir, 'destino')
+      mkdirSync(dst, { recursive: true })
+      mkdirSync(join(dst, '.opencode'), { recursive: true })
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({
+        mcp: { 'ancleto-memory': { type: 'local', enabled: true, command: ['C:\\viejo\\node.exe', 'x', 'mcp'] } }
+      }))
+      const r = run(['import', join(dir, 'b.tgz')], dst)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dst).profile, 'general', 'rc del bundle aplicada')
+      assert.ok(existsSync(join(dst, 'aspec', 'config.yaml')), 'aspec del bundle aplicado')
+      const cfg = JSON.parse(readFileSync(join(dst, '.opencode', 'opencode.json'), 'utf8'))
+      assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'MCP regenerado local')
+    })
+  })
+})
+
+describe('CLI import openspec externo (import-legacy-openspec)', () => {
+  function seedExternalOpenspec(dir, { agentsSignature = false } = {}) {
+    mkdirSync(join(dir, 'openspec', 'specs', 'pagos'), { recursive: true })
+    writeFileSync(join(dir, 'openspec', 'specs', 'pagos', 'spec.md'), '# Spec: pagos\n')
+    mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
+    writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# demo\n')
+    if (agentsSignature) {
+      writeFileSync(join(dir, 'AGENTS.md'), '# Contexto OpenSpec del proyecto\n')
+    }
+  }
+
+  it('init --yes importa specs+changes, conserva backup y escribe marcador', () => {
+    withDir((dir) => {
+      seedExternalOpenspec(dir)
+      const r = run(['init', '--yes', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dir, 'aspec', 'specs', 'pagos', 'spec.md'), 'utf8'), '# Spec: pagos\n', 'spec importada')
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n', 'change importado')
+      assert.equal(readFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n', 'openspec intacto')
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), 'marcador escrito')
+    })
+  })
+
+  it('sin --yes (no-TTY) no importa por default', () => {
+    withDir((dir) => {
+      seedExternalOpenspec(dir)
+      const r = run(['init', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(join(dir, 'aspec', 'specs', 'pagos', 'spec.md')), false, 'no importa sin confirmacion')
+      assert.equal(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), false, 'sin marcador')
+      assert.ok(existsSync(join(dir, 'openspec', 'specs', 'pagos', 'spec.md')), 'openspec intacto')
+    })
+  })
+
+  it('aspec/ con contenido real no se pisa aunque haya --yes', () => {
+    withDir((dir) => {
+      seedExternalOpenspec(dir)
+      mkdirSync(join(dir, 'aspec', 'changes', 'mio'), { recursive: true })
+      writeFileSync(join(dir, 'aspec', 'changes', 'mio', 'proposal.md'), '# mio\n')
+      const r = run(['init', '--yes', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(join(dir, 'aspec', 'specs', 'pagos', 'spec.md')), false, 'no copia contenido externo')
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'mio', 'proposal.md'), 'utf8'), '# mio\n', 'contenido real intacto')
+    })
+  })
+
+  it('openspec/ vacio es no-op silencioso (no-falso-positivo)', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'openspec'), { recursive: true })
+      const r = run(['init', '--yes', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), false, 'sin marcador')
+    })
+  })
+
+  it('AGENTS.md de OpenSpec no se pisa: se adopta si falta, se conserva el local si existe', () => {
+    withDir((dir) => {
+      seedExternalOpenspec(dir)
+      writeFileSync(join(dir, 'openspec', 'AGENTS.md'), '# Guia OpenSpec\n')
+      assert.equal(run(['init', '--yes', '--tier', 'minimo'], dir).status, 0)
+      assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /# Guia OpenSpec/, 'adoptado como base')
+    })
+    withDir((dir) => {
+      seedExternalOpenspec(dir)
+      writeFileSync(join(dir, 'openspec', 'AGENTS.md'), '# Guia OpenSpec\n')
+      writeFileSync(join(dir, 'AGENTS.md'), '# Guia local\n')
+      assert.equal(run(['init', '--yes', '--tier', 'minimo'], dir).status, 0)
+      assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /# Guia local/, 'local conservado')
+      assert.match(readFileSync(join(dir, 'openspec', 'AGENTS.md'), 'utf8'), /# Guia OpenSpec/, 'backup intacto')
+    })
+  })
+
+  it('install --project detecta e importa con --yes', () => {
+    withDir((dir) => {
+      seedExternalOpenspec(dir)
+      const r = run(['install', '--project', dir, '--yes', '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, 'aspec', 'specs', 'pagos', 'spec.md')), 'install importa')
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), 'marcador escrito')
+    })
+  })
+
+  it('upgrade sin .ancletorc migra en lugar de exigir init', () => {
+    withDir((dir) => {
+      seedExternalOpenspec(dir)
+      const r = run(['upgrade', '--yes'], dir)
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, 'aspec', 'specs', 'pagos', 'spec.md')), 'upgrade migra')
+      assert.match(r.stdout, /Corré 'ancleto init'/, 'indica el siguiente paso')
+    })
+  })
+
+  it('upgrade sin .ancletorc y sin openspec sigue exigiendo init', () => {
+    withDir((dir) => {
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /Ejecuta 'ancleto init' primero/)
+    })
+  })
+})
+
+describe('CLI copilot support (add-copilot-support)', () => {
+  function promptFiles(dir) {
+    return readdirSync(join(dir, '.github', 'prompts')).filter((n) => n.endsWith('.prompt.md'))
+  }
+
+  it('install --project --agent copilot genera prompts sin model: y persiste el agente', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--agent', 'copilot', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      const rc = readRc(dir)
+      assert.equal(rc.agent, 'copilot')
+      assert.ok(rc.installedPaths.agents.includes('.github/prompts'), 'agents en prompts')
+      assert.ok(rc.installedPaths.commands.includes('.github/prompts'), 'commands en prompts')
+      const files = promptFiles(dir)
+      assert.ok(files.includes('orchestrator.prompt.md'), 'prompt del orchestrator')
+      assert.ok(files.includes('coder.prompt.md'), 'prompt de coder')
+      assert.ok(files.includes('cleto-new.prompt.md'), 'comando como prompt')
+      const orch = readFileSync(join(dir, '.github', 'prompts', 'orchestrator.prompt.md'), 'utf8')
+      assert.match(orch, /^description: Orchestrates tasks/m, 'description preservada por el adapter')
+      assert.match(orch, /picker de Copilot/, 'nota de modelo en orchestrator')
+      assert.match(orch, /implement code directly/, 'instrucciones identicas al origen')
+      for (const f of files) {
+        const content = readFileSync(join(dir, '.github', 'prompts', f), 'utf8')
+        assert.doesNotMatch(content, /^model: /m, `${f} sin model: (el tier no toca prompts)`)
+      }
+    })
+  })
+
+  it('install --agent copilot crea copilot-mcp.json con merge no destructivo', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, 'presetup'), '')
+      mkdirSync(join(dir, '.github'), { recursive: true })
+      writeFileSync(join(dir, 'copilot-mcp.json'), JSON.stringify({ mcp: { custom: { type: 'local', command: ['x'] } } }))
+      const r = run(['install', '--project', dir, '--agent', 'copilot', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, 'copilot-mcp.json'), 'utf8'))
+      assert.deepEqual(cfg.mcp.custom, { type: 'local', command: ['x'] }, 'custom preservado')
+      assert.ok(cfg.mcp['ancleto-memory'], 'ancleto-memory agregado')
+      assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'ruta local del host')
+    })
+  })
+
+  it('upgrade --agent copilot regenera prompts sin truncar customs', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--agent', 'copilot', '--no-mcp', '--tier', 'minimo'], dir)
+      writeFileSync(join(dir, '.github', 'copilot-instructions.md'), '# Customs del equipo\n')
+      writeFileSync(join(dir, '.github', 'prompts', 'coder.prompt.md'), 'BORRADO-A-PROPOSITO')
+      const r = run(['upgrade', '--agent', 'copilot'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dir, '.github', 'copilot-instructions.md'), 'utf8'), '# Customs del equipo\n', 'custom intacto')
+      assert.match(readFileSync(join(dir, '.github', 'prompts', 'coder.prompt.md'), 'utf8'), /^description: /m, 'prompt regenerado con adapter')
+    })
+  })
+
+  it('init --agent copilot persiste el agente', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'copilot', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'copilot')
+    })
+  })
+
+  it('--profile test --agent copilot combina overlay del perfil en prompts', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--profile', 'test', '--agent', 'copilot', '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.github', 'prompts', 'cleto-test-heal.prompt.md')), 'comando del perfil como prompt')
+      assert.match(readFileSync(join(dir, '.github', 'prompts', 'tester.prompt.md'), 'utf8'), /healing/, 'tester ampliado en prompts')
+    })
+  })
+
+  it('cada agente del paquete trae description (adapter de Copilot la preserva)', () => {
+    const names = readdirSync(join(TEST_DIR, '..', 'agents')).filter((n) => n.endsWith('.md'))
+    assert.ok(names.length > 0, 'hay agentes en el paquete')
+    for (const name of names) {
+      const content = readFileSync(join(TEST_DIR, '..', 'agents', name), 'utf8')
+      assert.match(content, /^description: .+/m, `${name} sin description`)
+    }
   })
 })
 

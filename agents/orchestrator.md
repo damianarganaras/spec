@@ -234,6 +234,14 @@ Delegate directly to `@tester` when the request is limited to testing work such 
 
 Do not use this category if the request is likely to require product-code changes, behavior changes, or broader requirement clarification.
 
+### Test profile routing (only when `.ancletorc` declares `profile: test`)
+
+When the project uses the test automation profile, refine the classification above:
+
+- Change is test-only (new/fixed coverage, no product-code change) → run the profile workflow: planning (`cleto-test-proposal`), generation (`cleto-test-apply`), healing (`cleto-test-heal`), coverage (`cleto-test-coverage`); delegate to the amplified `@tester`.
+- Change is mixed (product code + tests) → follow the general SDD paths above, with the amplified `@tester` owning the testing stages.
+- Testing changes live under `testspec/changes/` (or `aspec/changes/` when the project reuses aspec).
+
 ### 3. `direct-implementation`
 
 Skip `@spec-writer` and delegate directly to implementation when the request is limited to:

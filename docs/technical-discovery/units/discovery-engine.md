@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix y el presupuesto por tier"
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js"]
 sourcesSha: 890886ffbbacbdaf0fd546cdd2c9aafb323fb339ce49658d7ecef3b177e7d4f4
-generatedAt: 2026-09-25T14:03:34Z
-pluginVersion: 0.6.37
+generatedAt: 2026-09-30T14:03:46Z
+pluginVersion: 0.7.1
 skillVersion: '2.3'
 ---
 
@@ -47,7 +47,7 @@ modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
 
 ## Flujo del estado del seed (`--check`)
 
-1. `presentDocs` verifica los 8 documentos esperados → `MISSING`/`PARTIAL`.
+1. `presentDocs` verifica los 8 documentos esperados (`EXPECTED_DOCS`) → `MISSING`/`PARTIAL`.
 2. `computeSources` + `hashSources` recorren los fuentes aplicando `discovery.exclude`,
    `DEFAULT_IGNORES` y el propio `outputDir`.
 3. Si hay estado previo, `computeImpact` compara por archivo y por área (primer nivel) y
@@ -61,6 +61,10 @@ modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
 
 ## Paths clave
 
-`src/core/discovery.js`, `src/core/repomix-tier.js`, `src/core/tier-models.js`,
-`src/cli/index.js` (`checkDiscovery`, `runRepomix`, `packDiscovery`),
-`test/discovery-topology.test.js`, `test/discovery-tier.test.js`, `test/tier-models.test.js`.
+| Path | Rol |
+|---|---|
+| `src/core/discovery.js` | Mapa topológico (`buildTopologyMap`, `writeDiscoveryMap`). |
+| `src/core/repomix-tier.js` | Args de Repomix y budget por tier. |
+| `src/core/tier-models.js` | Modelos por tier y resolución gratis. |
+| `src/cli/index.js` | `checkDiscovery`, `runRepomix`, `packDiscovery`. |
+| `test/discovery-topology.test.js`, `test/discovery-tier.test.js`, `test/tier-models.test.js` | Guardas de topología, tiers y modelos. |

@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-09-25T14:03:34Z
-pluginVersion: 0.6.37
+generatedAt: 2026-09-30T14:03:46Z
+pluginVersion: 0.7.1
 skillVersion: '2.3'
 ---
 
@@ -32,12 +32,23 @@ skillVersion: '2.3'
    de los bloques `<!-- LOCKED: name -->` y preservan el resto (EXTENSIBLE); si los tags
    faltan o están mal formados, avisa y **no toca** el archivo. Evidencia: `src/cli/index.js`,
    `README.md`, `BACKLOG.md` (G7).
-7. **Patrón "CLI materializa + agente lee".** `ancleto memory context` escribe
-   `.ancleto/working-context.md`; el orquestador lo lee como datos no confiables sin `bash`.
-   Evidencia: `BACKLOG.md`, `agents/orchestrator.md`, `src/cli/index.js`.
-8. **`@coder` con `bash` acotado (issue #13).** Allow base + deny de lo destructivo
-   (`az`, `git push/reset/checkout/rebase`, `rm -rf`, `npm publish`). Evidencia: `BACKLOG.md`,
-   `agents/coder.md`.
+7. **Instalación de skills por agente, dueño único.** `installAgentSkills` es el único punto
+   que resuelve `AGENT_SKILLS_DIR[agent]` (`.opencode/skills`, `.vscode/skills`,
+   `.antigravity/skills`, `.cursor/skills`, `.roo/skills`) y copia el catálogo. El manifiesto
+   registra ese directorio en `installedPaths.skills`. Evidencia: `src/cli/index.js` (líneas
+   735–761), `units/cli-install.md`.
+8. **Frontmatter de skills: copia literal (por ahora).** `installAgentSkills` no transforma el
+   frontmatter (`name`, `description`, `license`, `metadata`, ...): copia el archivo tal cual
+   para cualquier IDE. La adaptación por IDE es deuda declarada (**A1**, v0.7.0, sin
+   implementar). Evidencia: `src/cli/index.js`, `BACKLOG.md` (A1), `skills/*/SKILL.md`.
+9. **Migración legacy `openspec/` → `aspec/` no destructiva.** `migrateLegacyOpenspec` copia
+   recursiva con `force: false`, escribe el marcador `.migrated-from-openspec` y conserva
+   `openspec/` como backup; si `aspec/` ya tiene contenido real (`changes/` o `specs/` no
+   vacíos) avisa y no migra. La invocan `init`, `install --project` y `upgrade`. Evidencia:
+   `src/cli/index.js`, `aspec/changes/archive/2026-09-29-migrate-openspec-to-aspec/`.
+10. **Patrón "CLI materializa + agente lee".** `ancleto memory context` escribe
+    `.ancleto/working-context.md`; el orquestador lo lee como datos no confiables sin `bash`.
+    Evidencia: `BACKLOG.md`, `agents/orchestrator.md`, `src/core/memory/working-context.js`.
 
 ## Seed incremental (contrato del discovery)
 
@@ -49,7 +60,9 @@ skillVersion: '2.3'
   documentos. El mapeo vive en `seed-map.json` (lo mantiene la skill); sin ese archivo la
   regeneración es completa.
 - Al archivar un change, el seed puede quedar `STALE` (issue #17).
-Evidencia: `README.md`, `BACKLOG.md`, `src/cli/index.js`.
+- `EXPECTED_DOCS` del CLI = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`,
+  `integrations`, `decisions`, `unknowns`, `units/_map`).
+- Evidencia: `README.md`, `BACKLOG.md`, `src/cli/index.js`.
 
 ## Riesgos, deuda y acoplamiento
 
@@ -62,17 +75,19 @@ Evidencia: `README.md`, `BACKLOG.md`, `src/cli/index.js`.
   Evidencia: `BACKLOG.md` (relevamiento §7).
 - **`agents/`, `commands/`, `skills/`, `templates/` son la superficie de producto instalable.**
   Cambiarlos altera lo que reciben todos los proyectos usuarios; `installAgentSkills()` es el
-  punto único de copia y el frontmatter de skills puede requerir adaptación por IDE (A1 del
+  punto único de copia y el frontmatter de skills todavía no se adapta por IDE (A1 del
   backlog v0.7.0).
 - **`ancleto stats` acoplado a opencode**: lee la base de sesiones de opencode; no funciona con
-  otros IDEs. Evidencia: `README.md`, `src/cli/index.js`.
+  otros IDEs. Evidencia: `README.md`, `src/cli/index.js` (`opencodeDbPath`).
 - **MCP = costo fijo por request.** La lista de tools viaja en cada request
   (`ancleto-memory` ~500, caveman ~830, engram ~4.900 tokens). Engram quedó opcional
   (`--with-engram`) justamente por eso. Evidencia: `README.md`, `BACKLOG.md`.
+- **Branch protection honor-based.** `AGENTS.md`/`BACKLOG.md` declaran `main` protegida, pero
+  el remoto no aplica protection real (B3). Evidencia: `BACKLOG.md`.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, CI o Azure. Los tokens
   viven fuera del repo (env/secretos del IDE); nombrar la variable y omitir el valor.
-- **Deuda declarada v0.7.0**: export/import de memoria, garbage collection (`memory gc`),
-  adapters de frontmatter por IDE. Evidencia: `BACKLOG.md`.
+- **Deuda declarada v0.7.0**: export/import de memoria (M1), garbage collection `memory gc`
+  (M2) y adapters de frontmatter por IDE (A1). Evidencia: `BACKLOG.md`.
 
 ## Decisiones registradas en memoria del repo
 
@@ -80,4 +95,4 @@ Evidencia: `README.md`, `BACKLOG.md`, `src/cli/index.js`.
   `.opencode/`, `.ancletorc`, `.ancleto/`.
 - `fix-init-tier-huerfano-0.6.36` y `fix-init-tier-guardado-0.6.37`: `init` debe aplicar el tier
   guardado a los agentes locales (paridad con `install`), incluido re-init sin flags.
-Evidencia: `.ancleto/memory.db` vía `ancleto memory list`.
+- Evidencia: `.ancleto/memory.db` vía `ancleto memory list`.

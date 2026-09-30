@@ -49,7 +49,13 @@ describe('CLI init (G6 manifest)', () => {
       assert.ok(!Number.isNaN(Date.parse(rc.installedAt)))
       assert.deepEqual(rc.azure, { enabled: false })
       assert.deepEqual(rc.discovery, { outputDir: 'docs/technical-discovery', exclude: [] })
-      assert.deepEqual(rc.installedPaths, { templates: [], agents: [], commands: [], skills: [] })
+      // init materializa el layout del host (default opencode) y lo registra (D10/1.7).
+      assert.deepEqual(rc.installedPaths, {
+        templates: ['AGENTS.md', 'PRODUCT.md'],
+        agents: ['.opencode/agents'],
+        commands: ['.opencode/commands'],
+        skills: ['.opencode/skills']
+      })
     })
   })
 
@@ -111,6 +117,255 @@ describe('CLI agent (S1)', () => {
       const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
       assert.equal(r.status, 0)
       assert.equal(readRc(dir).agent, 'cursor')
+    })
+  })
+})
+
+describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () => {
+  const REPO = join(TEST_DIR, '..')
+  const SKILL_SRC = (n) => join(REPO, 'skills', n, 'SKILL.md')
+  const AGENT_SRC = (n) => join(REPO, 'agents', `${n}.md`)
+  const COMMAND_SRC = (n) => join(REPO, 'commands', `${n}.md`)
+
+  it('5.1 init --agent vscode rutea a .github con sufijos .agent.md/.prompt.md', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'vscode'], dir)
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.github', 'skills', 'triage-clarifier', 'SKILL.md')))
+      assert.ok(existsSync(join(dir, '.github', 'agents', 'orchestrator.agent.md')))
+      assert.ok(existsSync(join(dir, '.github', 'prompts', 'cleto-new.prompt.md')))
+      assert.equal(existsSync(join(dir, '.opencode', 'agents')), false, 'no escribe agents en otro base')
+      assert.equal(existsSync(join(dir, '.vscode')), false, 'no usa la ruta vieja .vscode/skills')
+      const rc = readRc(dir)
+      assert.deepEqual(rc.installedPaths.skills, ['.github/skills'])
+      assert.deepEqual(rc.installedPaths.agents, ['.github/agents'])
+      assert.deepEqual(rc.installedPaths.commands, ['.github/prompts'])
+    })
+  })
+
+  it('5.2 init --agent antigravity escribe solo skills y avisa por stderr sin fallar (D12)', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'antigravity'], dir)
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.agents', 'skills', 'triage-clarifier', 'SKILL.md')))
+      assert.equal(existsSync(join(dir, '.antigravity', 'skills')), false, 'no usa la ruta vieja')
+      assert.equal(existsSync(join(dir, '.agents', 'agents')), false)
+      assert.equal(existsSync(join(dir, '.agents', 'commands')), false)
+      assert.match(r.stderr, /skip agents: not supported by host 'antigravity'/)
+      assert.match(r.stderr, /skip commands: not supported by host 'antigravity'/)
+      const rc = readRc(dir)
+      assert.deepEqual(rc.installedPaths.skills, ['.agents/skills'])
+      assert.deepEqual(rc.installedPaths.agents, [])
+      assert.deepEqual(rc.installedPaths.commands, [])
+    })
+  })
+
+  it('5.3 opencode conserva .opencode/* y <n>.md (sin regresión)', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.opencode', 'agents', 'orchestrator.md')))
+      assert.ok(existsSync(join(dir, '.opencode', 'commands', 'cleto-new.md')))
+      assert.ok(existsSync(join(dir, '.opencode', 'skills', 'triage-clarifier', 'SKILL.md')))
+      const rc = readRc(dir)
+      assert.deepEqual(rc.installedPaths.agents, ['.opencode/agents'])
+      assert.deepEqual(rc.installedPaths.commands, ['.opencode/commands'])
+      assert.deepEqual(rc.installedPaths.skills, ['.opencode/skills'])
+    })
+  })
+
+  it('5.4 multi-agente acumula la unión de destinos y check valida ambos sin huérfanos', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir).status, 0)
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'vscode'], dir).status, 0)
+      const rc = readRc(dir)
+      assert.deepEqual(rc.installedPaths.agents, ['.opencode/agents', '.github/agents'])
+      assert.deepEqual(rc.installedPaths.commands, ['.opencode/commands', '.github/prompts'])
+      assert.deepEqual(rc.installedPaths.skills, ['.opencode/skills', '.github/skills'])
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /0 faltantes/)
+      assert.match(r.stdout, /0 huerfanos/)
+      assert.match(r.stdout, /✔ \.opencode\/agents/)
+      assert.match(r.stdout, /✔ \.github\/agents/)
+    })
+  })
+
+  it('5.5 adaptador Claude: agents sin claves opencode/model/tools y skills byte-idénticas', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir)
+      assert.equal(r.status, 0)
+
+      const skillSrc = readFileSync(SKILL_SRC('triage-clarifier'))
+      const skillOut = readFileSync(join(dir, '.claude', 'skills', 'triage-clarifier', 'SKILL.md'))
+      assert.ok(skillOut.equals(skillSrc), 'SKILL.md byte-idéntica')
+
+      const coderSrc = readFileSync(AGENT_SRC('coder'), 'utf8')
+      assert.match(coderSrc, /^mode: /m)
+      assert.match(coderSrc, /^model: opencode-go\//m)
+      assert.match(coderSrc, /^tools:/m)
+
+      const coderOut = readFileSync(join(dir, '.claude', 'agents', 'coder.md'), 'utf8')
+      assert.doesNotMatch(coderOut, /^mode:/m)
+      assert.doesNotMatch(coderOut, /^color:/m)
+      assert.doesNotMatch(coderOut, /^temperature:/m)
+      assert.doesNotMatch(coderOut, /^permission:/m)
+      assert.doesNotMatch(coderOut, /^tools:/m)
+      assert.doesNotMatch(coderOut, /opencode-go/)
+      assert.match(coderOut, /^description: Implements approved changes/m)
+    })
+  })
+
+  it('5.12 adaptador vscode: .agent.md adaptado (no verbatim), sin claves opencode/model/tools', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'vscode'], dir)
+      assert.equal(r.status, 0)
+
+      const coderSrc = readFileSync(AGENT_SRC('coder'), 'utf8')
+      assert.match(coderSrc, /^mode: /m)
+      assert.match(coderSrc, /^model: opencode-go\//m)
+      assert.match(coderSrc, /^tools:/m)
+
+      const coderOut = readFileSync(join(dir, '.github', 'agents', 'coder.agent.md'), 'utf8')
+      assert.doesNotMatch(coderOut, /^mode:/m)
+      assert.doesNotMatch(coderOut, /^color:/m)
+      assert.doesNotMatch(coderOut, /^temperature:/m)
+      assert.doesNotMatch(coderOut, /^permission:/m)
+      assert.doesNotMatch(coderOut, /^tools:/m)
+      assert.doesNotMatch(coderOut, /opencode-go/)
+      assert.match(coderOut, /^description: Implements approved changes/m)
+    })
+  })
+
+  it('5.12 los commands de vscode se copian verbatim (sólo description, sin adaptación)', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'vscode'], dir)
+      assert.equal(r.status, 0)
+      const out = readFileSync(join(dir, '.github', 'prompts', 'cleto-new.prompt.md'))
+      assert.ok(out.equals(readFileSync(COMMAND_SRC('cleto-new'))), 'command vscode byte-idéntico')
+    })
+  })
+
+  it('5.5 hosts sin adaptación preservan verbatim (skills op/cursor/roo/antigravity; opencode agent no adaptado)', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir).status, 0)
+      assert.ok(
+        readFileSync(join(dir, '.opencode', 'skills', 'triage-clarifier', 'SKILL.md')).equals(readFileSync(SKILL_SRC('triage-clarifier'))),
+        'skill opencode byte-idéntica'
+      )
+      // opencode no está en el set de adapters: conserva las claves de opencode
+      // (el tier puede reescribir `model`, por eso no se compara byte a byte).
+      const opencodeAgent = readFileSync(join(dir, '.opencode', 'agents', 'coder.md'), 'utf8')
+      assert.match(opencodeAgent, /^mode:/m, 'agent opencode no adaptado')
+      assert.match(opencodeAgent, /^tools:/m)
+
+      for (const [agent, base] of [
+        ['cursor', '.cursor'],
+        ['roo', '.roo'],
+        ['antigravity', '.agents']
+      ]) {
+        const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', agent], dir)
+        assert.equal(r.status, 0)
+        assert.ok(
+          readFileSync(join(dir, base, 'skills', 'triage-clarifier', 'SKILL.md')).equals(readFileSync(SKILL_SRC('triage-clarifier'))),
+          `skill de ${agent} byte-idéntica`
+        )
+      }
+    })
+  })
+
+  it('5.6 init --agent claude exit 0, persiste agent y escribe bajo .claude/*', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'claude'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'claude')
+      assert.ok(existsSync(join(dir, '.claude', 'skills', 'triage-clarifier', 'SKILL.md')))
+      assert.ok(existsSync(join(dir, '.claude', 'agents', 'orchestrator.md')))
+      assert.ok(existsSync(join(dir, '.claude', 'commands', 'cleto-new.md')))
+      const rc = readRc(dir)
+      assert.deepEqual(rc.installedPaths.skills, ['.claude/skills'])
+      assert.deepEqual(rc.installedPaths.agents, ['.claude/agents'])
+      assert.deepEqual(rc.installedPaths.commands, ['.claude/commands'])
+    })
+  })
+
+  it('5.6 claude se preserva en un install posterior sin --agent', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'claude'], dir)
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'claude')
+    })
+  })
+
+  it('5.7 --agent claude no crea archivos MCP de host', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(join(dir, '.mcp.json')), false)
+      assert.equal(existsSync(join(dir, 'mcp_config.json')), false)
+      assert.equal(existsSync(join(dir, '.vscode', 'mcp.json')), false)
+    })
+  })
+
+  it('5.7 un .mcp.json preexistente se conserva intacto', () => {
+    withDir((dir) => {
+      const prev = JSON.stringify({ mcpServers: { custom: { command: 'x' } } }, null, 2) + '\n'
+      writeFileSync(join(dir, '.mcp.json'), prev)
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dir, '.mcp.json'), 'utf8'), prev)
+    })
+  })
+
+  it('5.9 instalar --agent claude tras opencode deja .opencode/* intacto', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const before = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8'), before)
+      assert.ok(existsSync(join(dir, '.claude', 'agents', 'orchestrator.md')))
+      assert.deepEqual(readRc(dir).installedPaths.agents, ['.opencode/agents', '.claude/agents'])
+    })
+  })
+
+  it('5.11 cursor rutea a .cursor/skills y roo a .roo/skills (roo: evidencia 3rd-party)', () => {
+    withDir((dir) => {
+      const c = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'cursor'], dir)
+      assert.equal(c.status, 0)
+      assert.ok(existsSync(join(dir, '.cursor', 'skills', 'triage-clarifier', 'SKILL.md')))
+      assert.equal(existsSync(join(dir, '.cursor', 'agents')), false)
+      const rr = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'roo'], dir)
+      assert.equal(rr.status, 0)
+      assert.ok(existsSync(join(dir, '.roo', 'skills', 'triage-clarifier', 'SKILL.md')))
+      assert.equal(existsSync(join(dir, '.roo', 'agents')), false)
+      assert.deepEqual(readRc(dir).installedPaths.skills, ['.cursor/skills', '.roo/skills'])
+    })
+  })
+})
+
+describe('CLI documentación multi-host (R2/R3)', () => {
+  const README = readFileSync(join(TEST_DIR, '..', 'README.md'), 'utf8')
+
+  it('5.10 README documenta .agents/skills como punto de lectura compartido', () => {
+    assert.match(README, /\.agents\/skills/)
+    // El README envuelve la línea; se tolera el salto entre "lectura" y "compartido".
+    assert.match(README, /punto de lectura\s+compartido/)
+  })
+
+  it('5.10 README documenta la semántica de --agent (layout nativo + pipeline de adaptación)', () => {
+    assert.match(README, /layout nativo a materializar/)
+    assert.match(README, /pipeline de adaptación de frontmatter/)
+  })
+
+  it('1.10 --help lista claude y explica que --agent no arbitra el descubrimiento', () => {
+    withDir((dir) => {
+      const r = run(['--help'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /claude/)
+      assert.match(r.stdout, /layout nativo a materializar/)
+      assert.match(r.stdout, /NO arbitra/)
     })
   })
 })
@@ -262,8 +517,15 @@ describe('CLI check (G3)', () => {
   it('avisa tier huerfano sin fallar cuando no hay agentes locales', () => {
     withDir((dir) => {
       run(['init', '--tier', 'gratis'], dir)
-      // escenario de riesgo: el tier quedo pero los agentes locales ya no estan
+      // escenario de riesgo: el tier quedo pero los agentes locales ya no estan.
+      // Se limpia tambien el manifiesto para aislar el aviso de tier huerfano: con
+      // el manifiesto veraz (D10), borrar .opencode/agents seria un faltante, no un
+      // tier huerfano.
       rmSync(join(dir, '.opencode', 'agents'), { recursive: true, force: true })
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.installedPaths.agents = []
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
       const r = run(['check'], dir)
       assert.equal(r.status, 0)
       assert.match(r.stdout, /⚠ tier "gratis" sin agentes locales/)

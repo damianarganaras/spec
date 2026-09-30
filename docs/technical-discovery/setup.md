@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers y validaciones"
-generatedAt: 2026-09-25T14:03:34Z
-pluginVersion: 0.6.37
+generatedAt: 2026-09-30T14:03:46Z
+pluginVersion: 0.7.1
 skillVersion: '2.3'
 ---
 
@@ -22,9 +22,9 @@ skillVersion: '2.3'
 ```bash
 npm install -g @ancleto/spec      # instalación global
 ancleto init [--agent opencode] [--tier normal|minimo|gratis] [--lang es|en|pt|auto] [--exclude <globs>] [--with-azure]
-ancleto install [--project <dir>] [--no-mcp] [--with-engram] [--tier ...] [--agent ...]
+ancleto install [--project <dir>] [--global] [--no-mcp] [--with-engram] [--tier ...] [--agent ...]
 ancleto update                    # re-instala la última versión sobre lo existente
-ancleto upgrade                   # re-aplica templates/skills respetando personalizaciones
+ancleto upgrade [--agent <nombre>]  # re-aplica templates (LOCKED) y skills respetando personalizaciones
 ancleto discovery --check         # estado del seed en JSON (READY/STALE/PARTIAL/MISSING) + config
 ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
 ancleto mcp                       # servidor MCP stdio de memoria propia
@@ -35,18 +35,24 @@ ancleto projects list|scan <raiz>|prune|info|update [--all] [--json]
 ancleto check | doctor
 ```
 
-Evidencia: `src/cli/index.js`, `README.md`.
+Evidencia: `src/cli/index.js`, `README.md`. `install` sin `--project`/`--global` opera sobre
+el proyecto actual si hay `.ancletorc`; `--global` fuerza el alcance global.
 
 ## Configuración persistida
 
-- **`.ancletorc`** (raíz): manifiesto de instalación (`version`, `installedAt`,
-  `installedPaths`) + `discovery` (`outputDir`, `exclude`), `agent`, `language`, `azure.enabled`,
-  `gratisModel`. Este repo: `outputDir: "docs/technical-discovery"`, `language: "es"`,
+- **`.ancletorc`** (raíz): manifiesto de instalación (`schemaVersion`, `version`,
+  `installedAt`, `installedPaths`) + `discovery` (`outputDir`, `exclude`), `agent`, `language`,
+  `azure.enabled`, `gratisModel`. `installedPaths.skills` guarda el **directorio de skills del
+  agente** elegido. Este repo: `outputDir: "docs/technical-discovery"`, `language: "es"`,
   `azure.enabled: false`, `exclude` de tests/imágenes/`docs`/lockfiles. **No editar a mano
   durante el seed**; se consume resuelto desde `ancleto discovery --check`.
 - **`.opencode/.ancleto-tier`**: tier del proyecto (`minimo` en este repo). El tier decide
   modelos de los agents y la agresividad del pack (`test/**`, `docs/**`, `**/*.md`,
-  `--compress`). Evidencia: `src/core/repomix-tier.js`, `.opencode/.ancleto-tier`.
+  `--compress`). Evidencia: `src/core/repomix-tier.js`.
+- **Directorio de skills por agente**: `AGENT_SKILLS_DIR` mapea cada IDE a su carpeta
+  (`.opencode/skills`, `.vscode/skills`, `.antigravity/skills`, `.cursor/skills`,
+  `.roo/skills`). El frontmatter de las skills se copia tal cual hoy. Detalle:
+  `units/cli-install.md`.
 - **`.opencode/opencode.json`**: MCP configurados (ver `integrations.md`).
 - **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`); ignorado por git.
 
@@ -67,7 +73,7 @@ Solo nombres; **valores omitidos** (ver riesgo de secretos en `decisions.md`):
 - `ANCLETO_PROJECTS_FILE` — ruta alternativa del registro global de proyectos.
 - `ANCLETO_MUSE_SPARK` — `1`/`0` fuerza/niega Muse Spark en tier gratis.
 - `NO_COLOR` — desactiva color en la salida del CLI.
-- `XDG_CONFIG_HOME` — base del registro global (`~/.config/ancleto/`).
+- `XDG_CONFIG_HOME` — base del registro global (`~/.config/ancleto/`, `~/.config/opencode/`).
 - `NPM_TOKEN` — secreto del workflow de publish (GitHub Actions).
 - Azure DevOps (opcional): `AZURE_DEVOPS_ORG_URL`, `AZURE_DEVOPS_PAT`.
 
@@ -75,19 +81,24 @@ Evidencia: `README.md`, `src/cli/index.js`, `.github/workflows/publish.yml`.
 
 ## Tests y validaciones
 
-- Suite: `node --test test/*.test.js` (7 archivos; ~158 tests según `BACKLOG.md`).
+- Suite: `node --test test/*.test.js` (8 archivos: `cli`, `content-guards`, `discovery-tier`,
+  `discovery-topology`, `mcp`, `memory-engine`, `tier-models`, `working-context`).
+  `BACKLOG.md` declara 162 tests en verde al cierre de v0.6.38 (sin desglosar
+  `working-context.test.js`, agregado después).
 - Validaciones obligatorias del repo (definidas en `AGENTS.md`): `npm run typecheck` o
   `npx tsc --noEmit`, `npm run lint`, `npm test`. **Observación**: este repo es JavaScript
   puro y `package.json` **no define** esos scripts; la regla es genérica del template
   `AGENTS.md`, no de este paquete. Evidencia: `package.json`, `AGENTS.md`.
 - CI: `.github/workflows/publish.yml` corre `npm ci` + `node --test test/*.test.js` y publica
-  a npm al pushear un tag `v*`, con canary no bloqueante y creación del Release.
+  a npm al pushear un tag `v*` (o `workflow_dispatch`), con canary no bloqueante y creación
+  del Release. Omite `npm publish` si la versión ya existe.
 
 ## Convenciones de trabajo
 
-- Conventional Commits (`feat(scope):`, `fix(scope):`, ...); no commitear a `main`/`master`.
+- Conventional Commits (`feat(scope):`, `fix(scope):`, ...); no commitear a `main`/`master`
+  (protección honor-based, ver `BACKLOG.md` B3). Evidencia: `AGENTS.md`.
 - Fuente de verdad: rama `development`; cada commit de feature lleva su version bump antes de
   pushear. Evidencia: `AGENTS.md`, `BACKLOG.md`.
 - Idioma de artifacts: español (`language: "es"`); keywords y nombres de archivo siempre en
   inglés literal (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`). Evidencia:
-  `.ancletorc`, `AGENTS.md`.
+  `AGENTS.md`.

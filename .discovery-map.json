@@ -1,21 +1,22 @@
 {
-  "last_updated": "2026-09-25T14:03:25.066Z",
-  "total_files": 488,
+  "last_updated": "2026-09-30T14:02:03.910Z",
+  "total_files": 528,
   "tree_summary": {
     ".github": 1,
     ".opencode": 59,
     "agents": 10,
-    "aspec": 1,
+    "aspec": 25,
     "commands": 12,
-    "docs": 4,
+    "docs": 17,
     "documentation": 340,
     "skills": 32,
-    "src": 10,
+    "src": 11,
     "templates": 2,
-    "test": 7
+    "test": 8
   },
   "root_files": [
     ".ancletorc",
+    ".discovery-map.json",
     ".gitattributes",
     ".gitignore",
     "AGENTS.md",

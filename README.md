@@ -23,6 +23,7 @@
 - [Características principales](#características-principales)
 - [Requisitos](#requisitos)
 - [Instalación](#instalación)
+- [Hosts soportados y layouts por agente](#hosts-soportados-y-layouts-por-agente)
 - [Guía de .gitignore](#guía-de-gitignore)
 - [Configuración y tiers de costo](#configuración-y-tiers-de-costo)
 - [Uso rápido](#uso-rápido)
@@ -39,7 +40,7 @@
 
 **Ancleto** (alias de CLI: `aspec`) es un orquestador ligero para desarrollo de software asistido por IA bajo el paradigma **SDD (Spec-Driven Development)**.
 
-Vive dentro de tu entorno de desarrollo (OpenCode, Cursor, VS Code, Roo, etc.) y automatiza tres cosas que normalmente hacés a mano:
+Vive dentro de tu entorno de desarrollo (OpenCode, Claude, Cursor, VS Code, Roo, etc.) y automatiza tres cosas que normalmente hacés a mano:
 
 - **Especificar** — escritura guiada de especificaciones y planes de implementación.
 - **Descubrir** — relevamiento topológico del repositorio y empaquetado de contexto.
@@ -122,6 +123,39 @@ Cómo bajarlo:
 - Podés deshabilitar cualquier servidor en tu `opencode.json`: `"mcp": { "engram": { "enabled": false } }`.
 
 Para medir el consumo **real** por sesión (no estimado): `ancleto stats` lee la base de sesiones de opencode y reporta tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Con `--session <id>` desglosa por agente y con `--since YYYY-MM-DD` permite comparar antes/después de una optimización. Solo funciona con opencode.
+
+---
+
+## Hosts soportados y layouts por agente
+
+`--agent <nombre>` selecciona **el layout nativo a materializar** (el directorio y la convención de
+nombre de cada asset) y el **pipeline de adaptación de frontmatter** de ese host. No arbitra qué
+descubre cada host: si dos hosts leen el mismo directorio, el descubrimiento compartido es un efecto
+del host (el CLI no deduplica ni elige un "ganador").
+
+| Host (`--agent`) | skills | agents | commands |
+|---|---|---|---|
+| `opencode` (default) | `.opencode/skills/<n>/SKILL.md` | `.opencode/agents/<n>.md` | `.opencode/commands/<n>.md` |
+| `claude` | `.claude/skills/<n>/SKILL.md` | `.claude/agents/<n>.md` (adaptado) | `.claude/commands/<n>.md` |
+| `vscode` (VS Code / Copilot) | `.github/skills/<n>/SKILL.md` | `.github/agents/<n>.agent.md` | `.github/prompts/<n>.prompt.md` |
+| `antigravity` | `.agents/skills/<n>/SKILL.md` | — (no soportado) | — (no soportado) |
+| `cursor` | `.cursor/skills/<n>/SKILL.md` | — | — |
+| `roo` | `.roo/skills/<n>/SKILL.md` | — | — |
+
+Cada host recibe sus skills en **su** directorio nativo. **`.agents/skills` es un punto de lectura
+compartido** —lo leen opencode, Cursor, VS Code y Antigravity—, no un destino universal: Claude lee
+`.claude/skills` y Roo, `.roo/skills`. Por eso el CLI no escribe todas las skills en `.agents/skills`.
+
+Los assets que un host no soporta (por ejemplo `agents`/`commands` de `antigravity`, `cursor` y `roo`)
+**no se escriben** y el instalador avisa por `stderr`
+(`skip agents: not supported by host 'antigravity'`) sin abortar. La instalación es **aditiva y no
+destructiva**: instalar con otro agente escribe en su base y preserva los layouts previos, y el
+manifiesto `.ancletorc.installedPaths` acumula la unión de los destinos realmente escritos.
+
+La **configuración MCP específica de host** está fuera de alcance: el CLI no genera ni transforma
+`.mcp.json`, `mcp_config.json` ni `.vscode/mcp.json`, y no pisa config MCP preexistente. `claude` se
+soporta con adaptación de frontmatter obligatoria para `agents` (se omiten `model`/`tools` sin
+equivalencia verificada y las claves `mode`/`color`/`temperature`/`permission`), sin MCP propio.
 
 ---
 

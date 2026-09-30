@@ -106,6 +106,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 ## En curso / próximo
 
 - [ ] **Validar comportamiento de Antigravity IDE vs Antigravity CLI** — verificar si se comportan igual; el tema "Linux + Antigravity" va junto con este item.
+- [ ] **Change `add-multi-agent-cli-support` (en implementación)** — modelo de instalación portable multi-host: ruteo nativo por host, adapters de frontmatter, alta de `claude`. Consistency check `design → specs → tasks`: **`READY FOR IMPLEMENTATION`**.
 
 ## v0.7.0 - Multi-Agent Adaptability & Memory Ops (Planeado)
 - [ ] **M1 (Export/Import):** Commands `ancleto memory export` e `import` para respaldar/compartir reglas y decisiones activas en JSON/SQL sanitizado.
@@ -117,6 +118,23 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - [ ] **B2 — `ancleto doctor` advierte gates declarados-ausentes:** el contrato (`AGENTS.md`) exige `npm run typecheck`, `npm run lint` y `npm test` como validaciones obligatorias, pero un proyecto puede no tener scripts ni configs (ESLint/Prettier/tsconfig) y entonces esos gates no existen — el tester/coder deben reportarlos como "gate ausente" en cada change. Propuesta: que `ancleto doctor` (o `check`) detecte y advierta cuando el contrato declara gates que el tooling real del proyecto no provee, o que el template `AGENTS.md` se genere condicionado al tooling detectado.
 - [ ] **B3 — Branch protection real en `main`, o aclarar que es honor-based:** `BACKLOG.md` y `AGENTS.md` declaran `main` como protegida y prohíben commits directos a `main`/`master`, pero el remoto no aplica branch protection real (un `git push origin main` y un merge fast-forward `development→main` pasan sin PR). Propuesta: habilitar branch protection real en GitHub (requiere PR + review) o documentar explícitamente que el guardrail es honor-based y no enforceado.
 - [ ] **B4 — Modo "scope extension" en `@spec-writer`:** cuando un change necesita ampliar su alcance a mitad de camino (p. ej. la opción B de `fix-memory-engine-test-isolation`), hoy hay que re-delegar al spec-writer completo para re-sincronizar todos los artifacts. Propuesta: un modo de extensión de alcance que toque solo las secciones afectadas (proposal/spec/design/tasks), conservando el resto del trabajo ya aprobado.
+- [ ] **B5 — Autoría de memoria no verificable:** el engine de memoria (`node:sqlite`) no registra el emisor; `source` vale `mcp:ancleto-memory` en todos los nodos, así que el ownership de escritura es convención del workflow, no una propiedad enforceable. Candidato a change propio de endurecimiento (p. ej. campo de actor/procedencia). Aparte: superseder el nodo stale `multi-agent-cli-support-design` vía `@memory-keeper` cuando el cambio multi-agente quede cerrado.
+
+## Observaciones diferidas — change `add-multi-agent-cli-support`
+
+Revisar después de la implementación (no bloquean el change).
+
+- [ ] **Cobertura de tests (menor):** assert explícito de ausencia de `agents`/`commands` para `cursor`/`roo` (hoy el mecanismo es host-agnóstico y solo `antigravity` se ejercita); assert explícito de `installedPaths` en el test del recorte `claude` (hoy validado genéricamente).
+- [ ] **Enunciado D10:** unificar la lista de lectores de `.agents/skills` incluyendo Antigravity (D2/proposal lo incluyen; D10 lo omite — enunciado no exhaustivo).
+- [ ] **`mergeMcp` multi-host:** hoy escribe en `opencode.json` aunque el host no sea opencode → evaluar soporte MCP por host (OOS en este change).
+- [ ] **Frontmatter fino de custom agents de VS Code:** verificar el esquema real antes de prometer campos no portables (política actual: omitir/heredar).
+- [ ] **`.roo/skills`:** apoyado solo en evidencia 3rd-party → verificar contra doc oficial de Roo.
+- [ ] **`allowed-tools`:** retractado como guarda; si algún skill lo trae, queda cubierto por la política genérica de D5 (revisar si aparece demanda).
+- [ ] **Tier/registro acoplados a `.opencode` (deuda, no bloqueante):** `registerProject`, `projectStatus` y `checkTierOrphan` (`src/cli/index.js`) leen rutas fijas bajo `.opencode/` (`agents`, `.ancleto-tier`), pero la instalación ahora rutea agents a `.claude|.github|…`. En un proyecto solo-cursor/roo con `--tier`, `ancleto check` emite un falso `⚠ tier "…" sin agentes locales` y el proyecto sale como `global` en `projects list`. Desacoplar del base opencode.
+- [ ] **Spec `agent-install-routing` (texto inexacto):** el scenario de `check` dice "sin requerir cambios de lógica", pero `installedExtFor` fue necesario para que `check` derive `.agent.md`/`.prompt.md`. Ajustar el texto del spec.
+- [ ] **MCP por defecto en host no-opencode (confirmar/cobertura):** `install --project --agent claude` **sin** `--no-mcp` sigue mergeando MCP en `.opencode/opencode.json` (D6 lo declara OOS/diferido). Los tests sólo cubren `--no-mcp` → confirmar aceptabilidad o agregar cobertura del camino por defecto.
+- [ ] **CRLF en frontmatter adaptado:** `serializeFrontmatter` normaliza `\r\n`→`\n` dentro del frontmatter adaptado (Claude); en checkouts CRLF cambia finales de línea respecto del origen. Fidelidad menor, sólo en archivos adaptados.
+- [ ] **DECISIÓN PENDIENTE — adapter de vscode vs D5:** los agents de vscode se copian **verbatim** (sin adapter), conservando `mode/color/temperature/permission` y `model: opencode-go/*` en `.github/agents/<n>.agent.md`; esto contradice el requirement genérico "aplicable a cualquier host" de `skill-frontmatter-adapters` (D5) y, a la vez, el requirement "Preservación por defecto". Decidir: (a) adaptar vscode como claude; (b) acotar el requirement genérico a hosts con adapter; o (c) aceptar verbatim con racional documentado.
 
 ## Futuro (sin fecha) - Contexto colaborativo para equipos (Idea)
 

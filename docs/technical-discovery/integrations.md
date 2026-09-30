@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-09-25T14:03:34Z
-pluginVersion: 0.6.37
+generatedAt: 2026-09-30T14:03:46Z
+pluginVersion: 0.7.1
 skillVersion: '2.3'
 ---
 
@@ -20,8 +20,26 @@ skillVersion: '2.3'
 | Sistema | Uso | Evidencia |
 |---|---|---|
 | **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`). | `.github/workflows/publish.yml`, `package.json` |
-| **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
+| **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
+
+## IDEs / agentes consumidores (contrato de instalación)
+
+`agents/`, `commands/`, `skills/` y `templates/` son consumidos por el IDE elegido. El CLI
+resuelve el destino con `SUPPORTED_AGENTS` y `AGENT_SKILLS_DIR`, y lo registra en
+`installedPaths` de `.ancletorc`:
+
+| Agente | Directorio de skills (`AGENT_SKILLS_DIR`) | Evidencia |
+|---|---|---|
+| `opencode` (default) | `.opencode/skills` | `src/cli/index.js` |
+| `vscode` | `.vscode/skills` | `src/cli/index.js` |
+| `antigravity` | `.antigravity/skills` | `src/cli/index.js` |
+| `cursor` | `.cursor/skills` | `src/cli/index.js` |
+| `roo` | `.roo/skills` | `src/cli/index.js` |
+
+Los agents/commands se copian siempre bajo `.opencode/` (proyecto) o al directorio global de
+config del IDE. El frontmatter de las skills se copia sin transformar; la adaptación por IDE
+(A1) está planeada, no implementada. Detalle: `units/cli-install.md`.
 
 ## MCP (Model Context Protocol)
 
@@ -47,13 +65,11 @@ Evidencia: `.opencode/opencode.json`, `README.md`, `BACKLOG.md`.
 - Gate en `.ancletorc` → `azure.enabled: false` en este repo.
 - El comando `/cleto-pr` usa GitHub por defecto; con Azure habilitado cambia el flujo. Setup:
   `az extension add --name azure-devops` + `az login` (extensión, no dependencia del paquete).
-  Evidencia: `README.md`, `PRODUCT.md`, `.ancletorc`.
+  Evidencia: `README.md`, `PRODUCT.md`.
 
 ## Dependencias internas y de runtime
 
 - Módulos nativos: `node:sqlite` (motor de memoria), `node:test` (suite), `node:fs`,
   `node:crypto`, `node:child_process` (spawn de Repomix). Evidencia: pack `src/**`.
-- `agents/`, `commands/`, `skills/`, `templates/` son consumidos por IDEs (OpenCode, Cursor,
-  VS Code, Roo, Antigravity) mediante los paths de instalación del manifiesto.
 - `documentation/lnx-cli/` es material legado de otro CLI (`lnx`) usado como fuente de
   relevamiento; no es dependencia de runtime. Evidencia: `BACKLOG.md`, listado del directorio.

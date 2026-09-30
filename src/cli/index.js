@@ -35,7 +35,11 @@ Uso:
   ancleto install --tier <nivel>     normal | minimo | gratis (wizard interactivo en TTY)
   ancleto install --lang <codigo>    auto | es | en | pt (idioma de los artifacts; auto = idioma de la conversacion)
   ancleto install --exclude <globs>  Paths excluidos del discovery, coma-separados (ej: "**/*.png,docs")
-  ancleto install --agent <nombre>    opencode | vscode | antigravity | cursor | roo (wizard si no esta guardado)
+  ancleto install --agent <nombre>    opencode | claude | vscode | antigravity | cursor | roo (wizard si no esta guardado)
+                                   Elige el layout nativo a materializar (directorio + convencion de
+                                   nombre) y el adapter de frontmatter del host. NO arbitra el
+                                   descubrimiento entre hosts: si dos leen el mismo directorio, eso es
+                                   efecto del host (no se deduplica ni se elige "ganador").
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
                                    Parado en un proyecto con .ancletorc opera sobre ese proyecto;
                                    usa --global para forzar el alcance global
@@ -591,13 +595,13 @@ async function applyTier(agentsDir, tier, models = null) {
   }
 }
 
-const SUPPORTED_AGENTS = ['opencode', 'vscode', 'antigravity', 'cursor', 'roo']
+const SUPPORTED_AGENTS = ['opencode', 'claude', 'vscode', 'antigravity', 'cursor', 'roo']
 const DEFAULT_AGENT = 'opencode'
 
 function askAgent() {
   return new Promise((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout })
-    rl.question('Agente/IDE [opencode/vscode/antigravity/cursor/roo] (default: opencode): ', (a) => {
+    rl.question(`Agente/IDE [${SUPPORTED_AGENTS.join('/')}] (default: ${DEFAULT_AGENT}): `, (a) => {
       rl.close()
       const t = a.trim().toLowerCase()
       resolve(SUPPORTED_AGENTS.includes(t) ? t : DEFAULT_AGENT)
@@ -732,32 +736,145 @@ async function copyAssets(dest) {
   }
 }
 
-const AGENT_SKILLS_DIR = {
-  opencode: '.opencode/skills',
-  vscode: '.vscode/skills',
-  antigravity: '.antigravity/skills',
-  cursor: '.cursor/skills',
-  roo: '.roo/skills'
+// D1: destino nativo por host. Cada asset declara su directorio y su convencion
+// de nombre (ext); null = asset no soportado por ese host. Fuente unica de rutas.
+const MD_EXT = '.md'
+const AGENT_TARGETS = {
+  opencode: {
+    skills: { dir: '.opencode/skills' },
+    agents: { dir: '.opencode/agents', ext: MD_EXT },
+    commands: { dir: '.opencode/commands', ext: MD_EXT }
+  },
+  claude: {
+    skills: { dir: '.claude/skills' },
+    agents: { dir: '.claude/agents', ext: MD_EXT },
+    commands: { dir: '.claude/commands', ext: MD_EXT }
+  },
+  vscode: {
+    skills: { dir: '.github/skills' },
+    agents: { dir: '.github/agents', ext: '.agent.md' },
+    commands: { dir: '.github/prompts', ext: '.prompt.md' }
+  },
+  // Antigravity, Cursor y Roo: solo skills (D3/D7). .agents/skills es punto de
+  // lectura compartido (D2), no destino universal.
+  antigravity: { skills: { dir: '.agents/skills' }, agents: null, commands: null },
+  cursor: { skills: { dir: '.cursor/skills' }, agents: null, commands: null },
+  roo: { skills: { dir: '.roo/skills' }, agents: null, commands: null }
 }
 
 const ANCLETO_SKILLS = ['ancleto-new', 'ancleto-propose', 'ancleto-apply', 'ancleto-verify', 'ancleto-archive', 'ancleto-bulk-archive', 'ancleto-continue', 'ancleto-explore', 'ancleto-ff', 'ancleto-onboard', 'ancleto-workflow']
 
-async function installAgentSkills(projectDir, agent) {
-  const dir = AGENT_SKILLS_DIR[agent] || AGENT_SKILLS_DIR.opencode
-  const dest = join(projectDir, dir)
-  await mkdir(dest, { recursive: true })
-  for (const name of ANCLETO_SKILLS) {
-    const src = join(ROOT, 'skills', name)
-    if (!(await exists(src))) {
-      console.warn(`ancleto: skill no encontrada en el paquete: ${name}`)
+// Frontmatter: parser propio sin dependencias. Cada entrada conserva su clave y
+// sus lineas crudas (incluye block scalars y mapas anidados), preservando orden.
+function parseFrontmatter(content) {
+  const m = /^(---\r?\n)([\s\S]*?)(\r?\n---)(\r?\n?)([\s\S]*)$/.exec(content)
+  if (!m) return { hasFrontmatter: false, content }
+  const entries = []
+  for (const line of m[2].split(/\r?\n/)) {
+    if (/^[A-Za-z0-9_-]+:/.test(line)) {
+      entries.push({ key: line.slice(0, line.indexOf(':')), lines: [line] })
+    } else if (entries.length) {
+      entries[entries.length - 1].lines.push(line)
+    } else {
+      entries.push({ key: null, lines: [line] })
+    }
+  }
+  return { hasFrontmatter: true, open: m[1], entries, close: m[3], nl: m[4], body: m[5] }
+}
+
+function serializeFrontmatter(parsed) {
+  if (!parsed.hasFrontmatter) return parsed.content
+  const inner = parsed.entries.flatMap((e) => e.lines).join('\n')
+  return `${parsed.open}${inner}${parsed.close}${parsed.nl}${parsed.body}`
+}
+
+// D4/D5: hosts cuyo formato de agents difiere del origen requieren adaptacion
+// (hoy Claude y VS Code). El resto es identidad (preservacion verbatim). Nunca se
+// inventan equivalencias de model/tools.
+const AGENT_ADAPTER_HOSTS = new Set(['claude', 'vscode'])
+const AGENT_ADAPTER_DROP = new Set(['mode', 'color', 'temperature', 'permission', 'model', 'tools'])
+
+function adaptFrontmatter(content, host, assetKind) {
+  if (assetKind !== 'agents' || !AGENT_ADAPTER_HOSTS.has(host)) return content
+  const parsed = parseFrontmatter(content)
+  if (!parsed.hasFrontmatter) return content
+  parsed.entries = parsed.entries.filter((e) => !(e.key && AGENT_ADAPTER_DROP.has(e.key)))
+  return serializeFrontmatter(parsed)
+}
+
+// D12: asset no soportado -> no se escribe y se avisa a stderr (no bloqueante).
+function warnUnsupportedAsset(asset, agent) {
+  console.error(`skip ${asset}: not supported by host '${agent}'`)
+}
+
+async function copyDirTransformed(srcDir, destDir, host, assetKind) {
+  await mkdir(destDir, { recursive: true })
+  for (const e of await readdir(srcDir, { withFileTypes: true })) {
+    const src = join(srcDir, e.name)
+    const dest = join(destDir, e.name)
+    if (e.isDirectory()) {
+      await copyDirTransformed(src, dest, host, assetKind)
+    } else if (e.isFile() && e.name.endsWith(MD_EXT)) {
+      await writeFile(dest, adaptFrontmatter(await readFile(src, 'utf8'), host, assetKind))
+    } else if (e.isFile()) {
+      await cp(src, dest)
+    }
+  }
+}
+
+async function installAssetFiles(cat, projectDir, spec, host) {
+  const destDir = join(projectDir, spec.dir)
+  await mkdir(destDir, { recursive: true })
+  for (const e of await readdir(join(ROOT, cat), { withFileTypes: true })) {
+    if (!e.isFile() || !e.name.endsWith(MD_EXT)) continue
+    const base = e.name.slice(0, -MD_EXT.length)
+    const content = await readFile(join(ROOT, cat, e.name), 'utf8')
+    await writeFile(join(destDir, `${base}${spec.ext}`), adaptFrontmatter(content, host, cat))
+  }
+}
+
+// Dueno unico de la instalacion de assets por proyecto: materializa skills,
+// agents y commands en el destino nativo del host y devuelve las rutas escritas.
+async function installAgentAssets(projectDir, agent) {
+  const model = AGENT_TARGETS[agent] || AGENT_TARGETS[DEFAULT_AGENT]
+  const written = { agents: [], commands: [], skills: [] }
+
+  if (model.skills) {
+    await copyDirTransformed(join(ROOT, 'skills'), join(projectDir, model.skills.dir), agent, 'skills')
+    written.skills.push(model.skills.dir)
+  } else {
+    warnUnsupportedAsset('skills', agent)
+  }
+
+  for (const cat of ['agents', 'commands']) {
+    const spec = model[cat]
+    if (!spec) {
+      warnUnsupportedAsset(cat, agent)
       continue
     }
-    await cp(src, join(dest, name), { recursive: true })
+    await installAssetFiles(cat, projectDir, spec, agent)
+    written[cat].push(spec.dir)
   }
-  if (dir !== AGENT_SKILLS_DIR.opencode) {
-    await cp(join(ROOT, 'skills'), dest, { recursive: true })
+  return written
+}
+
+// D10: installedPaths es la union de destinos realmente escritos; un asset
+// omitido (null) no deja rastro. No se borran rutas previas (no destructivo).
+function unionInstalledPaths(existing, next) {
+  const out = {}
+  for (const k of ['templates', 'agents', 'commands', 'skills']) {
+    out[k] = [...new Set([...(existing?.[k] || []), ...(next?.[k] || [])])]
   }
-  return dir.replace(/\\/g, '/')
+  return out
+}
+
+// Convencion de nombre esperada en un directorio instalado (para `check`).
+function installedExtFor(cat, dirRel) {
+  for (const t of Object.values(AGENT_TARGETS)) {
+    const spec = t[cat]
+    if (spec && spec.dir === dirRel && spec.ext) return spec.ext
+  }
+  return null
 }
 
 const CHANGES_ROOT = 'aspec'
@@ -864,9 +981,9 @@ function findInsertAnchor(local, source, name) {
   return local.length
 }
 
+// Solo mergea los templates raiz (AGENTS.md/PRODUCT.md). Los assets por host
+// los materializa installAgentAssets (dueno unico).
 async function copyTemplates(projectDir) {
-  const dest = join(projectDir, '.opencode')
-  await copyAssets(dest)
   for (const t of TEMPLATES) {
     const target = join(projectDir, t)
     const source = await readFile(join(ROOT, 'templates', t), 'utf8')
@@ -965,18 +1082,16 @@ async function install(args) {
     await migrateLegacyOpenspec(projectDir)
     await scaffoldAspec(projectDir)
     await refreshWorkingContext(projectDir)
-    const agentSkillsDir = await installAgentSkills(projectDir, agent)
+    const written = await installAgentAssets(projectDir, agent)
     await writeManifest(projectDir, {
       agent,
       language,
       ...(excludeChoice !== null ? { discovery: { ...existingDiscovery, exclude: excludeChoice } } : {}),
       ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {}),
-      installedPaths: {
+      installedPaths: unionInstalledPaths(existingRc?.installedPaths, {
         templates: ['AGENTS.md', 'PRODUCT.md'],
-        agents: ['.opencode/agents'],
-        commands: ['.opencode/commands'],
-        skills: [agentSkillsDir]
-      }
+        ...written
+      })
     })
   } else {
     await copyAssets(target)
@@ -984,6 +1099,9 @@ async function install(args) {
 
   const models = tierModels(tier, TIERS, gratisModelChoice)
   await applyTier(join(target, 'agents'), tier, models)
+  // El estado de tier vive en el base de opencode; puede no existir si el host
+  // resuelto ubica sus assets en otro directorio (p. ej. cursor -> .cursor/).
+  await mkdir(target, { recursive: true })
   await writeFile(tierStatePath(target), tier + '\n')
 
   if (projectDir) await registerProject(projectDir, { agent, tier })
@@ -999,7 +1117,7 @@ async function install(args) {
 
   const res = await mergeMcp(target, mcpMap)
   const loc = projectDir
-    ? `${projectDir} (.opencode/ + templates en la raiz)`
+    ? `${projectDir} (layout ${agent} + templates en la raiz)`
     : `${target} (disponible en todos tus proyectos)`
   console.log(`ancleto: instalado en ${loc}`)
   console.log(`ancleto: tier de costo de agents: ${tier}`)
@@ -1020,20 +1138,19 @@ async function upgradeCmd(args) {
   await migrateLegacyOpenspec(projectDir)
   const agent = await resolveAgent(args, rc.agent)
   await copyTemplates(projectDir)
-  const agentSkillsDir = await installAgentSkills(projectDir, agent)
+  const written = await installAgentAssets(projectDir, agent)
   const wentContext = await refreshWorkingContext(projectDir)
   const manifest = await writeManifest(projectDir, {
     agent,
-    installedPaths: {
+    installedPaths: unionInstalledPaths(rc.installedPaths, {
       templates: ['AGENTS.md', 'PRODUCT.md'],
-      agents: ['.opencode/agents'],
-      commands: ['.opencode/commands'],
-      skills: [agentSkillsDir]
-    }
+      ...written
+    })
   })
+  const skillsDir = written.skills[0] || '.opencode/skills'
   console.log(`ancleto: upgrade completo (v${manifest.version}, agente: ${agent})`)
   console.log('  ✔ templates re-aplicados (bloques LOCKED actualizados, EXTENSIBLE intacto)')
-  console.log(`  ✔ skills actualizadas en ${agentSkillsDir} (${ANCLETO_SKILLS.length} skills)`)
+  console.log(`  ✔ skills actualizadas en ${skillsDir} (${ANCLETO_SKILLS.length} skills)`)
   console.log(wentContext ? '  ✔ working-context.md regenerado' : '  ✔ working-context.md sin reglas activas (vacio)')
   console.log('  ✔ manifiesto .ancletorc actualizado')
 }
@@ -1100,12 +1217,17 @@ async function initProject(args) {
     const persisted = isKnownGratisModel(existing?.gratisModel) ? existing.gratisModel : null
     gratisModelChoice = persisted || gratisModel()
   }
+  const written = await installAgentAssets(projectDir, agent)
   const manifest = await writeManifest(projectDir, {
     azure,
     discovery,
     agent,
     language,
-    ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {})
+    ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {}),
+    installedPaths: unionInstalledPaths(existing?.installedPaths, {
+      templates: ['AGENTS.md', 'PRODUCT.md'],
+      ...written
+    })
   })
   await copyTemplates(projectDir)
   if (tier) {
@@ -1591,7 +1713,10 @@ async function checkCommand() {
         missing++
         continue
       }
-      const expected = (await readdir(join(ROOT, cat))).sort()
+      // La convencion de nombre del host (p. ej. vscode: .agent.md/.prompt.md)
+      // se deriva del mismo modelo de destino; en skills no cambia el nombre.
+      const ext = installedExtFor(cat, dirRel)
+      const expected = (await readdir(join(ROOT, cat))).sort().map((f) => (ext ? f.replace(/\.md$/, ext) : f))
       const actual = (await readdir(destDir)).sort()
       const missingFiles = expected.filter((f) => !actual.includes(f))
       const orphanFiles = actual.filter((f) => !expected.includes(f))

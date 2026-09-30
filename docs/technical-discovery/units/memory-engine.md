@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el working-context y sus reglas"
 sources: ["src/core/memory/**"]
 sourcesSha: 50a0e07371dc4515bd743ae7b609f23b9c0d35a86abbfa35ee58139980696d63
-generatedAt: 2026-09-30T14:03:46Z
-pluginVersion: 0.7.1
+generatedAt: 2026-09-30T19:34:11Z
+pluginVersion: 0.7.2
 skillVersion: '2.3'
 ---
 

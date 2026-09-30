@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-09-30T14:03:46Z
-pluginVersion: 0.7.1
+generatedAt: 2026-09-30T19:34:11Z
+pluginVersion: 0.7.2
 skillVersion: '2.3'
 ---
 
@@ -23,7 +23,7 @@ Repomix `tier: minimo` (comprimido) más los documentos raíz del repo y lectura
 | Reglas de negocio, contratos, riesgos, deuda, acoplamiento e impacto de cambios | `decisions.md` |
 | Sistemas externos y dependencias privadas observables (npm, GitHub, Repomix, MCP) | `integrations.md` |
 | Catálogo de unidades (módulos, agents, skills) con propósito y entry point | `units/_map.md` |
-| **Rutas de instalación por agente, `AGENT_SKILLS_DIR`, manifiesto y frontmatter de skills** | `units/cli-install.md` |
+| **Rutas de instalación por host (`AGENT_TARGETS`), frontmatter de agents, commands como skills y MCP** | `units/cli-install.md` |
 | Motor de memoria persistente (SQLite + FTS5, tools del LLM, working-context) | `units/memory-engine.md` |
 | Discovery, empaquetado Repomix y tiers de tokens | `units/discovery-engine.md` |
 | CLI: `init`/`install`/`update`/`upgrade`, wizard TTY, migración legacy y MCP | `units/cli-install.md` |
@@ -34,13 +34,13 @@ Repomix `tier: minimo` (comprimido) más los documentos raíz del repo y lectura
 
 - **Tipo**: librería/CLI de Node.js, ESM, **cero dependencias**, `engines.node: ">=24.0.0"`.
 - **Entry point**: `src/cli/index.js` (bin `ancleto` y `aspec` en `package.json`).
-- **Producto**: orquestador SDD para IDEs (OpenCode, Cursor, VS Code, Roo, Antigravity) con
-  descubrimiento técnico, memoria persistente local y control de tokens por tier.
-- **Versión observada**: `0.7.1` (`package.json`). El CLI global puede ir por detrás: al
+- **Producto**: orquestador SDD para IDEs (OpenCode, Claude, VS Code, Antigravity, Cursor, Roo)
+  con descubrimiento técnico, memoria persistente local y control de tokens por tier.
+- **Versión observada**: `0.7.2` (`package.json`). El CLI global puede ir por detrás: al
   relevar, `ancleto --version` reportó `0.7.0`.
-- **Skills por agente**: `installAgentSkills` copia el catálogo al directorio propio de cada
-  IDE vía `AGENT_SKILLS_DIR` (`.opencode/skills`, `.vscode/skills`, ...). El frontmatter se
-  copia **tal cual** (la adaptación por IDE está planeada, `A1`). Detalle: `units/cli-install.md`.
+- **Instalación por host**: `AGENT_TARGETS` es la fuente única de rutas (skills/agents/commands)
+  por IDE; los agents de `claude`/`vscode`/`antigravity` se adaptan de frontmatter. Detalle:
+  `units/cli-install.md`.
 - **Rama de trabajo**: `development`; `main` protegida y estable (`BACKLOG.md`).
 
 Antes de afirmar un detalle fino o reciente, abrir el archivo citado en cada documento.

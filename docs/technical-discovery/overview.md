@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-09-30T14:03:46Z
-pluginVersion: 0.7.1
+generatedAt: 2026-09-30T19:34:11Z
+pluginVersion: 0.7.2
 skillVersion: '2.3'
 ---
 
@@ -27,7 +27,7 @@ CLI monolítica en ESM, sin framework externo. Capas:
 
 | Capa | Ruta | Rol |
 |---|---|---|
-| CLI / orquestación | `src/cli/index.js` | Parsing de comandos, `init`/`install`/`update`/`upgrade`, discovery, memoria, projects, stats, doctor, MCP. |
+| CLI / orquestación | `src/cli/index.js` | Parsing de comandos, `init`/`install`/`update`/`upgrade`, instalación por host, discovery, memoria, projects, stats, doctor, MCP. |
 | UI de terminal | `src/cli/ui.js` | Banner ASCII animado y menús TTY (Raw Mode) sin librerías; helpers de color. |
 | Discovery | `src/core/discovery.js` | Mapa topológico `.discovery-map.json`. |
 | Empaquetado y tiers | `src/core/repomix-tier.js` | Args de Repomix, ignores por tier, `--compress`, token budget. |
@@ -44,9 +44,10 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 ## Componentes y responsabilidades
 
 - **CLI (`src/cli/index.js`)**: registra el proyecto en `~/.config/ancleto/projects.json`,
-  resuelve el agente/IDE y el tier, copia assets, instala las skills en el directorio del
-  agente (`AGENT_SKILLS_DIR`), fusiona bloques `<!-- LOCKED -->` en templates, configura MCP
-  (propio + caveman; engram opcional) y expone los subcomandos.
+  resuelve el agente/IDE y el tier, materializa assets en el destino nativo del host
+  (`AGENT_TARGETS`), adapta el frontmatter de agents para `claude`/`vscode`/`antigravity`,
+  fusiona bloques `<!-- LOCKED -->` en templates, configura MCP (propio + caveman; engram
+  opcional) y expone los subcomandos.
 - **Discovery**: `--check` reporta estado del seed (`READY`/`STALE`/`PARTIAL`/`MISSING`) con
   `impact` (`none`/`minor`/`material`) y `affectedDocs`; el pack (Repomix) se genera on-demand.
 - **Memoria**: 3 tools (`searchMemory`, `recordRule`, `recordDecision`) sobre SQLite + FTS5
@@ -59,11 +60,11 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 
 1. **Alta de proyecto** — `ancleto init` (wizard en TTY): escribe `.ancletorc`, scaffold
    `aspec/`, copia `AGENTS.md`/`PRODUCT.md` preservando lo existente, migra `openspec/` legacy
-   si existe, instala skills por agente, aplica el tier a los agentes locales y materializa
-   `.ancleto/working-context.md`. Evidencia: `src/cli/index.js`, `README.md`.
+   si existe, instala assets por host, aplica el tier a los agentes locales, configura el MCP
+   del host y materializa `.ancleto/working-context.md`. Evidencia: `src/cli/index.js`, `README.md`.
 2. **Instalación/actualización** — `ancleto install|update|upgrade` (con `install --project`
-   como paridad): copia `agents/`, `commands/`, `skills/`, `templates/`, instala skills en el
-   directorio del agente, fusiona MCP de forma no destructiva, migra `openspec/` legacy y
+   como paridad): materializa `agents/`, `commands/`, `skills/`, `templates/` en el destino del
+   host, adapta frontmatter, fusiona MCP de forma no destructiva, migra `openspec/` legacy y
    re-aplica bloques `LOCKED`. Evidencia: `src/cli/index.js`, `README.md`.
 3. **Descubrimiento** — `ancleto discovery --check` (estado) y `ancleto discovery
    [--compress]` (pack Repomix con ignores del tier); el seed lo redacta la skill

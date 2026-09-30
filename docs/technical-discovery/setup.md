@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers y validaciones"
-generatedAt: 2026-09-30T14:03:46Z
-pluginVersion: 0.7.1
+generatedAt: 2026-09-30T19:34:11Z
+pluginVersion: 0.7.2
 skillVersion: '2.3'
 ---
 
@@ -21,10 +21,10 @@ skillVersion: '2.3'
 
 ```bash
 npm install -g @ancleto/spec      # instalación global
-ancleto init [--agent opencode] [--tier normal|minimo|gratis] [--lang es|en|pt|auto] [--exclude <globs>] [--with-azure]
+ancleto init [--agent opencode|claude|vscode|antigravity|cursor|roo] [--tier normal|minimo|gratis] [--lang es|en|pt|auto] [--exclude <globs>] [--with-azure] [--no-mcp]
 ancleto install [--project <dir>] [--global] [--no-mcp] [--with-engram] [--tier ...] [--agent ...]
 ancleto update                    # re-instala la última versión sobre lo existente
-ancleto upgrade [--agent <nombre>]  # re-aplica templates (LOCKED) y skills respetando personalizaciones
+ancleto upgrade [--agent <nombre>]  # re-aplica templates (LOCKED) y assets respetando personalizaciones
 ancleto discovery --check         # estado del seed en JSON (READY/STALE/PARTIAL/MISSING) + config
 ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
 ancleto mcp                       # servidor MCP stdio de memoria propia
@@ -36,24 +36,28 @@ ancleto check | doctor
 ```
 
 Evidencia: `src/cli/index.js`, `README.md`. `install` sin `--project`/`--global` opera sobre
-el proyecto actual si hay `.ancletorc`; `--global` fuerza el alcance global.
+el proyecto actual si hay `.ancletorc`; `--global` fuerza el alcance global. `init` configura
+el MCP del host por defecto; `--no-mcp` lo evita.
 
 ## Configuración persistida
 
 - **`.ancletorc`** (raíz): manifiesto de instalación (`schemaVersion`, `version`,
   `installedAt`, `installedPaths`) + `discovery` (`outputDir`, `exclude`), `agent`, `language`,
-  `azure.enabled`, `gratisModel`. `installedPaths.skills` guarda el **directorio de skills del
-  agente** elegido. Este repo: `outputDir: "docs/technical-discovery"`, `language: "es"`,
-  `azure.enabled: false`, `exclude` de tests/imágenes/`docs`/lockfiles. **No editar a mano
-  durante el seed**; se consume resuelto desde `ancleto discovery --check`.
+  `azure.enabled`, `gratisModel`. `installedPaths` guarda la **unión de destinos realmente
+  escritos** por host (`templates`, `agents`, `commands`, `skills`); para antigravity
+  `commands` queda vacío (los commands viven como skills). Este repo: `outputDir:
+  "docs/technical-discovery"`, `language: "es"`, `azure.enabled: false`, `exclude` de
+  tests/imágenes/`docs`/lockfiles. **No editar a mano durante el seed**; se consume resuelto
+  desde `ancleto discovery --check`.
 - **`.opencode/.ancleto-tier`**: tier del proyecto (`minimo` en este repo). El tier decide
   modelos de los agents y la agresividad del pack (`test/**`, `docs/**`, `**/*.md`,
   `--compress`). Evidencia: `src/core/repomix-tier.js`.
-- **Directorio de skills por agente**: `AGENT_SKILLS_DIR` mapea cada IDE a su carpeta
-  (`.opencode/skills`, `.vscode/skills`, `.antigravity/skills`, `.cursor/skills`,
-  `.roo/skills`). El frontmatter de las skills se copia tal cual hoy. Detalle:
+- **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
+  IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`).
+  Los agents de `claude`/`vscode`/`antigravity` se adaptan de frontmatter. Detalle:
   `units/cli-install.md`.
-- **`.opencode/opencode.json`**: MCP configurados (ver `integrations.md`).
+- **MCP del host**: antigravity en `.agents/mcp_config.json`; el resto en
+  `.opencode/opencode.json` (ver `integrations.md`).
 - **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`); ignorado por git.
 
 ## Tiers de costo

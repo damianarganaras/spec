@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync, cpSync, copyFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -143,19 +143,20 @@ describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () =
     })
   })
 
-  it('5.2 init --agent antigravity escribe solo skills y avisa por stderr sin fallar (D12)', () => {
+  it('6.1 init --agent antigravity escribe skills y agents adaptados sin avisos de skip (D10)', () => {
     withDir((dir) => {
-      const r = run(['init', '--agent', 'antigravity'], dir)
+      const r = run(['init', '--agent', 'antigravity', '--no-mcp'], dir, { ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
       assert.equal(r.status, 0)
       assert.ok(existsSync(join(dir, '.agents', 'skills', 'triage-clarifier', 'SKILL.md')))
       assert.equal(existsSync(join(dir, '.antigravity', 'skills')), false, 'no usa la ruta vieja')
-      assert.equal(existsSync(join(dir, '.agents', 'agents')), false)
+      assert.ok(existsSync(join(dir, '.agents', 'agents', 'orchestrator.md')))
       assert.equal(existsSync(join(dir, '.agents', 'commands')), false)
-      assert.match(r.stderr, /skip agents: not supported by host 'antigravity'/)
-      assert.match(r.stderr, /skip commands: not supported by host 'antigravity'/)
+      assert.doesNotMatch(r.stderr, /skip agents: not supported by host 'antigravity'/)
+      assert.doesNotMatch(r.stderr, /skip commands: not supported by host 'antigravity'/)
       const rc = readRc(dir)
+      assert.equal(rc.agent, 'antigravity')
       assert.deepEqual(rc.installedPaths.skills, ['.agents/skills'])
-      assert.deepEqual(rc.installedPaths.agents, [])
+      assert.deepEqual(rc.installedPaths.agents, ['.agents/agents'])
       assert.deepEqual(rc.installedPaths.commands, [])
     })
   })
@@ -341,6 +342,408 @@ describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () =
       assert.ok(existsSync(join(dir, '.roo', 'skills', 'triage-clarifier', 'SKILL.md')))
       assert.equal(existsSync(join(dir, '.roo', 'agents')), false)
       assert.deepEqual(readRc(dir).installedPaths.skills, ['.cursor/skills', '.roo/skills'])
+    })
+  })
+})
+
+describe('CLI antigravity full support (add-antigravity-full-support)', () => {
+  const REPO = join(TEST_DIR, '..')
+  const AGENT_SRC = (n) => join(REPO, 'agents', `${n}.md`)
+  const regEnv = (dir) => ({ ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
+
+  it('6.2 init --agent antigravity rutea skills/agents a .agents y no crea .agents/commands', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'antigravity', '--no-mcp'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.agents', 'skills', 'triage-clarifier', 'SKILL.md')))
+      assert.ok(existsSync(join(dir, '.agents', 'agents', 'orchestrator.md')))
+      assert.equal(existsSync(join(dir, '.agents', 'commands')), false)
+      assert.doesNotMatch(r.stderr, /skip (agents|commands): not supported/)
+      const rc = readRc(dir)
+      assert.deepEqual(rc.installedPaths.skills, ['.agents/skills'])
+      assert.deepEqual(rc.installedPaths.agents, ['.agents/agents'])
+      assert.deepEqual(rc.installedPaths.commands, [])
+    })
+  })
+
+  it('6.3 adaptador antigravity: name, description, tools lista, model inherit y sin claves opencode', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const src = readFileSync(AGENT_SRC('coder'), 'utf8')
+      assert.match(src, /^mode: subagent$/m)
+      assert.match(src, /^model: opencode-go\//m)
+      assert.match(src, /^tools:$/m)
+
+      const out = readFileSync(join(dir, '.agents', 'agents', 'coder.md'), 'utf8')
+      assert.match(out, /^name: coder$/m)
+      assert.match(out, /^description: Implements approved changes from aspec artifacts or orchestrator instructions$/m)
+      // D3: sólo ids de la columna (A). `write` no tiene id confirmado -> se omite.
+      assert.match(out, /^tools: \[view_file, replace_file_content, run_command\]$/m)
+      assert.doesNotMatch(out, /write_to_file/)
+      assert.match(r.stderr, /skip tool 'write': no verified Antigravity id for agent 'coder'/)
+      assert.match(out, /^model: inherit$/m)
+      assert.match(out, /^mainAgent: false$/m)
+      assert.match(out, /^subagent: true$/m)
+      assert.doesNotMatch(out, /^mode:/m)
+      assert.doesNotMatch(out, /^color:/m)
+      assert.doesNotMatch(out, /^temperature:/m)
+      assert.doesNotMatch(out, /^permission:/m)
+      assert.doesNotMatch(out, /opencode-go/)
+    })
+  })
+
+  it('6.3 dedupe: cada clave gestionada se emite una sola vez, en orden determinista', () => {
+    const AGENT = 'fixture-dedupe'
+    withDir((dir) => {
+      const root = mkdtempSync(join(tmpdir(), 'ancleto-cli-src-'))
+      try {
+        for (const d of ['src', 'agents', 'commands', 'skills', 'templates']) {
+          cpSync(join(REPO, d), join(root, d), { recursive: true })
+        }
+        copyFileSync(join(REPO, 'package.json'), join(root, 'package.json'))
+        // Fuente con claves gestionadas repetidas y con claves que el adaptador dropea:
+        // el adaptador debe filtrarlas TODAS y re-emitirlas una sola vez (ordinal fijo),
+        // sin importar cuántas veces ni dónde las declare el origen.
+        writeFileSync(
+          join(root, 'agents', `${AGENT}.md`),
+          [
+            '---',
+            'name: nombre-declarado-en-la-fuente',
+            'description: Primera description gestionada',
+            'mode: subagent',
+            'tools:',
+            '  read: true',
+            'mainAgent: true',
+            'subagent: false',
+            'model: opencode-go/algo',
+            'color: red',
+            'temperature: 0.1',
+            'permission: allow',
+            'tools:',
+            '  grep: true',
+            'description: Segunda description gestionada (duplicada en la fuente)',
+            'skills: [ancleto-new]',
+            'mcpServers:',
+            '  custom:',
+            '    command: custom-cmd',
+            '---',
+            '',
+            '# Fixture dedupe',
+            ''
+          ].join('\n')
+        )
+        const r = spawnSync(
+          process.execPath,
+          [join(root, 'src', 'cli', 'index.js'), 'install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'],
+          { cwd: dir, encoding: 'utf8', env: { ...process.env, ANCLETO_MUSE_SPARK: '0', ...regEnv(dir) } }
+        )
+        assert.equal(r.status, 0)
+        const out = readFileSync(join(dir, '.agents', 'agents', `${AGENT}.md`), 'utf8')
+        const count = (key) => (out.match(new RegExp(`^${key}:`, 'gm')) || []).length
+
+        // Cada clave gestionada aparece exactamente una vez pese a los duplicados del origen.
+        const managed = ['name', 'description', 'tools', 'mainAgent', 'subagent', 'model', 'commandExecutionPolicy', 'mcpServers', 'skills']
+        for (const key of managed) {
+          assert.equal(count(key), 1, `${key} emitido una sola vez`)
+        }
+        // Las claves dropeadas no sobreviven, ni siquiera duplicadas.
+        for (const key of ['mode', 'color', 'temperature', 'permission']) {
+          assert.equal(count(key), 0, `${key} no se emite`)
+        }
+        // Orden determinista del adaptador (D2).
+        const positions = managed.map((k) => out.search(new RegExp(`^${k}:`, 'm')))
+        for (let i = 1; i < positions.length; i++) {
+          assert.ok(positions[i] > positions[i - 1], `${managed[i]} va despues de ${managed[i - 1]}`)
+        }
+        // Los valores derivados pisan a los declarados en la fuente.
+        assert.match(out, /^name: fixture-dedupe$/m)
+        assert.match(out, /^description: Primera description gestionada$/m)
+        assert.match(out, /^tools: \[view_file\]$/m)
+        assert.match(out, /^mainAgent: false$/m)
+        assert.match(out, /^subagent: true$/m)
+        assert.match(out, /^model: inherit$/m)
+        assert.match(out, /^commandExecutionPolicy: sandbox$/m)
+        assert.match(out, /^  custom:$/m)
+        assert.doesNotMatch(out, /nombre-declarado-en-la-fuente/)
+        assert.doesNotMatch(out, /Segunda description gestionada/)
+        assert.doesNotMatch(out, /opencode-go/)
+      } finally {
+        rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+      }
+    })
+  })
+
+  it('6.4 memory-keeper no emite ids MCP: sólo (A) y aviso por clave sin id verificado', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const mk = readFileSync(join(dir, '.agents', 'agents', 'memory-keeper.md'), 'utf8')
+      // Sólo ids de (A): read->view_file, grep->grep_search.
+      assert.match(mk, /^tools: \[view_file, grep_search\]$/m)
+      // MCP no es tool: nunca se emite un id de MCP (`call_mcp_tool` prohibido, D3/D5).
+      assert.doesNotMatch(mk, /call_mcp_tool/)
+      // (d) las claves MCP del mapa `tools` no tienen id verificado -> avisan (tensión con D5: flag).
+      for (const k of ['searchMemory', 'recordRule', 'recordDecision']) {
+        assert.match(r.stderr, new RegExp(`skip tool '${k}': no verified Antigravity id for agent 'memory-keeper'`))
+      }
+      // (e) `write: false`/`edit: false` no avisan (se distinguen del aviso de la clave `write: true` de otros agents).
+      assert.doesNotMatch(r.stderr, /skip tool '(write|edit)': no verified Antigravity id for agent 'memory-keeper'/)
+    })
+  })
+
+  it('6.4 skill: true no emite un id de tool, no crea campo skills y no avisa', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const orch = readFileSync(join(dir, '.agents', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orch, /^tools: \[view_file\]$/m)
+      assert.doesNotMatch(orch, /^skills:/m)
+      assert.match(orch, /^mainAgent: true$/m)
+      assert.match(orch, /^subagent: false$/m)
+      // (b) `skill` no es tool: no cae en el aviso de tool sin id.
+      assert.doesNotMatch(r.stderr, /skip tool 'skill'/)
+    })
+  })
+
+  it('6.4 una tool sin id verificado se omite con aviso a stderr y exit 0 (sin inferir MCP)', () => {
+    withDir((dir) => {
+      const root = mkdtempSync(join(tmpdir(), 'ancleto-cli-src-'))
+      try {
+        for (const d of ['src', 'agents', 'commands', 'skills', 'templates']) {
+          cpSync(join(REPO, d), join(root, d), { recursive: true })
+        }
+        copyFileSync(join(REPO, 'package.json'), join(root, 'package.json'))
+        writeFileSync(
+          join(root, 'agents', 'fixture-unknown-tool.md'),
+          ['---', 'description: Fixture agent with an unverified tool', 'mode: subagent', 'tools:', '  read: true', '  unknown_tool: true', '---', '', '# Fixture', ''].join('\n')
+        )
+        const cli = join(root, 'src', 'cli', 'index.js')
+        const r = spawnSync(
+          process.execPath,
+          [cli, 'install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'],
+          { cwd: dir, encoding: 'utf8', env: { ...process.env, ANCLETO_MUSE_SPARK: '0', ...regEnv(dir) } }
+        )
+        assert.equal(r.status, 0)
+        assert.match(r.stderr, /skip tool 'unknown_tool': no verified Antigravity id for agent 'fixture-unknown-tool'/)
+        const out = readFileSync(join(dir, '.agents', 'agents', 'fixture-unknown-tool.md'), 'utf8')
+        assert.match(out, /^tools: \[view_file\]$/m)
+        assert.doesNotMatch(out, /unknown_tool/)
+        // MCP no se infiere desde una clave desconocida del mapa `tools`.
+        assert.doesNotMatch(out, /call_mcp_tool/)
+      } finally {
+        rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+      }
+    })
+  })
+
+  it('6.5 los commands se materializan como skills y el manifiesto no registra commands', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'antigravity', '--no-mcp'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.agents', 'skills', 'cleto-new', 'SKILL.md')))
+      const sk = readFileSync(join(dir, '.agents', 'skills', 'cleto-new', 'SKILL.md'), 'utf8')
+      assert.match(sk, /^name: cleto-new$/m)
+      assert.match(sk, /^description: Start a new change using the experimental artifact workflow$/m)
+      assert.match(sk, /Invoke the `ancleto-new` skill/)
+      assert.deepEqual(readRc(dir).installedPaths.commands, [])
+    })
+  })
+
+  it('6.6 init antigravity crea .agents/mcp_config.json con el esquema del host (sin type/enabled)', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'antigravity', '--tier', 'minimo'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, '.agents', 'mcp_config.json'), 'utf8'))
+      assert.ok(cfg.mcpServers['ancleto-memory'], 'ancleto-memory presente')
+      assert.equal(cfg.mcpServers['ancleto-memory'].command, process.execPath)
+      assert.deepEqual(cfg.mcpServers['ancleto-memory'].args.slice(-1), ['mcp'])
+      assert.equal('type' in cfg.mcpServers['ancleto-memory'], false)
+      assert.equal('enabled' in cfg.mcpServers['ancleto-memory'], false)
+    })
+  })
+
+  it('6.6 el merge de mcp_config.json preserva homonimos y claves preexistentes', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.agents'), { recursive: true })
+      const prev = {
+        mcpServers: {
+          propio: { command: 'propio-cmd', args: ['--x'] },
+          'ancleto-memory': { command: 'memoria-propia', args: ['--keep'] }
+        },
+        customTop: 1
+      }
+      writeFileSync(join(dir, '.agents', 'mcp_config.json'), JSON.stringify(prev, null, 2) + '\n')
+      const r = run(['init', '--agent', 'antigravity', '--tier', 'minimo'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, '.agents', 'mcp_config.json'), 'utf8'))
+      assert.deepEqual(cfg.mcpServers.propio, { command: 'propio-cmd', args: ['--x'] })
+      assert.deepEqual(cfg.mcpServers['ancleto-memory'], { command: 'memoria-propia', args: ['--keep'] })
+      assert.equal(cfg.customTop, 1)
+    })
+  })
+
+  it('6.6 un mcp_config.json invalido se avisa y no se sobrescribe', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.agents'), { recursive: true })
+      writeFileSync(join(dir, '.agents', 'mcp_config.json'), '{ no es json')
+      const r = run(['init', '--agent', 'antigravity', '--tier', 'minimo'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(r.stderr, /no se pudo leer mcp_config\.json como JSON/)
+      assert.equal(readFileSync(join(dir, '.agents', 'mcp_config.json'), 'utf8'), '{ no es json')
+    })
+  })
+
+  it('6.6 --no-mcp omite el MCP sin afectar el resto de los assets', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'antigravity', '--no-mcp'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(join(dir, '.agents', 'mcp_config.json')), false)
+      assert.equal(existsSync(join(dir, '.opencode')), false)
+      assert.ok(existsSync(join(dir, '.agents', 'agents', 'coder.md')))
+      assert.ok(existsSync(join(dir, '.agents', 'skills', 'cleto-new', 'SKILL.md')))
+    })
+  })
+
+  it('6.7 check valida el layout antigravity sin faltantes/huerfanos ni falso tier huerfano', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'antigravity', '--tier', 'minimo'], dir, regEnv(dir))
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /0 faltantes/)
+      assert.match(r.stdout, /0 huerfanos/)
+      assert.match(r.stdout, /✔ \.agents\/agents/)
+      assert.match(r.stdout, /✔ \.agents\/skills/)
+      assert.doesNotMatch(r.stdout, /tier .* sin agentes locales/)
+    })
+  })
+
+  it('6.7 el proyecto antigravity figura scoped en projects list', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'antigravity', '--tier', 'minimo'], dir, regEnv(dir))
+      const r = run(['projects', 'list', '--json'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.projects[0].agent, 'antigravity')
+      assert.equal(j.projects[0].scoped, true)
+    })
+  })
+
+  it('6.8 opencode conserva .opencode/* y configura su MCP en opencode.json', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--tier', 'gratis', '--agent', 'opencode'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.opencode', 'agents', 'orchestrator.md')))
+      assert.ok(existsSync(join(dir, '.opencode', 'commands', 'cleto-new.md')))
+      assert.ok(existsSync(join(dir, '.opencode', 'skills', 'triage-clarifier', 'SKILL.md')))
+      const cfg = JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8'))
+      assert.ok(cfg.mcp['ancleto-memory'])
+      assert.match(readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8'), /^mode:/m)
+      assert.equal(existsSync(join(dir, '.agents', 'mcp_config.json')), false)
+      assert.equal(existsSync(join(dir, '.agents')), false)
+    })
+  })
+
+  it('6.8 claude y vscode no crean MCP de host ni el layout de antigravity', () => {
+    withDir((dir) => {
+      const c = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir, regEnv(dir))
+      assert.equal(c.status, 0)
+      const claudeCoder = readFileSync(join(dir, '.claude', 'agents', 'coder.md'), 'utf8')
+      assert.doesNotMatch(claudeCoder, /^tools:/m)
+      assert.doesNotMatch(claudeCoder, /^mode:/m)
+      const v = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'vscode'], dir, regEnv(dir))
+      assert.equal(v.status, 0)
+      assert.ok(existsSync(join(dir, '.github', 'agents', 'coder.agent.md')))
+      assert.equal(existsSync(join(dir, '.mcp.json')), false)
+      assert.equal(existsSync(join(dir, '.vscode', 'mcp.json')), false)
+      assert.equal(existsSync(join(dir, '.agents')), false)
+    })
+  })
+
+  it('6.8 cursor sigue siendo solo-skills sin agents ni layout antigravity', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'cursor'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.cursor', 'skills', 'triage-clarifier', 'SKILL.md')))
+      assert.equal(existsSync(join(dir, '.cursor', 'agents')), false)
+      assert.equal(existsSync(join(dir, '.agents')), false)
+    })
+  })
+
+  it('6.9 grep se mapea a grep_search y nunca a search_directory ni find_file', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const td = readFileSync(join(dir, '.agents', 'agents', 'technical-discovery.md'), 'utf8')
+      // Sólo (A): read->view_file, bash->run_command, grep->grep_search. `glob` se omite con aviso.
+      assert.match(td, /^tools: \[view_file, run_command, grep_search\]$/m)
+      assert.doesNotMatch(td, /search_directory/)
+      assert.doesNotMatch(td, /find_file/)
+      assert.match(r.stderr, /skip tool 'glob': no verified Antigravity id for agent 'technical-discovery'/)
+    })
+  })
+
+  it('CRITICAL: agent con tools no mapeadas arranca (exit 0) y avisa cada omisión', () => {
+    // Verificación ESTRUCTURAL (en CI no hay Antigravity real, así que no se observa el
+    // runtime del host): se comprueba que el frontmatter emitido contiene SOLO ids de la
+    // columna (A) y que cada tool omitida deja su línea de aviso (D3/D5). Es la mitigación
+    // del Known Issue: un id no verificado cuelga el subagente, por lo que el conjunto
+    // emitible debe ser el cerrado y verificado.
+    const VERIFIED = ['view_file', 'replace_file_content', 'grep_search', 'run_command', 'manage_task']
+    const AGENT = 'fixture-no-mapped-tools'
+    const UNMAPPED = ['write', 'glob', 'task', 'webfetch', 'websearch', 'find_file', 'call_mcp_tool', 'invoke_subagent', 'searchMemory', 'unknown_tool']
+    withDir((dir) => {
+      const root = mkdtempSync(join(tmpdir(), 'ancleto-cli-src-'))
+      try {
+        for (const d of ['src', 'agents', 'commands', 'skills', 'templates']) {
+          cpSync(join(REPO, d), join(root, d), { recursive: true })
+        }
+        copyFileSync(join(REPO, 'package.json'), join(root, 'package.json'))
+        writeFileSync(
+          join(root, 'agents', `${AGENT}.md`),
+          ['---', 'description: Fixture con tools mapeadas y no mapeadas', 'mode: subagent', 'tools:', '  read: true', '  edit: true', '  grep: true', '  bash: true', '  todowrite: true', ...UNMAPPED.map((k) => `  ${k}: true`), '---', '', '# Fixture', ''].join('\n')
+        )
+        const r = spawnSync(
+          process.execPath,
+          [join(root, 'src', 'cli', 'index.js'), 'install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'],
+          { cwd: dir, encoding: 'utf8', env: { ...process.env, ANCLETO_MUSE_SPARK: '0', ...regEnv(dir) } }
+        )
+        // (a) arranca sin colgar: exit 0 pese a las tools sin id verificado.
+        assert.equal(r.status, 0)
+        const out = readFileSync(join(dir, '.agents', 'agents', `${AGENT}.md`), 'utf8')
+        const line = out.match(/^tools: \[(.*)\]$/m)
+        assert.ok(line, 'frontmatter con lista tools')
+        const emitted = line[1] ? line[1].split(', ') : []
+        // Estructural: SOLO ids de (A), en el orden de declaración de las claves mapeadas.
+        assert.deepEqual(emitted, VERIFIED)
+        for (const id of emitted) assert.ok(VERIFIED.includes(id), `id verificado: ${id}`)
+        // (c) formato del aviso D5: uno por cada tool omitida, nombrando tool y agent.
+        for (const k of UNMAPPED) {
+          assert.match(r.stderr, new RegExp(`skip tool '${k}': no verified Antigravity id for agent '${AGENT}'`))
+        }
+        // Ningún id de (B) solo-SDK, (C) comunidad ni (D) delegación se filtra al frontmatter.
+        assert.doesNotMatch(out, /find_file|call_mcp_tool|invoke_subagent|write_to_file|start_subagent|define_subagent/)
+      } finally {
+        rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+      }
+    })
+  })
+
+  it('6.10 multi-host: antigravity + opencode con rc.agent opencode no reporta huérfanos falsos', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'], dir, regEnv(dir)).status, 0)
+      // Segundo install con --agent opencode acumula destinos y fija rc.agent=opencode.
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'opencode'], dir, regEnv(dir)).status, 0)
+      assert.ok(existsSync(join(dir, '.agents', 'skills', 'cleto-new', 'SKILL.md')), 'command-skill de antigravity presente')
+      assert.equal(readRc(dir).agent, 'opencode')
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      // El conjunto esperado de `.agents/skills` sale de la unión de hosts instalados,
+      // no de rc.agent: si saliera sólo de opencode, los command-skills serían huérfanos.
+      assert.match(r.stdout, /0 faltantes/)
+      assert.match(r.stdout, /0 huerfanos/)
+      assert.match(r.stdout, /✔ \.agents\/skills/)
+      assert.match(r.stdout, /✔ \.opencode\/skills/)
     })
   })
 })

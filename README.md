@@ -138,7 +138,7 @@ del host (el CLI no deduplica ni elige un "ganador").
 | `opencode` (default) | `.opencode/skills/<n>/SKILL.md` | `.opencode/agents/<n>.md` | `.opencode/commands/<n>.md` |
 | `claude` | `.claude/skills/<n>/SKILL.md` | `.claude/agents/<n>.md` (adaptado) | `.claude/commands/<n>.md` |
 | `vscode` (VS Code / Copilot) | `.github/skills/<n>/SKILL.md` | `.github/agents/<n>.agent.md` | `.github/prompts/<n>.prompt.md` |
-| `antigravity` | `.agents/skills/<n>/SKILL.md` | — (no soportado) | — (no soportado) |
+| `antigravity` | `.agents/skills/<n>/SKILL.md` | `.agents/agents/<n>.md` (adaptado) | `.agents/skills/<n>/SKILL.md` (como skill) |
 | `cursor` | `.cursor/skills/<n>/SKILL.md` | — | — |
 | `roo` | `.roo/skills/<n>/SKILL.md` | — | — |
 
@@ -146,16 +146,36 @@ Cada host recibe sus skills en **su** directorio nativo. **`.agents/skills` es u
 compartido** —lo leen opencode, Cursor, VS Code y Antigravity—, no un destino universal: Claude lee
 `.claude/skills` y Roo, `.roo/skills`. Por eso el CLI no escribe todas las skills en `.agents/skills`.
 
-Los assets que un host no soporta (por ejemplo `agents`/`commands` de `antigravity`, `cursor` y `roo`)
+**Antigravity** no tiene directorio de commands de proyecto; sus `/cleto-*` se materializan como
+**command-skills** en `.agents/skills/<n>/SKILL.md` (los Workflows están deprecados a favor de Agent
+Skills), por eso `installedPaths.commands` queda vacío para este host. Sus `agents` se escriben en
+`.agents/agents/<n>.md` con el frontmatter adaptado: `name` inyectado, `tools` como **lista** de ids
+verificados de Antigravity (`read`→`view_file`, `edit`→`replace_file_content`, `grep`→`grep_search`,
+`bash`→`run_command`, `todowrite`→`manage_task`), `mode`→`mainAgent`/`subagent`,
+`commandExecutionPolicy: sandbox` y `model: inherit` (el tier no reescribe modelos de Antigravity). Una
+tool de opencode sin id verificado se **omite con aviso** (`skip tool '<k>': no verified Antigravity id
+for agent '<n>'`): un id inexistente cuelga el subagent. Los ids que sólo existen en el SDK
+(`find_file`, `edit_file`, `search_web`, `read_url_content`, …), los de comunidad (`write_to_file`,
+`call_mcp_tool`, `multi_replace_file_content`, …) y los de delegación (`invoke_subagent`,
+`start_subagent`, `define_subagent`) **no** se emiten; el uso de MCP se expresa por
+`mcpServers`/`.agents/mcp_config.json`, nunca como tool id. El campo `skill` no es una tool: se cubre
+con el surfaceo automático de skills de Antigravity.
+
+Los assets que un host no soporta (por ejemplo `agents`/`commands` de `cursor` y `roo`)
 **no se escriben** y el instalador avisa por `stderr`
-(`skip agents: not supported by host 'antigravity'`) sin abortar. La instalación es **aditiva y no
+(`skip agents: not supported by host 'cursor'`) sin abortar. La instalación es **aditiva y no
 destructiva**: instalar con otro agente escribe en su base y preserva los layouts previos, y el
 manifiesto `.ancletorc.installedPaths` acumula la unión de los destinos realmente escritos.
 
-La **configuración MCP específica de host** está fuera de alcance: el CLI no genera ni transforma
-`.mcp.json`, `mcp_config.json` ni `.vscode/mcp.json`, y no pisa config MCP preexistente. `claude` se
-soporta con adaptación de frontmatter obligatoria para `agents` (se omiten `model`/`tools` sin
-equivalencia verificada y las claves `mode`/`color`/`temperature`/`permission`), sin MCP propio.
+La **configuración MCP específica de host** está fuera de alcance con **una excepción**: para
+`agent: antigravity` el CLI genera o mergea (no destructivo) el MCP de workspace
+`.agents/mcp_config.json` con esquema `{ "mcpServers": { "<n>": { "command", "args", "env" } } }`,
+incluyendo el servidor de memoria `ancleto-memory`; preserva `mcpServers` preexistentes y no pisa
+homónimos. `.mcp.json` (Claude) y `.vscode/mcp.json` (VS Code) siguen fuera de alcance, al igual que el
+MCP global de Antigravity. `claude` se soporta con adaptación de frontmatter obligatoria para `agents`
+(se omiten `model`/`tools` sin equivalencia verificada y las claves
+`mode`/`color`/`temperature`/`permission`), sin MCP propio. Tanto `init` como `install --project`
+configuran el MCP del host en la misma ejecución; `--no-mcp` lo omite.
 
 ---
 

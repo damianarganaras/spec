@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-09-30T14:03:46Z
-pluginVersion: 0.7.1
+generatedAt: 2026-09-30T19:34:11Z
+pluginVersion: 0.7.2
 skillVersion: '2.3'
 ---
 
@@ -26,33 +26,34 @@ skillVersion: '2.3'
 ## IDEs / agentes consumidores (contrato de instalación)
 
 `agents/`, `commands/`, `skills/` y `templates/` son consumidos por el IDE elegido. El CLI
-resuelve el destino con `SUPPORTED_AGENTS` y `AGENT_SKILLS_DIR`, y lo registra en
+resuelve el destino con `AGENT_TARGETS` (fuente única de rutas) y lo registra en
 `installedPaths` de `.ancletorc`:
 
-| Agente | Directorio de skills (`AGENT_SKILLS_DIR`) | Evidencia |
-|---|---|---|
-| `opencode` (default) | `.opencode/skills` | `src/cli/index.js` |
-| `vscode` | `.vscode/skills` | `src/cli/index.js` |
-| `antigravity` | `.antigravity/skills` | `src/cli/index.js` |
-| `cursor` | `.cursor/skills` | `src/cli/index.js` |
-| `roo` | `.roo/skills` | `src/cli/index.js` |
+| Host | Skills | Agents | Commands |
+|---|---|---|---|
+| `opencode` (default) | `.opencode/skills` | `.opencode/agents/<n>.md` | `.opencode/commands/<n>.md` |
+| `claude` | `.claude/skills` | `.claude/agents/<n>.md` | `.claude/commands/<n>.md` |
+| `vscode` | `.github/skills` | `.github/agents/<n>.agent.md` | `.github/prompts/<n>.prompt.md` |
+| `antigravity` | `.agents/skills` | `.agents/agents/<n>.md` | `.agents/skills/<n>/SKILL.md` (command-skill) |
+| `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) |
+| `roo` | `.roo/skills` | — (no soportado) | — (no soportado) |
 
-Los agents/commands se copian siempre bajo `.opencode/` (proyecto) o al directorio global de
-config del IDE. El frontmatter de las skills se copia sin transformar; la adaptación por IDE
-(A1) está planeada, no implementada. Detalle: `units/cli-install.md`.
+Los agents de `claude`/`vscode`/`antigravity` se adaptan de frontmatter (el resto se copia
+verbatim); Antigravity además transforma tools y flags. Detalle: `units/cli-install.md`.
 
 ## MCP (Model Context Protocol)
 
-Configurados en `.opencode/opencode.json` y por `ancleto install`:
+Configurados por `setupHostMcp` (dueño único): antigravity en `.agents/mcp_config.json`; el
+resto en `.opencode/opencode.json`. `init` y `install` los configuran; `--no-mcp` lo evita.
 
 | MCP | Tipo | Rol | Default |
 |---|---|---|---|
 | `ancleto-memory` | local (stdio) | Memoria propia del repo: expone `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. | Habilitado |
-| `caveman` | local (binario) | Compresión de salida del agente (`caveman-mcp.exe`). | Habilitado |
+| `caveman` | local (binario) | Compresión de salida del agente (`caveman-mcp.exe`). | Habilitado si está en `PATH` |
 | `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`), no se agrega por defecto por su costo (~4.900 tokens/request). | Deshabilitado |
 | `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Solo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
 
-Evidencia: `.opencode/opencode.json`, `README.md`, `BACKLOG.md`.
+Evidencia: `src/cli/index.js`, `.opencode/opencode.json`, `README.md`, `BACKLOG.md`.
 
 ## Observabilidad / telemetría
 

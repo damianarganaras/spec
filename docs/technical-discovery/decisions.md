@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-09-30T14:03:46Z
-pluginVersion: 0.7.1
+generatedAt: 2026-09-30T19:34:11Z
+pluginVersion: 0.7.2
 skillVersion: '2.3'
 ---
 
@@ -32,21 +32,41 @@ skillVersion: '2.3'
    de los bloques `<!-- LOCKED: name -->` y preservan el resto (EXTENSIBLE); si los tags
    faltan o están mal formados, avisa y **no toca** el archivo. Evidencia: `src/cli/index.js`,
    `README.md`, `BACKLOG.md` (G7).
-7. **Instalación de skills por agente, dueño único.** `installAgentSkills` es el único punto
-   que resuelve `AGENT_SKILLS_DIR[agent]` (`.opencode/skills`, `.vscode/skills`,
-   `.antigravity/skills`, `.cursor/skills`, `.roo/skills`) y copia el catálogo. El manifiesto
-   registra ese directorio en `installedPaths.skills`. Evidencia: `src/cli/index.js` (líneas
-   735–761), `units/cli-install.md`.
-8. **Frontmatter de skills: copia literal (por ahora).** `installAgentSkills` no transforma el
-   frontmatter (`name`, `description`, `license`, `metadata`, ...): copia el archivo tal cual
-   para cualquier IDE. La adaptación por IDE es deuda declarada (**A1**, v0.7.0, sin
-   implementar). Evidencia: `src/cli/index.js`, `BACKLOG.md` (A1), `skills/*/SKILL.md`.
-9. **Migración legacy `openspec/` → `aspec/` no destructiva.** `migrateLegacyOpenspec` copia
-   recursiva con `force: false`, escribe el marcador `.migrated-from-openspec` y conserva
-   `openspec/` como backup; si `aspec/` ya tiene contenido real (`changes/` o `specs/` no
-   vacíos) avisa y no migra. La invocan `init`, `install --project` y `upgrade`. Evidencia:
-   `src/cli/index.js`, `aspec/changes/archive/2026-09-29-migrate-openspec-to-aspec/`.
-10. **Patrón "CLI materializa + agente lee".** `ancleto memory context` escribe
+7. **Instalación de assets por host, dueño único `AGENT_TARGETS` + `installAgentAssets`.**
+   `AGENT_TARGETS` es la **fuente única de rutas** (skills/agents/commands con su `dir` y su
+   `ext`; `null` = asset no soportado). `installAgentAssets` materializa el destino nativo y
+   devuelve las rutas escritas; `unionInstalledPaths` las acumula en
+   `installedPaths`. Antigravity no tiene dir de commands: sus `/cleto-*` se empaquetan como
+   `.agents/skills/<n>/SKILL.md` (`package: 'skill-dir'`) y **no** se registran en
+   `installedPaths.commands`. Cursor y Roo solo tienen skills. Un asset no soportado no se
+   escribe y avisa por stderr (`skip <asset>: not supported by host '<host>'`). Evidencia:
+   `src/cli/index.js`, `units/cli-install.md`.
+8. **Frontmatter de agents adaptado por host.** `claude`, `vscode` y `antigravity` son
+   `AGENT_ADAPTER_HOSTS`; el resto copia verbatim. `AGENT_ADAPTER_DROP = {mode, color,
+   temperature, permission, model, tools}` se elimina. Antigravity aplica
+   `adaptAntigravityFrontmatter` con orden determinista (`name`, `description`, `tools`,
+   `mainAgent`, `subagent`, `model: inherit`, `commandExecutionPolicy: sandbox`, `mcpServers`,
+   `skills`, extras) y mapea `mode` a flags. Las claves gestionadas se filtran y re-emiten una
+   sola vez. Evidencia: `src/cli/index.js`, `units/cli-install.md`.
+9. **Mapeo de tools de Antigravity: conjunto cerrado (regla dura).** Solo se emiten los 5 ids
+   verificados: `read→view_file`, `edit→replace_file_content`, `grep→grep_search`,
+   `bash→run_command`, `todowrite→manage_task`. Cualquier otra clave se omite con aviso a
+   stderr no bloqueante (`skip tool '<k>': no verified Antigravity id for agent '<n>'`); un id
+   inexistente cuelga el subagent (Known Issue). El tool `skill` se saltea; `call_mcp_tool`
+   está **prohibido**. El uso de MCP se expresa por `mcpServers`/`.agents/mcp_config.json`,
+   nunca se infiere desde el mapa `tools`. Evidencia: `src/cli/index.js`,
+   `units/cli-install.md`.
+10. **Migración legacy `openspec/` → `aspec/` no destructiva.** `migrateLegacyOpenspec` copia
+    recursiva con `force: false`, escribe el marcador `.migrated-from-openspec` y conserva
+    `openspec/` como backup; si `aspec/` ya tiene contenido real (`changes/` o `specs/` no
+    vacíos) avisa y no migra. La invocan `init`, `install --project` y `upgrade`. Evidencia:
+    `src/cli/index.js`, `aspec/changes/archive/2026-09-29-migrate-openspec-to-aspec/`.
+11. **MCP de host, dueño único `setupHostMcp`.** Antigravity mergea `.agents/mcp_config.json`
+    (`{ "mcpServers": { "<n>": { command, args, env } } }`) de forma **no destructiva**:
+    preserva `mcpServers` y claves top-level, no pisa homónimos y un JSON inválido avisa sin
+    escribir. El resto conserva `mergeMcp` sobre `opencode.json`. `init` configura MCP igual
+    que `install`; `--no-mcp` es el escape. Evidencia: `src/cli/index.js`.
+12. **Patrón "CLI materializa + agente lee".** `ancleto memory context` escribe
     `.ancleto/working-context.md`; el orquestador lo lee como datos no confiables sin `bash`.
     Evidencia: `BACKLOG.md`, `agents/orchestrator.md`, `src/core/memory/working-context.js`.
 
@@ -74,9 +94,10 @@ skillVersion: '2.3'
 - **Repomix no consume contexto por defecto**: se ejecuta on-demand en `ancleto discovery`.
   Evidencia: `BACKLOG.md` (relevamiento §7).
 - **`agents/`, `commands/`, `skills/`, `templates/` son la superficie de producto instalable.**
-  Cambiarlos altera lo que reciben todos los proyectos usuarios; `installAgentSkills()` es el
-  punto único de copia y el frontmatter de skills todavía no se adapta por IDE (A1 del
-  backlog v0.7.0).
+  Cambiarlos altera lo que reciben todos los proyectos usuarios; `installAgentAssets()` es el
+  punto único de materialización y el adaptador de frontmatter (`AGENT_ADAPTER_DROP`,
+  `ANTIGRAVITY_TOOL_MAP`) define qué claves sobreviven por host. Un id de tool no verificado
+  cuelga el subagent de Antigravity.
 - **`ancleto stats` acoplado a opencode**: lee la base de sesiones de opencode; no funciona con
   otros IDEs. Evidencia: `README.md`, `src/cli/index.js` (`opencodeDbPath`).
 - **MCP = costo fijo por request.** La lista de tools viaja en cada request
@@ -84,10 +105,11 @@ skillVersion: '2.3'
   (`--with-engram`) justamente por eso. Evidencia: `README.md`, `BACKLOG.md`.
 - **Branch protection honor-based.** `AGENTS.md`/`BACKLOG.md` declaran `main` protegida, pero
   el remoto no aplica protection real (B3). Evidencia: `BACKLOG.md`.
-- **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, CI o Azure. Los tokens
-  viven fuera del repo (env/secretos del IDE); nombrar la variable y omitir el valor.
-- **Deuda declarada v0.7.0**: export/import de memoria (M1), garbage collection `memory gc`
-  (M2) y adapters de frontmatter por IDE (A1). Evidencia: `BACKLOG.md`.
+- **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, `mcp_config.json`, CI o
+  Azure. Los tokens viven fuera del repo (env/secretos del IDE); nombrar la variable y omitir
+  el valor.
+- **Deuda declarada**: export/import de memoria (M1), garbage collection `memory gc` (M2).
+  Evidencia: `BACKLOG.md`.
 
 ## Decisiones registradas en memoria del repo
 

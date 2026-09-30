@@ -107,6 +107,7 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 
 - [ ] **Validar comportamiento de Antigravity IDE vs Antigravity CLI** — verificar si se comportan igual; el tema "Linux + Antigravity" va junto con este item.
 - [ ] **Change `add-multi-agent-cli-support` (en implementación)** — modelo de instalación portable multi-host: ruteo nativo por host, adapters de frontmatter, alta de `claude`. Consistency check `design → specs → tasks`: **`READY FOR IMPLEMENTATION`**.
+- [ ] **Change `add-antigravity-full-support` (en implementación)** — al elegir `antigravity`, `init` deja el framework completo: skills + agents adaptados en `.agents/agents/` + commands como skills + MCP de workspace `.agents/mcp_config.json`, y `check`/tier host-aware. Mapa de tools restringido a los 5 ids confirmados en frontmatter (`view_file`, `replace_file_content`, `grep_search`, `run_command`, `manage_task`); el resto se **omite con aviso** (un id no mapeado cuelga el subagente).
 
 ## v0.7.0 - Multi-Agent Adaptability & Memory Ops (Planeado)
 - [ ] **M1 (Export/Import):** Commands `ancleto memory export` e `import` para respaldar/compartir reglas y decisiones activas en JSON/SQL sanitizado.
@@ -119,6 +120,8 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - [ ] **B3 — Branch protection real en `main`, o aclarar que es honor-based:** `BACKLOG.md` y `AGENTS.md` declaran `main` como protegida y prohíben commits directos a `main`/`master`, pero el remoto no aplica branch protection real (un `git push origin main` y un merge fast-forward `development→main` pasan sin PR). Propuesta: habilitar branch protection real en GitHub (requiere PR + review) o documentar explícitamente que el guardrail es honor-based y no enforceado.
 - [ ] **B4 — Modo "scope extension" en `@spec-writer`:** cuando un change necesita ampliar su alcance a mitad de camino (p. ej. la opción B de `fix-memory-engine-test-isolation`), hoy hay que re-delegar al spec-writer completo para re-sincronizar todos los artifacts. Propuesta: un modo de extensión de alcance que toque solo las secciones afectadas (proposal/spec/design/tasks), conservando el resto del trabajo ya aprobado.
 - [ ] **B5 — Autoría de memoria no verificable:** el engine de memoria (`node:sqlite`) no registra el emisor; `source` vale `mcp:ancleto-memory` en todos los nodos, así que el ownership de escritura es convención del workflow, no una propiedad enforceable. Candidato a change propio de endurecimiento (p. ej. campo de actor/procedencia). Aparte: superseder el nodo stale `multi-agent-cli-support-design` vía `@memory-keeper` cuando el cambio multi-agente quede cerrado.
+- [ ] **B6 — El seed check reporta archivos cambiados, no contratos cambiados:** `ancleto discovery --check` deriva el veredicto de `changedAreas` + `affectedDocs` y sus `materialReasons` nombran el **archivo** (p. ej. `package.json`) pero no **qué contrato** cambió. Eso da veredictos correctos por heurística y puede producir falsos positivos (marca material) y, peor, falsos negativos (deja pasar un cambio de contrato). Mejora propuesta: que el check identifique el **contrato** afectado (nombres de assets, forma de frontmatter, paths por host), no solo el archivo.
+- [ ] **B7 — No hay gate de lint/format; se publicaron 3+ changes sin él:** el repo no tiene `eslint`/`prettier`/`tsconfig` ni script de lint; los changes consecutivos (`reviewer-guarantee-vs-model`, `add-multi-agent-cli-support`, `add-antigravity-full-support`) se publicaron con "gates ausentes (no bloqueante)". La verificación fue 100% manual + `node --test`. Candidato a change propio: agregar linter estándar (devDependency + config + paso en CI) y resolver hallazgos.
 
 ## Observaciones diferidas — change `add-multi-agent-cli-support`
 
@@ -135,6 +138,12 @@ Revisar después de la implementación (no bloquean el change).
 - [ ] **MCP por defecto en host no-opencode (confirmar/cobertura):** `install --project --agent claude` **sin** `--no-mcp` sigue mergeando MCP en `.opencode/opencode.json` (D6 lo declara OOS/diferido). Los tests sólo cubren `--no-mcp` → confirmar aceptabilidad o agregar cobertura del camino por defecto.
 - [ ] **CRLF en frontmatter adaptado:** `serializeFrontmatter` normaliza `\r\n`→`\n` dentro del frontmatter adaptado (Claude); en checkouts CRLF cambia finales de línea respecto del origen. Fidelidad menor, sólo en archivos adaptados.
 - [ ] **DECISIÓN PENDIENTE — adapter de vscode vs D5:** los agents de vscode se copian **verbatim** (sin adapter), conservando `mode/color/temperature/permission` y `model: opencode-go/*` en `.github/agents/<n>.agent.md`; esto contradice el requirement genérico "aplicable a cualquier host" de `skill-frontmatter-adapters` (D5) y, a la vez, el requirement "Preservación por defecto". Decidir: (a) adaptar vscode como claude; (b) acotar el requirement genérico a hosts con adapter; o (c) aceptar verbatim con racional documentado.
+
+## Observaciones diferidas — change `add-antigravity-full-support`
+
+Revisar después de la implementación (no bloquean el change).
+
+- [ ] **Determinar empíricamente qué tool ids acepta el frontmatter de subagents de Antigravity sin colgar el subagente.** La doc oficial usa "e.g." para los ejemplos de `tools` → la lista **no es exhaustiva**: ids como `create_file`, `find_file`, `write_to_file` **podrían** ser válidos en frontmatter aunque no estén documentados (hoy solo se conocen como SDK `BuiltinTools` o guías de comunidad). La regla dura actual (emitir solo los 5 confirmados; el resto omitir con aviso) es conservadora y correcta. La deuda es resolverlo **en runtime** (probar ids candidatos contra un subagente real y ver si arranca/ejecuta sin colgarse), **no** buscando en docs (la doc no publica la lista completa).
 
 ## Futuro (sin fecha) - Contexto colaborativo para equipos (Idea)
 

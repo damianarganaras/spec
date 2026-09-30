@@ -40,12 +40,14 @@ Uso:
                                    nombre) y el adapter de frontmatter del host. NO arbitra el
                                    descubrimiento entre hosts: si dos leen el mismo directorio, eso es
                                    efecto del host (no se deduplica ni se elige "ganador").
+                                   antigravity instala skills, agents adaptados y commands como skills
+                                   (.agents/*) y mergea el MCP de workspace .agents/mcp_config.json.
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
                                    Parado en un proyecto con .ancletorc opera sobre ese proyecto;
                                    usa --global para forzar el alcance global
   ancleto upgrade [--agent <nombre>]  Re-aplica templates (LOCKED) y skills sobre el proyecto actual
-  ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--exclude <globs>]
-                                     Crea .ancletorc en el repositorio actual
+  ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--exclude <globs>] [--no-mcp]
+                                     Crea .ancletorc en el repositorio actual y configura el MCP del host
                                      (interactivo en TTY: banner + menu; Azure desactivado por defecto)
   ancleto discovery --check           Estado del seed (READY/STALE/PARTIAL/MISSING)
   ancleto discovery [--compress] [--include G] [--ignore G] [--token-budget N]
@@ -151,12 +153,28 @@ async function writeProjectsRegistry(reg) {
   return file
 }
 
+// D9: directorios locales de agents derivados del host/manifiesto, no de
+// `.opencode/agents` fijo. Un proyecto antigravity usa `.agents/agents`.
+function localAgentDirs(rc, agent) {
+  const dirs = new Set(rc?.installedPaths?.agents || [])
+  const spec = AGENT_TARGETS[agent || rc?.agent]?.agents
+  if (spec?.dir) dirs.add(spec.dir)
+  return [...dirs]
+}
+
+async function hasLocalAgents(baseDir, rc, agent) {
+  for (const d of localAgentDirs(rc, agent)) {
+    if (await exists(join(baseDir, d))) return true
+  }
+  return false
+}
+
 async function registerProject(projectDir, { agent, tier } = {}) {
   const abs = resolve(projectDir)
   const rc = await readAncletorc(abs)
   const tierFile = join(abs, '.opencode', '.ancleto-tier')
   const localTier = (await exists(tierFile)) ? (await readFile(tierFile, 'utf8')).trim() : null
-  const hasScopedAgents = await exists(join(abs, '.opencode', 'agents'))
+  const hasScopedAgents = await hasLocalAgents(abs, rc, agent)
   const entry = {
     path: abs.replace(/\\/g, '/'),
     version: await packageVersion(),
@@ -231,7 +249,7 @@ async function projectStatus(entry) {
   if (!rc) return { ...entry, exists: false, reason: 'sin .ancletorc' }
   const tierFile = join(abs, '.opencode', '.ancleto-tier')
   const tier = (await exists(tierFile)) ? (await readFile(tierFile, 'utf8')).trim() : null
-  const scoped = await exists(join(abs, '.opencode', 'agents'))
+  const scoped = await hasLocalAgents(abs, rc, entry.agent)
   return {
     ...entry,
     exists: true,
@@ -729,6 +747,47 @@ async function mergeMcp(configDir, mcpMap) {
   return { file: targets.join(', '), added: [...new Set(added)] }
 }
 
+// D6: MCP de workspace de Antigravity (`.agents/mcp_config.json`). Merge NO
+// destructivo: se preservan `mcpServers` y demas claves top-level, no se pisa un
+// servidor homonimo, y un JSON invalido se avisa sin sobrescribir. Esquema del host
+// `{ command, args, env }` (se descartan `type`/`enabled` de opencode).
+async function mergeAntigravityMcp(projectDir, mcpMap) {
+  if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
+  const file = join(projectDir, '.agents', 'mcp_config.json')
+  let cfg = {}
+  if (await exists(file)) {
+    try {
+      cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    } catch {
+      console.warn(`ancleto: no se pudo leer ${basename(file)} como JSON; MCP de Antigravity no se modifico`)
+      return { file, added: [] }
+    }
+  }
+  cfg.mcpServers = cfg.mcpServers || {}
+  const added = []
+  for (const [name, def] of Object.entries(mcpMap)) {
+    if (cfg.mcpServers[name]) continue
+    const command = Array.isArray(def.command) ? def.command : [def.command]
+    const server = { command: command[0], args: command.slice(1) }
+    if (def.env) server.env = def.env
+    cfg.mcpServers[name] = server
+    added.push(name)
+  }
+  await mkdir(dirname(file), { recursive: true })
+  await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
+  return { file, added }
+}
+
+// D6: dueno unico del MCP de host. Antigravity mergea `.agents/mcp_config.json`;
+// el resto conserva `mergeMcp` sobre opencode.json (targetDir = .opencode del
+// proyecto o config global).
+async function setupHostMcp(targetDir, mcpMap, { projectDir = null, agent = null } = {}) {
+  if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
+  if (agent === 'antigravity' && projectDir) return mergeAntigravityMcp(projectDir, mcpMap)
+  await mkdir(targetDir, { recursive: true })
+  return mergeMcp(targetDir, mcpMap)
+}
+
 async function copyAssets(dest) {
   await mkdir(dest, { recursive: true })
   for (const d of ASSETS) {
@@ -755,9 +814,17 @@ const AGENT_TARGETS = {
     agents: { dir: '.github/agents', ext: '.agent.md' },
     commands: { dir: '.github/prompts', ext: '.prompt.md' }
   },
-  // Antigravity, Cursor y Roo: solo skills (D3/D7). .agents/skills es punto de
-  // lectura compartido (D2), no destino universal.
-  antigravity: { skills: { dir: '.agents/skills' }, agents: null, commands: null },
+  // Antigravity: agents adaptados en `.agents/agents` y commands materializados
+  // como skills dentro de `.agents/skills` (Antigravity no tiene dir de commands;
+  // los Workflows estan deprecados a favor de Agent Skills). `package: 'skill-dir'`
+  // marca que el asset se empaqueta como `<dir>/<n>/SKILL.md`, no como archivo plano.
+  antigravity: {
+    skills: { dir: '.agents/skills' },
+    agents: { dir: '.agents/agents', ext: MD_EXT },
+    commands: { dir: '.agents/skills', package: 'skill-dir' }
+  },
+  // Cursor y Roo: solo skills (D3/D7). .agents/skills es punto de lectura
+  // compartido (D2), no destino universal.
   cursor: { skills: { dir: '.cursor/skills' }, agents: null, commands: null },
   roo: { skills: { dir: '.roo/skills' }, agents: null, commands: null }
 }
@@ -788,14 +855,119 @@ function serializeFrontmatter(parsed) {
   return `${parsed.open}${inner}${parsed.close}${parsed.nl}${parsed.body}`
 }
 
-// D4/D5: hosts cuyo formato de agents difiere del origen requieren adaptacion
-// (hoy Claude y VS Code). El resto es identidad (preservacion verbatim). Nunca se
-// inventan equivalencias de model/tools.
-const AGENT_ADAPTER_HOSTS = new Set(['claude', 'vscode'])
+// D4/D5: hosts cuyo formato de agents difiere del origen requieren adaptacion.
+// Claude/VS Code eliminan las claves de opencode; Antigravity usa una
+// transformacion propia (D2). El resto es identidad (preservacion verbatim).
+const AGENT_ADAPTER_HOSTS = new Set(['claude', 'vscode', 'antigravity'])
 const AGENT_ADAPTER_DROP = new Set(['mode', 'color', 'temperature', 'permission', 'model', 'tools'])
 
-function adaptFrontmatter(content, host, assetKind) {
+// D3: tabla unica (fijada contra la tabla oficial de frontmatter de Custom
+// Subagents) de ids de Antigravity. Conjunto CERRADO: solo se emiten estos ids.
+// Los ids solo-SDK (`find_file`, `edit_file`, `search_web`, `read_url_content`,
+// ...), los de comunidad (`write_to_file`, `call_mcp_tool`,
+// `multi_replace_file_content`, ...) y los de delegacion (`invoke_subagent`,
+// `start_subagent`, `define_subagent`) NO se emiten: no estan confirmados en el
+// frontmatter y un id inexistente cuelga el subagent (Known Issue). Una clave no
+// listada aqui se omite con aviso a stderr, nunca en silencio (D5).
+const ANTIGRAVITY_TOOL_MAP = {
+  read: 'view_file',
+  edit: 'replace_file_content',
+  grep: 'grep_search',
+  bash: 'run_command',
+  todowrite: 'manage_task'
+}
+
+// Hijos directos del mapa `tools:` con su valor crudo (p. ej. `read: true`).
+function parseToolFlags(entry) {
+  const flags = []
+  if (!entry) return flags
+  let childIndent = null
+  for (const line of entry.lines.slice(1)) {
+    const m = /^(\s+)([A-Za-z0-9_-]+):\s*(.*?)\s*$/.exec(line)
+    if (!m) continue
+    if (childIndent === null) childIndent = m[1].length
+    if (m[1].length !== childIndent) continue
+    flags.push({ key: m[2], value: m[3] })
+  }
+  return flags
+}
+
+function frontmatterValue(entry, fallback = null) {
+  if (!entry) return fallback
+  const m = /^[A-Za-z0-9_-]+:\s*(.*?)\s*$/.exec(entry.lines[0] || '')
+  return m ? m[1] : fallback
+}
+
+// D2/D3/D5/D8: adapta el frontmatter de un agent de opencode al de Antigravity.
+// `name` (requerido por el host) se inyecta desde el nombre del archivo. `tools` se
+// emite siempre como lista (el default del host es la lista vacia). Nunca se inventa
+// un id: una clave sin id verificado se omite con aviso (un id inexistente cuelga el
+// subagent).
+function adaptAntigravityFrontmatter(content, name) {
+  const parsed = parseFrontmatter(content)
+  if (!parsed.hasFrontmatter) return content
+  const byKey = (k) => parsed.entries.find((e) => e.key === k)
+  // Claves que el adaptador gestiona: las dropeadas (AGENT_ADAPTER_DROP), las que
+  // re-emite (name/tools/mainAgent/subagent/model/commandExecutionPolicy) y los campos
+  // que preserva del origen (description/skills/mcpServers). Se filtran TODAS del
+  // conjunto conservado para que ninguna pueda quedar duplicada, y se re-emiten una
+  // sola vez en orden determinista, sin importar lo que declare la fuente.
+  const managed = new Set([
+    ...AGENT_ADAPTER_DROP,
+    'name',
+    'description',
+    'mainAgent',
+    'subagent',
+    'commandExecutionPolicy',
+    'mcpServers',
+    'skills'
+  ])
+  // Se conservan las claves extra (no gestionadas); los campos preservados se
+  // re-emiten abajo desde su primera ocurrencia en el origen.
+  const kept = parsed.entries.filter((e) => e.key && !managed.has(e.key))
+
+  const toolIds = []
+  for (const { key, value } of parseToolFlags(byKey('tools'))) {
+    if (value === 'false') continue
+    if (key === 'skill') continue // no es tool: se cubre por `skills`/surfaceo automatico (OQ2)
+    const id = ANTIGRAVITY_TOOL_MAP[key]
+    if (id) {
+      toolIds.push(id)
+      continue
+    }
+    // D3/D5: regla dura. Un id fuera del frontmatter confirmado (exista o no en el
+    // SDK) no se emite: un id inexistente cuelga el subagent. Se omite con aviso,
+    // nunca en silencio. El uso de MCP NO se infiere desde claves desconocidas del
+    // mapa `tools`: se expresa por `mcpServers`/`.agents/mcp_config.json` (D6).
+    console.error(`skip tool '${key}': no verified Antigravity id for agent '${name}'`)
+  }
+
+  const mode = frontmatterValue(byKey('mode'))
+  const mainAgent = mode === 'subagent' ? 'false' : 'true'
+  const subagent = mode === 'primary' ? 'false' : 'true'
+
+  // Orden determinista: name, description, tools, mainAgent, subagent, model,
+  // commandExecutionPolicy, mcpServers, skills, y luego las claves extra conservadas.
+  const out = [{ key: 'name', lines: [`name: ${name}`] }]
+  const description = byKey('description')
+  if (description) out.push(description)
+  out.push({ key: 'tools', lines: [`tools: [${toolIds.join(', ')}]`] })
+  out.push({ key: 'mainAgent', lines: [`mainAgent: ${mainAgent}`] })
+  out.push({ key: 'subagent', lines: [`subagent: ${subagent}`] })
+  out.push({ key: 'model', lines: [`model: inherit`] })
+  out.push({ key: 'commandExecutionPolicy', lines: [`commandExecutionPolicy: sandbox`] })
+  const mcpServers = byKey('mcpServers')
+  if (mcpServers) out.push(mcpServers)
+  const skills = byKey('skills')
+  if (skills) out.push(skills)
+  out.push(...kept)
+  parsed.entries = out
+  return serializeFrontmatter(parsed)
+}
+
+function adaptFrontmatter(content, host, assetKind, name) {
   if (assetKind !== 'agents' || !AGENT_ADAPTER_HOSTS.has(host)) return content
+  if (host === 'antigravity') return adaptAntigravityFrontmatter(content, name)
   const parsed = parseFrontmatter(content)
   if (!parsed.hasFrontmatter) return content
   parsed.entries = parsed.entries.filter((e) => !(e.key && AGENT_ADAPTER_DROP.has(e.key)))
@@ -829,7 +1001,30 @@ async function installAssetFiles(cat, projectDir, spec, host) {
     if (!e.isFile() || !e.name.endsWith(MD_EXT)) continue
     const base = e.name.slice(0, -MD_EXT.length)
     const content = await readFile(join(ROOT, cat, e.name), 'utf8')
-    await writeFile(join(destDir, `${base}${spec.ext}`), adaptFrontmatter(content, host, cat))
+    await writeFile(join(destDir, `${base}${spec.ext}`), adaptFrontmatter(content, host, cat, base))
+  }
+}
+
+// D4: un command de ancleto convertido en skill (`name` + `description` del origen,
+// body verbatim). Antigravity no tiene dir de commands: sus `/cleto-*` viven como
+// command-skills dentro de `.agents/skills`.
+function commandToSkill(content, name) {
+  const parsed = parseFrontmatter(content)
+  const desc = parsed.hasFrontmatter ? parsed.entries.find((e) => e.key === 'description') : null
+  const head = ['---', `name: ${name}`, ...(desc ? desc.lines : []), '---'].join('\n')
+  const body = parsed.hasFrontmatter ? parsed.body : content
+  return `${head}\n${body}`
+}
+
+// Materializa `commands/*.md` como `.agents/skills/<n>/SKILL.md` (asset empaquetado).
+async function installCommandSkills(projectDir, spec) {
+  const destBase = join(projectDir, spec.dir)
+  for (const e of await readdir(join(ROOT, 'commands'), { withFileTypes: true })) {
+    if (!e.isFile() || !e.name.endsWith(MD_EXT)) continue
+    const base = e.name.slice(0, -MD_EXT.length)
+    const content = await readFile(join(ROOT, 'commands', e.name), 'utf8')
+    await mkdir(join(destBase, base), { recursive: true })
+    await writeFile(join(destBase, base, 'SKILL.md'), commandToSkill(content, base))
   }
 }
 
@@ -850,6 +1045,12 @@ async function installAgentAssets(projectDir, agent) {
     const spec = model[cat]
     if (!spec) {
       warnUnsupportedAsset(cat, agent)
+      continue
+    }
+    // D4: un asset empaquetado (commands de Antigravity) vive dentro del layout de
+    // skills; no se registra un directorio de commands propio en installedPaths.
+    if (spec.package === 'skill-dir') {
+      await installCommandSkills(projectDir, spec)
       continue
     }
     await installAssetFiles(cat, projectDir, spec, agent)
@@ -875,6 +1076,16 @@ function installedExtFor(cat, dirRel) {
     if (spec && spec.dir === dirRel && spec.ext) return spec.ext
   }
   return null
+}
+
+// D9: hosts realmente instalados derivados del manifiesto (union de destinos
+// escritos), no de un unico `rc.agent`. Un proyecto multi-host debe sumar los
+// esperados de todos los hosts para no reportar huerfanos falsos.
+function installedHostsFromPaths(ip) {
+  const dirs = new Set([...(ip?.skills || []), ...(ip?.agents || []), ...(ip?.commands || [])])
+  return Object.entries(AGENT_TARGETS)
+    .filter(([, t]) => ['skills', 'agents', 'commands'].some((cat) => t[cat]?.dir && dirs.has(t[cat].dir)))
+    .map(([host]) => host)
 }
 
 const CHANGES_ROOT = 'aspec'
@@ -1115,7 +1326,7 @@ async function install(args) {
     }
   }
 
-  const res = await mergeMcp(target, mcpMap)
+  const res = await setupHostMcp(target, mcpMap, { projectDir, agent })
   const loc = projectDir
     ? `${projectDir} (layout ${agent} + templates en la raiz)`
     : `${target} (disponible en todos tus proyectos)`
@@ -1158,6 +1369,7 @@ async function upgradeCmd(args) {
 async function initProject(args) {
   const projectDir = process.cwd()
   const withAzure = args.includes('--with-azure')
+  const withMcp = !args.includes('--no-mcp')
   const agentFlag = scanAgentFlag(args)
   const tierFlag = scanTierFlag(args)
   const langFlag = scanLangFlag(args)
@@ -1237,7 +1449,12 @@ async function initProject(args) {
   await scaffoldAspec(projectDir)
   await refreshWorkingContext(projectDir)
   await registerProject(projectDir, { agent, tier: tier || null })
+  // D7: init configura el MCP del host igual que install (mismo dueno, sin rama
+  // especial por host); --no-mcp conserva el escape.
+  const mcpMap = withMcp ? buildDefaultMcp({}) : {}
+  const mcpRes = await setupHostMcp(join(projectDir, '.opencode'), mcpMap, { projectDir, agent })
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
+  if (mcpRes.added.length) console.log(`ancleto: MCP configurados: ${mcpRes.added.join(', ')} en ${mcpRes.file}`)
   console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''} (Idioma: ${language})`)
 }
 
@@ -1693,6 +1910,8 @@ async function checkCommand() {
     process.exit(1)
   }
   const ip = rc.installedPaths
+  // D9: la union de hosts instalados se lee del manifiesto, no de un unico `rc.agent`.
+  const installedHosts = installedHostsFromPaths(ip)
   let missing = 0
   let orphans = 0
 
@@ -1716,7 +1935,18 @@ async function checkCommand() {
       // La convencion de nombre del host (p. ej. vscode: .agent.md/.prompt.md)
       // se deriva del mismo modelo de destino; en skills no cambia el nombre.
       const ext = installedExtFor(cat, dirRel)
-      const expected = (await readdir(join(ROOT, cat))).sort().map((f) => (ext ? f.replace(/\.md$/, ext) : f))
+      let expected = (await readdir(join(ROOT, cat))).sort().map((f) => (ext ? f.replace(/\.md$/, ext) : f))
+      // D9: los command-skills de Antigravity viven dentro de `.agents/skills`; el
+      // conjunto esperado de ese dir suma el catalogo de skills y los commands de
+      // cualquier host instalado que empaquete commands ahi (union, no rc.agent).
+      const packagesCommandsHere = cat === 'skills' && installedHosts.some((h) => {
+        const cs = AGENT_TARGETS[h].commands
+        return cs?.package === 'skill-dir' && cs.dir === dirRel
+      })
+      if (packagesCommandsHere) {
+        const cmds = (await readdir(join(ROOT, 'commands'))).filter((f) => f.endsWith(MD_EXT)).map((f) => f.slice(0, -MD_EXT.length))
+        expected = [...new Set([...expected, ...cmds])].sort()
+      }
       const actual = (await readdir(destDir)).sort()
       const missingFiles = expected.filter((f) => !actual.includes(f))
       const orphanFiles = actual.filter((f) => !expected.includes(f))
@@ -1749,10 +1979,13 @@ async function checkTierOrphan(cwd) {
   if (!(await exists(tierFile))) return warnings
   const tier = (await readFile(tierFile, 'utf8')).trim()
   if (!TIERS[tier]) return warnings
-  const localAgents = join(cwd, '.opencode', 'agents')
+  // D9: se cuentan los agents locales del host realmente instalados, no
+  // `.opencode/agents` fijo (un proyecto antigravity usa `.agents/agents`).
+  const rc = await readAncletorc(cwd)
   let count = 0
-  if (await exists(localAgents)) {
-    count = (await readdir(localAgents)).filter((f) => f.endsWith('.md')).length
+  for (const d of localAgentDirs(rc)) {
+    const p = join(cwd, d)
+    if (await exists(p)) count += (await readdir(p)).filter((f) => f.endsWith(MD_EXT)).length
   }
   if (count === 0) {
     warnings.push(`tier "${tier}" sin agentes locales donde aplicarlo — este proyecto usa los agentes globales. Corre 'ancleto install --project .' para que el tier aplique, o borra .opencode/.ancleto-tier.`)

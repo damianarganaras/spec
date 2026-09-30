@@ -1,11 +1,11 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas de skills por agente, frontmatter, wizard y MCP"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, frontmatter de agents, commands como skills, wizard y MCP"
 sources: ["src/cli/**"]
-sourcesSha: e4ca5aa8cab5c80704b14f32531d4cff5d5fc589a24b184a5b96b8bd19173ac3
-generatedAt: 2026-09-30T14:03:46Z
-pluginVersion: 0.7.1
+sourcesSha: 8dc1f19abbf4f1d845275059842c7e4017b5a5c79a912939cea66f8db39ba0a4
+generatedAt: 2026-09-30T19:34:11Z
+pluginVersion: 0.7.2
 skillVersion: '2.3'
 ---
 
@@ -14,7 +14,7 @@ skillVersion: '2.3'
 ## Responsabilidad
 
 `src/cli/index.js` es el **único entry point** (`bin.ancleto`/`bin.aspec`). Parseo de
-comandos, instalación de assets, resolución de agente/IDE, instalación de skills por agente,
+comandos, instalación de assets por host, resolución de agente/IDE, adaptación de frontmatter,
 gestión de tiers, MCP, discovery, memoria, registro de proyectos y diagnósticos. `src/cli/ui.js`
 aporta el wizard. Evidencia: `package.json`, `src/cli/index.js`.
 
@@ -24,40 +24,107 @@ aporta el wizard. Evidencia: `package.json`, `src/cli/index.js`.
 (context|list|doctor)`, `specs check`, `stats`, `projects (list|scan|prune|info|update)`,
 `list --projects`, `check`, `doctor`, `--help`, `--version`. Evidencia: `src/cli/index.js`, `README.md`.
 
-## Instalación de skills por agente (área clave)
+## Modelo único de destinos por host (`AGENT_TARGETS`)
 
-- **`SUPPORTED_AGENTS = ['opencode','vscode','antigravity','cursor','roo']`**; default
-  `opencode`. `scanAgentFlag` valida `--agent` y `resolveAgent` prioriza flag → `.ancletorc`
-  (`agent`) → wizard TTY → default.
-- **`AGENT_SKILLS_DIR`** mapea el IDE a su carpeta de skills:
+`AGENT_TARGETS` es la **fuente única de rutas** (D1): cada host declara `skills`, `agents` y
+`commands` con su `dir` y su convención de nombre (`ext`); `null` = asset no soportado por ese
+host. `SUPPORTED_AGENTS = ['opencode','claude','vscode','antigravity','cursor','roo']`; default
+`opencode`. `scanAgentFlag` valida `--agent` y `resolveAgent` prioriza flag → `.ancletorc`
+(`agent`) → wizard TTY → default. Evidencia: `src/cli/index.js`.
 
-  | Agente | Directorio |
-  |---|---|
-  | `opencode` | `.opencode/skills` |
-  | `vscode` | `.vscode/skills` |
-  | `antigravity` | `.antigravity/skills` |
-  | `cursor` | `.cursor/skills` |
-  | `roo` | `.roo/skills` |
+| Host | Skills | Agents | Commands |
+|---|---|---|---|
+| `opencode` | `.opencode/skills` | `.opencode/agents/<n>.md` | `.opencode/commands/<n>.md` |
+| `claude` | `.claude/skills` | `.claude/agents/<n>.md` | `.claude/commands/<n>.md` |
+| `vscode` | `.github/skills` | `.github/agents/<n>.agent.md` | `.github/prompts/<n>.prompt.md` |
+| `antigravity` | `.agents/skills` | `.agents/agents/<n>.md` | `.agents/skills/<n>/SKILL.md` (empaquetado como skill) |
+| `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) |
+| `roo` | `.roo/skills` | — (no soportado) | — (no soportado) |
 
-- **`installAgentSkills(projectDir, agent)`** (dueño único): resuelve el directorio con
-  `AGENT_SKILLS_DIR[agent]` (fallback a `opencode`), crea el destino y copia las 11 skills de
-  ciclo (`ANCLETO_SKILLS`: `ancleto-new`, `-propose`, `-apply`, `-verify`, `-archive`,
-  `-bulk-archive`, `-continue`, `-explore`, `-ff`, `-onboard`, `-workflow`). Si el agente **no**
-  es `opencode`, copia además el árbol `skills/` completo (auxiliares: `ancleto-commit`,
-  `ancleto-pr`, `triage-clarifier`, `ancleto-technical-discovery`, `ancleto-upgrade`,
-  `ancleto-recall`, `ancleto-sync-specs`). Devuelve el path relativo con `/`.
-- **Frontmatter de skills: copia literal.** `installAgentSkills` hace `cp` recursivo y no
-  transforma el frontmatter (`name`, `description`, `license`, `compatibility`, `metadata`);
-  el mismo archivo se copia a cualquier IDE. La adaptación dinámica por IDE (**A1**) está
-  **planeada y sin implementar** en v0.7.0. Evidencia: `src/cli/index.js`, `BACKLOG.md` (A1),
-  `skills/*/SKILL.md`.
-- Los **agents/commands** no se instalan por agente: se copian siempre a `.opencode/agents` y
-  `.opencode/commands` (proyecto) o al directorio global de config.
-- **Manifiesto `.ancletorc`**: `writeManifest` escribe `schemaVersion`, `version` (= versión
-  del paquete), `installedAt`, `installedPaths` (`templates: [AGENTS.md, PRODUCT.md]`,
-  `agents: ['.opencode/agents']`, `commands: ['.opencode/commands']`, `skills: [agentSkillsDir]`),
-  `agent`, `language`, `discovery` y `gratisModel`. `ancleto check` compara los archivos
-  instalados contra ese manifiesto. Evidencia: `src/cli/index.js`.
+- **Antigravity no tiene directorio de commands**: sus `/cleto-*` se materializan como
+  **command-skills** dentro de `.agents/skills/<n>/SKILL.md` (`package: 'skill-dir'`). No existe
+  `.agents/commands`.
+- **Cursor y Roo: solo skills** (D3/D7). `.agents/skills` es punto de lectura compartido (D2),
+  no destino universal.
+- **`installAgentAssets(projectDir, agent)`** (dueño único): materializa skills, agents y
+  commands en el destino nativo del host y devuelve las rutas escritas. Un asset `null` no deja
+  rastro y dispara `warnUnsupportedAsset` → `skip <asset>: not supported by host '<host>'`
+  (stderr, no bloqueante). Evidencia: `src/cli/index.js`.
+
+## Frontmatter de agents por host
+
+`AGENT_ADAPTER_HOSTS = {claude, vscode, antigravity}`; el resto es identidad (copia verbatim).
+`AGENT_ADAPTER_DROP = {mode, color, temperature, permission, model, tools}`: claude/vscode
+eliminan esas claves de opencode. Evidencia: `src/cli/index.js`.
+
+### Antigravity (`adaptAntigravityFrontmatter`)
+
+Transformación propia con **orden determinista**: `name` (inyectado del nombre de archivo),
+`description`, `tools: [...]` (siempre, aun `[]`), `mainAgent`, `subagent`, `model: inherit`
+(fijo), `commandExecutionPolicy: sandbox` (fijo), `mcpServers` (preservado si existía),
+`skills` (preservado) y luego las claves extra no gestionadas. Las claves gestionadas se
+filtran y re-emiten **una sola vez** (sin duplicados). **Eliminados**: `mode`, `color`,
+`temperature`, `permission`, `model` de catálogo opencode y `tools` en forma de mapa.
+
+Mapeo de `mode` → flags: `primary` → (`mainAgent:true`, `subagent:false`); `subagent` →
+(`false`,`true`); sin `mode` → (`true`,`true`).
+
+### Mapeo de tools (conjunto cerrado)
+
+Solo se emiten estos 5 ids verificados contra la tabla oficial de frontmatter de Custom
+Subagents:
+
+| Clave opencode | Id Antigravity |
+|---|---|
+| `read` | `view_file` |
+| `edit` | `replace_file_content` |
+| `grep` | `grep_search` |
+| `bash` | `run_command` |
+| `todowrite` | `manage_task` |
+
+**Política de omisión (regla dura)**: cualquier otra clave del mapa `tools` —ids solo-SDK
+(`find_file`, `edit_file`, `search_web`, `read_url_content`), de comunidad (`write_to_file`,
+`call_mcp_tool`, `multi_replace_file_content`) o de delegación (`invoke_subagent`,
+`start_subagent`, `define_subagent`), y también `write`/`glob`/`task`/`webfetch`/`websearch`—
+**no se emite** y produce un aviso a stderr no bloqueante:
+`skip tool '<k>': no verified Antigravity id for agent '<n>'`. Un id inexistente cuelga el
+subagent (Known Issue). El tool `skill` se saltea (se cubre por el campo `skills`).
+`call_mcp_tool` está **prohibido**; el uso de MCP se expresa por `mcpServers` /
+`.agents/mcp_config.json`, nunca se infiere desde claves desconocidas del mapa `tools`.
+Evidencia: `src/cli/index.js`.
+
+## Commands como skills (Antigravity)
+
+`installCommandSkills` / `commandToSkill` leen `commands/*.md` y escriben
+`.agents/skills/<base>/SKILL.md` con frontmatter `name: <base>` + `description` de origen y
+**body verbatim**. No se registran en `installedPaths.commands` (queda vacío para antigravity):
+el asset vive dentro del layout de skills. Evidencia: `src/cli/index.js`.
+
+## MCP de host (`setupHostMcp`, dueño único)
+
+- **Antigravity**: `.agents/mcp_config.json` con
+  `{ "mcpServers": { "<n>": { "command": "...", "args": [...], "env": {...} } } }`. Merge **no
+  destructivo**: preserva `mcpServers` y claves top-level, no pisa homónimos, y un JSON inválido
+  avisa y **no escribe**. Se descartan `type`/`enabled` de opencode.
+- **Resto de hosts**: `mergeMcp` sobre `opencode.json` (targetDir = `.opencode` del proyecto o
+  config global).
+- **`init` ahora configura MCP** (nuevo, D7) igual que `install`, con el mismo dueño y sin rama
+  especial por host; `--no-mcp` es el escape en ambos. Defaults: `ancleto-memory` (stdio) y
+  `caveman` si está en `PATH`; `engram` solo con `--with-engram`; `azure-devops` si
+  `azure.enabled: true`. Evidencia: `src/cli/index.js`.
+
+## `check` / tier / `projects` host-aware
+
+- **`localAgentDirs(rc, agent)`**: unión de `installedPaths.agents` ∪ destino del host
+  (`AGENT_TARGETS[agent].agents.dir`). Evita el falso "tier sin agentes locales" en hosts como
+  antigravity (`.agents/agents`).
+- **`installedHostsFromPaths(ip)`**: deriva los hosts realmente instalados de `installedPaths`
+  (unión de destinos escritos), no de un único `rc.agent`. Un proyecto multi-host suma los
+  esperados de todos los hosts y evita huérfanos falsos.
+- **`check`**: el `expected` de un directorio de skills incluye los command-skills cuando algún
+  host instalado empaqueta commands como skill (`package:'skill-dir'` y mismo `dir`).
+- **`installedExtFor`**: deriva la convención de nombre del host (p. ej. vscode
+  `.agent.md`/`.prompt.md`) del mismo modelo de destino. Evidencia: `src/cli/index.js`.
 
 ## Flujo de alta (`initProject` / `install`)
 
@@ -66,16 +133,16 @@ aporta el wizard. Evidencia: `package.json`, `src/cli/index.js`.
 2. `copyTemplates` copia `AGENTS.md`/`PRODUCT.md` con `mergeLocked`: reemplaza el interior de
    los bloques `<!-- LOCKED: name -->`, preserva EXTENSIBLE, inserta bloques nuevos y no toca
    archivos con tags malformados (`extractLockedBlocks`, `replaceLockedBlock`, `findInsertAnchor`).
-3. `copyAssets` (agents/commands/skills) + `installAgentSkills` escriben en el directorio del
-   agente según la tabla anterior.
+3. `installAgentAssets` materializa skills/agents/commands en el destino nativo del host
+   (tabla anterior), adaptando el frontmatter de agents según el host.
 4. `migrateLegacyOpenspec` migra `openspec/` → `aspec/` si procede (ver reglas).
 5. `scaffoldAspec` crea `aspec/changes/` y `aspec/config.yaml` sin pisar lo existente.
 6. `applyTier` reescribe la línea `model:` de cada agente; resuelve `gratisModel`
    (env/persistido/probe) y lo guarda en `.ancletorc`. Paridad `init`/`install` en el tier
    guardado (v0.6.36/v0.6.37).
-7. `mergeMcp` fusiona MCP de forma **no destructiva** en la config del IDE: `ancleto-memory`
-   y `caveman` por defecto, `engram` con `--with-engram`, `azure-devops` si
-   `azure.enabled: true` y no `--no-mcp`.
+7. `setupHostMcp` configura el MCP del host de forma **no destructiva** (antigravity →
+   `.agents/mcp_config.json`; resto → `opencode.json`): `ancleto-memory` y `caveman` por
+   defecto, `engram` con `--with-engram`, `azure-devops` si `azure.enabled: true` y no `--no-mcp`.
 8. `writeManifest` actualiza `.ancletorc` y `registerProject` anota el repo en
    `~/.config/ancleto/projects.json` (override: `ANCLETO_PROJECTS_FILE`).
 9. `refreshWorkingContext` regenera `.ancleto/working-context.md` desde la memoria.
@@ -94,21 +161,23 @@ aporta el wizard. Evidencia: `package.json`, `src/cli/index.js`.
 
 - **Cero dependencias**: todo con `node:*` y `spawn`; UI de terminal con Raw Mode propio.
 - **Idempotencia y no destrucción**: `init`/`install` no pisan config ni documentos del usuario;
-  los bloques LOCKED se re-aplican y el resto se preserva.
-- **Paridad `init`/`install`**: los flags (`--agent`, `--tier`, `--lang`, `--exclude`) y el tier
-  guardado se comportan igual en ambos, incluido re-init sin flags.
+  los bloques LOCKED se re-aplican y el resto se preserva. `installedPaths` es la unión de
+  destinos escritos (`unionInstalledPaths`); no se borran rutas previas.
+- **Paridad `init`/`install`**: los flags (`--agent`, `--tier`, `--lang`, `--exclude`, `--no-mcp`)
+  y el tier guardado se comportan igual en ambos, incluido re-init sin flags.
 - **`--check` no empaqueta**: state-only sobre hashes; el pack se genera solo en `discovery`
   y no se consume contexto por defecto.
-- **Errores no bloqueantes**: binarios ausentes (MCP/git/gh/az) se omiten con warning.
+- **Errores no bloqueantes**: binarios ausentes (MCP/git/gh/az) y assets no soportados se omiten
+  con warning a stderr.
 - `ancleto --version` lee `package.json` en runtime (no hardcodeado).
 
 ## Paths clave
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_SKILLS_DIR`, `ANCLETO_SKILLS`, `installAgentSkills`, `SUPPORTED_AGENTS`, `writeManifest`, `migrateLegacyOpenspec`, `mergeLocked`. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `adaptAntigravityFrontmatter`, `ANTIGRAVITY_TOOL_MAP`, `installCommandSkills`, `setupHostMcp`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `mergeLocked`. |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED/EXTENSIBLE. |
-| `skills/*/SKILL.md` | Catálogo instalable; frontmatter propio copiado tal cual. |
+| `skills/*/SKILL.md` | Catálogo instalable; frontmatter adaptado por host en agents, copiado en skills. |
 | `test/cli.test.js`, `test/content-guards.test.js` | Guardas del CLI y de contenido. |
-| `README.md`, `BACKLOG.md` | Contrato operativo y backlog (A1, M1, M2). |
+| `README.md`, `BACKLOG.md` | Contrato operativo y backlog (M1, M2). |

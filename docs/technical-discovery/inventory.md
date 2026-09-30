@@ -2,15 +2,15 @@
 node: inventory
 kind: inventory
 read_when: "cobertura del repositorio por directorios y globs, y qué queda fuera"
-generatedAt: 2026-09-30T14:03:46Z
-pluginVersion: 0.7.1
+generatedAt: 2026-09-30T19:34:11Z
+pluginVersion: 0.7.2
 skillVersion: '2.3'
 ---
 
 # Inventario (orientación)
 
 Cobertura por directorio/glob, no auditoría archivo por archivo. Conteos de
-`.discovery-map.json` (root, sin ignorados de Claude/anclote; `total_files: 528`).
+`.discovery-map.json` (root, sin ignorados de Claude/anclote; `total_files: 543`).
 
 | Área | Contenido | Archivos |
 |---|---|---|
@@ -20,13 +20,21 @@ Cobertura por directorio/glob, no auditoría archivo por archivo. Conteos de
 | `commands/*.md` | 12 comandos `/cleto-*`. | 12 |
 | `skills/*/SKILL.md` (+ references) | 18 skills nativas. | 32 |
 | `templates/` | `AGENTS.md`, `PRODUCT.md`. | 2 |
-| `aspec/` | `config.yaml` + `specs/` (aspec-bootstrap, memory-engine, review) + `changes/archive/` (6 changes). | 25 |
+| `aspec/` | `config.yaml` + `specs/` (aspec-bootstrap, memory-engine, review) + `changes/archive/`. | 40 |
 | `test/**` | `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `mcp`, `memory-engine`, `tier-models`, `working-context` (`.test.js`). | 8 |
 | `docs/**` | Documentación del framework + relevamiento (`.md`); excluida del pack. | 17 |
 | `documentation/**` | Material legado `lnx-cli/` + guías `.md`/`.pdf`; gitignored. | 340 |
 | `.github/workflows/**` | `publish.yml` (publicación a npm + Release). | 1 |
-| `.opencode/**` | Instalación local (agents/commands/skills/opencode.json/tier); gitignored. Incluye el directorio de skills del agente (`AGENT_SKILLS_DIR`). | 59 |
+| `.opencode/**` | Instalación local (agents/commands/skills/opencode.json/tier); gitignored. Este repo usa el host `opencode`. | 59 |
 | Raíz | `package.json`, `package-lock.json`, `README.md`, `BACKLOG.md`, `DESIGN-memory-engine-v0.2.0.md`, `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `.ancletorc`. | 11 |
+
+## Destinos por host (no presentes en este repo)
+
+`AGENT_TARGETS` define destinos que solo existen si el proyecto se instala con ese host:
+`.claude/**`, `.github/skills|agents|prompts/**`, `.agents/skills|agents/**` y
+`.agents/mcp_config.json` (antigravity), `.cursor/skills`, `.roo/skills`. Este repo se
+inicializó con `opencode`, por lo que solo materializa `.opencode/**`. Detalle:
+`units/cli-install.md`.
 
 ## Exclusiones efectivas del pack (`tier: minimo`)
 

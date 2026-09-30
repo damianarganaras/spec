@@ -532,6 +532,36 @@ describe('CLI migracion openspec -> aspec (copia no destructiva)', () => {
     })
   })
 
+  it('install --project con openspec/ preexistente migra por copia antes del scaffold', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'openspec', 'changes', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), '# demo\n')
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /migrado/)
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n')
+      assert.ok(existsSync(join(dir, 'aspec', 'config.yaml')), 'scaffold posterior')
+      assert.ok(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), 'marcador escrito')
+      assert.equal(readFileSync(join(dir, 'openspec', 'changes', 'demo', 'proposal.md'), 'utf8'), '# demo\n', 'openspec/ se conserva como backup')
+    })
+  })
+
+  it('install --project con aspec/ real advierte, no migra y conserva openspec/', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'openspec'), { recursive: true })
+      writeFileSync(join(dir, 'openspec', 'old.txt'), 'viejo\n')
+      mkdirSync(join(dir, 'aspec', 'changes', 'existing'), { recursive: true })
+      writeFileSync(join(dir, 'aspec', 'changes', 'existing', 'spec.md'), '# existente\n')
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stderr, /no se migro/)
+      assert.equal(existsSync(join(dir, 'aspec', 'old.txt')), false, 'no migra')
+      assert.equal(readFileSync(join(dir, 'aspec', 'changes', 'existing', 'spec.md'), 'utf8'), '# existente\n', 'aspec/ real intacto')
+      assert.equal(readFileSync(join(dir, 'openspec', 'old.txt'), 'utf8'), 'viejo\n', 'openspec/ se conserva')
+      assert.equal(existsSync(join(dir, 'aspec', '.migrated-from-openspec')), false, 'sin marcador')
+    })
+  })
+
   it('un directorio vacio bajo aspec/changes cuenta como contenido real (conservador)', () => {
     withDir((dir) => {
       writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, version: '0.0.0' }) + '\n')

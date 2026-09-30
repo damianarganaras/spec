@@ -793,7 +793,7 @@ async function hasRealContent(aspecDir) {
 }
 
 // Migra la carpeta legacy openspec/ a aspec/ por copia recursiva (no destructiva).
-// Unico dueno del invariante: la invocan init y upgrade antes del scaffold.
+// Unico dueno del invariante: la invocan init e install --project antes del scaffold, y upgrade como paso previo (sin scaffold).
 async function migrateLegacyOpenspec(projectDir) {
   const legacyDir = join(projectDir, LEGACY_OPENSPEC_DIR)
   if (!(await exists(legacyDir))) return // sin legacy: no-op silencioso
@@ -962,6 +962,7 @@ async function install(args) {
 
   if (projectDir) {
     await copyTemplates(projectDir)
+    await migrateLegacyOpenspec(projectDir)
     await scaffoldAspec(projectDir)
     await refreshWorkingContext(projectDir)
     const agentSkillsDir = await installAgentSkills(projectDir, agent)

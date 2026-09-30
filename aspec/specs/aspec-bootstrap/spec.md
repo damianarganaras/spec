@@ -2,20 +2,20 @@
 
 ## Purpose
 
-Bootstrap de `aspec/` en los scripts de inicio (`ancleto init` y `ancleto upgrade`). Define la
-detección y migración automática de una carpeta legacy `openspec/` hacia `aspec/`, su orden respecto
-del scaffold, la conservación de `openspec/` como backup y la idempotencia del proceso sin pérdida de
-datos.
+Bootstrap de `aspec/` en los scripts de inicio (`ancleto init`, `ancleto install --project` y
+`ancleto upgrade`). Define la detección y migración automática de una carpeta legacy `openspec/` hacia
+`aspec/`, su orden respecto del scaffold, la conservación de `openspec/` como backup y la idempotencia
+del proceso sin pérdida de datos.
 
 ## Requirements
 
 ### Requirement: Detección automática de la carpeta legacy `openspec/` en los scripts de inicio
 
-Los scripts de inicio `ancleto init` y `ancleto upgrade` SHALL detectar la presencia de una carpeta
-`openspec/` en la raíz del proyecto, sin requerir un comando separado ni intervención manual del
-usuario. La detección y la eventual migración SHALL ejecutarse antes del scaffold de `aspec/`
-(creación de `aspec/changes/` y `aspec/config.yaml`), de modo que el scaffold NO SHALL impedir la
-detección.
+Los scripts de inicio `ancleto init`, `ancleto install --project` y `ancleto upgrade` SHALL detectar la
+presencia de una carpeta `openspec/` en la raíz del proyecto, sin requerir un comando separado ni
+intervención manual del usuario. La detección y la eventual migración SHALL ejecutarse antes del
+scaffold de `aspec/` (creación de `aspec/changes/` y `aspec/config.yaml`), de modo que el scaffold NO
+SHALL impedir la detección.
 
 #### Scenario: `init` detecta `openspec/` antes de crear `aspec/`
 
@@ -29,10 +29,17 @@ detección.
 - **WHEN** `ancleto upgrade` se ejecuta en una raíz con `.ancletorc` que contiene `openspec/`
 - **THEN** detecta la carpeta legacy como punto de partida de la migración
 
+#### Scenario: `install --project` detecta `openspec/` antes de crear `aspec/`
+
+- **WHEN** `ancleto install --project` se ejecuta en una raíz que contiene `openspec/` y no contiene
+  `aspec/` con contenido real
+- **THEN** detecta la carpeta legacy antes de ejecutar el scaffold de `aspec/`
+- **AND** la migración no queda bloqueada por el scaffold
+
 #### Scenario: Sin carpeta legacy no se actúa
 
 - **WHEN** no existe `openspec/` en la raíz del proyecto
-- **THEN** `init` y `upgrade` no ejecutan ninguna acción de migración
+- **THEN** `init`, `install --project` y `upgrade` no ejecutan ninguna acción de migración
 - **AND** el comando completa sin error
 
 ### Requirement: Migración por copia del contenido legacy cuando `aspec/` no existe o no tiene contenido real
@@ -49,7 +56,7 @@ raíz como backup y ambos directorios SHALL convivir; el comando NO SHALL elimin
 #### Scenario: Migración preserva estructura y contenido
 
 - **WHEN** existe `openspec/changes/demo/proposal.md` y no existe `aspec/`
-- **AND** se ejecuta `init` o `upgrade`
+- **AND** se ejecuta `init`, `install --project` o `upgrade`
 - **THEN** el archivo queda en `aspec/changes/demo/proposal.md` con contenido idéntico
 - **AND** `openspec/changes/demo/proposal.md` sigue existiendo (se conserva como backup)
 - **AND** el comando reporta que el contenido fue migrado
@@ -59,7 +66,7 @@ raíz como backup y ambos directorios SHALL convivir; el comando NO SHALL elimin
 
 - **WHEN** existe `aspec/` con sólo el scaffold (`aspec/changes/` vacío y/o `aspec/config.yaml`) y
   existe `openspec/` con contenido
-- **AND** se ejecuta `init` o `upgrade`
+- **AND** se ejecuta `init`, `install --project` o `upgrade`
 - **THEN** el contenido de `openspec/` se copia dentro de `aspec/`
 - **AND** el `aspec/config.yaml` existente se conserva sin sobrescribir
 - **AND** `openspec/` se conserva como backup
@@ -82,7 +89,7 @@ indique que la revisión es manual.
 
 - **WHEN** la raíz contiene `openspec/` y `aspec/` con contenido real propio
 - **AND** no existe el marcador `aspec/.migrated-from-openspec`
-- **AND** se ejecuta `init` o `upgrade`
+- **AND** se ejecuta `init`, `install --project` o `upgrade`
 - **THEN** `aspec/` conserva su contenido sin cambios
 - **AND** `openspec/` permanece intacta
 - **AND** el comando emite una advertencia de revisión manual
@@ -97,7 +104,7 @@ eliminarse sin haber quedado preservado en `aspec/`.
 
 #### Scenario: Segunda ejecución tras migrar
 
-- **WHEN** `upgrade` o `init` se ejecuta y una corrida anterior migró por copia `openspec/` a `aspec/`
+- **WHEN** `upgrade`, `init` o `install --project` se ejecuta y una corrida anterior migró por copia `openspec/` a `aspec/`
 - **AND** existe el marcador `aspec/.migrated-from-openspec` y `openspec/` sigue existiendo como backup
 - **THEN** la segunda ejecución no vuelve a copiar el contenido a `aspec/`
 - **AND** no emite advertencia

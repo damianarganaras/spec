@@ -83,6 +83,8 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   design → tasks → implementación → validación → review → archive). Tag `v0.6.38` creado sobre el
   merge `development→main`. **Sin publicación nueva en npm** (el `package.json` quedó en `0.6.37` y
   el workflow omite `npm publish` si la versión ya existe; solo se creó el Release de GitHub).
+- ✅ Change SDD `migrate-openspec-to-aspec` completado y archivado en `aspec/changes/archive/2026-09-29-migrate-openspec-to-aspec/`: directorio de changes `aspec/` (antes `openspec/`) con migración automática en `ancleto upgrade`.
+- ✅ Fix `direct-implementation`: `install --project` ahora ejecuta la migración legacy `openspec/` → `aspec/` (paridad con `init`/`upgrade`) — `migrateLegacyOpenspec` antes de `scaffoldAspec` en `src/cli/index.js`; spec `aspec/specs/aspec-bootstrap/spec.md` actualizado con el tercer ejecutor del invariante.
 
 ## Estado actual
 
@@ -104,8 +106,6 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 ## En curso / próximo
 
 - [ ] **Validar comportamiento de Antigravity IDE vs Antigravity CLI** — verificar si se comportan igual; el tema "Linux + Antigravity" va junto con este item.
-- [ ] **Migración openspec→aspec** *(en progreso)* — candidato ya cubierto por el change `migrate-openspec-to-aspec`; el change ya arrancó.
-- [ ] **`install --project` no ejecuta la detección/migración legacy `openspec/` → `aspec/`** — `install --project` también llama `scaffoldAspec` (`src/cli/index.js:930-933`) pero quedó fuera de scope del change `migrate-openspec-to-aspec`; evaluar extenderlo.
 
 ## v0.7.0 - Multi-Agent Adaptability & Memory Ops (Planeado)
 - [ ] **M1 (Export/Import):** Commands `ancleto memory export` e `import` para respaldar/compartir reglas y decisiones activas en JSON/SQL sanitizado.

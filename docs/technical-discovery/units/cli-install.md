@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo el CLI inicializa e instala el framework, rutas por host, frontmatter de agents, commands como skills, wizard y MCP"
 sources: ["src/cli/**"]
 sourcesSha: 8dc1f19abbf4f1d845275059842c7e4017b5a5c79a912939cea66f8db39ba0a4
-generatedAt: 2026-09-30T19:34:11Z
-pluginVersion: 0.7.2
+generatedAt: 2026-09-30T21:56:00Z
+pluginVersion: 0.8.0
 skillVersion: '2.3'
 ---
 
@@ -20,16 +20,18 @@ aporta el wizard. Evidencia: `package.json`, `src/cli/index.js`.
 
 ## Superficie de comandos
 
-`install`, `update`, `upgrade`, `init`, `discovery` (`--check` / pack), `mcp`, `memory
-(context|list|doctor)`, `specs check`, `stats`, `projects (list|scan|prune|info|update)`,
-`list --projects`, `check`, `doctor`, `--help`, `--version`. Evidencia: `src/cli/index.js`, `README.md`.
+`install`, `update`, `upgrade`, `init`, `export` (`--tar`), `import` (`<bundle>`/`--repair`),
+`discovery` (`--check` / pack), `mcp`, `memory (context|list|doctor)`, `specs check`, `stats`,
+`projects (list|scan|prune|info|update)`, `list --projects`, `check`, `doctor`, `--help`,
+`--version`. Flags transversales: `--agent`, `--tier`, `--lang`, `--profile`, `--exclude`,
+`--no-mcp`, `--with-engram`, `--yes` (solo importación openspec). Evidencia: `src/cli/index.js`, `README.md`.
 
 ## Modelo único de destinos por host (`AGENT_TARGETS`)
 
 `AGENT_TARGETS` es la **fuente única de rutas** (D1): cada host declara `skills`, `agents` y
 `commands` con su `dir` y su convención de nombre (`ext`); `null` = asset no soportado por ese
-host. `SUPPORTED_AGENTS = ['opencode','claude','vscode','antigravity','cursor','roo']`; default
-`opencode`. `scanAgentFlag` valida `--agent` y `resolveAgent` prioriza flag → `.ancletorc`
+host. `SUPPORTED_AGENTS = ['opencode','claude','vscode','antigravity','cursor','roo','copilot']`;
+default `opencode`. `scanAgentFlag` valida `--agent` y `resolveAgent` prioriza flag → `.ancletorc`
 (`agent`) → wizard TTY → default. Evidencia: `src/cli/index.js`.
 
 | Host | Skills | Agents | Commands |
@@ -40,12 +42,17 @@ host. `SUPPORTED_AGENTS = ['opencode','claude','vscode','antigravity','cursor','
 | `antigravity` | `.agents/skills` | `.agents/agents/<n>.md` | `.agents/skills/<n>/SKILL.md` (empaquetado como skill) |
 | `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) |
 | `roo` | `.roo/skills` | — (no soportado) | — (no soportado) |
+| `copilot` | — (no soportado) | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` |
 
 - **Antigravity no tiene directorio de commands**: sus `/cleto-*` se materializan como
   **command-skills** dentro de `.agents/skills/<n>/SKILL.md` (`package: 'skill-dir'`). No existe
   `.agents/commands`.
 - **Cursor y Roo: solo skills** (D3/D7). `.agents/skills` es punto de lectura compartido (D2),
   no destino universal.
+- **Copilot: host de prompts.** Agents y commands comparten `.github/prompts/` con ext
+  `.prompt.md` (sin colisión: `orchestrator`/`coder`/… vs `cleto-*`). Skills `null` → aviso
+  `skip` no bloqueante; los prompts son por repo (`install --global` avisa y no genera).
+  El tier nunca toca prompts (no hay `model:` que reescribir).
 - **`installAgentAssets(projectDir, agent)`** (dueño único): materializa skills, agents y
   commands en el destino nativo del host y devuelve las rutas escritas. Un asset `null` no deja
   rastro y dispara `warnUnsupportedAsset` → `skip <asset>: not supported by host '<host>'`
@@ -53,9 +60,10 @@ host. `SUPPORTED_AGENTS = ['opencode','claude','vscode','antigravity','cursor','
 
 ## Frontmatter de agents por host
 
-`AGENT_ADAPTER_HOSTS = {claude, vscode, antigravity}`; el resto es identidad (copia verbatim).
-`AGENT_ADAPTER_DROP = {mode, color, temperature, permission, model, tools}`: claude/vscode
-eliminan esas claves de opencode. Evidencia: `src/cli/index.js`.
+`AGENT_ADAPTER_HOSTS = {claude, vscode, antigravity, copilot}`; el resto es identidad (copia verbatim).
+`AGENT_ADAPTER_DROP = {mode, color, temperature, permission, model, tools}`: claude/vscode/copilot
+eliminan esas claves de opencode. Copilot además suma la nota de picker en el orchestrator (el
+tier no cambia modelos). Evidencia: `src/cli/index.js`.
 
 ### Antigravity (`adaptAntigravityFrontmatter`)
 
@@ -106,12 +114,34 @@ el asset vive dentro del layout de skills. Evidencia: `src/cli/index.js`.
   `{ "mcpServers": { "<n>": { "command": "...", "args": [...], "env": {...} } } }`. Merge **no
   destructivo**: preserva `mcpServers` y claves top-level, no pisa homónimos, y un JSON inválido
   avisa y **no escribe**. Se descartan `type`/`enabled` de opencode.
+- **Copilot**: `copilot-mcp.json` en la raíz (`mergeCopilotMcp` en install, `refreshCopilotMcp`
+  en upgrade: regenera rotas y agrega ausentes sin tocar `copilot-instructions.md`).
 - **Resto de hosts**: `mergeMcp` sobre `opencode.json` (targetDir = `.opencode` del proyecto o
   config global).
 - **`init` ahora configura MCP** (nuevo, D7) igual que `install`, con el mismo dueño y sin rama
   especial por host; `--no-mcp` es el escape en ambos. Defaults: `ancleto-memory` (stdio) y
   `caveman` si está en `PATH`; `engram` solo con `--with-engram`; `azure-devops` si
   `azure.enabled: true`. Evidencia: `src/cli/index.js`.
+
+## Perfil `test` (overlay, `installProfileOverlay`)
+
+Con `profile: test` (`--profile`, `test:playwright` como alias; `SUPPORTED_PROFILES =
+general|test`; persistido en `.ancletorc`), `installProfileOverlay` reinstala
+`profiles/test/agents` + `commands` sobre los destinos nativos del host (misma `ext` y mismo
+adapter que la base; funciona con opencode, claude y copilot), `copyTemplates` lee
+`profiles/test/templates/` (bloque LOCKED de convenciones Playwright) y se crea
+`testspec/specs` + `testspec/changes` (`scaffoldTestspec`). El paquete base queda intacto y el
+tier sigue ortogonal. Evidencia: `src/cli/index.js`, `profiles/test/`.
+
+## Portabilidad entre máquinas (`export` / `import`)
+
+`exportCmd` agrupa portables (`.ancletorc`, templates, `aspec/`, `.opencode/{agents,commands,skills}`)
++ `manifest.json` (`format: ancleto-export/1`; MCP como intención nombre+tipo, nunca rutas;
+aborta si hay absolutos) a directorio o `--tar`. Excluye `opencode.json`, `.ancleto-tier`,
+`memory.db`, `service.json` y global. `importCmd` aplica portables, reinstala assets del host,
+re-aplica el tier y **regenera** el MCP local (`mcpCommandBroken` + `repairProjectMcp`: solo
+rotas/ausentes, nunca sanas), cerrando con `doctor`. `import --repair` repara in place sin
+bundle. Wrapper `/cleto-transplant` para invocarlo desde el IDE. Evidencia: `src/cli/index.js`.
 
 ## `check` / tier / `projects` host-aware
 
@@ -128,33 +158,45 @@ el asset vive dentro del layout de skills. Evidencia: `src/cli/index.js`.
 
 ## Flujo de alta (`initProject` / `install`)
 
-1. Resuelve agente/IDE, tier (`scanTierFlag`/`readProjectTier`) e idioma; wizard interactivo
+1. Resuelve agente/IDE, tier (`scanTierFlag`/`readProjectTier`), idioma y perfil
+   (`scanProfileFlag`: `general`|`test`, default `general`); wizard interactivo
    en TTY (`selectOption`, `askExcludePresets`, `selectMultiple` en `ui.js`).
-2. `copyTemplates` copia `AGENTS.md`/`PRODUCT.md` con `mergeLocked`: reemplaza el interior de
-   los bloques `<!-- LOCKED: name -->`, preserva EXTENSIBLE, inserta bloques nuevos y no toca
-   archivos con tags malformados (`extractLockedBlocks`, `replaceLockedBlock`, `findInsertAnchor`).
+2. `maybeImportOpenspec` (punto único antes del scaffold): clasifica `openspec/` con
+   `detectLegacyOpenSpec` (`none`/`legacy`/`external`); legacy migra silencioso, externo pide
+   confirmación (default No, `--yes` para script) e importa sin pisar el `AGENTS.md` local.
+3. `copyTemplates` copia `AGENTS.md`/`PRODUCT.md` (del perfil si aplica) con `mergeLocked`:
+   reemplaza el interior de los bloques `<!-- LOCKED: name -->`, preserva EXTENSIBLE, inserta
+   bloques nuevos y no toca archivos con tags malformados (`extractLockedBlocks`,
+   `replaceLockedBlock`, `findInsertAnchor`).
 3. `installAgentAssets` materializa skills/agents/commands en el destino nativo del host
-   (tabla anterior), adaptando el frontmatter de agents según el host.
-4. `migrateLegacyOpenspec` migra `openspec/` → `aspec/` si procede (ver reglas).
-5. `scaffoldAspec` crea `aspec/changes/` y `aspec/config.yaml` sin pisar lo existente.
-6. `applyTier` reescribe la línea `model:` de cada agente; resuelve `gratisModel`
+   (tabla anterior), adaptando el frontmatter de agents según el host; con perfil `test`,
+   `installProfileOverlay` encima.
+4. `scaffoldAspec` (+ `scaffoldTestspec` con perfil `test`) crean estructura sin pisar.
+5. `applyTier` reescribe la línea `model:` de cada agente; resuelve `gratisModel`
    (env/persistido/probe) y lo guarda en `.ancletorc`. Paridad `init`/`install` en el tier
    guardado (v0.6.36/v0.6.37).
-7. `setupHostMcp` configura el MCP del host de forma **no destructiva** (antigravity →
-   `.agents/mcp_config.json`; resto → `opencode.json`): `ancleto-memory` y `caveman` por
-   defecto, `engram` con `--with-engram`, `azure-devops` si `azure.enabled: true` y no `--no-mcp`.
-8. `writeManifest` actualiza `.ancletorc` y `registerProject` anota el repo en
+6. `setupHostMcp` configura el MCP del host de forma **no destructiva** (antigravity →
+   `.agents/mcp_config.json`; copilot → `copilot-mcp.json`; resto → `opencode.json`):
+   `ancleto-memory` y `caveman` por defecto, `engram` con `--with-engram`, `azure-devops` si
+   `azure.enabled: true` y no `--no-mcp`. `upgrade` sin `.ancletorc` migra `openspec/` si lo
+   hay en lugar de exigir `init`.
+7. `writeManifest` actualiza `.ancletorc` y `registerProject` anota el repo en
    `~/.config/ancleto/projects.json` (override: `ANCLETO_PROJECTS_FILE`).
-9. `refreshWorkingContext` regenera `.ancleto/working-context.md` desde la memoria.
+8. `refreshWorkingContext` regenera `.ancleto/working-context.md` desde la memoria.
 
-## Migración legacy `openspec/` → `aspec/`
+## Migración/importación `openspec/` → `aspec/`
 
 - `migrateLegacyOpenspec(projectDir)`: si no existe `openspec/` es no-op; si existe el marcador
   `.migrated-from-openspec` también. Si `aspec/` ya tiene **contenido real** (al menos una
   entrada en `changes/` o `specs/`; un `config.yaml` solo no cuenta) avisa y **no migra**
   (conserva `openspec/`). Si migra, copia recursiva con `force: false`, escribe el marcador y
   conserva `openspec/` como backup.
-- Ejecutores del invariante: `init`, `install --project` y `upgrade` (antes del scaffold).
+- `detectLegacyOpenSpec`: `none` (ausente o carpeta vacía), `legacy` (resto) o `external`
+  (`specs/` con archivos o firma OpenSpec en `AGENTS.md`). Lo externo pide confirmación
+  (Sí/No/ver, default No; `--yes` en no-TTY) e `importExternalOpenspec` importa sin pisar el
+  `AGENTS.md` local (lo adopta si falta, con aviso).
+- Ejecutores del invariante (`maybeImportOpenspec` antes del scaffold): `init`,
+  `install --project` y `upgrade` (migratorio aun sin `.ancletorc`).
   Evidencia: `src/cli/index.js`, `aspec/specs/aspec-bootstrap/spec.md`.
 
 ## Reglas y convenciones
@@ -175,7 +217,7 @@ el asset vive dentro del layout de skills. Evidencia: `src/cli/index.js`.
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `adaptAntigravityFrontmatter`, `ANTIGRAVITY_TOOL_MAP`, `installCommandSkills`, `setupHostMcp`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `mergeLocked`. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installProfileOverlay`, `adaptAntigravityFrontmatter`, `ANTIGRAVITY_TOOL_MAP`, `installCommandSkills`, `setupHostMcp`, `mergeCopilotMcp`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `mergeLocked`. |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable; frontmatter adaptado por host en agents, copiado en skills. |

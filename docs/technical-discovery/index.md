@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-09-30T19:34:11Z
-pluginVersion: 0.7.2
+generatedAt: 2026-09-30T21:41:13Z
+pluginVersion: 0.8.0
 skillVersion: '2.3'
 ---
 
@@ -34,13 +34,17 @@ Repomix `tier: minimo` (comprimido) más los documentos raíz del repo y lectura
 
 - **Tipo**: librería/CLI de Node.js, ESM, **cero dependencias**, `engines.node: ">=24.0.0"`.
 - **Entry point**: `src/cli/index.js` (bin `ancleto` y `aspec` en `package.json`).
-- **Producto**: orquestador SDD para IDEs (OpenCode, Claude, VS Code, Antigravity, Cursor, Roo)
-  con descubrimiento técnico, memoria persistente local y control de tokens por tier.
-- **Versión observada**: `0.7.2` (`package.json`). El CLI global puede ir por detrás: al
-  relevar, `ancleto --version` reportó `0.7.0`.
+- **Producto**: orquestador SDD para IDEs (OpenCode, Claude, VS Code, Antigravity, Cursor, Roo,
+  Copilot) con descubrimiento técnico, memoria persistente local y control de tokens por tier.
+- **Versión observada**: `0.8.0` (`package.json`).
 - **Instalación por host**: `AGENT_TARGETS` es la fuente única de rutas (skills/agents/commands)
-  por IDE; los agents de `claude`/`vscode`/`antigravity` se adaptan de frontmatter. Detalle:
+  por IDE; los agents de `claude`/`vscode`/`antigravity`/`copilot` se adaptan de frontmatter
+  (copilot: agents+commands → `.github/prompts/*.prompt.md`, MCP en `copilot-mcp.json`). Detalle:
   `units/cli-install.md`.
+- **Perfil test**: `--profile test` instala el tester ampliado (planning/generation/healing/coverage),
+  comandos `cleto-test-*` y estructura `testspec/` (activos en `profiles/test/`).
+- **Portabilidad**: `ancleto export`/`import` (bundle + `manifest.json` sin rutas) y
+  `import --repair` regeneran el MCP local entre máquinas.
 - **Rama de trabajo**: `development`; `main` protegida y estable (`BACKLOG.md`).
 
 Antes de afirmar un detalle fino o reciente, abrir el archivo citado en cada documento.

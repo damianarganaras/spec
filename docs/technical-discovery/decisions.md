@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-09-30T19:34:11Z
-pluginVersion: 0.7.2
+generatedAt: 2026-09-30T21:56:00Z
+pluginVersion: 0.8.0
 skillVersion: '2.3'
 ---
 
@@ -41,13 +41,16 @@ skillVersion: '2.3'
    `installedPaths.commands`. Cursor y Roo solo tienen skills. Un asset no soportado no se
    escribe y avisa por stderr (`skip <asset>: not supported by host '<host>'`). Evidencia:
    `src/cli/index.js`, `units/cli-install.md`.
-8. **Frontmatter de agents adaptado por host.** `claude`, `vscode` y `antigravity` son
-   `AGENT_ADAPTER_HOSTS`; el resto copia verbatim. `AGENT_ADAPTER_DROP = {mode, color,
+8. **Frontmatter de agents adaptado por host.** `claude`, `vscode`, `antigravity` y
+   `copilot` son `AGENT_ADAPTER_HOSTS`; el resto copia verbatim. `AGENT_ADAPTER_DROP = {mode, color,
    temperature, permission, model, tools}` se elimina. Antigravity aplica
    `adaptAntigravityFrontmatter` con orden determinista (`name`, `description`, `tools`,
    `mainAgent`, `subagent`, `model: inherit`, `commandExecutionPolicy: sandbox`, `mcpServers`,
    `skills`, extras) y mapea `mode` a flags. Las claves gestionadas se filtran y re-emiten una
-   sola vez. Evidencia: `src/cli/index.js`, `units/cli-install.md`.
+   sola vez. Copilot comparte dir+ext entre agents y commands (`.github/prompts/*.prompt.md`,
+   sin colisión: `orchestrator`/`coder`/… vs `cleto-*`) y suma la nota de picker en el
+   orchestrator (el tier no cambia modelos). Evidencia: `src/cli/index.js`, `units/cli-install.md`,
+   `aspec/changes/archive/2026-09-30-add-copilot-support/`.
 9. **Mapeo de tools de Antigravity: conjunto cerrado (regla dura).** Solo se emiten los 5 ids
    verificados: `read→view_file`, `edit→replace_file_content`, `grep→grep_search`,
    `bash→run_command`, `todowrite→manage_task`. Cualquier otra clave se omite con aviso a
@@ -56,17 +59,37 @@ skillVersion: '2.3'
    está **prohibido**. El uso de MCP se expresa por `mcpServers`/`.agents/mcp_config.json`,
    nunca se infiere desde el mapa `tools`. Evidencia: `src/cli/index.js`,
    `units/cli-install.md`.
-10. **Migración legacy `openspec/` → `aspec/` no destructiva.** `migrateLegacyOpenspec` copia
-    recursiva con `force: false`, escribe el marcador `.migrated-from-openspec` y conserva
+10. **Migración/importación `openspec/` → `aspec/` no destructiva.** `migrateLegacyOpenspec`
+    copia recursiva con `force: false`, escribe el marcador `.migrated-from-openspec` y conserva
     `openspec/` como backup; si `aspec/` ya tiene contenido real (`changes/` o `specs/` no
-    vacíos) avisa y no migra. La invocan `init`, `install --project` y `upgrade`. Evidencia:
-    `src/cli/index.js`, `aspec/changes/archive/2026-09-29-migrate-openspec-to-aspec/`.
+    vacíos) avisa y no migra. `detectLegacyOpenSpec` clasifica (`none`/`legacy`/`external`:
+    `specs/` con archivos o firma OpenSpec en `AGENTS.md`); lo externo pide confirmación
+    (Sí/No/ver, default No, `--yes` para script) e importa sin pisar el `AGENTS.md` local.
+    Punto único `maybeImportOpenspec`, invocado por `init`, `install --project` y `upgrade`
+    (migratorio aun sin `.ancletorc`). Evidencia: `src/cli/index.js`,
+    `aspec/changes/archive/2026-09-29-migrate-openspec-to-aspec/`,
+    `aspec/changes/archive/2026-09-30-import-legacy-openspec/`.
 11. **MCP de host, dueño único `setupHostMcp`.** Antigravity mergea `.agents/mcp_config.json`
     (`{ "mcpServers": { "<n>": { command, args, env } } }`) de forma **no destructiva**:
     preserva `mcpServers` y claves top-level, no pisa homónimos y un JSON inválido avisa sin
-    escribir. El resto conserva `mergeMcp` sobre `opencode.json`. `init` configura MCP igual
-    que `install`; `--no-mcp` es el escape. Evidencia: `src/cli/index.js`.
-12. **Patrón "CLI materializa + agente lee".** `ancleto memory context` escribe
+    escribir. Copilot mergea `copilot-mcp.json` (`mergeCopilotMcp`; `refreshCopilotMcp` regenera
+    rotas en `upgrade` sin tocar `copilot-instructions.md`). El resto conserva `mergeMcp` sobre
+    `opencode.json`. `init` configura MCP igual que `install`; `--no-mcp` es el escape. Evidencia:
+    `src/cli/index.js`.
+12. **Perfil `test`: overlay, no fork.** Con `profile: test`, `installProfileOverlay` reinstala
+    `profiles/test/agents` + `commands` sobre los destinos nativos del host (misma ext y
+    adapter que la base) y `copyTemplates` lee `profiles/test/templates/`; el paquete base queda
+    intacto y el tier sigue ortogonal. `testspec/specs` + `testspec/changes` (o reuso de `aspec/`).
+    Evidencia: `src/cli/index.js`, `profiles/test/`, `aspec/specs/test-profile/spec.md`,
+    `aspec/changes/archive/2026-09-30-test-automation-profile/`.
+13. **Portabilidad = intención, no rutas.** `export` genera bundle + `manifest.json` con solo
+    nombres+tipos de MCP (nunca `command`/`args`); aborta si el manifiesto contiene absolutos.
+    `import` aplica portables y **regenera** entradas con el host local (`mcpCommandBroken`:
+    absoluta ausente, estilo Windows o ausente; relativos como `npx` se presumen sanos),
+    sin pisar sanas, y cierra con `doctor`.     Nunca se exportan credenciales, `service.json`,
+    global ni `memory.db`. Evidencia: `src/cli/index.js`,
+    `aspec/changes/archive/2026-09-30-cross-machine-export-import/`.
+14. **Patrón "CLI materializa + agente lee".** `ancleto memory context` escribe
     `.ancleto/working-context.md`; el orquestador lo lee como datos no confiables sin `bash`.
     Evidencia: `BACKLOG.md`, `agents/orchestrator.md`, `src/core/memory/working-context.js`.
 

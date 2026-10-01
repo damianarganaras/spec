@@ -117,9 +117,17 @@ describe('content guards — referencias validas', () => {
       .filter((e) => e.isDirectory())
       .map((e) => e.name)
     const commands = readdirSync(join(ROOT, 'commands')).filter((n) => n.endsWith('.md'))
-    assert.equal(commands.length, 12)
+    // Excepcion documentada (cross-machine-export-import): cleto-transplant no
+    // envuelve una skill — instruye al agente a correr el CLI (export/import),
+    // cuya logica requiere spawnear procesos y no vive en markdown.
+    const NON_SKILL_COMMANDS = ['cleto-transplant.md']
+    assert.equal(commands.length, 12 + NON_SKILL_COMMANDS.length)
     for (const c of commands) {
       const t = readFileSync(join(ROOT, 'commands', c), 'utf8')
+      if (NON_SKILL_COMMANDS.includes(c)) {
+        assert.match(t, /ancleto (export|import)/, `${c} debe instruir el CLI export/import`)
+        continue
+      }
       const m = t.match(/Invoke the `(ancleto-[\w-]+)` skill/)
       assert.ok(m, `${c} no es un wrapper valido`)
       assert.ok(skills.includes(m[1]), `${c} apunta a skill inexistente: ${m[1]}`)

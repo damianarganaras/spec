@@ -103,11 +103,48 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
 - Memoria: motor propio (`node:sqlite` + FTS5) expuesto como MCP (`ancleto mcp`); engram es opcional
   (`--with-engram`).
 
+## Evolución v0.7 — backlog seleccionado
+
+Branch de trabajo: `feat/evolucion-v07-backlog` (rebaseada a `main` @ `v0.8.0` / `61a9b3e`;
+A, C, D, F portados a la arquitectura multi-host; E superseded).
+Selección: **A, C, D, E, F, G (vscode-extension)**.
+
+- [ ] **A. Soporte Copilot (VS Code + Visual Studio)** — portado a la arquitectura multi-host
+  de `main`: `copilot` en `SUPPORTED_AGENTS` + entrada en `AGENT_TARGETS` (agents/commands →
+  `.github/prompts/*.prompt.md`) + `copilot` en `AGENT_ADAPTER_HOSTS` (mismo DROP set) + nota
+  de picker en orchestrator + `copilot-mcp.json` (merge en install, refresh en upgrade).
+  Documentado que el tier no cambia modelos en Copilot (solo nivel de esfuerzo/pasos).
+- [ ] **C. Perfil de test automation estilo spectest** — `ancleto init --profile test`
+  (`--profile test:playwright`); activos en `profiles/test/` (tester ampliado con
+  planning/generation/healing/coverage + reviewer, comandos `cleto-test-*`,
+  estructura `testspec/specs` + `testspec/changes` o reuso de `aspec/`); compatible con `--agent copilot`.
+- [ ] **D. Export / Import entre máquinas** — comandos `ancleto export` (bundle portable +
+  `manifest.json` sin paths absolutos, solo intención MCP) e `ancleto import` (regenera MCP
+  vía `buildDefaultMcp`/`resolveBin`, corre `doctor`); `import --repair` repara in place
+  entradas con `command` inexistente. Caso real: Windows → Linux (T480). No confundir con
+  M1 de v0.7.0 (ese es export/import de *memoria*; este es portabilidad de *proyecto*).
+- [x] **E. Antigravity: directorio de skills — COMPLETO (vía `main` v0.8.0)** — el modelo
+  multi-host + soporte completo (agents adaptados, commands como skills, MCP propio) cubren
+  el fix; garantía IDE/CLI validada por el usuario. Change propio archivado como historial.
+- [x] **F. Import de proyecto OpenSpec pre-existente en init** — change `import-legacy-openspec`
+  implementado: `detectLegacyOpenSpec` clasifica (`none`/`legacy`/`external`: specs con archivos
+  o firma OpenSpec en `AGENTS.md`); externo pide confirmación (Sí/No/ver, default No, `--yes`
+  para script); importación semilla no destructiva + `AGENTS.md` nunca pisado en silencio +
+  marcador de idempotencia; cableado en `init`, `install --project` y `upgrade` migratorio sin
+  `.ancletorc`. Rama legacy del change archivado intacta (suite 314/314 en v0.8.0).
+- [ ] **G. Extensión de VS Code (distribución dual npm + Marketplace)** — fuente:
+  `aspec/changes/ancleto-vscode-extension/` (**DIFERIDO, no prioridad**: implementación
+  revertida en v0.8.0, tasks reseteadas a 0/21; quedan proposal/design/specs como historial).
+  Estrategia decidida: **thin-wrapper** (npm fuente de verdad, build genera el `.vsix`).
+
 ## En curso / próximo
 
-- [ ] **Validar comportamiento de Antigravity IDE vs Antigravity CLI** — verificar si se comportan igual; el tema "Linux + Antigravity" va junto con este item.
+- [x] **Validar comportamiento de Antigravity IDE vs Antigravity CLI** — validado por el usuario (2026-09-30); garantía registrada en `fix-antigravity-skill-dir`.
 - [ ] **Change `add-multi-agent-cli-support` (en implementación)** — modelo de instalación portable multi-host: ruteo nativo por host, adapters de frontmatter, alta de `claude`. Consistency check `design → specs → tasks`: **`READY FOR IMPLEMENTATION`**.
-- [ ] **Change `add-antigravity-full-support` (en implementación)** — al elegir `antigravity`, `init` deja el framework completo: skills + agents adaptados en `.agents/agents/` + commands como skills + MCP de workspace `.agents/mcp_config.json`, y `check`/tier host-aware. Mapa de tools restringido a los 5 ids confirmados en frontmatter (`view_file`, `replace_file_content`, `grep_search`, `run_command`, `manage_task`); el resto se **omite con aviso** (un id no mapeado cuelga el subagente).
+- [x] **Migración openspec→aspec** — change archivado `migrate-openspec-to-aspec` (legacy propio) +
+  change `import-legacy-openspec` (externo, `install --project`, `upgrade` sin `.ancletorc`).
+- [x] **`install --project` ejecuta la detección/migración `openspec/` → `aspec/`** — cableado vía
+  `maybeImportOpenspec` antes del scaffold (change `import-legacy-openspec`).
 
 ## v0.7.0 - Multi-Agent Adaptability & Memory Ops (Planeado)
 - [ ] **M1 (Export/Import):** Commands `ancleto memory export` e `import` para respaldar/compartir reglas y decisiones activas en JSON/SQL sanitizado.

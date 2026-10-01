@@ -31,6 +31,8 @@
 - [Referencia de comandos CLI](#referencia-de-comandos-cli)
 - [Motor de memoria persistente](#motor-de-memoria-persistente)
 - [Comandos del ciclo SDD en tu IDE](#comandos-del-ciclo-sdd-en-tu-ide)
+- [Perfil de test automation](#perfil-de-test-automation)
+- [Portabilidad entre máquinas](#portabilidad-entre-máquinas)
 - [Azure DevOps (opcional)](#azure-devops-opcional)
 - [Referencia: agentes y modelos por tier](#referencia-agentes-y-modelos-por-tier)
 
@@ -73,6 +75,12 @@ Ancleto resuelve esto centralizando las reglas de negocio en un motor de memoria
 **Agentic aspec engine** — Sin binarios externos. Las 11 skills del ciclo de vida (`new`, `propose`, `apply`, `verify`, `archive`, `bulk-archive`, `continue`, `explore`, `ff`, `onboard`, `workflow`) más las auxiliares (`ancleto-commit`, `ancleto-pr`, `triage-clarifier`, entre otras) se instalan e inyectan nativamente en tu IDE.
 
 **Wizard interactivo** — Banner animado y menús navegables con flechas en `init` e `install`, sin librerías pesadas.
+
+**Hosts e IDEs (7)** — opencode, claude, vscode, antigravity, cursor, roo y copilot, cada uno con su layout nativo (Copilot: prompts en `.github/prompts` + MCP en `copilot-mcp.json`).
+
+**Perfil de test automation** — `--profile test`: tester ampliado (planning/generation/healing/coverage), comandos `cleto-test-*` y estructura `testspec/` para proyectos Playwright.
+
+**Portabilidad entre máquinas** — `ancleto export`/`import` mudan el proyecto regenerando el MCP local (`import --repair` repara rutas rotas sin bundle).
 
 ---
 
@@ -141,6 +149,7 @@ del host (el CLI no deduplica ni elige un "ganador").
 | `antigravity` | `.agents/skills/<n>/SKILL.md` | `.agents/agents/<n>.md` (adaptado) | `.agents/skills/<n>/SKILL.md` (como skill) |
 | `cursor` | `.cursor/skills/<n>/SKILL.md` | — | — |
 | `roo` | `.roo/skills/<n>/SKILL.md` | — | — |
+| `copilot` | — | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` |
 
 Cada host recibe sus skills en **su** directorio nativo. **`.agents/skills` es un punto de lectura
 compartido** —lo leen opencode, Cursor, VS Code y Antigravity—, no un destino universal: Claude lee
@@ -174,7 +183,11 @@ incluyendo el servidor de memoria `ancleto-memory`; preserva `mcpServers` preexi
 homónimos. `.mcp.json` (Claude) y `.vscode/mcp.json` (VS Code) siguen fuera de alcance, al igual que el
 MCP global de Antigravity. `claude` se soporta con adaptación de frontmatter obligatoria para `agents`
 (se omiten `model`/`tools` sin equivalencia verificada y las claves
-`mode`/`color`/`temperature`/`permission`), sin MCP propio. Tanto `init` como `install --project`
+`mode`/`color`/`temperature`/`permission`), sin MCP propio. **Copilot** instala agents y commands
+como prompt files en `.github/prompts/*.prompt.md` (mismo adapter, sin `model:`) y su MCP en
+`copilot-mcp.json` (merge en install, regeneración de rotas en upgrade, nunca toca tu
+`copilot-instructions.md`); el modelo lo elegís en el picker —el tier solo marca el nivel de
+esfuerzo—. Tanto `init` como `install --project`
 configuran el MCP del host en la misma ejecución; `--no-mcp` lo omite.
 
 ---
@@ -317,10 +330,10 @@ ancleto discovery         # Genera .discovery-map.json y empaqueta el repo
 ## Referencia de comandos CLI
 
 ```bash
-ancleto init [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--exclude <globs>] [--with-azure]
+ancleto init [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--exclude <globs>] [--with-azure] [--profile <perfil>]
                           # Configura el proyecto (interactivo en TTY)
 
-ancleto install [--project <dir>] [--tier <nivel>] [--agent <nombre>] [--lang <codigo>] [--exclude <globs>] [--no-mcp]
+ancleto install [--project <dir>] [--tier <nivel>] [--agent <nombre>] [--lang <codigo>] [--exclude <globs>] [--no-mcp] [--profile <perfil>]
                           # Instala agentes, skills y templates
 
 ancleto update            # Re-instala la última versión sobre lo existente
@@ -328,6 +341,13 @@ ancleto update            # Re-instala la última versión sobre lo existente
                           # usá --global para forzar el alcance global
 
 ancleto upgrade           # Re-aplica templates y skills respetando tus personalizaciones
+
+ancleto export [--tar <archivo>]
+                          # Empaqueta lo portable del proyecto (bundle + manifest.json sin rutas)
+
+ancleto import <bundle> [--repair] | ancleto import --repair
+                          # Restaura el bundle regenerando el MCP local; --repair solo arregla
+                          # entradas con command inexistente
 
 ancleto check             # Verifica la integridad de la instalación (faltantes / huérfanos)
 
@@ -406,11 +426,43 @@ Una vez instalado, tu IDE expone el ciclo de vida completo como comandos barra:
 | `/cleto-ff` | Avanzar rápido con el contexto ya recuperado. |
 | `/cleto-apply` | Aplicar el código del change. |
 | `/cleto-verify` | Verificar reglas, tests y memoria antes de cerrar. |
+| `/cleto-security` | Realizar una auditoría de seguridad integral en el proyecto o change. |
 | `/cleto-sync` | Sincronizar las specs con el estado del repositorio. |
 | `/cleto-archive` | Archivar el change y registrar aprendizajes. |
 | `/cleto-continue` | Retomar un change con artefactos pendientes. |
 | `/cleto-explore` | Explorar un problema sin comprometerse a implementar. |
 | `/cleto-onboard` | Recorrer el ciclo completo en modo tutorial. |
+| `/cleto-bulk-archive` | Archivar varios changes juntos. |
+| `/cleto-recall` | Recuperar memoria del proyecto antes de empezar. |
+| `/cleto-transplant` | Mudar el proyecto entre máquinas (export/import). |
+
+Con perfil `test` se suman `cleto-test-proposal`, `cleto-test-apply`, `cleto-test-heal`, `cleto-test-coverage` y `cleto-test-archive` (ver perfil abajo).
+
+---
+
+## Perfil de test automation
+
+Para proyectos de test automation con Playwright:
+
+```bash
+ancleto init --profile test   # o: ancleto install --project . --profile test
+```
+
+Instala un tester ampliado con 4 workflows (planning, generation, healing, coverage), comandos `cleto-test-*`, estructura `testspec/specs` + `testspec/changes` (o reuso de `aspec/`) y convenciones Playwright en `AGENTS.md`. El orchestrator rutea lo test-only al tester ampliado y lo mixto al SDD general. Sin Playwright instalado, los workflows degradan a análisis y lo reportan. Combinable con cualquier host (`--profile test --agent copilot`, etc.).
+
+---
+
+## Portabilidad entre máquinas
+
+Al copiar un proyecto de una PC a otra, las rutas absolutas del MCP se rompen (caso real: Windows → Linux). Para mudarlo:
+
+```bash
+ancleto export --tar traslado.tgz   # en origen, antes de copiar
+ancleto import traslado.tgz         # en destino, regenera el MCP local + doctor
+ancleto import --repair             # sin bundle: repara entradas con command inexistente
+```
+
+El bundle lleva solo lo portable (manifiesto con intención MCP, sin rutas ni secretos: nunca incluye credenciales, `service.json`, global ni `memory.db`). El import no pisa entradas MCP sanas.
 
 ---
 

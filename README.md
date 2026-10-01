@@ -165,10 +165,11 @@ verificados de Antigravity (`read`→`view_file`, `edit`→`replace_file_content
 tool de opencode sin id verificado se **omite con aviso** (`skip tool '<k>': no verified Antigravity id
 for agent '<n>'`): un id inexistente cuelga el subagent. Los ids que sólo existen en el SDK
 (`find_file`, `edit_file`, `search_web`, `read_url_content`, …), los de comunidad (`write_to_file`,
-`call_mcp_tool`, `multi_replace_file_content`, …) y los de delegación (`invoke_subagent`,
-`start_subagent`, `define_subagent`) **no** se emiten; el uso de MCP se expresa por
-`mcpServers`/`.agents/mcp_config.json`, nunca como tool id. El campo `skill` no es una tool: se cubre
-con el surfaceo automático de skills de Antigravity.
+`multi_replace_file_content`, …) y los de delegación (`invoke_subagent`, `start_subagent`,
+`define_subagent`) **no** se emiten. Las claves de MCP declaradas dentro de `tools` (`mcpServers`,
+`mcp_*`, `call_mcp_tool`) caen en **omisión con aviso** y `call_mcp_tool` queda **prohibido**; el uso
+de MCP se expresa por `mcpServers`/`.agents/mcp_config.json`, nunca como tool id. El campo `skill` no
+es una tool: se cubre con el surfaceo automático de skills de Antigravity.
 
 Los assets que un host no soporta (por ejemplo `agents`/`commands` de `cursor` y `roo`)
 **no se escriben** y el instalador avisa por `stderr`
@@ -308,6 +309,8 @@ ancleto init              # Crea .ancletorc, aspec/, AGENTS.md y PRODUCT.md
 
 `init` **no pisa** lo que ya existe: si tu repo tiene su propio `AGENTS.md` o `PRODUCT.md`, los respeta (solo fusiona los bloques `<!-- LOCKED -->` del template). Además materializa `.ancleto/working-context.md` con tus reglas activas cuando hay memoria — es el bloque que el orquestador inyecta al arrancar.
 
+Si el repo trae una carpeta legacy `openspec/`, `init`, `install --project` y `upgrade` la detectan y migran su contenido a `aspec/` **por copia**, sin prompts, cuando `aspec/` no existe o sólo tiene el scaffold: conservan `openspec/` como backup y escriben el marcador `aspec/.migrated-from-openspec`. Si `aspec/` ya tiene contenido real propio no fusionan las carpetas y avisan para revisión manual, y si el marcador ya existe la corrida es un no-op silencioso.
+
 > ¿Querés que el proyecto lleve **su propia** copia de agents/skills (sin depender de la instalación global)? Sumá `ancleto install --project .`.
 
 ### 2. Descubrir contexto técnico
@@ -409,7 +412,7 @@ Funciona en tres piezas que comparten el mismo archivo:
 
 Cada entrada tiene un `scope`: `project` (default), `feature` o `task`. Solo las **reglas** activas con scope `project` entran en `<ProjectMemoryRules>`; las **decisiones** con scope `project` se recuperan reactivamente con `searchMemory` y no se inyectan de forma proactiva. El orquestador inyecta los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` en el system prompt de tu agente desde el día cero —incluso sin reglas previas— para que no repita errores ya resueltos.
 
-> El mismo motor se puede consultar a mano desde la terminal: `ancleto memory context --scope project`. El archivo `.ancleto/working-context.md` que lee el orquestador se regenera solo en `init`, `install --project` y `upgrade`.
+> El mismo motor se puede consultar a mano desde la terminal: `ancleto memory context --scope project`. El archivo `.ancleto/working-context.md` que lee el orquestador se regenera en los lifecycle points (`init`, `install --project`, `upgrade` y `memory context --out`) y también **on-write**, cuando una escritura MCP lo altera: al registrar una `rule` con scope `project` o al superseder una `memory_key` existente (sin importar `type` ni `scope`).
 
 **Dos memorias, sin mezcla.** La memoria **del repositorio** (esta, `.ancleto/memory.db`) guarda reglas y decisiones del proyecto y se comparte con el equipo. Si el runtime expone además una memoria **del agente** (por ejemplo engram, habilitable con `--with-engram`), esa guarda notas de sesión, no del repo. **Una entrada vive en una sola**: si un futuro agente del equipo debería encontrarla, va al repo.
 
@@ -425,7 +428,7 @@ Una vez instalado, tu IDE expone el ciclo de vida completo como comandos barra:
 | `/cleto-propose` | Proponer el diseño técnico. |
 | `/cleto-ff` | Avanzar rápido con el contexto ya recuperado. |
 | `/cleto-apply` | Aplicar el código del change. |
-| `/cleto-verify` | Verificar reglas, tests y memoria antes de cerrar. |
+| `/cleto-verify` | Verificar reglas, tests y memoria antes de cerrar. En modo `aspec Change`, cuando el proposal declara garantías de efecto sobre estado, verifica además que se sostengan bajo el modelo real; si no, emite `GUARANTEE NOT SUSTAINED` (`CRITICAL`) y el orquestador bloquea el archive. |
 | `/cleto-security` | Realizar una auditoría de seguridad integral en el proyecto o change. |
 | `/cleto-sync` | Sincronizar las specs con el estado del repositorio. |
 | `/cleto-archive` | Archivar el change y registrar aprendizajes. |

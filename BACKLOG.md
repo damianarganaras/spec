@@ -139,6 +139,7 @@ Selección: **A, C, D, E, F, G (vscode-extension)**.
 
 ## En curso / próximo
 
+- [ ] **Change `cleto-review` (en planificación)** — skill `ancleto-review` + comando `/cleto-review`: revisión de calidad interna sobre scope declarado por el usuario (`#nroticket`, rangos git, paths). Detectores: código repetido, método redundante, código mal ubicado, código sin uso. Solo reporta, no edita. Fuente: `aspec/changes/cleto-review/` (proposal/design/tasks/specs).
 - [x] **Validar comportamiento de Antigravity IDE vs Antigravity CLI** — validado por el usuario (2026-09-30); garantía registrada en `fix-antigravity-skill-dir`.
 - [ ] **Change `add-multi-agent-cli-support` (en implementación)** — modelo de instalación portable multi-host: ruteo nativo por host, adapters de frontmatter, alta de `claude`. Consistency check `design → specs → tasks`: **`READY FOR IMPLEMENTATION`**.
 - [x] **Migración openspec→aspec** — change archivado `migrate-openspec-to-aspec` (legacy propio) +

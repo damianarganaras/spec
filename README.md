@@ -23,6 +23,7 @@
 - [Características principales](#características-principales)
 - [Requisitos](#requisitos)
 - [Instalación](#instalación)
+- [Instalación manual (sin npm)](docs/instalacion-manual.md)
 - [Hosts soportados y layouts por agente](#hosts-soportados-y-layouts-por-agente)
 - [Guía de .gitignore](#guía-de-gitignore)
 - [Configuración y tiers de costo](#configuración-y-tiers-de-costo)
@@ -429,6 +430,7 @@ Una vez instalado, tu IDE expone el ciclo de vida completo como comandos barra:
 | `/cleto-ff` | Avanzar rápido con el contexto ya recuperado. |
 | `/cleto-apply` | Aplicar el código del change. |
 | `/cleto-verify` | Verificar reglas, tests y memoria antes de cerrar. En modo `aspec Change`, cuando el proposal declara garantías de efecto sobre estado, verifica además que se sostengan bajo el modelo real; si no, emite `GUARANTEE NOT SUSTAINED` (`CRITICAL`) y el orquestador bloquea el archive. |
+| `/cleto-review` | Revisar código del scope por duplicación, redundancia, mala ubicación y código sin uso. |
 | `/cleto-security` | Realizar una auditoría de seguridad integral en el proyecto o change. |
 | `/cleto-sync` | Sincronizar las specs con el estado del repositorio. |
 | `/cleto-archive` | Archivar el change y registrar aprendizajes. |

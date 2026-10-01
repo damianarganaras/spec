@@ -2,6 +2,19 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.9.0] - 2026-09-30
+
+### Added
+- **Soporte para GitHub Copilot** (`--agent copilot`): integración con VS Code y Visual Studio, ruteo de agents/commands a `.github/prompts/*.prompt.md` y configuración MCP en `.github/copilot-mcp.json`.
+- **Portabilidad de proyectos entre máquinas**: nuevos comandos `ancleto export` (bundle portable con manifiesto de intención MCP sin paths absolutos) e `ancleto import` (regeneración de paths locales, resolución de binarios y `--repair`), junto con el comando `/cleto-transplant`.
+- **Perfil de test automation** (`ancleto init --profile test` / `--profile test:playwright`): perfiles modulares bajo `profiles/test/` con subagentes especializados (`tester`, `reviewer`), comandos `/cleto-test-*` (apply, archive, coverage, heal, proposal) y templates específicos.
+- **Detección e importación de OpenSpec pre-existente**: detección automática de proyectos con OpenSpec legacy/externo en `init` e `install --project`, ofreciendo migración asistida e idempotente a `aspec/`.
+- **Auditoría de seguridad**: nuevo comando `/cleto-security` y skill `ancleto-security` para análisis de seguridad de cambios y repositorios.
+
+### Fixed
+- Corrección de la ruta de instalación de skills de Antigravity (`.agents/skills/<name>/SKILL.md`).
+- Corrección del conteo de comandos wrapper en los content guards de la suite de tests.
+
 ## [0.8.0] - 2026-09-30
 
 ### Added

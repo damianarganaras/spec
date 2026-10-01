@@ -109,16 +109,16 @@ Branch de trabajo: `feat/evolucion-v07-backlog` (rebaseada a `main` @ `v0.8.0` /
 A, C, D, F portados a la arquitectura multi-host; E superseded).
 Selección: **A, C, D, E, F, G (vscode-extension)**.
 
-- [ ] **A. Soporte Copilot (VS Code + Visual Studio)** — portado a la arquitectura multi-host
+- [x] **A. Soporte Copilot (VS Code + Visual Studio)** — portado a la arquitectura multi-host
   de `main`: `copilot` en `SUPPORTED_AGENTS` + entrada en `AGENT_TARGETS` (agents/commands →
   `.github/prompts/*.prompt.md`) + `copilot` en `AGENT_ADAPTER_HOSTS` (mismo DROP set) + nota
   de picker en orchestrator + `copilot-mcp.json` (merge en install, refresh en upgrade).
   Documentado que el tier no cambia modelos en Copilot (solo nivel de esfuerzo/pasos).
-- [ ] **C. Perfil de test automation estilo spectest** — `ancleto init --profile test`
+- [x] **C. Perfil de test automation estilo spectest** — `ancleto init --profile test`
   (`--profile test:playwright`); activos en `profiles/test/` (tester ampliado con
   planning/generation/healing/coverage + reviewer, comandos `cleto-test-*`,
   estructura `testspec/specs` + `testspec/changes` o reuso de `aspec/`); compatible con `--agent copilot`.
-- [ ] **D. Export / Import entre máquinas** — comandos `ancleto export` (bundle portable +
+- [x] **D. Export / Import entre máquinas** — comandos `ancleto export` (bundle portable +
   `manifest.json` sin paths absolutos, solo intención MCP) e `ancleto import` (regenera MCP
   vía `buildDefaultMcp`/`resolveBin`, corre `doctor`); `import --repair` repara in place
   entradas con `command` inexistente. Caso real: Windows → Linux (T480). No confundir con

@@ -4,7 +4,7 @@
 
 **Orquestador SDD (Spec-Driven Development) y toolkit personal asistido por IA**
 
-[![Version](https://img.shields.io/npm/v/@ancleto/spec?style=flat-square&label=version&color=4f46e5)](https://www.npmjs.com/package/@ancleto/spec)
+[![Version](https://img.shields.io/npm/v/%40ancleto/spec?style=flat-square&label=version&color=4f46e5)](https://www.npmjs.com/package/@ancleto/spec)
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A5%2024-43853D?style=flat-square&logo=node.js&logoColor=white)](#requisitos)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-0d9488?style=flat-square)](#requisitos)
 [![Agents](https://img.shields.io/badge/agents-10-334155?style=flat-square)](#caracter%C3%ADsticas-principales)

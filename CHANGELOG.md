@@ -2,6 +2,11 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.9.1] - 2026-09-30
+
+### Fixed
+- Codificación URL (`%40`) en badge de versión de npm en `README.md` para compatibilidad con el proxy de imágenes de GitHub (Camo).
+
 ## [0.9.0] - 2026-09-30
 
 ### Added

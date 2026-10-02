@@ -30,6 +30,10 @@
     "node": ">=24.0.0"
   },
   "license": "MIT",
+  "scripts": {
+    "lint": "eslint src/ test/",
+    "test": "node --test \"test/*.test.js\""
+  },
   "keywords": [
     "opencode",
     "aspec",
@@ -38,5 +42,9 @@
     "agents",
     "skills",
     "spec-driven"
-  ]
+  ],
+  "devDependencies": {
+    "eslint": "^10.11.0",
+    "globals": "^17.13.0"
+  }
 }

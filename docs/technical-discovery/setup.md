@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers y validaciones"
-generatedAt: 2026-10-02T17:35:00Z
-pluginVersion: 0.10.0
+generatedAt: 2026-10-02T20:32:00Z
+pluginVersion: 0.11.0
 skillVersion: '2.3'
 ---
 
@@ -55,15 +55,16 @@ el MCP del host por defecto; `--no-mcp` lo evita.
   **unión de destinos realmente escritos** por host (`templates`, `agents`, `commands`,
   `skills`); para antigravity `commands` queda vacío (los commands viven como skills). **No
   editar a mano durante el seed**; se consume resuelto desde `ancleto discovery --check`.
-  En este checkout `.ancletorc` **no existe** (gitignored, eliminado), por lo que aplican los
-  defaults: `outputDir: docs/technical-discovery`, `exclude: []`.
+  En este checkout `.ancletorc` **existe** (gitignored, no versionado); el contrato de
+  contenido se describe por código, no por lectura directa del manifiesto.
 - **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/reviewer ampliados
   (planning/generation/healing/coverage), comandos `cleto-test-*`, estructura `testspec/` y
   bloque LOCKED de convenciones Playwright; instalable con cualquier host (incluido copilot).
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
-  En este checkout no existe ninguno de los dos, por lo que el tier resuelto es **`gratis`**
-  (default). El tier decide modelos de los agents y la agresividad del pack. Evidencia:
-  `src/core/repomix-tier.js`, `ancleto discovery --check`.
+  En este checkout existe `.opencode/.ancleto-tier` con valor `gratis`, por lo que el tier
+  resuelto es **`gratis`**. El tier decide modelos de los agents y la agresividad del pack.
+  Evidencia: `src/core/repomix-tier.js`, `.opencode/.ancleto-tier`,
+  `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`).
   Los agents de claude/vscode/antigravity/copilot se adaptan de frontmatter. Detalle:
@@ -103,7 +104,8 @@ Evidencia: `README.md`, `src/cli/index.js`, `.github/workflows/publish.yml`.
 - **Suite**: `npm test` → `node --test "test/*.test.js"` (10 archivos: `adapters-frontmatter`,
   `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `linter-config`, `mcp`,
   `memory-engine`, `tier-models`, `working-context`). **381 tests / 82 suites en verde** en
-  v0.10.0. Evidencia: `test/`, ejecución local.
+  v0.10.0 (heredado del seed previo; no re-ejecutado en esta regeneración porque `test/**`
+  queda fuera del pack del tier `gratis`). Evidencia: `test/`, `CHANGELOG.md`.
 - Validaciones obligatorias del repo (definidas en `AGENTS.md`): `npm run typecheck` o
   `npx tsc --noEmit`, `npm run lint`, `npm test`. **Observación**: este repo es JavaScript
   puro y `package.json` **no define** `typecheck`; `lint` y `test` sí existen desde el change

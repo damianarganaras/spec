@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-10-02T17:35:00Z
-pluginVersion: 0.10.0
+generatedAt: 2026-10-02T20:32:00Z
+pluginVersion: 0.11.0
 skillVersion: '2.3'
 ---
 
@@ -35,7 +35,7 @@ skillVersion: '2.3'
 | Skills (20) | Ciclo de vida, discovery, commit/pr, review/security, upgrade y `triage-clarifier`; se instalan en el directorio del host. | `skills/*/SKILL.md` | `units/cli-install.md` |
 | Templates (2) | `AGENTS.md` y `PRODUCT.md` base para proyectos nuevos (bloques LOCKED/EXTENSIBLE). | `templates/` | `units/cli-install.md` |
 | Linter | Flat config ESLint con 4 reglas sobre `src/` y `test/`. | `eslint.config.js` | — |
-| Specs del repo | Configuración aspec, 14 specs fuente y changes (1 activo diferido + 17 archivados). | `aspec/config.yaml`, `aspec/specs/**` | — |
-| Tests | Suite `node --test` (381 tests): CLI, adapters, discovery, memoria, working-context, tier, lint y guardas de contenido. | `test/*.test.js` | — |
+| Specs del repo | Configuración aspec, 14 specs fuente y changes (1 activo diferido + archivados). | `aspec/config.yaml`, `aspec/specs/**` | — |
+| Tests | Suite `node --test` (10 archivos: CLI, adapters, discovery, memoria, working-context, tier, lint y guardas de contenido). | `test/*.test.js` | — |
 
 Cada dossier describe responsabilidades, flujo, reglas y paths clave; no repite inventario.

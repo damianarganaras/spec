@@ -5,8 +5,8 @@ read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adap
 covers: [instalación, AGENT_TARGETS, frontmatter, MCP, perfiles, export/import]
 sources: ["src/cli/**", "src/core/adapters/**"]
 sourcesSha: 86eefeb896a883dd77d7c93b255060e77ff62fd311b64126fa2604fb84b4ac73
-generatedAt: 2026-10-02T17:35:00Z
-pluginVersion: 0.10.0
+generatedAt: 2026-10-02T20:32:00Z
+pluginVersion: 0.11.0
 skillVersion: '2.3'
 ---
 

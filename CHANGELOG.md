@@ -2,6 +2,27 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.11.0] - 2026-10-02
+
+### Added
+- **Subcomandos `ancleto memory export|import|gc`** (`gc` acepta `--dry-run` y `--days`): el engine expone `exportActive`, `importNodes` y `gcSuperseded` (los nodos superseded quedan como historia interna y no se exportan) en `src/core/memory/engine.js` y `src/cli/index.js`.
+- **Adaptador de frontmatter** (`parseFrontmatter`, `serializeFrontmatter`, `adaptFrontmatter`) para generar assets por host en `src/core/adapters/frontmatter.js`.
+- **Gate de lint estándar**: config ESLint flat (`eslint.config.js`), script `npm run lint` y paso bloqueante en `publish.yml`, con test de coherencia en `test/linter-config.test.js`.
+
+### Changed
+- `init` interactivo con tier `gratis` pregunta siempre por Muse Spark 1.3 Free, salvo que `ANCLETO_MUSE_SPARK` fuerce el valor; informa el origen (variable de entorno, valor guardado o detección) cuando no pregunta (`src/cli/index.js`, `README.md`).
+- Archivados cuatro changes en `aspec/changes/archive/` (`add-standard-linter`, `cleto-review`, `dynamic-frontmatter-adapters`, `memory-ops-export-import-gc`), specs sincronizadas en `aspec/specs/` (`code-review`, `linter-standard`, `memory-ops`, `skill-frontmatter-adapters`), `BACKLOG.md` actualizado y semilla de `docs/technical-discovery` regenerada.
+
+## [0.10.0] - 2026-10-01
+
+### Added
+- **Revisión de código con `/cleto-review`** (skill `ancleto-review`): revisión de calidad sobre el scope declarado por el usuario, con detectores de código repetido, método redundante, código mal ubicado y código sin uso (solo reporta, no edita) en `skills/ancleto-review/SKILL.md` y `commands/cleto-review.md`, con spec en `aspec/changes/cleto-review/specs/code-review/spec.md`.
+- **Guía de instalación manual (sin npm)** en `docs/instalacion-manual.md`, enlazada desde el índice del `README.md`.
+- Archivo `LICENSE` (MIT).
+
+### Changed
+- `README.md`: precisión sobre tool ids de Antigravity omitidos con aviso (`mcpServers`/`mcp_*`/`call_mcp_tool` caen en omisión, `call_mcp_tool` prohibido), migración legacy `openspec/` → `aspec/` por copia en `init`/`install --project`/`upgrade`, puntos de regeneración de `.ancleto/working-context.md` y nota de garantía `GUARANTEE NOT SUSTAINED` en `/cleto-verify`.
+
 ## [0.9.1] - 2026-09-30
 
 ### Fixed

@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-10-02T17:35:00Z
-pluginVersion: 0.10.0
+generatedAt: 2026-10-02T20:32:00Z
+pluginVersion: 0.11.0
 skillVersion: '2.3'
 ---
 
@@ -36,9 +36,9 @@ CLI monolítica en ESM, sin framework externo. Capas:
 | Selección de modelos | `src/core/tier-models.js` | Modelos por tier, resolución de tier gratis (Muse Spark/probe/env). |
 | Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (search/record/export/import/gc), `tools`, `mcp-server`, `doctor`, `working-context`. |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 15 commands, 20 skills, 2 templates + perfil `test`). |
-| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (14 capacidades) + 1 change activo + `changes/archive/` (17). |
+| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (14 capacidades) + 1 change activo + `changes/archive/`. |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
-| Tests | `test/*.test.js` | Suite `node --test` (10 archivos, 381 tests en verde en v0.10.0). |
+| Tests | `test/*.test.js` | Suite `node --test` (10 archivos; 381 tests en verde en v0.10.0, no re-ejecutados aquí). |
 
 Entry point único: `src/cli/index.js` (`bin.ancleto` y `bin.aspec`). No hay servidor ni base
 de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, pack Repomix
@@ -97,7 +97,9 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 
 ## Estado del repositorio
 
-Dogfooding histórico: el framework fue inicializado sobre este repo, pero **este checkout no
-materializa `.ancletorc` ni `.opencode/`** (ambos gitignored). Persisten `AGENTS.md`,
-`PRODUCT.md`, `aspec/` y `.ancleto/memory.db`; el discovery usa defaults (tier `gratis`).
-Evidencia: `.gitignore`, `.discovery-map.json`, `ancleto discovery --check`.
+Versión `0.11.0` en rama `development` (`CHANGELOG.md` cubre `0.10.0` y `0.11.0`). Dogfooding
+histórico: el framework fue inicializado sobre este repo; este checkout **sí materializa
+`.ancletorc` y `.opencode/`** (ambos gitignored, no versionados) y persiste `AGENTS.md`,
+`PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier resuelto es `gratis` vía
+`.opencode/.ancleto-tier`. Evidencia: `.gitignore`, `.discovery-map.json`,
+`ancleto discovery --check`.

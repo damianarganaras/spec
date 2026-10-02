@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-02T17:35:00Z
-pluginVersion: 0.10.0
+generatedAt: 2026-10-02T20:32:00Z
+pluginVersion: 0.11.0
 skillVersion: '2.3'
 ---
 
@@ -19,9 +19,9 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`). | `.github/workflows/publish.yml`, `package.json` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.11.0`. | `.github/workflows/publish.yml`, `package.json`, `CHANGELOG.md` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
-| **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js`, `package-lock.json` |
+| **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
 
 ## IDEs / agentes consumidores (contrato de instalación)
@@ -69,8 +69,9 @@ Evidencia: `src/cli/index.js`, `README.md`, `BACKLOG.md`.
 
 ## Azure DevOps (opcional, apagado)
 
-- Gate en `.ancletorc` → no configurado en este checkout (sin `.ancletorc`), por lo que el
-  default es apagado.
+- Gate en `.ancletorc` → en este checkout `.ancletorc` existe pero su contenido no se lee
+  durante el seed (contrato: se consume resuelto vía `--check`); el default documentado es
+  apagado.
 - El comando `/cleto-pr` usa GitHub por defecto; con Azure habilitado cambia el flujo. Setup:
   `az extension add --name azure-devops` + `az login` (extensión, no dependencia del paquete).
   Evidencia: `README.md`, `PRODUCT.md`.
@@ -79,7 +80,9 @@ Evidencia: `src/cli/index.js`, `README.md`, `BACKLOG.md`.
 
 - Módulos nativos: `node:sqlite` (motor de memoria), `node:test` (suite), `node:fs`,
   `node:crypto`, `node:child_process` (spawn de Repomix). Evidencia: pack `src/**`.
-- Dependencias de desarrollo: `eslint` y `globals` (lint), más su árbol transitivo en
-  `package-lock.json`. No son dependencias del paquete publicado. Evidencia: `package.json`.
+- Dependencias de desarrollo: `eslint` y `globals` (lint). Los lockfiles
+  (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) existen en el checkout pero están
+  **excluidos de las fuentes del discovery y del pack**. No son dependencias del paquete
+  publicado. Evidencia: `package.json`, `ancleto discovery --check` (`config.exclude`).
 - `documentation/lnx-cli/` es material legado de otro CLI (`lnx`) usado como fuente de
   relevamiento; no es dependencia de runtime. Evidencia: `BACKLOG.md`, listado del directorio.

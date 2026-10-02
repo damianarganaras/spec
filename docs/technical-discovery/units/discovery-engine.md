@@ -5,8 +5,8 @@ read_when: "cómo se genera el mapa topológico, el pack Repomix y el presupuest
 covers: [topologia, empaquetado, tiers, tokens]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js"]
 sourcesSha: 890886ffbbacbdaf0fd546cdd2c9aafb323fb339ce49658d7ecef3b177e7d4f4
-generatedAt: 2026-10-02T17:35:00Z
-pluginVersion: 0.10.0
+generatedAt: 2026-10-02T20:32:00Z
+pluginVersion: 0.11.0
 skillVersion: '2.3'
 ---
 
@@ -39,7 +39,8 @@ modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
 - `TIER_PACK_CONFIG`: `normal` (sin ignores extra, sin compresión, sin budget), `minimo`
   (+`test/**`, `docs/**`, `**/*.md`; `--compress`), `gratis` (igual que `minimo` + budget 50000).
 - `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
-  En este repo no existe `.ancleto-tier`, por lo que el tier resuelto es `gratis`.
+  En este checkout existe `.opencode/.ancleto-tier` con valor `gratis`, por lo que el tier
+  resuelto es `gratis` por archivo (antes, por default).
 - `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
   + `--ignore` del usuario, y agrega `--compress` si el tier o el flag lo piden. No permite
   reemplazar los ignores por un `--ignore` vacío.

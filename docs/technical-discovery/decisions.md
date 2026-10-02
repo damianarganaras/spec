@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-02T17:35:00Z
-pluginVersion: 0.10.0
+generatedAt: 2026-10-02T20:32:00Z
+pluginVersion: 0.11.0
 skillVersion: '2.3'
 ---
 
@@ -134,12 +134,12 @@ skillVersion: '2.3'
 
 ## Riesgos, deuda y acoplamiento
 
-- **Pack comprimido y sesgado a código.** El tier `gratis` (resuelto aquí por default) ignora
-  `test/**`, `docs/**` y `**/*.md`; `.gitignore` excluye `.opencode/`, `.ancletorc`,
-  `.ancleto/` y `/documentation`. Resultado: `agents/`, `commands/`, `skills/`, `templates/`,
-  `docs/` y `documentation/` **no entran** en el pack. El seed los describe por listados,
-  `README.md` y `BACKLOG.md`; una regeneración futura puede no detectar cambios en ellos (ver
-  `unknowns.md`).
+- **Pack comprimido y sesgado a código.** El tier `gratis` (resuelto aquí vía
+  `.opencode/.ancleto-tier`) ignora `test/**`, `docs/**` y `**/*.md`; `.gitignore` excluye
+  `.opencode/`, `.ancletorc`, `.ancleto/` y `/documentation` del pack. Resultado: `agents/`,
+  `commands/`, `skills/`, `templates/`, `docs/` y `documentation/` **no entran** en el pack. El
+  seed los describe por listados, `README.md` y `BACKLOG.md`; una regeneración futura puede no
+  detectar cambios en ellos (ver `unknowns.md`).
 - **`agents/`, `commands/`, `skills/`, `templates/` son la superficie de producto instalable.**
   Cambiarlos altera lo que reciben todos los proyectos usuarios. `installAgentAssets()` es el
   punto único de materialización y `src/core/adapters/frontmatter.js` define qué claves
@@ -160,10 +160,10 @@ skillVersion: '2.3'
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, `mcp_config.json`, CI o
   Azure. Los tokens viven fuera del repo (env/secretos del IDE); nombrar la variable y omitir
   el valor.
-- **Deuda resuelta recientemente**: export/import de memoria (M1) y garbage collection `memory
+- **Deuda resuelta en 0.11.0**: export/import de memoria (M1) y garbage collection `memory
   gc` (M2) ya no son deuda: se implementaron en `memory-ops-export-import-gc`. `PRODUCT.md`
   sigue desactualizado (afirma que no hay scripts npm, cuando `lint`/`test` existen).
-  Evidencia: `BACKLOG.md`, `PRODUCT.md`.
+  Evidencia: `BACKLOG.md`, `PRODUCT.md`, `CHANGELOG.md`.
 
 ## Decisiones registradas en memoria del repo
 

@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-10-02T17:35:00Z
-pluginVersion: 0.10.0
+generatedAt: 2026-10-02T20:32:00Z
+pluginVersion: 0.11.0
 skillVersion: '2.3'
 ---
 
@@ -11,8 +11,9 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto` / alias `aspec`).
 No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia: pack Repomix
-(`--compress`, tier resuelto `gratis`, 543 archivos, ~9.2k tokens) más los documentos raíz del
-repo y lectura puntual de los archivos citados.
+(`--compress`, tier resuelto `gratis`, 604 archivos, ~9.3k tokens), `CHANGELOG.md`
+(hasta `0.11.0`), `.discovery-map.json` (`total_files: 617`) y lectura puntual de los
+archivos citados.
 
 ## Ruteo por pregunta
 
@@ -36,8 +37,9 @@ repo y lectura puntual de los archivos citados.
 - **Entry point**: `src/cli/index.js` (bin `ancleto` y `aspec` en `package.json`).
 - **Producto**: orquestador SDD para IDEs (OpenCode, Claude, VS Code, Antigravity, Cursor, Roo,
   Copilot) con descubrimiento técnico, memoria persistente local y control de tokens por tier.
-- **Versión observada**: `0.10.0` (`package.json`, `ancleto --version`); el `CHANGELOG.md` llega
-  hasta `0.9.1`.
+- **Versión observada**: `0.11.0` (`package.json`); el `CHANGELOG.md` cubre hasta `0.11.0`
+  (entradas `0.10.0` y `0.11.0`: `memory export|import|gc`, adaptador de frontmatter, gate de
+  lint, prompt interactivo de Muse Spark, 4 changes archivados).
 - **Linter**: ESLint 10 como **devDependency** (flat config `eslint.config.js`, 4 reglas),
   scripts `npm run lint` y `npm test`; no agrega dependencias de runtime.
 - **Módulo puro de frontmatter**: `src/core/adapters/frontmatter.js` es el **dueño único** de la
@@ -46,9 +48,8 @@ repo y lectura puntual de los archivos citados.
   `memory export|import|gc` sobre `.ancleto/memory.db`.
 - **Instalación por host**: `AGENT_TARGETS` es la fuente única de rutas (skills/agents/commands)
   por IDE; el frontmatter de agents se adapta por host. Detalle: `units/cli-install.md`.
-- **Este checkout**: no tiene `.ancletorc` ni `.opencode/` (gitignored); el discovery resuelve los
-  defaults (`outputDir: docs/technical-discovery`, `exclude: []`, tier `gratis`). Sí existe
-  `.ancleto/memory.db`.
+- **Este checkout**: `.ancletorc` y `.opencode/` **existen** (gitignored, no versionados); el
+  tier resuelto es `gratis` vía `.opencode/.ancleto-tier`. Persiste `.ancleto/memory.db`.
 - **Rama de trabajo**: `development`; `main` protegida y estable (`BACKLOG.md`).
 
 Antes de afirmar un detalle fino o reciente, abrir el archivo citado en cada documento.

@@ -38,6 +38,8 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run lint
+
       - run: node --test test/*.test.js
 
       - name: Publish to npm (skipped if the version already exists)

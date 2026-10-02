@@ -344,6 +344,17 @@ describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () =
       assert.deepEqual(readRc(dir).installedPaths.skills, ['.cursor/skills', '.roo/skills'])
     })
   })
+
+  it('5.12 install cursor/roo avisa passthrough de frontmatter (sin formato documentado)', () => {
+    withDir((dir) => {
+      const c = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'cursor'], dir)
+      assert.equal(c.status, 0)
+      assert.match(c.stderr, /no documented frontmatter adaptation for host 'cursor'/)
+      const rr = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'roo'], dir)
+      assert.equal(rr.status, 0)
+      assert.match(rr.stderr, /no documented frontmatter adaptation for host 'roo'/)
+    })
+  })
 })
 
 describe('CLI antigravity full support (add-antigravity-full-support)', () => {
@@ -1219,6 +1230,42 @@ describe('CLI check (G3)', () => {
       assert.equal(r.status, 0)
       assert.match(r.stdout, /✔/)
       assert.match(r.stdout, /0 faltantes/)
+      // El frontmatter instalado coincide con la salida del adaptador: sin falso positivo.
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('frontmatter editado a mano se reporta como divergencia no bloqueante (warning, exit 0)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const agentPath = join(dir, '.opencode', 'agents', 'orchestrator.md')
+      const edited = readFileSync(agentPath, 'utf8').replace(/^description: .*$/m, 'description: editado a mano')
+      writeFileSync(agentPath, edited)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(
+        r.stdout,
+        /⚠ \.opencode\/agents\/orchestrator\.md \(frontmatter diverge del adaptador para host 'opencode'\)/
+      )
+      assert.match(r.stdout, /0 faltantes/)
+    })
+  })
+
+  it('deriva el host por directorio en multi-host (divergencia solo del host editado)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'vscode'], dir)
+      const vscodeAgent = join(dir, '.github', 'agents', 'orchestrator.agent.md')
+      const edited = readFileSync(vscodeAgent, 'utf8').replace(/^description: .*$/m, 'description: editado a mano')
+      writeFileSync(vscodeAgent, edited)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(
+        r.stdout,
+        /⚠ \.github\/agents\/orchestrator\.agent\.md \(frontmatter diverge del adaptador para host 'vscode'\)/
+      )
+      // La copia de opencode (identity, no editada) no debe reportar divergencia.
+      assert.doesNotMatch(r.stdout, /\.opencode\/agents\/.*diverge del adaptador/)
     })
   })
 
@@ -1942,6 +1989,35 @@ describe('CLI init --tier (v0.6.2)', () => {
       const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
       assert.match(orchestrator, /model: opencode\/big-pickle/)
       assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
+    })
+  })
+
+  it('init --tier gratis con gratisModel persistido lo reutiliza y anuncia el origen', () => {
+    withDir((dir) => {
+      assert.equal(run(['init', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '1' }).status, 0)
+      const r = run(['init', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '' })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /modelo gratis: opencode\/muse-spark-1\.3-contributor-free \(valor guardado en \.ancletorc\)/)
+      assert.equal(readRc(dir).gratisModel, 'opencode/muse-spark-1.3-contributor-free')
+      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orchestrator, /model: opencode\/muse-spark-1\.3-contributor-free/)
+    })
+  })
+
+  it('init --tier gratis con ANCLETO_MUSE_SPARK=0 anuncia el origen entorno', () => {
+    withDir((dir) => {
+      const r = run(['init', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '0' })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /modelo gratis: opencode\/big-pickle \(variable de entorno ANCLETO_MUSE_SPARK\)/)
+      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
+    })
+  })
+
+  it('init --tier gratis no interactivo anuncia la detección automática', () => {
+    withDir((dir) => {
+      const r = run(['init', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '' })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /modelo gratis: opencode\/big-pickle \(detección automática\)/)
     })
   })
 

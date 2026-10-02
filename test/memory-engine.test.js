@@ -1,4 +1,4 @@
-import { describe, it, before, after } from 'node:test'
+import { describe, it, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { openDatabase } from '../src/core/memory/database.js'
 import { createMemoryEngine, defaultMemoryDbPath } from '../src/core/memory/engine.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
-import { memoryTools, createMemoryToolHandlers, createMemoryToolkit } from '../src/core/memory/tools.js'
+import { memoryTools, createMemoryToolkit } from '../src/core/memory/tools.js'
 
 const dir = mkdtempSync(join(tmpdir(), 'ancleto-memory-'))
 const dbPath = join(dir, '.ancleto', 'memory.db')
@@ -672,6 +672,255 @@ describe('buildWorkingContext — inyeccion de topologia (D3)', () => {
       const block = eng.buildWorkingContext('project', 2000, dir)
       assert.doesNotMatch(block, /<ProjectTopology>/)
       assert.equal(block.startsWith('<ProjectMemoryRules>'), true)
+    })
+  })
+})
+
+// memory-ops-export-import-gc: T7/T8/T9 — engine.exportActive / importNodes / gcSuperseded.
+function withFreshEngine(fn) {
+  const dir = mkdtempSync(join(tmpdir(), 'ancleto-memops-'))
+  const dbPath = join(dir, '.ancleto', 'memory.db')
+  const eng = createMemoryEngine(dbPath)
+  // Local raw helper: el del scope superior esta cerrado sobre el dbPath del
+  // engine principal, no sobre este. Sin esto las aserciones leerian la BD vieja.
+  const rawAt = (sql, ...params) => {
+    const db = openDatabase(dbPath)
+    try {
+      return db.prepare(sql).all(...params)
+    } finally {
+      db.close()
+    }
+  }
+  try {
+    return fn(eng, dbPath, rawAt)
+  } finally {
+    eng.close()
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+    } catch {
+      // best effort: en Windows los handles de WAL pueden tardar en liberarse
+      // tras VACUUM; el tmpdir se limpia solo en el siguiente reinicio.
+    }
+  }
+}
+
+describe('exportActive', () => {
+  it('exporta solo nodos activos con los campos del formato', () => {
+    withFreshEngine((eng, _dbPath, _rawAt) => {
+      eng.recordNode({ memory_key: 'ex-a', type: 'rule', scope: 'project', content: 'regla uno', justification: 'porque uno' })
+      eng.recordNode({ memory_key: 'ex-b', type: 'decision', scope: 'project', content: 'decision uno', justification: 'porque dos' })
+      eng.recordNode({ memory_key: 'ex-c', type: 'rule', scope: 'project', content: 'regla que se retira' })
+      eng.recordNode({ memory_key: 'ex-c', type: 'rule', scope: 'project', content: 'regla vigente' }) // supersede de ex-c anterior
+
+      const exported = eng.exportActive()
+      const keys = exported.map((n) => n.memory_key).sort()
+      assert.deepEqual(keys, ['ex-a', 'ex-b', 'ex-c'])
+      for (const n of exported) {
+        assert.deepEqual(Object.keys(n).sort(), ['content', 'createdAt', 'justification', 'memory_key', 'scope', 'type'])
+        assert.equal(n.content.includes('<redacted'), false)
+      }
+      assert.equal(exported.find((n) => n.memory_key === 'ex-c').content, 'regla vigente')
+    })
+  })
+
+  it('sanitiza paths absolutos en content y justification', () => {
+    withFreshEngine((eng, _dbPath, _rawAt) => {
+      eng.recordNode({ memory_key: 'ex-path', type: 'rule', scope: 'project', content: 'ver C:\\Users\\damia\\repo y /home/user/secret', justification: 'o /Users/alice/work' })
+      const exported = eng.exportActive()
+      const node = exported.find((n) => n.memory_key === 'ex-path')
+      assert.equal(node.content.includes('C:\\Users\\damia\\repo'), false)
+      assert.equal(node.content.includes('/home/user/secret'), false)
+      assert.equal(node.justification.includes('/Users/alice/work'), false)
+      assert.match(node.content, /<redacted>/)
+      assert.match(node.justification, /<redacted>/)
+    })
+  })
+})
+
+describe('importNodes', () => {
+  it('importa en BD vacia: los 3 nodos quedan activos con el createdAt del JSON', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const payload = [
+        { memory_key: 'imp-a', type: 'rule', scope: 'project', content: 'uno', justification: '', createdAt: '2026-09-01T10:00:00.000Z' },
+        { memory_key: 'imp-b', type: 'decision', scope: 'feature', content: 'dos', justification: 'j', createdAt: '2026-09-02T10:00:00.000Z' },
+        { memory_key: 'imp-c', type: 'rule', scope: 'task', content: 'tres', justification: '', createdAt: '2026-09-03T10:00:00.000Z' }
+      ]
+      const summary = eng.importNodes(payload)
+      assert.deepEqual(summary, { inserted: 3, updated: 0, skipped: 0 })
+      const nodes = rawAt(`SELECT memory_key, status, created_at FROM memory_nodes WHERE memory_key LIKE 'imp-%' AND status = 'active' ORDER BY memory_key`)
+      assert.equal(nodes.length, 3)
+      assert.equal(nodes[0].created_at, '2026-09-01T10:00:00.000Z')
+      assert.equal(nodes[1].created_at, '2026-09-02T10:00:00.000Z')
+      assert.equal(nodes[2].created_at, '2026-09-03T10:00:00.000Z')
+    })
+  })
+
+  it('es idempotente: importar dos veces deja el mismo estado', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const payload = [
+        { memory_key: 'imp-idem', type: 'rule', scope: 'project', content: 'estable', justification: 'j', createdAt: '2026-09-01T10:00:00.000Z' }
+      ]
+      eng.importNodes(payload)
+      eng.importNodes(payload)
+      const nodes = rawAt(`SELECT created_at, content, justification FROM memory_nodes WHERE memory_key = 'imp-idem' AND status = 'active'`)
+      assert.equal(nodes.length, 1)
+      assert.equal(nodes[0].content, 'estable')
+      assert.equal(nodes[0].created_at, '2026-09-01T10:00:00.000Z')
+    })
+  })
+
+  it('upsert: createdAt mas reciente supersede el existente', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'imp-up', type: 'rule', scope: 'project', content: 'viejo' })
+      const payload = [
+        { memory_key: 'imp-up', type: 'rule', scope: 'project', content: 'nuevo', justification: '', createdAt: '2099-01-01T00:00:00.000Z' }
+      ]
+      eng.importNodes(payload)
+      const active = rawAt(`SELECT content, created_at FROM memory_nodes WHERE memory_key = 'imp-up' AND status = 'active'`)
+      const superseded = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = 'imp-up' AND status = 'superseded'`)
+      assert.equal(active.length, 1)
+      assert.equal(active[0].content, 'nuevo')
+      assert.equal(active[0].created_at, '2099-01-01T00:00:00.000Z')
+      assert.equal(superseded[0].c, 1)
+    })
+  })
+
+  it('upsert: createdAt mas antiguo o igual no sobrescribe', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      // inserta un nodo con createdAt FUTURO para forzar "existente mas reciente"
+      const db = openDatabase(dbPath)
+      db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('imp-old-fixed', 'imp-keep', 'rule', 'project', 'active', 'futuro', '', 'test', 1, ?)`).run('2099-01-01T00:00:00.000Z')
+      db.close()
+
+      const payload = [
+        { memory_key: 'imp-keep', type: 'rule', scope: 'project', content: 'pasado', justification: '', createdAt: '2020-01-01T00:00:00.000Z' }
+      ]
+      const summary = eng.importNodes(payload)
+      assert.deepEqual(summary, { inserted: 0, updated: 0, skipped: 1 })
+      const active = rawAt(`SELECT content, created_at FROM memory_nodes WHERE memory_key = 'imp-keep' AND status = 'active'`)
+      assert.equal(active.length, 1)
+      assert.equal(active[0].content, 'futuro')
+    })
+  })
+
+  it('NO reactiva nodos superseded (decision aprobada): los deja como historia', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      // Solo hay un nodo superseded (no activo). El import NO debe traerlo a activo.
+      const db = openDatabase(dbPath)
+      db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('rev-sup-1', 'imp-rev', 'rule', 'project', 'superseded', 'viejo superseded', '', 'test', 1, ?)`).run('2020-01-01T00:00:00.000Z')
+      db.close()
+
+      const payload = [
+        { memory_key: 'imp-rev', type: 'rule', scope: 'project', content: 'revivir', justification: '', createdAt: '2099-01-01T00:00:00.000Z' }
+      ]
+      const summary = eng.importNodes(payload)
+      // La decision aprobada dice "no reactivar superseded": se cuenta como skipped.
+      assert.equal(summary.skipped, 1)
+      assert.equal(summary.inserted, 0)
+      const states = rawAt(`SELECT status, content FROM memory_nodes WHERE memory_key = 'imp-rev' ORDER BY rowid`)
+      assert.equal(states.length, 1)
+      assert.equal(states[0].status, 'superseded')
+      assert.equal(states[0].content, 'viejo superseded')
+    })
+  })
+
+  it('entrada invalida aborta el batch sin insertar nada', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const payload = [
+        { memory_key: 'imp-good', type: 'rule', scope: 'project', content: 'ok', justification: '', createdAt: '2026-09-01T10:00:00.000Z' },
+        { type: 'rule', scope: 'project', content: 'falta memory_key', createdAt: '2026-09-02T10:00:00.000Z' }
+      ]
+      assert.throws(() => eng.importNodes(payload), /entry\[1\] invalida: falta campo obligatorio "memory_key"/)
+      // el batch entero se aborta: imp-good NO esta presente.
+      const rows = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = 'imp-good'`)
+      assert.equal(rows[0].c, 0)
+    })
+  })
+
+  it('valida que createdAt sea parseable', () => {
+    withFreshEngine((eng, _dbPath, _rawAt) => {
+      assert.throws(
+        () => eng.importNodes([{ memory_key: 'imp-bad-ts', type: 'rule', scope: 'project', content: 'x', createdAt: 'no-es-fecha' }]),
+        /createdAt invalido/
+      )
+    })
+  })
+
+  it('rechaza type invalido', () => {
+    withFreshEngine((eng, _dbPath, _rawAt) => {
+      assert.throws(
+        () => eng.importNodes([{ memory_key: 'imp-bad-type', type: 'otro', scope: 'project', content: 'x', createdAt: '2026-01-01T00:00:00.000Z' }]),
+        /type invalido/
+      )
+    })
+  })
+})
+
+describe('gcSuperseded', () => {
+  function insertSuperseded(dbPath, id, memory_key, daysAgo) {
+    const db = openDatabase(dbPath)
+    // Simulamos "superseded hace N dias" usando created_at antiguo.
+    // El schema no expone superseded_at, asi que created_at es el proxy temporal.
+    const ts = new Date(Date.now() - daysAgo * 86400000).toISOString()
+    db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+      VALUES (?, ?, 'rule', 'project', 'superseded', 'historia', '', 'test', 1, ?)`).run(`${id}-old`, `${memory_key}-old`, ts)
+    db.close()
+  }
+
+  it('purga solo superseded con antiguedad mayor al umbral', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      insertSuperseded(dbPath, 'gc1', 'gc-1', 40)
+      insertSuperseded(dbPath, 'gc2', 'gc-2', 10)
+      const result = eng.gcSuperseded({ days: 30 })
+      assert.equal(result.dryRun, false)
+      assert.equal(result.days, 30)
+      assert.equal(result.removed, 1)
+      const remaining = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes WHERE status = 'superseded'`)
+      assert.equal(remaining[0].c, 1)
+    })
+  })
+
+  it('no toca nodos activos', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      insertSuperseded(dbPath, 'gc3', 'gc-act', 365)
+      eng.recordNode({ memory_key: 'gc-act', type: 'rule', scope: 'project', content: 'version nueva' })
+      // Tambien un nodo active con created_at muy antiguo, fuera del umbral.
+      const db = openDatabase(dbPath)
+      db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('gc-act-old-2', 'gc-act2', 'rule', 'project', 'active', 'activo viejo', '', 'test', 1, ?)`).run(new Date(Date.now() - 365 * 86400000).toISOString())
+      db.close()
+
+      const result = eng.gcSuperseded({ days: 30 })
+      // Solo se purga el superseded de hace 365 dias. El active viejo NO.
+      assert.equal(result.removed, 1)
+      const activeCount = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes WHERE status = 'active'`)
+      assert.equal(activeCount[0].c, 2)
+    })
+  })
+
+  it('dryRun reporta sin borrar', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      insertSuperseded(dbPath, 'gc4', 'gc-d1', 40)
+      insertSuperseded(dbPath, 'gc5', 'gc-d2', 35)
+      const result = eng.gcSuperseded({ days: 30, dryRun: true })
+      assert.equal(result.dryRun, true)
+      assert.equal(result.days, 30)
+      assert.equal(result.nodes, 2)
+      assert.ok(result.estimated_bytes > 0)
+      const remaining = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes WHERE status = 'superseded'`)
+      assert.equal(remaining[0].c, 2)
+    })
+  })
+
+  it('usa default 30 dias cuando opts.days no se pasa', () => {
+    withFreshEngine((eng, dbPath, _rawAt) => {
+      insertSuperseded(dbPath, 'gc6', 'gc-def-1', 31)
+      insertSuperseded(dbPath, 'gc7', 'gc-def-2', 5)
+      const result = eng.gcSuperseded()
+      assert.equal(result.days, 30)
+      assert.equal(result.removed, 1)
     })
   })
 })

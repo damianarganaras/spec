@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-09-30T21:41:13Z
-pluginVersion: 0.8.0
+generatedAt: 2026-10-02T17:35:00Z
+pluginVersion: 0.10.0
 skillVersion: '2.3'
 ---
 
@@ -15,35 +15,35 @@ skillVersion: '2.3'
 |---|---|---|
 | **Repomix 1.18.0** | Empaqueta el repo para el seed. Se resuelve en `PATH` o con `npx -y repomix@1.18.0`; admite `--include`, `--ignore`, `--compress`, `--token-budget`. Aporta `--compress` (tree-sitter). | `src/cli/index.js` (`runRepomix`), pack Repomix |
 
-## Distribución y CI
+## Distribución, CI y calidad
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
 | **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`). | `.github/workflows/publish.yml`, `package.json` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
+| **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js`, `package-lock.json` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
 
 ## IDEs / agentes consumidores (contrato de instalación)
 
 `agents/`, `commands/`, `skills/` y `templates/` son consumidos por el IDE elegido. El CLI
 resuelve el destino con `AGENT_TARGETS` (fuente única de rutas) y lo registra en
-`installedPaths` de `.ancletorc`:
+`installedPaths` de `.ancletorc`. La adaptación de frontmatter de agents la posee
+`src/core/adapters/frontmatter.js`:
 
-| Host | Skills | Agents | Commands |
-|---|---|---|---|
-| `opencode` (default) | `.opencode/skills` | `.opencode/agents/<n>.md` | `.opencode/commands/<n>.md` |
-| `claude` | `.claude/skills` | `.claude/agents/<n>.md` | `.claude/commands/<n>.md` |
-| `vscode` | `.github/skills` | `.github/agents/<n>.agent.md` | `.github/prompts/<n>.prompt.md` |
-| `antigravity` | `.agents/skills` | `.agents/agents/<n>.md` | `.agents/skills/<n>/SKILL.md` (command-skill) |
-| `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) |
-| `roo` | `.roo/skills` | — (no soportado) | — (no soportado) |
-| `copilot` | — (no soportado) | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` |
+| Host | Skills | Agents | Commands | Frontmatter de agents |
+|---|---|---|---|---|
+| `opencode` (default) | `.opencode/skills` | `.opencode/agents/<n>.md` | `.opencode/commands/<n>.md` | identidad |
+| `claude` | `.claude/skills` | `.claude/agents/<n>.md` | `.claude/commands/<n>.md` | dropea claves no portables |
+| `vscode` | `.github/skills` | `.github/agents/<n>.agent.md` | `.github/prompts/<n>.prompt.md` | dropea claves no portables |
+| `antigravity` | `.agents/skills` | `.agents/agents/<n>.md` | `.agents/skills/<n>/SKILL.md` (command-skill) | transformación completa |
+| `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) | identidad + aviso stderr |
+| `roo` | `.roo/skills` | — (no soportado) | — (no soportado) | identidad + aviso stderr |
+| `copilot` | — (no soportado) | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` | dropea claves no portables + nota de picker |
 
-Los agents de `claude`/`vscode`/`antigravity`/`copilot` se adaptan de frontmatter (el resto se
-copia verbatim); Antigravity además transforma tools y flags; Copilot comparte dir entre
-agents y commands (sin colisión) y suma la nota de picker (el tier no cambia modelos).
 Con perfil `test`, el overlay (`profiles/test/`) se materializa en los mismos destinos del
-host. Detalle: `units/cli-install.md`.
+host. `ancleto check` valida que el frontmatter instalado coincida con la salida del adaptador
+(warning no bloqueante). Detalle: `units/cli-install.md`.
 
 ## MCP (Model Context Protocol)
 
@@ -59,7 +59,7 @@ configuran; `--no-mcp` lo evita. `import` regenera entradas rotas con rutas loca
 | `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`), no se agrega por defecto por su costo (~4.900 tokens/request). | Deshabilitado |
 | `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Solo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
 
-Evidencia: `src/cli/index.js`, `.opencode/opencode.json`, `README.md`, `BACKLOG.md`.
+Evidencia: `src/cli/index.js`, `README.md`, `BACKLOG.md`.
 
 ## Observabilidad / telemetría
 
@@ -69,7 +69,8 @@ Evidencia: `src/cli/index.js`, `.opencode/opencode.json`, `README.md`, `BACKLOG.
 
 ## Azure DevOps (opcional, apagado)
 
-- Gate en `.ancletorc` → `azure.enabled: false` en este repo.
+- Gate en `.ancletorc` → no configurado en este checkout (sin `.ancletorc`), por lo que el
+  default es apagado.
 - El comando `/cleto-pr` usa GitHub por defecto; con Azure habilitado cambia el flujo. Setup:
   `az extension add --name azure-devops` + `az login` (extensión, no dependencia del paquete).
   Evidencia: `README.md`, `PRODUCT.md`.
@@ -78,5 +79,7 @@ Evidencia: `src/cli/index.js`, `.opencode/opencode.json`, `README.md`, `BACKLOG.
 
 - Módulos nativos: `node:sqlite` (motor de memoria), `node:test` (suite), `node:fs`,
   `node:crypto`, `node:child_process` (spawn de Repomix). Evidencia: pack `src/**`.
+- Dependencias de desarrollo: `eslint` y `globals` (lint), más su árbol transitivo en
+  `package-lock.json`. No son dependencias del paquete publicado. Evidencia: `package.json`.
 - `documentation/lnx-cli/` es material legado de otro CLI (`lnx`) usado como fuente de
   relevamiento; no es dependencia de runtime. Evidencia: `BACKLOG.md`, listado del directorio.

@@ -2,20 +2,28 @@
 node: units/discovery-engine
 kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix y el presupuesto por tier"
+covers: [topologia, empaquetado, tiers, tokens]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js"]
 sourcesSha: 890886ffbbacbdaf0fd546cdd2c9aafb323fb339ce49658d7ecef3b177e7d4f4
-generatedAt: 2026-09-30T19:34:11Z
-pluginVersion: 0.7.2
+generatedAt: 2026-10-02T17:35:00Z
+pluginVersion: 0.10.0
 skillVersion: '2.3'
 ---
 
 # Unidad: discovery y tiers
 
-## Responsabilidad
+## Propósito
 
 Relevar el repositorio y empaquetar contexto con costo controlado. Tres piezas:
 topología (`discovery.js`), traducción tier→Repomix (`repomix-tier.js`) y selección de
 modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
+
+## Recorrido relevante
+
+1. `buildTopologyMap(rootDir)` recorre la raíz y produce el árbol/totales.
+2. `ancleto discovery --check` (state-only) compara hashes y clasifica `impact`.
+3. `ancleto discovery [--compress]` genera el pack Repomix con los ignores del tier.
+4. La skill `ancleto-technical-discovery` redacta el seed a partir del pack.
 
 ## Topología — `src/core/discovery.js`
 
@@ -31,6 +39,7 @@ modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
 - `TIER_PACK_CONFIG`: `normal` (sin ignores extra, sin compresión, sin budget), `minimo`
   (+`test/**`, `docs/**`, `**/*.md`; `--compress`), `gratis` (igual que `minimo` + budget 50000).
 - `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
+  En este repo no existe `.ancleto-tier`, por lo que el tier resuelto es `gratis`.
 - `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
   + `--ignore` del usuario, y agrega `--compress` si el tier o el flag lo piden. No permite
   reemplazar los ignores por un `--ignore` vacío.
@@ -48,8 +57,9 @@ modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
 ## Flujo del estado del seed (`--check`)
 
 1. `presentDocs` verifica los 8 documentos esperados (`EXPECTED_DOCS`) → `MISSING`/`PARTIAL`.
-2. `computeSources` + `hashSources` recorren los fuentes aplicando `discovery.exclude`,
-   `DEFAULT_IGNORES` y el propio `outputDir`.
+2. `computeSources` + `hashSources` recorren los fuentes aplicando `DEFAULT_IGNORES`
+   (`node_modules`, `.git`, `dist`) y el propio `outputDir`; el hash encadena
+   `rel \0 longitud \0 contenido \n` por archivo ordenado.
 3. Si hay estado previo, `computeImpact` compara por archivo y por área (primer nivel) y
    clasifica `impact`: `material` si cambió un archivo material (`package.json`, configs de
    runtime, `index.html`, `src/main|index.*`) o apareció/desapareció un área raíz; si no,
@@ -58,6 +68,12 @@ modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
    regeneración a `affectedDocs`.
 5. El pack (`--compress`) escribe estado en `docs/technical-discovery/.discovery-state.json`
    (sources, fileHashes, hash global, `packTokens`); el seed lo redacta la skill.
+
+## Reglas, contratos y riesgos
+
+- `--check` no empaqueta: es state-only sobre hashes.
+- El pack comprimido solo expone firmas (no cuerpos), lo que limita la evidencia de `src/**`.
+- El tier decide también qué markdown/test queda fuera del pack; el seed debe anotarlo.
 
 ## Paths clave
 

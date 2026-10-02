@@ -14,6 +14,23 @@ const SCOPE_HIERARCHY = {
 }
 
 const PUBLIC_COLUMNS = 'n.memory_key, n.type, n.scope, n.content, n.justification, n.created_at'
+const GC_DEFAULT_DAYS = 30
+
+// Sanitizacion best-effort de paths absolutos en texto libre. Cubre los casos
+// pedidos por el spec: `C:\...` en Windows, `/home/...` y `/Users/...` en Unix.
+// No es exhaustiva (se podria perder un path sin barra inicial o con `~`); el
+// usuario debe revisar el archivo antes de compartirlo.
+const ABS_PATH_PATTERNS = [
+  /[A-Za-z]:\\[^\s]*\S/g,
+  /\/home\/[^\s)]+/g,
+  /\/Users\/[^\s)]+/g
+]
+function sanitizePaths(text) {
+  if (!text) return text
+  let out = String(text)
+  for (const re of ABS_PATH_PATTERNS) out = out.replace(re, '<redacted>')
+  return out
+}
 
 const STOPWORDS = new Set([
   'como', 'cómo', 'the', 'a', 'an', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas',
@@ -80,10 +97,22 @@ export function createReadonlyMemoryEngine(dbPath = defaultMemoryDbPath()) {
 function buildEngine(db) {
 
   const findActive = db.prepare(`SELECT id FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
+  const findActiveRow = db.prepare(`SELECT id, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
+  const countSuperseded = db.prepare(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = ? AND status = 'superseded'`)
   const supersede = db.prepare(`UPDATE memory_nodes SET status = 'superseded', superseded_by = ? WHERE id = ? AND status = 'active'`)
   const insertNode = db.prepare(
     `INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, superseded_by, source, confidence, created_at)
      VALUES (?, ?, ?, ?, 'active', ?, ?, NULL, ?, ?, ?)`
+  )
+  const listActiveAll = db.prepare(
+    `SELECT memory_key, type, scope, content, justification, created_at FROM memory_nodes WHERE status = 'active' ORDER BY created_at, rowid`
+  )
+  const gcSelect = db.prepare(
+    `SELECT id, length(content) + length(justification) AS size FROM memory_nodes
+     WHERE status = 'superseded' AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' days')`
+  )
+  const gcDelete = db.prepare(
+    `DELETE FROM memory_nodes WHERE status = 'superseded' AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' days')`
   )
 
   function buildWorkingContext(scope, maxTokens = MAX_TOKENS, cwd = process.cwd()) {
@@ -128,7 +157,7 @@ function buildEngine(db) {
     const lim = Math.min(Math.max(Number(limit) || 10, 1), 50)
     const base = `SELECT ${PUBLIC_COLUMNS} FROM memory_fts f JOIN memory_nodes n ON n.rowid = f.rowid
        WHERE memory_fts MATCH ? AND n.status = 'active'`
-    const run = (match, loose) => {
+    const run = (match, _loose) => {
       const sql = type
         ? db.prepare(`${base} AND n.type = ? ORDER BY rank, n.rowid LIMIT ?`)
         : db.prepare(`${base} ORDER BY rank, n.rowid LIMIT ?`)
@@ -166,7 +195,7 @@ function buildEngine(db) {
     const id = randomUUID()
     const source = String(context.source || 'runtime')
     const confidence = Math.min(Math.max(Number(context.confidence ?? 1), 0), 1)
-    const created_at = new Date().toISOString()
+    const created_at = String(input.createdAt || new Date().toISOString())
 
     db.exec('BEGIN IMMEDIATE')
     let prev = null
@@ -210,6 +239,127 @@ function buildEngine(db) {
     return rows.map((r) => ({ ...publicNode(r), status: r.status }))
   }
 
+  // Devuelve los nodos activos en el formato de export. Sanitiza paths
+  // absolutos en `content` y `justification` antes de serializar. Solo nodos
+  // activos: los superseded son historia interna y no se exportan.
+  function exportActive() {
+    const rows = listActiveAll.all()
+    return rows.map((r) => ({
+      memory_key: r.memory_key,
+      type: r.type,
+      content: sanitizePaths(r.content),
+      justification: sanitizePaths(r.justification),
+      scope: r.scope,
+      createdAt: r.created_at
+    }))
+  }
+
+  // Importa un array validado. Cada entrada hace upsert por memory_key. Por
+  // decision aprobada, los superseded son historia y NO se reactivan: si la
+  // clave solo existe en ese estado, se ignora la entrada. Si existe activa y el
+  // createdAt del JSON es mas reciente, supersede el existente; si es mas
+  // antiguo o igual, no-op (idempotencia). Valida schema antes de procesar y
+  // aborta todo el batch si alguna entrada es invalida.
+  function importNodes(json) {
+    if (!Array.isArray(json)) throw new Error('importNodes: el argumento debe ser un array')
+    const required = ['memory_key', 'type', 'content', 'scope', 'createdAt']
+    for (let i = 0; i < json.length; i++) {
+      const entry = json[i]
+      if (!entry || typeof entry !== 'object') throw new Error(`entry[${i}] invalida: no es objeto`)
+      for (const k of required) {
+        if (entry[k] === undefined || entry[k] === null || entry[k] === '') {
+          throw new Error(`entry[${i}] invalida: falta campo obligatorio "${k}"`)
+        }
+      }
+      if (entry.type !== 'rule' && entry.type !== 'decision') {
+        throw new Error(`entry[${i}].type invalido: ${entry.type}`)
+      }
+      if (typeof entry.createdAt !== 'string' || Number.isNaN(Date.parse(entry.createdAt))) {
+        throw new Error(`entry[${i}].createdAt invalido: ${entry.createdAt}`)
+      }
+    }
+
+    const summary = { inserted: 0, updated: 0, skipped: 0 }
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const entry of json) {
+        const memory_key = String(entry.memory_key).trim()
+        const active = findActiveRow.get(memory_key)
+        if (active) {
+          const incomingTs = Date.parse(entry.createdAt)
+          const existingTs = Date.parse(active.created_at)
+          if (incomingTs > existingTs) {
+            const newId = randomUUID()
+            supersede.run(newId, active.id)
+            insertNode.run(
+              newId, memory_key, entry.type, entry.scope,
+              String(entry.content), String(entry.justification || ''),
+              'import', 1, entry.createdAt
+            )
+            summary.updated++
+          } else {
+            summary.skipped++
+          }
+          continue
+        }
+        const supersededCount = countSuperseded.get(memory_key).c
+        if (supersededCount > 0) {
+          // Decision aprobada: superseded es historia, no se reactiva.
+          summary.skipped++
+          continue
+        }
+        insertNode.run(
+          randomUUID(), memory_key, entry.type, entry.scope,
+          String(entry.content), String(entry.justification || ''),
+          'import', 1, entry.createdAt
+        )
+        summary.inserted++
+      }
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw err
+    }
+    return summary
+  }
+
+  // Purga nodos superseded cuya antiguedad (proxy: created_at, ya que el
+  // schema no expone superseded_at) supere `opts.days`. Con `opts.dryRun` solo
+  // reporta conteo y tamano estimado sin modificar la DB. Sin dryRun ejecuta
+  // el DELETE en transaccion propia y luego VACUUM + REINDEX fuera (SQLite no
+  // permite VACUUM dentro de una transaccion; si falla la compactacion la BD
+  // sigue consistente, solo no se reempaqueta).
+  function gcSuperseded(opts = {}) {
+    const days = Number.isFinite(opts.days) && opts.days > 0 ? Math.floor(opts.days) : GC_DEFAULT_DAYS
+    const dryRun = !!opts.dryRun
+
+    if (dryRun) {
+      const rows = gcSelect.all(days)
+      const nodes = rows.length
+      const estimated_bytes = rows.reduce((acc, r) => acc + Number(r.size || 0), 0)
+      return { dryRun: true, days, nodes, estimated_bytes }
+    }
+
+    db.exec('BEGIN IMMEDIATE')
+    let removed = 0
+    try {
+      const result = gcDelete.run(days)
+      removed = Number(result.changes || 0)
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw err
+    }
+    try {
+      db.exec('VACUUM')
+      db.exec('REINDEX')
+    } catch (err) {
+      // VACUUM/REINDEX son best-effort: si fallan, la BD esta consistente.
+      return { dryRun: false, days, removed, vacuumError: err.message }
+    }
+    return { dryRun: false, days, removed }
+  }
+
   function checkpoint() {
     return checkpointDatabase(db)
   }
@@ -218,5 +368,5 @@ function buildEngine(db) {
     db.close()
   }
 
-  return { buildWorkingContext, searchMemory, recordNode, listNodes, checkpoint, close }
+  return { buildWorkingContext, searchMemory, recordNode, listNodes, exportActive, importNodes, gcSuperseded, checkpoint, close }
 }

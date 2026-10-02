@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createMemoryEngine } from '../src/core/memory/engine.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const CLI = join(TEST_DIR, '..', 'src', 'cli', 'index.js')
@@ -56,7 +57,7 @@ function runCli(args, cwd) {
 describe('MCP de memoria propia (ancleto mcp)', () => {
   it('handshake, tools/list y round-trip de una regla', async () => {
     await withDir(async (dir) => {
-      const { child, send, close } = mcpClient(dir)
+      const { send, close } = mcpClient(dir)
       try {
         const init = await send(1, 'initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1' } })
         assert.equal(init.result.serverInfo.name, 'ancleto-memory')
@@ -224,6 +225,75 @@ describe('CLI memory list (issue #12)', () => {
 
       const after = existsSync(walPath) ? statSync(walPath).size : 0
       assert.ok(after < before || after === 0, `el WAL debe reducirse (antes ${before}, despues ${after})`)
+    })
+  })
+})
+
+// memory-ops-export-import-gc: cobertura de los subcomandos CLI (T4/T5/T6).
+// El engine ya esta cubierto en test/memory-engine.test.js; aca se verifica el
+// wiring CLI -> engine, el formato de salida y que gc no toque activos.
+describe('CLI memory export/import (memory-ops-export-import-gc)', () => {
+  it('export escribe solo activos, sanitiza paths y reimportar es idempotente', async () => {
+    await withDir(async (dir) => {
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      const eng = createMemoryEngine(dbPath)
+      eng.recordNode({ memory_key: 'exp-a', type: 'rule', scope: 'project', content: 'ver C:\\Users\\damia\\repo', justification: 'o /Users/alice/work' })
+      eng.recordNode({ memory_key: 'exp-b', type: 'decision', scope: 'feature', content: 'decision activa' })
+      eng.recordNode({ memory_key: 'exp-sup', type: 'rule', scope: 'project', content: 'version vieja' })
+      eng.recordNode({ memory_key: 'exp-sup', type: 'rule', scope: 'project', content: 'version nueva' }) // supersede
+      eng.close()
+
+      const stdoutRun = runCli(['memory', 'export'], dir)
+      assert.equal(stdoutRun.status, 0)
+      const nodes = JSON.parse(stdoutRun.stdout)
+      assert.deepEqual(nodes.map((n) => n.memory_key).sort(), ['exp-a', 'exp-b', 'exp-sup'])
+      assert.equal(nodes.find((n) => n.memory_key === 'exp-sup').content, 'version nueva')
+      const a = nodes.find((n) => n.memory_key === 'exp-a')
+      assert.match(a.content, /<redacted>/)
+      assert.match(a.justification, /<redacted>/)
+      assert.ok(!a.content.includes('C:\\Users') && !a.justification.includes('/Users/'))
+
+      const fileRun = runCli(['memory', 'export', '--out', 'backup.json'], dir)
+      assert.equal(fileRun.status, 0)
+      assert.ok(existsSync(join(dir, 'backup.json')))
+
+      const imported = runCli(['memory', 'import', 'backup.json'], dir)
+      assert.equal(imported.status, 0)
+      assert.match(imported.stdout, /insertados:0 actualizados:0 omitidos:3/)
+    })
+  })
+})
+
+describe('CLI memory gc (memory-ops-export-import-gc)', () => {
+  it('dry-run no borra; gc purga superseded antiguos y preserva los activos', async () => {
+    await withDir(async (dir) => {
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      const eng = createMemoryEngine(dbPath)
+      eng.recordNode({ memory_key: 'gc-old', type: 'rule', scope: 'project', content: 'vieja', createdAt: new Date(Date.now() - 40 * 86400000).toISOString() })
+      eng.recordNode({ memory_key: 'gc-old', type: 'rule', scope: 'project', content: 'nueva' })
+      eng.recordNode({ memory_key: 'gc-keep', type: 'rule', scope: 'project', content: 'activa' })
+      eng.close()
+
+      const dry = runCli(['memory', 'gc', '--dry-run'], dir)
+      assert.equal(dry.status, 0)
+      assert.match(dry.stdout, /1 nodo\(s\), ~\d+ bytes a liberar/)
+      let all = JSON.parse(runCli(['memory', 'list', '--all', '--json'], dir).stdout)
+      assert.equal(all.filter((n) => n.status === 'superseded').length, 1)
+
+      const real = runCli(['memory', 'gc', '--days', '30'], dir)
+      assert.equal(real.status, 0)
+      assert.match(real.stdout, /1 nodo\(s\) purgados \+ VACUUM \+ REINDEX/)
+      all = JSON.parse(runCli(['memory', 'list', '--all', '--json'], dir).stdout)
+      assert.equal(all.filter((n) => n.status === 'superseded').length, 0)
+      assert.deepEqual(all.filter((n) => n.status === 'active').map((n) => n.memory_key).sort(), ['gc-keep', 'gc-old'])
+    })
+  })
+
+  it('rechaza un --days no entero positivo', async () => {
+    await withDir(async (dir) => {
+      const r = runCli(['memory', 'gc', '--days', '0'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /--days invalido/)
     })
   })
 })

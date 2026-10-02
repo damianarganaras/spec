@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-30T21:56:00Z",
+  "generatedAt": "2026-10-02T17:35:00Z",
   "docs": {
     "index.md": [
       "README.md",
@@ -8,7 +8,8 @@
       "src",
       "BACKLOG.md",
       "profiles",
-      "commands"
+      "commands",
+      "skills"
     ],
     "overview.md": [
       "src",
@@ -21,7 +22,8 @@
       "templates",
       "aspec",
       "test",
-      "profiles"
+      "profiles",
+      "eslint.config.js"
     ],
     "setup.md": [
       "package.json",
@@ -31,9 +33,8 @@
       "aspec",
       "test",
       ".github",
-      ".ancletorc",
-      ".opencode",
-      "profiles"
+      "profiles",
+      "eslint.config.js"
     ],
     "decisions.md": [
       "README.md",
@@ -41,8 +42,6 @@
       "DESIGN-memory-engine-v0.2.0.md",
       "AGENTS.md",
       "src",
-      "agents",
-      "skills",
       "aspec",
       "profiles",
       "test"
@@ -50,26 +49,28 @@
     "integrations.md": [
       "README.md",
       "package.json",
+      "package-lock.json",
       "src",
       ".github",
-      ".opencode",
-      ".ancletorc",
-      "profiles"
+      "profiles",
+      "BACKLOG.md",
+      "eslint.config.js"
     ],
     "inventory.md": [
       "package.json",
       ".discovery-map.json",
       ".github",
-      ".opencode",
       "documentation",
       "aspec",
       "docs",
-      "profiles"
+      "profiles",
+      "eslint.config.js"
     ],
     "unknowns.md": [
       "README.md",
       "BACKLOG.md",
       "PRODUCT.md",
+      "package.json",
       "src",
       "test",
       "aspec",
@@ -83,13 +84,15 @@
       "templates",
       "test",
       "aspec",
-      "profiles"
+      "profiles",
+      "eslint.config.js"
     ],
     "units/memory-engine.md": [
       "src",
       "DESIGN-memory-engine-v0.2.0.md",
       "test",
-      "README.md"
+      "README.md",
+      "aspec"
     ],
     "units/discovery-engine.md": [
       "src",

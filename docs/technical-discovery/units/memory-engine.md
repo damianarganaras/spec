@@ -1,51 +1,80 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el working-context y sus reglas"
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el working-context y las ops export/import/gc"
+covers: [motor de memoria, tools, working-context, export/import/gc]
 sources: ["src/core/memory/**"]
-sourcesSha: 50a0e07371dc4515bd743ae7b609f23b9c0d35a86abbfa35ee58139980696d63
-generatedAt: 2026-09-30T19:34:11Z
-pluginVersion: 0.7.2
+sourcesSha: c6c49e095b611f0fa4387d9c2555fc2f3d16634fc23c400ed1d1939b122f87d7
+generatedAt: 2026-10-02T17:35:00Z
+pluginVersion: 0.10.0
 skillVersion: '2.3'
 ---
 
 # Unidad: motor de memoria persistente
 
-## Responsabilidad
+## Propósito
 
 Retener reglas y decisiones del proyecto entre sesiones de IA, en una base SQLite **local**
-(`.ancleto/memory.db`), sin bases vectoriales. Un mismo motor soporta tres consumidores:
-tools MCP del LLM, subcomandos CLI y el working-context inyectado al system prompt.
-Evidencia: `README.md`, `DESIGN-memory-engine-v0.2.0.md`.
+(`.ancleto/memory.db`), sin bases vectoriales. Un mismo motor soporta cuatro consumidores:
+tools MCP del LLM, subcomandos CLI (incluidas las ops export/import/gc), el working-context
+inyectado al system prompt y el doctor. Evidencia: `README.md`,
+`DESIGN-memory-engine-v0.2.0.md`, `aspec/specs/memory-ops/spec.md`.
+
+## Recorrido relevante
+
+1. `ancleto mcp` arranca `serveMemoryMcp`, que abre la DB y publica 3 tools al IDE.
+2. `recordRule`/`recordDecision` supersede atómicamente por `memory_key` y puede refrescar el
+   working-context.
+3. `ancleto memory export|import|gc` mueven/purgan nodos sin cambiar el schema.
+4. `buildWorkingContext` materializa `<ProjectMemoryRules>`/`<ProjectTopology>` para el prompt.
 
 ## Componentes
 
 | Archivo | Rol |
 |---|---|
 | `src/core/memory/database.js` | Abre la DB (`openDatabase`), PRAGMAs (`WAL`, `foreign_keys`, `busy_timeout=5000`), migraciones idempotentes, FTS5 external-content, triggers, `checkpointDatabase` (merge del WAL). |
-| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext`, `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode`, `listNodes`, `checkpoint`, `close`. |
-| `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de `searchMemory`/`recordRule`/`recordDecision`) y `createMemoryToolkit`. |
+| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext`, `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode`, `listNodes`, **`exportActive`, `importNodes`, `gcSuperseded`**, `sanitizePaths`, `checkpoint`, `close`. |
+| `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de las 3 tools) y `createMemoryToolkit`. |
 | `src/core/memory/mcp-server.js` | `createMemoryServer`/`serveMemoryMcp`: servidor MCP stdio sin dependencias; maneja JSON-RPC, `handle`, `respond`, `fail`. |
 | `src/core/memory/doctor.js` | `memoryDoctor`: integridad, detección de inconsistencias FTS5 y rebuild de índice / duplicados de activas. |
 | `src/core/memory/working-context.js` | Invariante "memoria activa → `working-context.md`": `workingContextPath`, `shouldRefreshWorkingContext`, `resolveMemoryProjectRoot`, `writeWorkingContext`. |
 
+## Operaciones export / import / gc (`memory-ops-export-import-gc`)
+
+Expuestas como subcomandos del grupo `memory`:
+
+- **`ancleto memory export [--out <archivo>]`** → `exportActive()`: array JSON de nodos
+  activos con `{memory_key, type, content, justification, scope, createdAt}`. Los superseded
+  no se incluyen. Antes de serializar, `sanitizePaths` reemplaza paths absolutos (Windows
+  `X:\...`, Unix `/home/...`, `/Users/...`) por `<redacted>`. Sin `--out` va a stdout.
+- **`ancleto memory import <archivo>`** → `importNodes(json)`: valida el schema de cada entrada
+  y **aborta el batch completo** si alguna es inválida. Upsert por `memory_key`: inserta si no
+  existe (con el `createdAt` del JSON); si existe activo, supersede solo cuando el `createdAt`
+  del JSON es más reciente (empate/no más nuevo = no-op → idempotente); si existe superseded,
+  lo saltea (los superseded **no se reactivan**). Reporta insertados/actualizados/omitidos.
+- **`ancleto memory gc [--dry-run] [--days N]`** → `gcSuperseded({days, dryRun})`: purga nodos
+  `superseded` con antigüedad mayor al umbral (default 30 días). La antigüedad se mide con
+  `created_at` como **proxy** (no existe `superseded_at`). Tras el DELETE hace `VACUUM` +
+  `REINDEX` post-commit (SQLite no permite `VACUUM` en transacción); si la compactación falla,
+  la DB queda consistente. `--dry-run` solo reporta conteo y bytes estimados. Los nodos
+  activos nunca se tocan.
+
 ## Flujo
 
 1. `ancleto mcp` arranca `serveMemoryMcp`, que abre la DB y publica 3 tools al IDE.
-2. `searchMemory(query)`: intenta primero una consulta FTS5 precisa (AND por términos); si no
-   hay resultados, reintenta tolerante (OR con prefijos `*`). El prefijo `*` va dentro del
-   `MATCH` porque FTS5 no acepta parámetros en `ORDER BY rank`. Devuelve nodos activos.
+2. `searchMemory(query)`: intenta primero FTS5 preciso (AND por términos); si no hay
+   resultados, reintenta tolerante (OR con prefijos `*`). El prefijo va dentro del `MATCH`
+   porque FTS5 no acepta parámetros en `ORDER BY rank`. Devuelve nodos activos.
 3. `recordRule`/`recordDecision`: `recordNode` abre `BEGIN IMMEDIATE`, marca `superseded` el
    nodo activo con la misma `memory_key` e inserta el nuevo. El runtime completa
    `source`/`confidence`/`status`/`id`; el LLM nunca los provee.
-4. **Refresh del working-context**: `shouldRefreshWorkingContext(result)` decide si corresponde
-   regenerar el archivo —(a) el nodo entrante es `rule` + scope `project` (alimenta el bloque),
-   o (b) hubo supersesión (cualquier `memory_key` pudo retirar del bloque una rule `project`).
-   El over-refresh intencional es aceptable porque el único consumidor lee el archivo una vez
-   por sesión. `writeWorkingContext` renderiza desde el engine vivo y persiste el `.md`.
+4. **Refresh del working-context**: `shouldRefreshWorkingContext(result)` decide si regenerar
+   —(a) el nodo entrante es `rule` + scope `project`, o (b) hubo supersesión (cualquier
+   `memory_key` pudo retirar del bloque una rule `project`). El over-refresh intencional es
+   aceptable porque el único consumidor lee el archivo una vez por sesión.
 5. `buildWorkingContext(scope, maxTokens)`: materializa `<ProjectMemoryRules>` (reglas activas,
    scope `project`) y `<ProjectTopology>`; trunca de forma segura con `<ContextOverflowWarning>`
-   si excede el presupuesto. Lo consume `ancleto memory context` y `agents/orchestrator.md`.
+   si excede el presupuesto.
 6. `ancleto memory doctor`: verifica integridad, reconstruye FTS5 y fusiona el WAL para dejar el
    `.db` seguro de copiar.
 
@@ -56,23 +85,25 @@ Evidencia: `README.md`, `DESIGN-memory-engine-v0.2.0.md`.
   `additionalProperties: false` y args forjados ignorados (anti prompt-injection).
 - **FTS5** external content con `content_rowid='rowid'`, tokenizer
   `unicode61 remove_diacritics 1` (sin Porter Stemmer) y triggers INSERT/UPDATE/DELETE.
-- **Scopes jerárquicos** `project < feature < task`; default `project` (un default erróneo
-  `repo` dejaba reglas invisibles para `<ProjectMemoryRules>`; se corrigió en v0.6.14).
+- **Scopes jerárquicos** `project < feature < task`; default `project`.
 - **Solo reglas activas con scope `project`** se inyectan en `<ProjectMemoryRules>`; las
   decisiones `project` se recuperan reactivamente con `searchMemory`.
 - **Raíz del proyecto desde la DB, no desde el cwd**: `resolveMemoryProjectRoot` prioriza el
   primer ancestro con `.ancletorc`; si no, el candidato derivado de `dbPath` con layout
-  `.ancleto/`. El refresh es best-effort (no hay raíz → no escribe).
+  `.ancleto/`. El refresh es best-effort.
 - Apertura read-only (`createReadonlyMemoryEngine`) para inspección sin migrar ni tocar el WAL.
+- **Export/import/gc no cambian el schema ni agregan dependencias**: solo `node:sqlite`.
 
 ## Paths clave
 
 | Path | Rol |
 |---|---|
 | `src/core/memory/database.js` | Conexión, PRAGMAs, migraciones, FTS5. |
-| `src/core/memory/engine.js` | `buildWorkingContext`, `searchMemory`, `recordNode`. |
+| `src/core/memory/engine.js` | `buildWorkingContext`, `searchMemory`, `recordNode`, `exportActive`, `importNodes`, `gcSuperseded`, `sanitizePaths`. |
 | `src/core/memory/working-context.js` | Persistencia y trigger de refresh del `.md` derivado. |
 | `src/core/memory/tools.js` | Contrato JSON Schema de las 3 tools. |
 | `src/core/memory/mcp-server.js` | Transporte MCP stdio. |
+| `src/cli/index.js` | `memoryExport`, `memoryImport`, `memoryGc`, `memoryCmd`. |
+| `aspec/specs/memory-ops/spec.md` | Contrato de las ops export/import/gc. |
 | `DESIGN-memory-engine-v0.2.0.md` | Diseño congelado del motor. |
-| `test/memory-engine.test.js`, `test/mcp.test.js`, `test/working-context.test.js` | Suite del motor, MCP y working-context. |
+| `test/memory-engine.test.js`, `test/mcp.test.js`, `test/working-context.test.js` | Suite del motor, MCP, ops CLI y working-context. |

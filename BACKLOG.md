@@ -85,6 +85,10 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   el workflow omite `npm publish` si la versión ya existe; solo se creó el Release de GitHub).
 - ✅ Change SDD `migrate-openspec-to-aspec` completado y archivado en `aspec/changes/archive/2026-09-29-migrate-openspec-to-aspec/`: directorio de changes `aspec/` (antes `openspec/`) con migración automática en `ancleto upgrade`.
 - ✅ Fix `direct-implementation`: `install --project` ahora ejecuta la migración legacy `openspec/` → `aspec/` (paridad con `init`/`upgrade`) — `migrateLegacyOpenspec` antes de `scaffoldAspec` en `src/cli/index.js`; spec `aspec/specs/aspec-bootstrap/spec.md` actualizado con el tercer ejecutor del invariante.
+- ✅ Change `cleto-review` archivado `2026-10-02-cleto-review/` (skill `ancleto-review` + `/cleto-review`, 4 detectores; spec source-of-truth `aspec/specs/code-review/spec.md`).
+- ✅ Change `memory-ops-export-import-gc` archivado `2026-10-02-memory-ops-export-import-gc/` (M1+M2: `memory export/import/gc`; spec `aspec/specs/memory-ops/spec.md`; import NO reactiva superseded, GC usa `created_at` como proxy + `strftime` ISO).
+- ✅ Change `add-standard-linter` archivado `2026-10-02-add-standard-linter/` (B7: ESLint 10 flat config, 4 reglas, `npm run lint` + CI bloqueante; spec `aspec/specs/linter-standard/spec.md`).
+- ✅ Change `dynamic-frontmatter-adapters` archivado `2026-10-02-dynamic-frontmatter-adapters/` (A1: `src/core/adapters/frontmatter.js` puro + `check` no bloqueante; spec `aspec/specs/skill-frontmatter-adapters/spec.md` +5 requirements).
 
 ## Estado actual
 
@@ -95,13 +99,14 @@ lleva su version bump** (`npm version minor|patch --no-git-tag-version`) antes d
   **v0.6.0** (Discovery Engine v2.0: D1+D2+D3), los hitos **v0.6.1-v0.6.15** (hotfixes, rebrand,
   inglés+compresión, modelos y Muse Spark, README, pipeline de publish, memoria cableada al runtime)
   y la épica **Memory & Roles hardening** (kanban #9, cerrada en v0.6.28).
-- Suite: **162 tests** `node --test` en verde (memory-engine 44 + cli 67 + discovery-topology 3 +
-  discovery-tier 9 + content-guards 25 + tier-models 6 + mcp 8), verificado en Windows y Linux.
+- Suite: **331 tests** `node --test` en verde (memory-engine 58 + cli 181 + adapters-frontmatter 43 +
+  content-guards 45 + linter-config 4), `npm run lint` limpio, verificado en Windows y Linux (2026-10-02).
 - `.ancleto/` ignorado en `.gitignore` (no se versionan bases de datos locales).
 - CI/CD: `publish.yml` se dispara **al pushear el tag** `v*` (o a mano), publica a npm, verifica el
   tarball con un canary corto y crea el Release con el mensaje del tag.
 - Memoria: motor propio (`node:sqlite` + FTS5) expuesto como MCP (`ancleto mcp`); engram es opcional
   (`--with-engram`).
+- Seed: `ancleto discovery --check` en **READY** / `impact: none` (regenerado 2026-10-02 tras archivar los 4 changes).
 
 ## Evolución v0.7 — backlog seleccionado
 
@@ -139,7 +144,7 @@ Selección: **A, C, D, E, F, G (vscode-extension)**.
 
 ## En curso / próximo
 
-- [ ] **Change `cleto-review` (en planificación)** — skill `ancleto-review` + comando `/cleto-review`: revisión de calidad interna sobre scope declarado por el usuario (`#nroticket`, rangos git, paths). Detectores: código repetido, método redundante, código mal ubicado, código sin uso. Solo reporta, no edita. Fuente: `aspec/changes/cleto-review/` (proposal/design/tasks/specs).
+- [x] **Change `cleto-review` — ARCHIVADO `2026-10-02-cleto-review/`** — skill `ancleto-review` + comando `/cleto-review` implementados y archivados (spec `aspec/specs/code-review/spec.md`).
 - [x] **Validar comportamiento de Antigravity IDE vs Antigravity CLI** — validado por el usuario (2026-09-30); garantía registrada en `fix-antigravity-skill-dir`.
 - [ ] **Change `add-multi-agent-cli-support` (en implementación)** — modelo de instalación portable multi-host: ruteo nativo por host, adapters de frontmatter, alta de `claude`. Consistency check `design → specs → tasks`: **`READY FOR IMPLEMENTATION`**.
 - [x] **Migración openspec→aspec** — change archivado `migrate-openspec-to-aspec` (legacy propio) +
@@ -148,9 +153,9 @@ Selección: **A, C, D, E, F, G (vscode-extension)**.
   `maybeImportOpenspec` antes del scaffold (change `import-legacy-openspec`).
 
 ## v0.7.0 - Multi-Agent Adaptability & Memory Ops (Planeado)
-- [ ] **M1 (Export/Import):** Commands `ancleto memory export` e `import` para respaldar/compartir reglas y decisiones activas en JSON/SQL sanitizado.
-- [ ] **M2 (Garbage Collection):** Subcomando `ancleto memory gc [--dry-run]` para purgar nodos superseídos antiguos y ejecutar VACUUM/REINDEX en node:sqlite.
-- [ ] **A1 (Frontmatter Adapters):** Transformador dinámico de metadatos en `installAgentSkills` para adaptar el frontmatter de las skills según el IDE configurado (`agent` en `.ancletorc`).
+- [x] **M1 (Export/Import):** `ancleto memory export/import` implementados y archivados (`2026-10-02-memory-ops-export-import-gc/`; spec `aspec/specs/memory-ops/spec.md`; import idempotente, NO reactiva superseded). ✅
+- [x] **M2 (Garbage Collection):** `ancleto memory gc [--dry-run] [--days N]` implementado y archivado (mismo change; usa `created_at` como proxy + `strftime` ISO, VACUUM/REINDEX post-commit, avisa `vacuumError`). ✅
+- [x] **A1 (Frontmatter Adapters):** `src/core/adapters/frontmatter.js` puro + `check` no bloqueante, implementado y archivado (`2026-10-02-dynamic-frontmatter-adapters/`; spec `aspec/specs/skill-frontmatter-adapters/spec.md`). ✅
 
 ## Candidatos de proceso y configuración (detectados en el cierre de v0.6.38)
 
@@ -159,7 +164,7 @@ Selección: **A, C, D, E, F, G (vscode-extension)**.
 - [ ] **B4 — Modo "scope extension" en `@spec-writer`:** cuando un change necesita ampliar su alcance a mitad de camino (p. ej. la opción B de `fix-memory-engine-test-isolation`), hoy hay que re-delegar al spec-writer completo para re-sincronizar todos los artifacts. Propuesta: un modo de extensión de alcance que toque solo las secciones afectadas (proposal/spec/design/tasks), conservando el resto del trabajo ya aprobado.
 - [ ] **B5 — Autoría de memoria no verificable:** el engine de memoria (`node:sqlite`) no registra el emisor; `source` vale `mcp:ancleto-memory` en todos los nodos, así que el ownership de escritura es convención del workflow, no una propiedad enforceable. Candidato a change propio de endurecimiento (p. ej. campo de actor/procedencia). Aparte: superseder el nodo stale `multi-agent-cli-support-design` vía `@memory-keeper` cuando el cambio multi-agente quede cerrado.
 - [ ] **B6 — El seed check reporta archivos cambiados, no contratos cambiados:** `ancleto discovery --check` deriva el veredicto de `changedAreas` + `affectedDocs` y sus `materialReasons` nombran el **archivo** (p. ej. `package.json`) pero no **qué contrato** cambió. Eso da veredictos correctos por heurística y puede producir falsos positivos (marca material) y, peor, falsos negativos (deja pasar un cambio de contrato). Mejora propuesta: que el check identifique el **contrato** afectado (nombres de assets, forma de frontmatter, paths por host), no solo el archivo.
-- [ ] **B7 — No hay gate de lint/format; se publicaron 3+ changes sin él:** el repo no tiene `eslint`/`prettier`/`tsconfig` ni script de lint; los changes consecutivos (`reviewer-guarantee-vs-model`, `add-multi-agent-cli-support`, `add-antigravity-full-support`) se publicaron con "gates ausentes (no bloqueante)". La verificación fue 100% manual + `node --test`. Candidato a change propio: agregar linter estándar (devDependency + config + paso en CI) y resolver hallazgos. **Alcance recomendado al abrirlo: mínimo** (reglas `no-undef`, `no-unused-vars`, `eqeqeq`, `no-dupe-keys`) **sin Prettier** (Prettier reformatea todo `src/` y `test/` → churn enorme; si se quiere, va como ítem aparte). **Caveat honesto:** un linter NO ataja la clase de bug de estos changes (ids inventados, conflación MCP, `cmdSpec` mal derivado) — eso lo atrapa un **test**, no un linter. Nota: agrega `devDependencies` (no rompe el "zero-dependencies" de **runtime**, que solo aplica a lo publicado).
+- [x] **B7 — COMPLETADO `2026-10-02-add-standard-linter/` (era: no había gate de lint/format):** el repo no tiene `eslint`/`prettier`/`tsconfig` ni script de lint; los changes consecutivos (`reviewer-guarantee-vs-model`, `add-multi-agent-cli-support`, `add-antigravity-full-support`) se publicaron con "gates ausentes (no bloqueante)". La verificación fue 100% manual + `node --test`. Candidato a change propio: agregar linter estándar (devDependency + config + paso en CI) y resolver hallazgos. **Alcance recomendado al abrirlo: mínimo** (reglas `no-undef`, `no-unused-vars`, `eqeqeq`, `no-dupe-keys`) **sin Prettier** (Prettier reformatea todo `src/` y `test/` → churn enorme; si se quiere, va como ítem aparte). **Caveat honesto:** un linter NO ataja la clase de bug de estos changes (ids inventados, conflación MCP, `cmdSpec` mal derivado) — eso lo atrapa un **test**, no un linter. Nota: agrega `devDependencies` (no rompe el "zero-dependencies" de **runtime**, que solo aplica a lo publicado).
 
 ## Observaciones diferidas — change `add-multi-agent-cli-support`
 

@@ -1,21 +1,20 @@
 {
-  "last_updated": "2026-09-30T21:59:18.093Z",
-  "total_files": 219,
+  "last_updated": "2026-10-02T17:26:21.232Z",
+  "total_files": 552,
   "tree_summary": {
     ".github": 1,
-    ".opencode": 35,
     "agents": 10,
-    "aspec": 70,
-    "commands": 13,
-    "docs": 17,
+    "aspec": 89,
+    "commands": 15,
+    "docs": 18,
+    "documentation": 340,
     "profiles": 8,
-    "skills": 32,
-    "src": 11,
+    "skills": 34,
+    "src": 12,
     "templates": 2,
-    "test": 8
+    "test": 10
   },
   "root_files": [
-    ".ancletorc",
     ".discovery-map.json",
     ".gitattributes",
     ".gitignore",
@@ -23,8 +22,10 @@
     "BACKLOG.md",
     "CHANGELOG.md",
     "DESIGN-memory-engine-v0.2.0.md",
+    "LICENSE",
     "PRODUCT.md",
     "README.md",
+    "eslint.config.js",
     "package-lock.json",
     "package.json"
   ]

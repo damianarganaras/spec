@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers y validaciones"
-generatedAt: 2026-09-30T21:56:00Z
-pluginVersion: 0.8.0
+generatedAt: 2026-10-02T17:35:00Z
+pluginVersion: 0.10.0
 skillVersion: '2.3'
 ---
 
@@ -20,7 +20,8 @@ skillVersion: '2.3'
 ## Instalación y CLI
 
 ```bash
-npm install -g @ancleto/spec      # instalación global
+npm install                      # deps de desarrollo (eslint, globals); runtime sin deps
+npm install -g @ancleto/spec     # instalación global del CLI
 ancleto init [--agent opencode|claude|vscode|antigravity|cursor|roo|copilot] [--tier normal|minimo|gratis] [--lang es|en|pt|auto] [--exclude <globs>] [--profile general|test] [--with-azure] [--no-mcp]
 ancleto install [--project <dir>] [--global] [--no-mcp] [--with-engram] [--tier ...] [--agent ...] [--profile ...]
 ancleto update                    # re-instala la última versión sobre lo existente
@@ -30,7 +31,12 @@ ancleto import <bundle> [--repair] | ancleto import --repair  # restaura regener
 ancleto discovery --check         # estado del seed en JSON (READY/STALE/PARTIAL/MISSING) + config
 ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
 ancleto mcp                       # servidor MCP stdio de memoria propia
-ancleto memory context|list|doctor [--scope project|feature|task] [--out <archivo>]
+ancleto memory context [--scope X] [--out <archivo>]
+ancleto memory list [--type X] [--scope X] [--all] [--json]
+ancleto memory doctor [--rebuild]
+ancleto memory export [--out <archivo>]   # nodos activos a JSON (stdout o archivo)
+ancleto memory import <archivo>           # upsert por memory_key, idempotente
+ancleto memory gc [--dry-run] [--days N]  # purga superseded con antigüedad > N días (default 30)
 ancleto specs check [--change <name>] [--json]
 ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
 ancleto projects list|scan <raiz>|prune|info|update [--all] [--json]
@@ -45,21 +51,22 @@ el MCP del host por defecto; `--no-mcp` lo evita.
 
 - **`.ancletorc`** (raíz): manifiesto de instalación (`schemaVersion`, `version`,
   `installedAt`, `installedPaths`) + `discovery` (`outputDir`, `exclude`), `agent`, `language`,
-  `profile` (`general`|`test`), `azure.enabled`, `gratisModel`. `installedPaths` guarda la **unión de destinos realmente
-  escritos** por host (`templates`, `agents`, `commands`, `skills`); para antigravity
-  `commands` queda vacío (los commands viven como skills). Este repo: `outputDir:
-  "docs/technical-discovery"`, `language: "es"`, `azure.enabled: false`, `exclude` de
-  tests/imágenes/`docs`/lockfiles. **No editar a mano durante el seed**; se consume resuelto
-  desde `ancleto discovery --check`.
+  `profile` (`general`|`test`), `azure.enabled`, `gratisModel`. `installedPaths` guarda la
+  **unión de destinos realmente escritos** por host (`templates`, `agents`, `commands`,
+  `skills`); para antigravity `commands` queda vacío (los commands viven como skills). **No
+  editar a mano durante el seed**; se consume resuelto desde `ancleto discovery --check`.
+  En este checkout `.ancletorc` **no existe** (gitignored, eliminado), por lo que aplican los
+  defaults: `outputDir: docs/technical-discovery`, `exclude: []`.
 - **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/reviewer ampliados
   (planning/generation/healing/coverage), comandos `cleto-test-*`, estructura `testspec/` y
   bloque LOCKED de convenciones Playwright; instalable con cualquier host (incluido copilot).
-- **`.opencode/.ancleto-tier`**: tier del proyecto (`minimo` en este repo). El tier decide
-  modelos de los agents y la agresividad del pack (`test/**`, `docs/**`, `**/*.md`,
-  `--compress`). Evidencia: `src/core/repomix-tier.js`.
+- **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
+  En este checkout no existe ninguno de los dos, por lo que el tier resuelto es **`gratis`**
+  (default). El tier decide modelos de los agents y la agresividad del pack. Evidencia:
+  `src/core/repomix-tier.js`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`).
-  Los agents de `claude`/`vscode`/`antigravity` se adaptan de frontmatter. Detalle:
+  Los agents de claude/vscode/antigravity/copilot se adaptan de frontmatter. Detalle:
   `units/cli-install.md`.
 - **MCP del host**: antigravity en `.agents/mcp_config.json`; el resto en
   `.opencode/opencode.json` (ver `integrations.md`).
@@ -71,7 +78,7 @@ el MCP del host por defecto; `--no-mcp` lo evita.
 |---|---|
 | `normal` | Modelos balanceados (`qwen3.7-plus`, `minimax-m3`, etc.), sin restricción de pack. |
 | `minimo` | Un único modelo `opencode-go/deepseek-v4.1-flash` para los 10 agents; pack comprimido y excluye tests/docs/markdown. |
-| `gratis` | Muse Spark 1.3 Free si está habilitado en la cuenta; fallback `opencode/big-pickle`; token budget estricto (50k). |
+| `gratis` | Muse Spark 1.3 Free si está habilitado en la cuenta; fallback `opencode/big-pickle`; token budget estricto (50k). Mismos ignores que `minimo`. |
 
 Evidencia: `src/core/tier-models.js`, `src/core/repomix-tier.js`, `README.md`.
 
@@ -90,17 +97,21 @@ Evidencia: `README.md`, `src/cli/index.js`, `.github/workflows/publish.yml`.
 
 ## Tests y validaciones
 
-- Suite: `node --test test/*.test.js` (8 archivos: `cli`, `content-guards`, `discovery-tier`,
-  `discovery-topology`, `mcp`, `memory-engine`, `tier-models`, `working-context`).
-  314 tests en verde en v0.8.0 (incluye CLI multi-host, perfil test, export/import, openspec
-  externo y copilot).
+- **Lint**: `npm run lint` → `eslint src/ test/` (flat config `eslint.config.js`, 4 reglas:
+  `no-undef`, `no-unused-vars`, `eqeqeq`, `no-dupe-keys`). Exit 0 sin violaciones.
+  Evidencia: `package.json`, `eslint.config.js`.
+- **Suite**: `npm test` → `node --test "test/*.test.js"` (10 archivos: `adapters-frontmatter`,
+  `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `linter-config`, `mcp`,
+  `memory-engine`, `tier-models`, `working-context`). **381 tests / 82 suites en verde** en
+  v0.10.0. Evidencia: `test/`, ejecución local.
 - Validaciones obligatorias del repo (definidas en `AGENTS.md`): `npm run typecheck` o
   `npx tsc --noEmit`, `npm run lint`, `npm test`. **Observación**: este repo es JavaScript
-  puro y `package.json` **no define** esos scripts; la regla es genérica del template
-  `AGENTS.md`, no de este paquete. Evidencia: `package.json`, `AGENTS.md`.
-- CI: `.github/workflows/publish.yml` corre `npm ci` + `node --test test/*.test.js` y publica
-  a npm al pushear un tag `v*` (o `workflow_dispatch`), con canary no bloqueante y creación
-  del Release. Omite `npm publish` si la versión ya existe.
+  puro y `package.json` **no define** `typecheck`; `lint` y `test` sí existen desde el change
+  `add-standard-linter`. Evidencia: `package.json`, `AGENTS.md`.
+- CI: `.github/workflows/publish.yml` corre `npm ci` + `npm run lint` + `node --test
+  test/*.test.js` y publica a npm al pushear un tag `v*` (o `workflow_dispatch`), con canary
+  no bloqueante y creación del Release. El lint bloquea el publish. Evidencia:
+  `.github/workflows/publish.yml`.
 
 ## Convenciones de trabajo
 
@@ -108,6 +119,6 @@ Evidencia: `README.md`, `src/cli/index.js`, `.github/workflows/publish.yml`.
   (protección honor-based, ver `BACKLOG.md` B3). Evidencia: `AGENTS.md`.
 - Fuente de verdad: rama `development`; cada commit de feature lleva su version bump antes de
   pushear. Evidencia: `AGENTS.md`, `BACKLOG.md`.
-- Idioma de artifacts: español (`language: "es"`); keywords y nombres de archivo siempre en
-  inglés literal (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`). Evidencia:
-  `AGENTS.md`.
+- Idioma de artifacts: español (`language: "es"` en el repo dogfooded); keywords y nombres de
+  archivo siempre en inglés literal (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`).
+  Evidencia: `AGENTS.md`.

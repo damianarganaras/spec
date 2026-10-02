@@ -9,6 +9,7 @@ import { join, dirname, resolve, basename, relative, isAbsolute } from 'node:pat
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
+import { adaptFrontmatter, parseFrontmatter } from '../core/adapters/frontmatter.js'
 import { writeWorkingContext } from '../core/memory/working-context.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
@@ -74,8 +75,11 @@ Uso:
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
   ancleto memory list [--type X] [--scope X] [--all] [--json]
                                     Lista los nodos de memoria (read-only, no toca la DB)
-  ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FTS5, unicidad)
-                                    y reconstruye el indice FTS5 con --rebuild
+ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FTS5, unicidad)
+                                     y reconstruye el indice FTS5 con --rebuild
+  ancleto memory export [--out <archivo>]  Exporta nodos activos a JSON (stdout o archivo)
+  ancleto memory import <archivo>          Importa nodos desde JSON (upsert por memory_key, idempotente)
+  ancleto memory gc [--dry-run] [--days N] Purga superseded con antiguedad > N dias (default 30)
   ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE
                                         expone searchMemory, recordRule y recordDecision
   ancleto check                         Verifica integridad de archivos instalados vs manifiesto
@@ -108,7 +112,7 @@ async function readAncletorc(projectDir) {
 
 async function writeManifest(projectDir, extra = {}) {
   const existing = (await readAncletorc(projectDir)) || {}
-  const { version: _legacy, ...rest } = existing
+  const { ...rest } = existing
   const manifest = {
     ...rest,
     schemaVersion: 1,
@@ -193,15 +197,6 @@ async function registerProject(projectDir, { agent, tier } = {}) {
   entry.lastSeen = new Date().toISOString()
   reg.projects[key] = entry
   await writeProjectsRegistry(reg)
-}
-
-async function unregisterProject(projectDir) {
-  const reg = await readProjectsRegistry()
-  const key = normKey(projectDir)
-  if (!reg.projects[key]) return false
-  delete reg.projects[key]
-  await writeProjectsRegistry(reg)
-  return true
 }
 
 // Color helpers (respetan NO_COLOR y TTY).
@@ -750,6 +745,9 @@ async function resolveAgent(args, existing, allowAsk = Boolean(process.stdin.isT
   if (flag) return flag
   if (existing && SUPPORTED_AGENTS.includes(existing)) return existing
   if (allowAsk) return askAgent()
+  if (existing && !SUPPORTED_AGENTS.includes(existing)) {
+    console.error(`ancleto: advertencia: agente '${existing}' no soportado, usando '${DEFAULT_AGENT}'`)
+  }
   return DEFAULT_AGENT
 }
 
@@ -947,36 +945,6 @@ const AGENT_TARGETS = {
 
 const ANCLETO_SKILLS = ['ancleto-new', 'ancleto-propose', 'ancleto-apply', 'ancleto-verify', 'ancleto-archive', 'ancleto-bulk-archive', 'ancleto-continue', 'ancleto-explore', 'ancleto-ff', 'ancleto-onboard', 'ancleto-workflow']
 
-// Frontmatter: parser propio sin dependencias. Cada entrada conserva su clave y
-// sus lineas crudas (incluye block scalars y mapas anidados), preservando orden.
-function parseFrontmatter(content) {
-  const m = /^(---\r?\n)([\s\S]*?)(\r?\n---)(\r?\n?)([\s\S]*)$/.exec(content)
-  if (!m) return { hasFrontmatter: false, content }
-  const entries = []
-  for (const line of m[2].split(/\r?\n/)) {
-    if (/^[A-Za-z0-9_-]+:/.test(line)) {
-      entries.push({ key: line.slice(0, line.indexOf(':')), lines: [line] })
-    } else if (entries.length) {
-      entries[entries.length - 1].lines.push(line)
-    } else {
-      entries.push({ key: null, lines: [line] })
-    }
-  }
-  return { hasFrontmatter: true, open: m[1], entries, close: m[3], nl: m[4], body: m[5] }
-}
-
-function serializeFrontmatter(parsed) {
-  if (!parsed.hasFrontmatter) return parsed.content
-  const inner = parsed.entries.flatMap((e) => e.lines).join('\n')
-  return `${parsed.open}${inner}${parsed.close}${parsed.nl}${parsed.body}`
-}
-
-// D4/D5: hosts cuyo formato de agents difiere del origen requieren adaptacion.
-// Claude/VS Code/Copilot eliminan las claves de opencode; Antigravity usa una
-// transformacion propia (D2). El resto es identidad (preservacion verbatim).
-const AGENT_ADAPTER_HOSTS = new Set(['claude', 'vscode', 'antigravity', 'copilot'])
-const AGENT_ADAPTER_DROP = new Set(['mode', 'color', 'temperature', 'permission', 'model', 'tools'])
-
 // Solo Copilot: los tiers no cambian modelos (el usuario elige en el picker);
 // el orchestrator lo recuerda al empezar.
 const COPILOT_MODEL_NOTE = `
@@ -987,119 +955,6 @@ Elegí el modelo en el picker de Copilot antes de empezar: los tiers de ancleto
 normal = flujo completo, minimo = pasos agrupados y económicos, gratis = modelo
 gratis disponible en tu cuenta.
 `
-
-// D3: tabla unica (fijada contra la tabla oficial de frontmatter de Custom
-// Subagents) de ids de Antigravity. Conjunto CERRADO: solo se emiten estos ids.
-// Los ids solo-SDK (`find_file`, `edit_file`, `search_web`, `read_url_content`,
-// ...), los de comunidad (`write_to_file`, `call_mcp_tool`,
-// `multi_replace_file_content`, ...) y los de delegacion (`invoke_subagent`,
-// `start_subagent`, `define_subagent`) NO se emiten: no estan confirmados en el
-// frontmatter y un id inexistente cuelga el subagent (Known Issue). Una clave no
-// listada aqui se omite con aviso a stderr, nunca en silencio (D5).
-const ANTIGRAVITY_TOOL_MAP = {
-  read: 'view_file',
-  edit: 'replace_file_content',
-  grep: 'grep_search',
-  bash: 'run_command',
-  todowrite: 'manage_task'
-}
-
-// Hijos directos del mapa `tools:` con su valor crudo (p. ej. `read: true`).
-function parseToolFlags(entry) {
-  const flags = []
-  if (!entry) return flags
-  let childIndent = null
-  for (const line of entry.lines.slice(1)) {
-    const m = /^(\s+)([A-Za-z0-9_-]+):\s*(.*?)\s*$/.exec(line)
-    if (!m) continue
-    if (childIndent === null) childIndent = m[1].length
-    if (m[1].length !== childIndent) continue
-    flags.push({ key: m[2], value: m[3] })
-  }
-  return flags
-}
-
-function frontmatterValue(entry, fallback = null) {
-  if (!entry) return fallback
-  const m = /^[A-Za-z0-9_-]+:\s*(.*?)\s*$/.exec(entry.lines[0] || '')
-  return m ? m[1] : fallback
-}
-
-// D2/D3/D5/D8: adapta el frontmatter de un agent de opencode al de Antigravity.
-// `name` (requerido por el host) se inyecta desde el nombre del archivo. `tools` se
-// emite siempre como lista (el default del host es la lista vacia). Nunca se inventa
-// un id: una clave sin id verificado se omite con aviso (un id inexistente cuelga el
-// subagent).
-function adaptAntigravityFrontmatter(content, name) {
-  const parsed = parseFrontmatter(content)
-  if (!parsed.hasFrontmatter) return content
-  const byKey = (k) => parsed.entries.find((e) => e.key === k)
-  // Claves que el adaptador gestiona: las dropeadas (AGENT_ADAPTER_DROP), las que
-  // re-emite (name/tools/mainAgent/subagent/model/commandExecutionPolicy) y los campos
-  // que preserva del origen (description/skills/mcpServers). Se filtran TODAS del
-  // conjunto conservado para que ninguna pueda quedar duplicada, y se re-emiten una
-  // sola vez en orden determinista, sin importar lo que declare la fuente.
-  const managed = new Set([
-    ...AGENT_ADAPTER_DROP,
-    'name',
-    'description',
-    'mainAgent',
-    'subagent',
-    'commandExecutionPolicy',
-    'mcpServers',
-    'skills'
-  ])
-  // Se conservan las claves extra (no gestionadas); los campos preservados se
-  // re-emiten abajo desde su primera ocurrencia en el origen.
-  const kept = parsed.entries.filter((e) => e.key && !managed.has(e.key))
-
-  const toolIds = []
-  for (const { key, value } of parseToolFlags(byKey('tools'))) {
-    if (value === 'false') continue
-    if (key === 'skill') continue // no es tool: se cubre por `skills`/surfaceo automatico (OQ2)
-    const id = ANTIGRAVITY_TOOL_MAP[key]
-    if (id) {
-      toolIds.push(id)
-      continue
-    }
-    // D3/D5: regla dura. Un id fuera del frontmatter confirmado (exista o no en el
-    // SDK) no se emite: un id inexistente cuelga el subagent. Se omite con aviso,
-    // nunca en silencio. El uso de MCP NO se infiere desde claves desconocidas del
-    // mapa `tools`: se expresa por `mcpServers`/`.agents/mcp_config.json` (D6).
-    console.error(`skip tool '${key}': no verified Antigravity id for agent '${name}'`)
-  }
-
-  const mode = frontmatterValue(byKey('mode'))
-  const mainAgent = mode === 'subagent' ? 'false' : 'true'
-  const subagent = mode === 'primary' ? 'false' : 'true'
-
-  // Orden determinista: name, description, tools, mainAgent, subagent, model,
-  // commandExecutionPolicy, mcpServers, skills, y luego las claves extra conservadas.
-  const out = [{ key: 'name', lines: [`name: ${name}`] }]
-  const description = byKey('description')
-  if (description) out.push(description)
-  out.push({ key: 'tools', lines: [`tools: [${toolIds.join(', ')}]`] })
-  out.push({ key: 'mainAgent', lines: [`mainAgent: ${mainAgent}`] })
-  out.push({ key: 'subagent', lines: [`subagent: ${subagent}`] })
-  out.push({ key: 'model', lines: [`model: inherit`] })
-  out.push({ key: 'commandExecutionPolicy', lines: [`commandExecutionPolicy: sandbox`] })
-  const mcpServers = byKey('mcpServers')
-  if (mcpServers) out.push(mcpServers)
-  const skills = byKey('skills')
-  if (skills) out.push(skills)
-  out.push(...kept)
-  parsed.entries = out
-  return serializeFrontmatter(parsed)
-}
-
-function adaptFrontmatter(content, host, assetKind, name) {
-  if (assetKind !== 'agents' || !AGENT_ADAPTER_HOSTS.has(host)) return content
-  if (host === 'antigravity') return adaptAntigravityFrontmatter(content, name)
-  const parsed = parseFrontmatter(content)
-  if (!parsed.hasFrontmatter) return content
-  parsed.entries = parsed.entries.filter((e) => !(e.key && AGENT_ADAPTER_DROP.has(e.key)))
-  return serializeFrontmatter(parsed)
-}
 
 // D12: asset no soportado -> no se escribe y se avisa a stderr (no bloqueante).
 function warnUnsupportedAsset(asset, agent) {
@@ -1204,6 +1059,18 @@ function installedExtFor(cat, dirRel) {
   for (const t of Object.values(AGENT_TARGETS)) {
     const spec = t[cat]
     if (spec && spec.dir === dirRel && spec.ext) return spec.ext
+  }
+  return null
+}
+
+// Host dueno de un directorio instalado por categoria). Para agents los
+// destinos son unicos por host (vscode escribe `.github/agents`, copilot
+// `.github/prompts`), pero commands comparte `.github/prompts` entre ambos:
+// se devuelve el primer match (chequeamos solo agents en el frontmatter check).
+function hostForDir(cat, dirRel) {
+  for (const [host, t] of Object.entries(AGENT_TARGETS)) {
+    const spec = t[cat]
+    if (spec && spec.dir === dirRel) return host
   }
   return null
 }
@@ -1497,15 +1364,22 @@ async function install(args) {
   }
   if (!language) language = 'auto'
 
-  if (projectDir && !agent) agent = DEFAULT_AGENT
+  if (projectDir && !agent) {
+    if (existingRc?.agent && !SUPPORTED_AGENTS.includes(existingRc.agent)) {
+      console.error(`ancleto: advertencia: agente '${existingRc.agent}' no soportado, usando '${DEFAULT_AGENT}'`)
+    }
+    agent = DEFAULT_AGENT
+  }
   if (!tier) tier = TIERS[storedTier] ? storedTier : 'normal'
 
   let gratisModelChoice = null
+  let gratisModelOrigin = null
   if (tier === 'gratis') {
     const env = envGratisModel()
     const persisted = isKnownGratisModel(existingRc?.gratisModel) ? existingRc.gratisModel : null
     if (env || persisted) {
       gratisModelChoice = env || persisted
+      gratisModelOrigin = env ? 'variable de entorno ANCLETO_MUSE_SPARK' : 'valor guardado en .ancletorc'
     } else if (process.stdout.isTTY) {
       if (!bannerShown) await showBanner()
       const answer = await selectOption('Muse Spark 1.3 Free disponible en tu cuenta?', ['No (usar big-pickle)', 'Si (Muse Spark)'], 0)
@@ -1513,6 +1387,7 @@ async function install(args) {
       gratisModelChoice = answer.startsWith('Si') ? MUSE_SPARK_MODEL : GRATIS_FALLBACK_MODEL
     } else {
       gratisModelChoice = gratisModel()
+      gratisModelOrigin = 'detección automática'
     }
   }
 
@@ -1570,7 +1445,7 @@ async function install(args) {
     : `${target} (disponible en todos tus proyectos)`
   console.log(`ancleto: instalado en ${loc}`)
   console.log(`ancleto: tier de costo de agents: ${tier}`)
-  if (tier === 'gratis') console.log(`ancleto: modelo gratis: ${models.orchestrator}`)
+  if (tier === 'gratis') console.log(`ancleto: modelo gratis: ${models.orchestrator}${gratisModelOrigin ? ` (${gratisModelOrigin})` : ''}`)
   if (res.added.length) {
     console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
   }
@@ -1683,9 +1558,26 @@ async function initProject(args) {
   // Paridad con install: el tier elegido tambien reescribe los modelos de los
   // agentes locales. Antes quedaba huerfano (tier declarado, modelos de otro tier).
   let gratisModelChoice = null
+  let gratisModelOrigin = null
   if (tier === 'gratis') {
+    const env = envGratisModel()
     const persisted = isKnownGratisModel(existing?.gratisModel) ? existing.gratisModel : null
-    gratisModelChoice = persisted || gratisModel()
+    if (env) {
+      gratisModelChoice = env
+      gratisModelOrigin = 'variable de entorno ANCLETO_MUSE_SPARK'
+    } else if (isInteractive) {
+      // En menú interactivo siempre se pregunta: el valor guardado (o la
+      // detección) solo pre-selecciona el default, nunca se aplica en silencio.
+      const defIdx = (persisted || gratisModel()) === MUSE_SPARK_MODEL ? 1 : 0
+      const answer = await selectOption('Muse Spark 1.3 Free disponible en tu cuenta?', ['No (usar big-pickle)', 'Si (Muse Spark)'], defIdx)
+      gratisModelChoice = answer.startsWith('Si') ? MUSE_SPARK_MODEL : GRATIS_FALLBACK_MODEL
+    } else if (persisted) {
+      gratisModelChoice = persisted
+      gratisModelOrigin = 'valor guardado en .ancletorc'
+    } else {
+      gratisModelChoice = gratisModel()
+      gratisModelOrigin = 'detección automática'
+    }
   }
   const written = await installAgentAssets(projectDir, agent)
   if (profile === 'test') await installProfileOverlay(projectDir, agent)
@@ -1717,6 +1609,7 @@ async function initProject(args) {
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
   if (mcpRes.added.length) console.log(`ancleto: MCP configurados: ${mcpRes.added.join(', ')} en ${mcpRes.file}`)
   console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''} (Idioma: ${language})`)
+  if (tier === 'gratis' && gratisModelChoice) console.log(`ancleto: modelo gratis: ${gratisModelChoice}${gratisModelOrigin ? ` (${gratisModelOrigin})` : ''}`)
 }
 
 const DEFAULT_IGNORES = ['node_modules', '.git', 'dist']
@@ -2142,6 +2035,88 @@ async function memoryListCmd(flags) {
   console.log(`ancleto: ${nodes.length} nodo(s)`)
 }
 
+async function memoryExport(flags) {
+  const out = flagValue(flags, '--out')
+  const dbPath = defaultMemoryDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exit(1)
+  }
+  const engine = createMemoryEngine(dbPath)
+  try {
+    const nodes = engine.exportActive()
+    const json = JSON.stringify(nodes, null, 2)
+    if (out) {
+      await writeFile(resolve(out), json + '\n')
+      console.log(`ancleto: exportados ${nodes.length} nodo(s) a ${out}`)
+    } else {
+      console.log(json)
+    }
+  } finally {
+    engine.close()
+  }
+}
+
+async function memoryImport(flags) {
+  const positional = flags.find((a) => !a.startsWith('-'))
+  if (!positional) {
+    console.error('ancleto: uso: ancleto memory import <archivo>')
+    process.exit(1)
+  }
+  const file = resolve(positional)
+  if (!(await exists(file))) {
+    console.error(`ancleto: no existe el archivo: ${file}`)
+    process.exit(1)
+  }
+  let json
+  try {
+    json = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+  } catch (err) {
+    console.error(`ancleto: no se pudo parsear ${file} como JSON: ${err.message}`)
+    process.exit(1)
+  }
+  const dbPath = defaultMemoryDbPath()
+  const engine = createMemoryEngine(dbPath)
+  try {
+    const summary = engine.importNodes(json)
+    console.log(`ancleto: import OK -> insertados:${summary.inserted} actualizados:${summary.updated} omitidos:${summary.skipped}`)
+  } finally {
+    engine.close()
+  }
+}
+
+async function memoryGc(flags) {
+  const dryRun = flags.includes('--dry-run')
+  const daysRaw = flagValue(flags, '--days')
+  let days
+  if (daysRaw !== null) {
+    days = Number(daysRaw)
+    if (!Number.isFinite(days) || days <= 0 || !Number.isInteger(days)) {
+      console.error(`ancleto: --days invalido: ${daysRaw} (entero positivo)`)
+      process.exit(1)
+    }
+  }
+  const dbPath = defaultMemoryDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exit(0)
+  }
+  const engine = createMemoryEngine(dbPath)
+  try {
+    const result = engine.gcSuperseded({ dryRun, days })
+    if (result.dryRun) {
+      console.log(`ancleto: gc --dry-run (umbral ${result.days} dias) -> ${result.nodes} nodo(s), ~${result.estimated_bytes} bytes a liberar`)
+    } else {
+      console.log(`ancleto: gc (umbral ${result.days} dias) -> ${result.removed} nodo(s) purgados + VACUUM + REINDEX`)
+      if (result.vacuumError) {
+        console.error(`ancleto: advertencia: VACUUM/REINDEX falló: ${result.vacuumError}`)
+      }
+    }
+  } finally {
+    engine.close()
+  }
+}
+
 async function memoryCmd(args) {
   const [sub, ...flags] = args
   if (sub === 'context') {
@@ -2156,10 +2131,25 @@ async function memoryCmd(args) {
     await memoryDoctorCmd(flags)
     return
   }
+  if (sub === 'export') {
+    await memoryExport(flags)
+    return
+  }
+  if (sub === 'import') {
+    await memoryImport(flags)
+    return
+  }
+  if (sub === 'gc') {
+    await memoryGc(flags)
+    return
+  }
   console.error(`ancleto: subcomando de memory desconocido: ${sub || '(ninguno)'}`)
   console.error('ancleto: uso: ancleto memory context [--scope X] [--out file]')
   console.error('ancleto: uso: ancleto memory list [--type X] [--scope X] [--all] [--json]')
   console.error('ancleto: uso: ancleto memory doctor [--rebuild]')
+  console.error('ancleto: uso: ancleto memory export [--out <archivo>]')
+  console.error('ancleto: uso: ancleto memory import <archivo>')
+  console.error('ancleto: uso: ancleto memory gc [--dry-run] [--days <n>]')
   process.exit(1)
 }
 
@@ -2219,6 +2209,13 @@ async function checkCommand() {
         console.log(`  ⚠ ${dirRel}/${f} (huerfano)`)
         orphans++
       }
+      // T3 (delta `frontmatter-adapters`): validacion no bloqueante del frontmatter
+      // de agents contra el adaptador. Solo aplica a `cat === 'agents'` y a archivos
+      // esperados (los huérfanos ya quedan avisados). Reporta como warning (⚠), no como
+      // faltante (✖): el exit code NO se ve alterado por divergencias (solo por faltantes).
+      if (cat === 'agents') {
+        await checkAgentsFrontmatter(cwd, dirRel, actual, expected, ext)
+      }
       if (missingFiles.length === 0 && orphanFiles.length === 0) {
         console.log(`  ✔ ${dirRel} (${actual.length} archivos)`)
       }
@@ -2230,6 +2227,52 @@ async function checkCommand() {
   console.log(`ancleto: check -> ${missing} faltantes, ${orphans} huerfanos`)
   for (const w of warnings) console.log(`  ⚠ ${w}`)
   process.exit(missing > 0 ? 1 : 0)
+}
+
+// T3 (delta `frontmatter-adapters`): para cada `.md` de un directorio de agents
+// instalado, compara el contenido contra `adaptFrontmatter(source, host, 'agents', name)`.
+// Para opencode tambien aplica la sustitucion de `model:` del tier (paso del install que
+// se ejecuta despues del adaptador). Para copilot + orchestrator suma `COPILOT_MODEL_NOTE`.
+// Reporta divergencia como warning (no bloqueante). No compara archivos huérfanos (ya
+// quedan avisados arriba) ni archivos sin origen comparable.
+async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
+  const host = hostForDir('agents', dirRel)
+  if (!host) return
+  // Mapa de modelos aplicado por install en opencode (model: <x> -> tier).
+  // Para 'gratis' usa el gratisModel persistido en .ancletorc.
+  let tierModelsMap = null
+  if (host === 'opencode') {
+    const tierFile = join(cwd, '.opencode', '.ancleto-tier')
+    if (await exists(tierFile)) {
+      const tier = (await readFile(tierFile, 'utf8')).trim()
+      if (TIERS[tier]) {
+        const rc = await readAncletorc(cwd)
+        const persisted = isKnownGratisModel(rc?.gratisModel) ? rc.gratisModel : null
+        tierModelsMap = tierModels(tier, TIERS, persisted)
+      }
+    }
+  }
+  const nameFromFile = (f) => fileExt ? f.slice(0, -fileExt.length) : f.replace(/\.md$/, '')
+  for (const f of actual) {
+    if (!expected.includes(f)) continue
+    const name = nameFromFile(f)
+    const srcPath = join(ROOT, 'agents', `${name}.md`)
+    if (!(await exists(srcPath))) continue
+    let source = await readFile(srcPath, 'utf8')
+    // Para opencode + tier aplicado, simular la sustitucion que hace applyTier
+    // sobre el campo `model:`. El resto lo gestiona el adaptador (identidad).
+    if (tierModelsMap && tierModelsMap[name]) {
+      source = source.replace(/^model: .*$/m, `model: ${tierModelsMap[name]}`)
+    }
+    let expectedContent = adaptFrontmatter(source, host, 'agents', name)
+    if (host === 'copilot' && name === 'orchestrator') {
+      expectedContent += COPILOT_MODEL_NOTE
+    }
+    const installed = await readFile(join(cwd, dirRel, f), 'utf8')
+    if (installed !== expectedContent) {
+      console.log(`  ⚠ ${dirRel}/${f} (frontmatter diverge del adaptador para host '${host}')`)
+    }
+  }
 }
 
 // Avisa si hay un tier del proyecto sin agentes locales donde aplicarlo:

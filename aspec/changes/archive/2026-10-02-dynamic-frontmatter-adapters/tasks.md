@@ -51,5 +51,5 @@
 
 ## Cierre
 
-- [ ] **T6: Actualizar spec source-of-truth**
+- [x] **T6: Actualizar spec source-of-truth**
   - Sync delta spec a `aspec/specs/skill-frontmatter-adapters/spec.md` (archive).

@@ -1,7 +1,7 @@
 ---
 description: Generates aspec change artifacts for spec-driven development
 mode: subagent
-model: opencode-go/qwen3.7-plus
+model: opencode-go/deepseek-v4.1-flash
 temperature: 0.2
 color: '#f59e0b'
 tools:

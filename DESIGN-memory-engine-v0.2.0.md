@@ -27,7 +27,7 @@
 | `content` | texto |
 | `justification` | texto |
 | `superseded_by` | referencia al nodo que lo supersede |
-| `source` | gestionado por el runtime TS — nunca por el LLM |
+| `source` | procedencia runtime-owned (auditoría, no autorización) — nunca por el LLM; vocabulario en §3 |
 | `confidence` | gestionado por el runtime TS — nunca por el LLM |
 | `created_at` | timestamp |
 
@@ -52,6 +52,16 @@
 - **Encapsulamiento**: `source`, `confidence`, `status` e `id` son gestionados 100% por el
   runtime de TypeScript. **Nunca** aparecen en las firmas JSON Schema de las tools:
   previene prompt injection y elevación de privilegios.
+- **Procedencia (`source`) — runtime-owned, solo auditoría**: cada superficie de
+  escritura confiable registra un valor propio (`mcp:ancleto-memory` vía tools MCP,
+  `cli:import` vía `ancleto memory import`, `tool:recordRule` / `tool:recordDecision`
+  por defecto del toolkit in-process según la tool invocada, `runtime` para escrituras
+  directas por código que NO pasan por una tool nombrada,
+  `agent:<rol>` solo si el runtime confiable lo provee — nunca el caller). Un `source`
+  forjado en los args se ignora. La procedencia es descriptiva: el motor NO la usa para
+  autorizar ni denegar escrituras (sin canal de identidad autenticado no hay enforcement).
+  Se expone en `listNodes` / `ancleto memory list` (auditoría) y sigue oculta en
+  `searchMemory` y en las firmas JSON Schema de las tools.
 - **Supersesión atómica**: se ejecuta por la clave conceptual `memory_key` en una
   transacción atómica `BEGIN IMMEDIATE` — marca el nodo previo como `superseded` e inserta
   el nuevo. El LLM no gestiona genealogía de IDs.

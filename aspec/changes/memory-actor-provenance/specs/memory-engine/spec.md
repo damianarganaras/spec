@@ -12,7 +12,11 @@ procedencia propio y estable que la identifique:
 
 - `mcp:ancleto-memory` — escrituras vía las tools MCP (`recordRule`, `recordDecision`).
 - `cli:import` — escrituras vía `ancleto memory import`.
-- `runtime` — uso programático del engine sin contexto de procedencia explícito.
+- `tool:recordRule` / `tool:recordDecision` — valor por defecto que emite el toolkit
+  in-process (`createMemoryToolkit`, `src/core/memory/tools.js:81-82`) según la tool
+  invocada, cuando no se provee un `source` de runtime explícito.
+- `runtime` — uso directo del engine (`recordNode`) por código que no pasa por una tool
+  nombrada, sin contexto de procedencia explícito.
 - `agent:<rol>` — cuando el runtime confiable provee una identidad de agente (nunca el caller).
 
 `source` NO SHALL aparecer en las firmas JSON Schema de entrada de las tools MCP.
@@ -32,6 +36,12 @@ procedencia propio y estable que la identifique:
 
 - **WHEN** `ancleto memory import` inserta o actualiza un nodo
 - **THEN** el nodo persistido tiene `source = 'cli:import'`
+
+#### Scenario: Procedencia por defecto del toolkit in-process
+
+- **WHEN** se registra un nodo vía el toolkit in-process (`createMemoryToolkit`) sin un `source` explícito
+- **THEN** el nodo persistido tiene `source = 'tool:recordRule'` o `source = 'tool:recordDecision'`
+  según la tool invocada
 
 #### Scenario: Procedencia por defecto del runtime
 

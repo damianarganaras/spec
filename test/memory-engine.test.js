@@ -174,6 +174,13 @@ describe('searchMemory', () => {
     assert.deepEqual(Object.keys(row).sort(), ['content', 'created_at', 'justification', 'memory_key', 'scope', 'type'])
   })
 
+  it('no expone source en el resultado (procedencia oculta al LLM)', () => {
+    engine.recordNode({ memory_key: 's-src-hidden', type: 'rule', scope: 'repo', content: 'ocultamiento procedencia' })
+    const [row] = engine.searchMemory({ query: 'ocultamiento' })
+    assert.ok(row)
+    assert.equal('source' in row, false)
+  })
+
   it('valida type invalido', () => {
     assert.throws(() => engine.searchMemory({ query: 'x', type: 'otro' }), /type invalido/)
   })
@@ -356,6 +363,36 @@ describe('recordNode', () => {
     assert.equal(row.source, 'agent:memory-keeper')
     assert.equal(row.confidence, 0.8)
     assert.ok(row.created_at)
+  })
+
+  it('ignora un source forjado en el input y usa el runtime por defecto', () => {
+    engine.recordNode({ memory_key: 'k-src-forge', type: 'rule', content: 'c', source: 'mcp:ancleto-memory' })
+    const [row] = raw(`SELECT source FROM memory_nodes WHERE memory_key = 'k-src-forge' AND status = 'active'`)
+    assert.equal(row.source, 'runtime')
+  })
+})
+
+describe('listNodes — procedencia (memory-actor-provenance)', () => {
+  it('incluye source en cada nodo y refleja el valor real', () => {
+    engine.recordNode({ memory_key: 'ln-provenance', type: 'rule', scope: 'repo', content: 'con procedencia' }, { source: 'agent:tester' })
+    engine.recordNode({ memory_key: 'ln-runtime', type: 'rule', scope: 'repo', content: 'runtime default' })
+
+    const nodes = engine.listNodes()
+    assert.ok(nodes.length > 0)
+    assert.ok(nodes.every((n) => 'source' in n), 'todo nodo de listNodes debe incluir source')
+    assert.equal(nodes.find((n) => n.memory_key === 'ln-provenance').source, 'agent:tester')
+    assert.equal(nodes.find((n) => n.memory_key === 'ln-runtime').source, 'runtime')
+  })
+
+  it('no rompe con valores historicos de source (retrocompatibilidad)', () => {
+    const db = openDatabase(dbPath)
+    db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+      VALUES ('ln-hist-1', 'ln-historical', 'rule', 'repo', 'active', 'nodo historico', '', 'import', 1, ?)`).run(new Date().toISOString())
+    db.close()
+
+    const node = engine.listNodes().find((n) => n.memory_key === 'ln-historical')
+    assert.ok(node, 'el nodo con source historico debe seguir listandose')
+    assert.equal(node.source, 'import')
   })
 })
 
@@ -854,6 +891,30 @@ describe('importNodes', () => {
         () => eng.importNodes([{ memory_key: 'imp-bad-type', type: 'otro', scope: 'project', content: 'x', createdAt: '2026-01-01T00:00:00.000Z' }]),
         /type invalido/
       )
+    })
+  })
+
+  it("persiste source = 'cli:import' en el insert y en el upsert", () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.importNodes([
+        { memory_key: 'imp-src', type: 'rule', scope: 'project', content: 'insertado', justification: '', createdAt: '2026-09-01T10:00:00.000Z' }
+      ])
+      const inserted = rawAt(`SELECT source, content FROM memory_nodes WHERE memory_key = 'imp-src' AND status = 'active'`)
+      assert.equal(inserted.length, 1)
+      assert.equal(inserted[0].source, 'cli:import')
+      assert.equal(inserted[0].content, 'insertado')
+
+      eng.importNodes([
+        { memory_key: 'imp-src', type: 'rule', scope: 'project', content: 'actualizado', justification: '', createdAt: '2026-10-01T10:00:00.000Z' }
+      ])
+      const updated = rawAt(`SELECT source, content FROM memory_nodes WHERE memory_key = 'imp-src' AND status = 'active'`)
+      assert.equal(updated.length, 1)
+      assert.equal(updated[0].source, 'cli:import')
+      assert.equal(updated[0].content, 'actualizado')
+
+      const superseded = rawAt(`SELECT source FROM memory_nodes WHERE memory_key = 'imp-src' AND status = 'superseded'`)
+      assert.equal(superseded.length, 1)
+      assert.equal(superseded[0].source, 'cli:import')
     })
   })
 })

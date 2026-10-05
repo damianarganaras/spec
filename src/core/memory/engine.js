@@ -182,6 +182,14 @@ function buildEngine(db) {
     return []
   }
 
+  // Procedencia de escritura (runtime-owned, solo auditoria): `source` se resuelve
+  // exclusivamente desde `context.source || 'runtime'` y NUNCA desde `input` (un
+  // `source` forjado en los args del caller se ignora, igual que `id`/`status`/
+  // `confidence`). Vocabulario: `mcp:ancleto-memory` (tools MCP), `cli:import`
+  // (import del CLI), `runtime` (default programatico), `agent:<rol>` (solo si el
+  // runtime confiable lo provee, nunca el caller). Frontera: la procedencia es
+  // descriptiva; el motor NO la usa para autorizar ni denegar escrituras (sin
+  // canal de identidad autenticado no hay enforcement).
   function recordNode(input, context = {}) {
     const memory_key = String(input.memory_key || '').trim()
     const type = input.type
@@ -232,11 +240,11 @@ function buildEngine(db) {
     }
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const rows = db.prepare(
-      `SELECT ${PUBLIC_COLUMNS}, status FROM memory_nodes n ${clause}
+      `SELECT ${PUBLIC_COLUMNS}, n.source, status FROM memory_nodes n ${clause}
        ORDER BY CASE n.scope WHEN 'task' THEN 0 WHEN 'feature' THEN 1 WHEN 'project' THEN 2 ELSE 9 END,
                 n.created_at DESC, n.rowid DESC`
     ).all(...params)
-    return rows.map((r) => ({ ...publicNode(r), status: r.status }))
+    return rows.map((r) => ({ ...publicNode(r), source: r.source, status: r.status }))
   }
 
   // Devuelve los nodos activos en el formato de export. Sanitiza paths
@@ -294,7 +302,7 @@ function buildEngine(db) {
             insertNode.run(
               newId, memory_key, entry.type, entry.scope,
               String(entry.content), String(entry.justification || ''),
-              'import', 1, entry.createdAt
+              'cli:import', 1, entry.createdAt
             )
             summary.updated++
           } else {
@@ -311,7 +319,7 @@ function buildEngine(db) {
         insertNode.run(
           randomUUID(), memory_key, entry.type, entry.scope,
           String(entry.content), String(entry.justification || ''),
-          'import', 1, entry.createdAt
+          'cli:import', 1, entry.createdAt
         )
         summary.inserted++
       }

@@ -297,3 +297,62 @@ describe('CLI memory gc (memory-ops-export-import-gc)', () => {
     })
   })
 })
+
+// memory-actor-provenance: la procedencia MCP es runtime-owned, auditable en
+// `memory list --json` y no forjable desde los args de la tool.
+describe('MCP de memoria propia — procedencia (memory-actor-provenance)', () => {
+  it("una regla escrita via tool MCP persiste source = 'mcp:ancleto-memory' y aparece en memory list --json", async () => {
+    await withDir(async (dir) => {
+      const { close, send } = mcpClient(dir)
+      try {
+        const rec = await send(1, 'tools/call', {
+          name: 'recordRule',
+          arguments: { memory_key: 'prov-mcp', content: 'Procedencia de la superficie MCP.' }
+        })
+        assert.equal(rec.result.isError, undefined)
+      } finally {
+        close()
+      }
+
+      const json = runCli(['memory', 'list', '--json'], dir)
+      assert.equal(json.status, 0)
+      const node = JSON.parse(json.stdout).find((n) => n.memory_key === 'prov-mcp')
+      assert.ok(node, 'el nodo escrito por MCP debe aparecer en list --json')
+      assert.equal(node.source, 'mcp:ancleto-memory')
+    })
+  })
+
+  it('un source forjado en los args de la tool no altera la procedencia persistida', async () => {
+    await withDir(async (dir) => {
+      const { close, send } = mcpClient(dir)
+      try {
+        const rec = await send(1, 'tools/call', {
+          name: 'recordRule',
+          arguments: { memory_key: 'prov-forge', content: 'Intento de forja.', source: 'agent:hacker' }
+        })
+        assert.equal(rec.result.isError, undefined)
+      } finally {
+        close()
+      }
+
+      const json = runCli(['memory', 'list', '--json'], dir)
+      const node = JSON.parse(json.stdout).find((n) => n.memory_key === 'prov-forge')
+      assert.ok(node, 'el nodo forjado debe seguir apareciendo')
+      assert.equal(node.source, 'mcp:ancleto-memory')
+      assert.notEqual(node.source, 'agent:hacker')
+    })
+  })
+
+  it('los inputSchema de las tools MCP no exponen source', async () => {
+    await withDir(async (dir) => {
+      const { close, send } = mcpClient(dir)
+      try {
+        const list = await send(1, 'tools/list')
+        const serialized = JSON.stringify(list.result.tools.map((t) => t.inputSchema))
+        assert.doesNotMatch(serialized, /source/)
+      } finally {
+        close()
+      }
+    })
+  })
+})

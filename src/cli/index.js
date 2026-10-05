@@ -2029,7 +2029,7 @@ async function memoryListCmd(flags) {
     return
   }
   for (const n of nodes) {
-    console.log(`  [${n.type}/${n.scope}${n.status === 'active' ? '' : '/' + n.status}] ${n.memory_key}`)
+    console.log(`  [${n.type}/${n.scope}${n.status === 'active' ? '' : '/' + n.status}] ${n.memory_key} (${n.source})`)
     console.log(`      ${n.content}`)
   }
   console.log(`ancleto: ${nodes.length} nodo(s)`)

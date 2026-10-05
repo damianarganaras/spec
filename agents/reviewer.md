@@ -1,7 +1,7 @@
 ---
 description: Reviews completed changes for correctness, conventions, and approved-scope compliance
 mode: subagent
-model: opencode-go/qwen3.6-plus
+model: opencode-go/deepseek-v4.1-flash
 temperature: 0.1
 color: '#ef4444'
 tools:

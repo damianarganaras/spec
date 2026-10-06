@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.12.0] - 2026-10-06
+
+### Added
+- **Skill `ancleto-update` (`/cleto-update`)**: actualiza los artifacts de un change existente ante cambios de definición con merge no destructivo — clasifica por artifact dueño (`specs/`, `design.md`, `proposal.md`, `tasks.md`), detecta drift entre los delta specs y los specs principales, y pregunta el modo de escritura (in-place vs `rev2`) en `skills/ancleto-update/SKILL.md` y `commands/cleto-update.md`, con spec en `aspec/specs/artifact-update/spec.md`.
+
+### Changed
+- Routing del ciclo aspec (`skills/ancleto-workflow/SKILL.md`) y `test/content-guards.test.js` (registro en `ARTIFACT_SKILLS` y conteo de comandos) actualizados para la nueva skill.
+- Semilla de `docs/technical-discovery` regenerada (`READY`).
+
 ## [0.11.0] - 2026-10-02
 
 ### Added

@@ -15,12 +15,13 @@ Map of the spec-driven lifecycle. It does not execute work — it routes: given 
 ## The Lifecycle
 
 ```
-explore → new/propose/ff → continue* → apply → verify → archive
+explore → new/propose/ff → continue* → update? → apply → verify → archive
                 ↑              ↓
              onboard      bulk-archive (batches)
 ```
 
 `*` continue runs once per missing artifact until the set is complete.
+`?` update runs only when a definition changes (a main spec, the scope, or a design decision).
 
 ## Routing Rules
 
@@ -32,6 +33,7 @@ explore → new/propose/ff → continue* → apply → verify → archive
 | Start structured work | `ancleto-new` (step by step) or `ancleto-propose` (all artifacts at once) |
 | Full draft when the path is clear | `ancleto-ff` |
 | Resume a change missing artifacts | `ancleto-continue` (repeat until complete) |
+| Update artifacts after a definition changed | `ancleto-update` |
 | Implement tasks from ready artifacts | `ancleto-apply` |
 | Check implementation before closing | `ancleto-verify` |
 | Close one finished change (sync its specs) | `ancleto-archive` |
@@ -48,6 +50,7 @@ explore → new/propose/ff → continue* → apply → verify → archive
 | `specs/` or `design.md` missing | `ancleto-continue` |
 | `tasks.md` missing | `ancleto-continue` |
 | All artifacts present, tasks unchecked | `ancleto-apply` |
+| A definition changed (main spec, scope, design) | `ancleto-update` |
 | All tasks checked | `ancleto-verify`, then `ancleto-archive` |
 | Several changes complete | `ancleto-bulk-archive` |
 

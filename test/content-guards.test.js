@@ -16,7 +16,8 @@ const ARTIFACT_SKILLS = [
   'ancleto-bulk-archive',
   'ancleto-explore',
   'ancleto-onboard',
-  'ancleto-upgrade'
+  'ancleto-upgrade',
+  'ancleto-update'
 ]
 
 function mdFiles(dir) {
@@ -121,7 +122,7 @@ describe('content guards — referencias validas', () => {
     // envuelve una skill — instruye al agente a correr el CLI (export/import),
     // cuya logica requiere spawnear procesos y no vive en markdown.
     const NON_SKILL_COMMANDS = ['cleto-transplant.md']
-    assert.equal(commands.length, 14 + NON_SKILL_COMMANDS.length)
+    assert.equal(commands.length, 15 + NON_SKILL_COMMANDS.length)
     for (const c of commands) {
       const t = readFileSync(join(ROOT, 'commands', c), 'utf8')
       if (NON_SKILL_COMMANDS.includes(c)) {

@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-10-02T20:32:00Z
-pluginVersion: 0.11.0
+generatedAt: 2026-10-06T23:01:00Z
+pluginVersion: 0.11.1
 skillVersion: '2.3'
 ---
 
@@ -24,18 +24,20 @@ skillVersion: '2.3'
 | Empaquetado por tier | Traduce tier+flags en args de Repomix (ignores, `--compress`, budget). | `src/core/repomix-tier.js` | `units/discovery-engine.md` |
 | Modelos por tier | Selección de modelos y resolución del tier `gratis`. | `src/core/tier-models.js` | `units/discovery-engine.md` |
 | Base de memoria | Abre `.ancleto/memory.db`, PRAGMAs, migraciones y FTS5. | `src/core/memory/database.js` | `units/memory-engine.md` |
-| Motor de memoria | `buildWorkingContext`, `searchMemory` (BM25), supersesión atómica, **`exportActive`/`importNodes`/`gcSuperseded`**. | `src/core/memory/engine.js` | `units/memory-engine.md` |
+| Motor de memoria | `buildWorkingContext`, `searchMemory` (BM25), supersesión atómica, `exportActive`/`importNodes`/`gcSuperseded`, `sanitizePaths`. | `src/core/memory/engine.js` | `units/memory-engine.md` |
 | Ops de memoria (CLI) | `ancleto memory export|import|gc` (JSON sanitizado, upsert idempotente, purga de superseded). | `src/cli/index.js` | `units/memory-engine.md` |
 | Tools de memoria | Handlers y JSON Schema de las 3 tools del LLM. | `src/core/memory/tools.js` | `units/memory-engine.md` |
 | MCP de memoria | Transporte MCP stdio para el IDE. | `src/core/memory/mcp-server.js` | `units/memory-engine.md` |
 | Memory doctor | Integridad, reconstrucción de FTS5 y merge del WAL. | `src/core/memory/doctor.js` | `units/memory-engine.md` |
 | Working context | Renderiza y persiste `.ancleto/working-context.md`; refresco ante escrituras de memoria. | `src/core/memory/working-context.js` | `units/memory-engine.md` |
 | Agents (10) | Subagentes instalables: orchestrator, coder, tester, spec-writer, reviewer, documenter, technical-discovery, technical-seed-writer, memory-keeper, context-resolver. | `agents/*.md` | — |
-| Commands (15) | Comandos `/cleto-*` del ciclo SDD + review/security + recall/pr implícitos + transplant. | `commands/*.md` | — |
-| Skills (20) | Ciclo de vida, discovery, commit/pr, review/security, upgrade y `triage-clarifier`; se instalan en el directorio del host. | `skills/*/SKILL.md` | `units/cli-install.md` |
+| Commands (16) | 15 `/cleto-*` (ciclo SDD + review/security + recall/pr + transplant) **más `cleto-update`** (skill `ancleto-update`). | `commands/*.md` | — |
+| Skills (21) | Ciclo de vida, discovery, commit/pr, review/security, upgrade y `triage-clarifier`; **`ancleto-update`** agregada para revisión de artifacts; se instalan en el directorio del host. | `skills/*/SKILL.md` | `units/cli-install.md` |
 | Templates (2) | `AGENTS.md` y `PRODUCT.md` base para proyectos nuevos (bloques LOCKED/EXTENSIBLE). | `templates/` | `units/cli-install.md` |
 | Linter | Flat config ESLint con 4 reglas sobre `src/` y `test/`. | `eslint.config.js` | — |
-| Specs del repo | Configuración aspec, 14 specs fuente y changes (1 activo diferido + archivados). | `aspec/config.yaml`, `aspec/specs/**` | — |
-| Tests | Suite `node --test` (10 archivos: CLI, adapters, discovery, memoria, working-context, tier, lint y guardas de contenido). | `test/*.test.js` | — |
+| Specs del repo | Configuración aspec, **15** specs fuente (incluida `artifact-update`) y changes (1 activo diferido + archivados, incluye `2026-10-06-ancleto-update` y `2026-10-05-memory-actor-provenance`). | `aspec/config.yaml`, `aspec/specs/**` | — |
+| Tests | Suite `node --test` (10 archivos: CLI, adapters, discovery, memoria, working-context, tier, lint y guardas de contenido; **331 tests declarados** en `BACKLOG.md`). | `test/*.test.js` | — |
+| Doc de skill | Documentación legible de la skill nueva `ancleto-update` (molde de `skill-ancleto-upgrade.md`). | `docs/skill-ancleto-update.md` | — |
 
-Cada dossier describe responsabilidades, flujo, reglas y paths clave; no repite inventario.
+Cada dossier describe responsabilidades, flujo, reglas y paths clave; no
+repite inventario.

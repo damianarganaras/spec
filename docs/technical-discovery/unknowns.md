@@ -2,16 +2,16 @@
 node: unknowns
 kind: unknowns
 read_when: "límites de evidencia: qué no se pudo verificar en este seed"
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 
 # Límites de evidencia
 
 - **Pack comprimido (tree-sitter).** El pack usado contiene firmas de
-  funciones, no cuerpos ni valores de constantes (282 archivos,
-  ~287k tokens). Las descripciones de flujo de `src/**` provienen de
+  funciones, no cuerpos ni valores de constantes (289 archivos,
+  ~288k tokens). Las descripciones de flujo de `src/**` provienen de
   firmas + `README.md` + `BACKLOG.md` + `CHANGELOG.md` + specs de
   `aspec/`, más lectura puntual de los archivos citados. Confirmar
   cualquier detalle fino en el archivo citado.
@@ -34,7 +34,8 @@ skillVersion: '2.3'
   specs, no por un manifiesto leído directamente.
 - **Constantes de instalación confirmadas por lectura directa, no por el
   pack.** Valores como `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `TIERS`,
-  `ANTIGRAVITY_TOOL_MAP` y `AGENT_ADAPTER_DROP` aparecen en el código
+  `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`,
+  `COMMANDCODE_MCP_TOOL_MAP` y `AGENT_ADAPTER_DROP` aparecen en el código
   (el adaptador en `src/core/adapters/frontmatter.js`); el pack
   comprimido solo muestra firmas. Pueden quedar desactualizados si
   cambian sin alterar firmas.
@@ -43,19 +44,27 @@ skillVersion: '2.3'
   y la política de omisión están cubiertos por
   `test/adapters-frontmatter.test.js`; no se validaron contra un host
   Antigravity real.
+- **Mapeo de tools de Command Code**: los ids verificados
+  (`read_file`, `write_file`, `edit_file`, `shell_command`, `grep`,
+  `glob`, `web_fetch`, `web_search`, `todo_write`) y las tools de memoria
+  (`mcp__ancleto-memory__*`) están cubiertos por
+  `test/adapters-frontmatter.test.js`; no se validaron contra un `cmd`
+  real (la verificación manual de `add-commandcode-support` quedó como
+  tarea declarada, no observada por este seed).
 - **Adaptación de frontmatter por host**: la lógica y el dispatch están
   verificados por tests (`test/adapters-frontmatter.test.js`), pero el
   resultado final no se comparó contra cada IDE real (Copilot,
-  Antigravity IDE/CLI y VS Code requieren entornos reales). La
-  validación de `ancleto check` contra el adaptador se describe por
+  Antigravity IDE/CLI, Command Code y VS Code requieren entornos reales).
+  La validación de `ancleto check` contra el adaptador se describe por
   código; no se ejecutó sobre un proyecto multi-host real.
 - **`PRODUCT.md` desactualizado**: afirma que `package.json` no define
   scripts npm, pero `lint` y `test` existen desde `add-standard-linter`;
   además no menciona `eslint.config.js`. La copia versionada quedó
   atrás respecto del código. Esta discrepancia es estable a través de
   varios seeds.
-- **`aspec/`**: 15 specs fuente (incluida `artifact-update`) + 1 change
-  activo (`ancleto-vscode-extension`, diferido) + archivados (incluidos
+- **`aspec/`**: 16 specs fuente (incluidas `artifact-update` y
+  `commandcode-support`) + 1 change activo (`ancleto-vscode-extension`,
+  diferido) + archivados (incluidos `2026-10-07-add-commandcode-support`,
   `2026-10-06-ancleto-update` y `2026-10-05-memory-actor-provenance`,
   más los 4 del 2026-10-02). No se analizó el contenido completo de
   cada spec/delta más allá de las capabilities afectadas.
@@ -69,14 +78,14 @@ skillVersion: '2.3'
   de `hashSources` del CLI (`rel`, `\0`, longitud, `\0`, contenido,
   `\n`, ordenado) sobre los globs indicados; no fue emitido por un
   subcomando del CLI. Sirve como referencia, no como valor canónico.
-- **Tests**: 331 tests declarados en `BACKLOG.md` (memory-engine 58 +
-  cli 181 + adapters-frontmatter 43 + content-guards 45 + linter-config
-  4); en esta regeneración **no se re-ejecutaron** (validación del seed
-  es state-only) — los conteos son del `BACKLOG.md` y de la línea de
-  cierre de la épica `Memory & Roles hardening` en v0.6.28.
+- **Tests**: 413 tests / 86 suites medidos en verde (`npm test`) al cierre
+  de `add-commandcode-support`; `BACKLOG.md` declaraba 331 antes de ese
+  change (memory-engine 58 + cli 181 + adapters-frontmatter 43 +
+  content-guards 45 + linter-config 4). Los conteos del `BACKLOG.md` son
+  declarativos; los 413/86 son de la corrida real de esta regeneración.
 - **Tier resuelto**: el seed previo afirmaba `gratis` vía
   `.opencode/.ancleto-tier`; en este checkout el archivo dice
   `normal`. Este seed corrige el dato.
-- **Versión**: `package.json` declara `0.11.1`; el `CHANGELOG.md` solo
-  cubre `0.10.0` y `0.11.0`. Los archivados `2026-10-05-...` y
-  `2026-10-06-...` aún no tienen entrada propia en el changelog.
+- **Versión**: `package.json` declara `0.12.0`; el `CHANGELOG.md` cubre
+  hasta `0.12.0`. El archivado `2026-10-07-add-commandcode-support` aún no
+  tiene entrada propia en el changelog.

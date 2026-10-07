@@ -2,8 +2,8 @@
 node: inventory
 kind: inventory
 read_when: "cobertura del repositorio por directorios y globs, y qué queda fuera"
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 
@@ -22,14 +22,14 @@ los assets instaladas en `units/_map.md`.
 | `skills/*/SKILL.md` (+ references) | 21 skills nativas (incluye `ancleto-review`, `ancleto-technical-discovery` y **`ancleto-update`**). | 35+ |
 | `templates/` | `AGENTS.md`, `PRODUCT.md`. | 2 |
 | `profiles/test/` | Overlay del perfil test: tester/reviewer ampliados, 5 comandos `cleto-test-*`, `AGENTS.md` con bloque LOCKED. | 8 |
-| `aspec/` | `config.yaml` + `specs/` (**15** capacidades, incluida `artifact-update`) + 1 change activo (`ancleto-vscode-extension`, diferido) + `changes/archive/` (incluye `2026-10-06-ancleto-update`, `2026-10-05-memory-actor-provenance` y los 4 del 2026-10-02). | 89+ |
-| `test/**` | `adapters-frontmatter`, `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `linter-config`, `mcp`, `memory-engine`, `tier-models`, `working-context` (`.test.js`); **331 tests declarados** en `BACKLOG.md`. | 10 |
+| `aspec/` | `config.yaml` + `specs/` (**16** capacidades, incluidas `artifact-update` y `commandcode-support`) + 1 change activo (`ancleto-vscode-extension`, diferido) + `changes/archive/` (incluye `2026-10-07-add-commandcode-support`, `2026-10-06-ancleto-update`, `2026-10-05-memory-actor-provenance` y los 4 del 2026-10-02). | 90+ |
+| `test/**` | `adapters-frontmatter`, `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `linter-config`, `mcp`, `memory-engine`, `tier-models`, `working-context` (`.test.js`); **413 tests / 86 suites medidos en verde**. | 10 |
 | `docs/**` | Documentación del framework + relevamiento (`.md`) + este seed; **incluye `skill-ancleto-update.md`** (nueva). | 19+ |
 | `documentation/` | **Eliminada como área raíz** (registrada como "área raíz eliminada" por `materialReasons`); no se incluye en este seed. | — |
 | `.opencode/**` | Instalación local del host (incluye `.ancleto-tier`); gitignored. | 64+ |
 | `.github/workflows/**` | `publish.yml` (publicación a npm + Release + gate de lint). | 1 |
 | `eslint.config.js` | Flat config del linter (4 reglas sobre `src/` y `test/`). | 1 |
-| Raíz | `package.json` (`0.11.1`), `README.md`, `CHANGELOG.md` (hasta `0.11.0`), `BACKLOG.md`, `DESIGN-memory-engine-v0.2.0.md`, `LICENSE` (MIT), `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `.ancletorc` (gitignored), **`package-lock.json`** (nuevo archivo material raíz). | 14 |
+| Raíz | `package.json` (`0.12.0`), `README.md`, `CHANGELOG.md` (hasta `0.12.0`), `BACKLOG.md`, `DESIGN-memory-engine-v0.2.0.md`, `LICENSE` (MIT), `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `.ancletorc` (gitignored), **`package-lock.json`** (nuevo archivo material raíz). | 14 |
 
 ## Fuera del árbol versionado (gitignored, puede no existir)
 
@@ -43,6 +43,7 @@ los assets instaladas en `units/_map.md`.
 `AGENT_TARGETS` define destinos que solo existen si el proyecto se instala
 con ese host: `.claude/**`, `.github/skills|agents|prompts/**`,
 `.agents/skills|agents/**` y `.agents/mcp_config.json` (antigravity),
+`.commandcode/skills|agents|commands/**` y `.mcp.json` (commandcode),
 `.cursor/skills`, `.roo/skills`. Detalle: `units/cli-install.md`.
 
 ## Exclusiones efectivas del pack (tier `normal` resuelto)
@@ -70,6 +71,13 @@ los lockfiles; sin embargo, Repomix respeta `.gitignore`, que ignora
 - **Tests**: `test/content-guards.test.js` actualizado para incluir
   `ancleto-update` en `ARTIFACT_SKILLS` y el conteo de comandos
   `15 + 1`.
+- **Host nuevo**: `commandcode` (Command Code, CLI `cmd`) en
+  `SUPPORTED_AGENTS` + `AGENT_TARGETS` (`.commandcode/{skills,agents,commands}`),
+  adaptador `adaptCommandCodeFrontmatter` + `COMMANDCODE_TOOL_MAP`/
+  `COMMANDCODE_MCP_TOOL_MAP` y MCP de proyecto `.mcp.json`. Spec nueva:
+  `aspec/specs/commandcode-support/spec.md`; deltas en `agent-install-routing`
+  y `skill-frontmatter-adapters`; tests nuevos en `test/cli.test.js` (11) y
+  `test/adapters-frontmatter.test.js` (10).
 - **Área eliminada**: `documentation/` ya no aparece como área raíz.
 
 ## Cobertura conceptual

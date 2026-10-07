@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers y validaciones"
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 
@@ -22,7 +22,7 @@ skillVersion: '2.3'
 ```bash
 npm install                      # deps de desarrollo (eslint, globals); runtime sin deps
 npm install -g @ancleto/spec     # instalación global del CLI
-ancleto init [--agent opencode|claude|vscode|antigravity|cursor|roo|copilot] [--tier normal|minimo|gratis] [--lang es|en|pt|auto] [--exclude <globs>] [--profile general|test] [--with-azure] [--no-mcp]
+ancleto init [--agent opencode|claude|vscode|antigravity|cursor|roo|copilot|commandcode] [--tier normal|minimo|gratis] [--lang es|en|pt|auto] [--exclude <globs>] [--profile general|test] [--with-azure] [--no-mcp]
 ancleto install [--project <dir>] [--global] [--no-mcp] [--with-engram] [--tier ...] [--agent ...] [--profile ...]
 ancleto update                    # re-instala la última versión sobre lo existente
 ancleto upgrade [--agent <nombre>] [--profile <perfil>]  # re-aplica templates (LOCKED) y assets respetando personalizaciones
@@ -69,7 +69,8 @@ frontmatter de `commands/cleto-update.md`.
   editar a mano durante el seed**; se consume resuelto desde `ancleto discovery
   --check`. En este checkout `.ancletorc` **existe** (gitignored, no versionado)
   con `agent: opencode`, `language: auto`, `profile: general`, `azure.enabled:
-  false` y `version: 0.11.1`. Evidencia: `cat .ancletorc` (no leída por la skill).
+  false` y `version: 0.11.1` (el `.ancletorc` de este checkout quedó por detrás
+  de `package.json` `0.12.0`). Evidencia: `cat .ancletorc` (no leída por la skill).
 - **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/
   reviewer ampliados (planning/generation/healing/coverage), comandos
   `cleto-test-*`, estructura `testspec/` y bloque LOCKED de convenciones
@@ -82,10 +83,11 @@ frontmatter de `commands/cleto-update.md`.
   --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de
   skills/agents/commands por IDE (`.opencode/*`, `.claude/*`, `.github/*`,
-  `.agents/*`, `.cursor/skills`, `.roo/skills`). Los agents de claude/
-  vscode/antigravity/copilot se adaptan de frontmatter. Detalle:
-  `units/cli-install.md`.
-- **MCP del host**: antigravity en `.agents/mcp_config.json`; el resto en
+  `.agents/*`, `.cursor/skills`, `.roo/skills`, `.commandcode/*`). Los agents de
+  claude/vscode/antigravity/copilot/commandcode se adaptan de frontmatter.
+  Detalle: `units/cli-install.md`.
+- **MCP del host**: antigravity en `.agents/mcp_config.json`; commandcode en
+  `.mcp.json` (project scope); copilot en `copilot-mcp.json`; el resto en
   `.opencode/opencode.json` (ver `integrations.md`).
 - **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`); ignorado
   por git.
@@ -123,10 +125,10 @@ Evidencia: `README.md`, `src/cli/index.js`, `.github/workflows/publish.yml`.
 - **Suite**: `npm test` → `node --test "test/*.test.js"` (10 archivos:
   `adapters-frontmatter`, `cli`, `content-guards`, `discovery-tier`,
   `discovery-topology`, `linter-config`, `mcp`, `memory-engine`, `tier-models`,
-  `working-context`). **331 tests / ~82 suites declarados en verde** en
-  `BACKLOG.md` (memory-engine 58 + cli 181 + adapters-frontmatter 43 +
-  content-guards 45 + linter-config 4 — los conteos son declarativos del
-  BACKLOG, no medidos en este seed). El tier resuelto `normal` **no** excluye
+  `working-context`). **413 tests / 86 suites medidos en verde** (`npm test`) al
+  cierre de `add-commandcode-support`; `BACKLOG.md` declaraba 331 antes de ese
+  change (los conteos del BACKLOG son declarativos, no medidos). El tier
+  resuelto `normal` **no** excluye
   `test/**` del pack, por lo que las firmas y conteos pueden venir del Repomix;
   en este seed no se re-ejecutó la suite. Evidencia: `test/`, `BACKLOG.md`,
   `CHANGELOG.md`.

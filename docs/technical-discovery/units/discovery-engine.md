@@ -5,8 +5,8 @@ read_when: "cómo se genera el mapa topológico, el pack Repomix y el presupuest
 covers: [topologia, empaquetado, tiers, tokens]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js"]
 sourcesSha: 890886ffbbacbdaf0fd546cdd2c9aafb323fb339ce49658d7ecef3b177e7d4f4
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 

@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 
@@ -58,7 +58,8 @@ skillVersion: '2.3'
    para `commandToSkill`. Dispatch: `opencode` y toda skill → identidad;
    `claude`/`vscode`/`copilot` + agents → dropean `AGENT_ADAPTER_DROP`
    (`mode`, `color`, `temperature`, `permission`, `model`, `tools`);
-   `antigravity` + agents → transformación propia; `cursor`/`roo` → identidad +
+   `antigravity` + agents → transformación propia; `commandcode` + agents →
+   transformación propia (ver ítem 19); `cursor`/`roo` → identidad +
    aviso a stderr (`no documented frontmatter adaptation for host '<host>'`);
    host desconocido → identidad + aviso (`unknown agent '<host>', passthrough`).
    Evidencia: `src/core/adapters/frontmatter.js`,
@@ -112,8 +113,10 @@ skillVersion: '2.3'
     `aspec/changes/archive/2026-09-30-import-legacy-openspec/`.
 13. **MCP de host, dueño único `setupHostMcp`.** Antigravity mergea
     `.agents/mcp_config.json` (`{ "mcpServers": { "<n>": { command, args, env
-    } } }`) de forma **no destructiva**: preserva `mcpServers` y claves top-level,
-    no pisa homónimos y un JSON inválido avisa sin escribir. Copilot mergea
+    } } }`) y Command Code mergea `.mcp.json` (`{ "mcpServers": { "<n>":
+    { transport: "stdio", command, args, env } } }`, sólo con `--project`), ambos
+    de forma **no destructiva**: preservan `mcpServers` y claves top-level,
+    no pisan homónimos y un JSON inválido avisa sin escribir. Copilot mergea
     `copilot-mcp.json` (`refreshCopilotMcp` regenera rotas en `upgrade` sin
     tocar `copilot-instructions.md`). El resto conserva `mergeMcp` sobre
     `opencode.json`. `init` y `install` configuran MCP igual; `--no-mcp` es el
@@ -162,6 +165,23 @@ skillVersion: '2.3'
     `commands/cleto-update.md`, `aspec/specs/artifact-update/spec.md`,
     `docs/skill-ancleto-update.md`,
     `aspec/changes/archive/2026-10-06-ancleto-update/`.
+19. **Host `commandcode` (Command Code): adaptador propio con mapa de tools y
+    `tools: "*"`.** `add-commandcode-support` sumó el host con layout nativo
+    `.commandcode/{skills,agents,commands}`. El adaptador
+    `adaptCommandCodeFrontmatter` inyecta `name`, preserva `description`, elimina
+    `mode`/`color`/`temperature`/`permission` y **omite `model`** (el host hereda
+    el modelo de sesión). `tools` se traduce con `COMMANDCODE_TOOL_MAP`
+    (`read→read_file`, `write→write_file`, `edit→edit_file`, `bash→shell_command`,
+    `grep→grep`, `glob→glob`, `webfetch→web_fetch`, `websearch→web_search`,
+    `todowrite→todo_write`); las tools de memoria se emiten como
+    `mcp__ancleto-memory__<tool>`; una clave sin id verificado se omite con aviso.
+    **Clave del diseño**: no se usa `dropManagedKeys` (como claude/vscode/copilot)
+    porque en Command Code `tools` omitido = "ninguna tool" y dejaría a los
+    subagentes inútiles; un origen sin `tools` emite `tools: "*"`. El MCP de
+    proyecto va a `.mcp.json` (2ª excepción host-MCP). Evidencia:
+    `src/core/adapters/frontmatter.js`, `src/cli/index.js`,
+    `aspec/specs/commandcode-support/spec.md`,
+    `aspec/changes/archive/2026-10-07-add-commandcode-support/`.
 
 ## Seed incremental (contrato del discovery)
 
@@ -222,9 +242,9 @@ skillVersion: '2.3'
   (env/secretos del IDE); nombrar la variable y omitir el valor.
 - **Deuda resuelta en 0.11.0**: export/import de memoria (M1) y garbage
   collection `memory gc` (M2) ya no son deuda: se implementaron en
-  `memory-ops-export-import-gc`. Cambios adicionales posteriores
-  (`memory-actor-provenance`, `ancleto-update`) están archivados pero todavía
-  no tienen entrada propia en el `CHANGELOG.md`. El tier resuelto en este
+  `memory-ops-export-import-gc`. El `CHANGELOG.md` cubre hasta `0.12.0`
+  (skill `ancleto-update`); el change `add-commandcode-support` (2026-10-07)
+  está archivado pero todavía no tiene entrada propia. El tier resuelto en este
   checkout (`.opencode/.ancleto-tier`) dice `normal`, **no** `gratis` como
   afirmaba el seed anterior. Evidencia: `BACKLOG.md`, `PRODUCT.md`,
   `CHANGELOG.md`.

@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 
@@ -13,13 +13,13 @@ skillVersion: '2.3'
 |---|---|---|---|
 | CLI / orquestación | Parsing de comandos; `init`/`install`/`update`/`upgrade`, `export`/`import`, profiles, projects, stats, doctor, MCP, migración legacy. | `src/cli/index.js` | `units/cli-install.md` |
 | UI de terminal | Banner animado y menús TTY sin dependencias. | `src/cli/ui.js` | — |
-| Adaptación de frontmatter | Módulo puro dueño único: `adaptFrontmatter(content, host, assetKind, name)` + `parseFrontmatter`/`serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`. | `src/core/adapters/frontmatter.js` | `units/cli-install.md` |
+| Adaptación de frontmatter | Módulo puro dueño único: `adaptFrontmatter(content, host, assetKind, name)` + `parseFrontmatter`/`serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`, `COMMANDCODE_MCP_TOOL_MAP`. | `src/core/adapters/frontmatter.js` | `units/cli-install.md` |
 | Instalación de assets por host | `AGENT_TARGETS` (fuente única de rutas) + `installAgentAssets` materializan skills/agents/commands en el destino nativo del host. | `src/cli/index.js` | `units/cli-install.md` |
 | Validación de frontmatter | `checkAgentsFrontmatter` compara el instalado contra la salida del adaptador (warning no bloqueante). | `src/cli/index.js` | `units/cli-install.md` |
 | Perfil test (overlay) | `installProfileOverlay` + `copyTemplates` por perfil + `testspec/`; tester ampliado y `cleto-test-*`. | `src/cli/index.js`, `profiles/test/` | `units/cli-install.md` |
 | Portabilidad entre máquinas | `export` (bundle + manifiesto sin rutas), `import` (regenera MCP + `doctor`), `import --repair`. | `src/cli/index.js` | `units/cli-install.md` |
 | Commands como skills | `installCommandSkills`/`commandToSkill` empaquetan `commands/*.md` en `.agents/skills/<n>/SKILL.md` (antigravity). | `src/cli/index.js` | `units/cli-install.md` |
-| MCP de host | `setupHostMcp` (dueño único): `.agents/mcp_config.json` (antigravity), `copilot-mcp.json` u `opencode.json`; merge no destructivo. | `src/cli/index.js` | `units/cli-install.md` |
+| MCP de host | `setupHostMcp` (dueño único): `.agents/mcp_config.json` (antigravity), `.mcp.json` (commandcode), `copilot-mcp.json` u `opencode.json`; merge no destructivo. | `src/cli/index.js` | `units/cli-install.md` |
 | Discovery / topología | Genera `.discovery-map.json` (árbol, totales, root files). | `src/core/discovery.js` | `units/discovery-engine.md` |
 | Empaquetado por tier | Traduce tier+flags en args de Repomix (ignores, `--compress`, budget). | `src/core/repomix-tier.js` | `units/discovery-engine.md` |
 | Modelos por tier | Selección de modelos y resolución del tier `gratis`. | `src/core/tier-models.js` | `units/discovery-engine.md` |
@@ -35,8 +35,8 @@ skillVersion: '2.3'
 | Skills (21) | Ciclo de vida, discovery, commit/pr, review/security, upgrade y `triage-clarifier`; **`ancleto-update`** agregada para revisión de artifacts; se instalan en el directorio del host. | `skills/*/SKILL.md` | `units/cli-install.md` |
 | Templates (2) | `AGENTS.md` y `PRODUCT.md` base para proyectos nuevos (bloques LOCKED/EXTENSIBLE). | `templates/` | `units/cli-install.md` |
 | Linter | Flat config ESLint con 4 reglas sobre `src/` y `test/`. | `eslint.config.js` | — |
-| Specs del repo | Configuración aspec, **15** specs fuente (incluida `artifact-update`) y changes (1 activo diferido + archivados, incluye `2026-10-06-ancleto-update` y `2026-10-05-memory-actor-provenance`). | `aspec/config.yaml`, `aspec/specs/**` | — |
-| Tests | Suite `node --test` (10 archivos: CLI, adapters, discovery, memoria, working-context, tier, lint y guardas de contenido; **331 tests declarados** en `BACKLOG.md`). | `test/*.test.js` | — |
+| Specs del repo | Configuración aspec, **16** specs fuente (incluidas `artifact-update` y `commandcode-support`) y changes (1 activo diferido + archivados, incluye `2026-10-07-add-commandcode-support`). | `aspec/config.yaml`, `aspec/specs/**` | — |
+| Tests | Suite `node --test` (10 archivos: CLI, adapters, discovery, memoria, working-context, tier, lint y guardas de contenido; **413 tests / 86 suites medidos en verde**). | `test/*.test.js` | — |
 | Doc de skill | Documentación legible de la skill nueva `ancleto-update` (molde de `skill-ancleto-upgrade.md`). | `docs/skill-ancleto-update.md` | — |
 
 Cada dossier describe responsabilidades, flujo, reglas y paths clave; no

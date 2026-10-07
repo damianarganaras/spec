@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 
@@ -37,9 +37,9 @@ CLI monolítica en ESM, sin framework externo. Capas:
 | Selección de modelos | `src/core/tier-models.js` | Modelos por tier, resolución de tier gratis (Muse Spark/probe/env). |
 | Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (search/record/export/import/gc), `tools`, `mcp-server`, `doctor`, `working-context`. |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 16 commands, 21 skills, 2 templates + perfil `test`). |
-| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (15 capacidades, incluida `artifact-update`) + 1 change activo (`ancleto-vscode-extension`, diferido) + `changes/archive/` (incluye los archivados `2026-10-06-ancleto-update` y `2026-10-05-memory-actor-provenance`). |
+| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (16 capacidades, incluidas `artifact-update` y `commandcode-support`) + 1 change activo (`ancleto-vscode-extension`, diferido) + `changes/archive/` (incluye `2026-10-06-ancleto-update`, `2026-10-05-memory-actor-provenance` y `2026-10-07-add-commandcode-support`). |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
-| Tests | `test/*.test.js` | Suite `node --test` (10 archivos; **331 tests** declarados en `BACKLOG.md`: memory-engine 58 + cli 181 + adapters-frontmatter 43 + content-guards 45 + linter-config 4). |
+| Tests | `test/*.test.js` | Suite `node --test` (10 archivos; **413 tests / 86 suites medidos en verde** al cierre de `add-commandcode-support`; `BACKLOG.md` declaraba 331 antes de ese change). |
 
 Entry point único: `src/cli/index.js` (`bin.ancleto` y `bin.aspec`). No hay
 servidor ni base de datos propia más allá de `.ancleto/memory.db`. Evidencia:
@@ -52,13 +52,13 @@ servidor ni base de datos propia más allá de `.ancleto/memory.db`. Evidencia:
   host (`AGENT_TARGETS`) delegando la adaptación de frontmatter en
   `src/core/adapters/frontmatter.js`, aplica el overlay del perfil `test`,
   fusiona bloques `<!-- LOCKED -->`, configura MCP (propio + caveman; engram
-  opcional; `copilot-mcp.json` y `.agents/mcp_config.json` según host) y expone
-  los subcomandos.
+  opcional; `copilot-mcp.json`, `.agents/mcp_config.json` y `.mcp.json` según host)
+  y expone los subcomandos.
 - **Adaptador de frontmatter**: `adaptFrontmatter(content, host, assetKind, name)`
   es una función pura sin E/S. `opencode` (y skills de cualquier host) es
   identidad; `claude`, `vscode` y `copilot` dropean claves no portables;
-  `antigravity` transforma a su convención; `cursor`/`roo` son passthrough con
-  aviso a stderr; host desconocido es passthrough con aviso.
+  `antigravity` y `commandcode` transforman a su convención; `cursor`/`roo` son
+  passthrough con aviso a stderr; host desconocido es passthrough con aviso.
 - **Discovery**: `--check` reporta estado del seed (`READY`/`STALE`/`PARTIAL`/
   `MISSING`) con `impact` (`none`/`minor`/`material`) y `affectedDocs`; el pack
   (Repomix) se genera on-demand.
@@ -113,9 +113,9 @@ servidor ni base de datos propia más allá de `.ancleto/memory.db`. Evidencia:
 
 ## Estado del repositorio
 
-Versión `0.11.1` en `package.json` (el `CHANGELOG.md` cubre `0.10.0` y `0.11.0`;
-los changes `memory-actor-provenance` (2026-10-05) y `ancleto-update`
-(2026-10-06) están archivados sin entrada propia todavía). Dogfooding histórico:
+Versión `0.12.0` en `package.json` (el `CHANGELOG.md` cubre hasta `0.12.0`;
+el change `add-commandcode-support` (2026-10-07, host `commandcode`) está
+archivado sin entrada propia todavía en el changelog). Dogfooding histórico:
 el framework fue inicializado sobre este repo; este checkout **sí materializa
 `.ancletorc` y `.opencode/`** (ambos gitignored, no versionados) y persiste
 `AGENTS.md`, `PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier resuelto es

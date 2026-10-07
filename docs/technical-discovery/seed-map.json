@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-06T23:01:00Z",
+  "generatedAt": "2026-10-07T23:35:00Z",
   "docs": {
     "index.md": [
       "README.md",
@@ -19,7 +19,9 @@
       "skills/ancleto-update/SKILL.md",
       "commands/cleto-update.md",
       "aspec/specs/artifact-update/spec.md",
-      "docs/skill-ancleto-update.md"
+      "docs/skill-ancleto-update.md",
+      "aspec/specs/commandcode-support/spec.md",
+      "aspec/changes/archive/2026-10-07-add-commandcode-support"
     ],
     "overview.md": [
       "README.md",
@@ -38,7 +40,9 @@
       "CHANGELOG.md",
       "skills/ancleto-workflow/SKILL.md",
       ".opencode/.ancleto-tier",
-      ".gitignore"
+      ".gitignore",
+      "aspec/specs/commandcode-support/spec.md",
+      "aspec/changes/archive/2026-10-07-add-commandcode-support"
     ],
     "setup.md": [
       "package.json",
@@ -57,7 +61,9 @@
       "commands",
       "skills",
       "aspec/specs/artifact-update/spec.md",
-      "docs/skill-ancleto-update.md"
+      "docs/skill-ancleto-update.md",
+      "aspec/specs/commandcode-support/spec.md",
+      "aspec/changes/archive/2026-10-07-add-commandcode-support"
     ],
     "decisions.md": [
       "README.md",
@@ -82,7 +88,9 @@
       "aspec/changes/archive/2026-10-02-add-standard-linter",
       "aspec/changes/archive/2026-10-02-cleto-review",
       "aspec/changes/archive/2026-09-30-import-legacy-openspec",
-      "aspec/changes/archive/2026-09-30-cross-machine-export-import"
+      "aspec/changes/archive/2026-09-30-cross-machine-export-import",
+      "aspec/specs/commandcode-support/spec.md",
+      "aspec/changes/archive/2026-10-07-add-commandcode-support"
     ],
     "integrations.md": [
       "README.md",
@@ -93,7 +101,9 @@
       "BACKLOG.md",
       "eslint.config.js",
       "CHANGELOG.md",
-      "test"
+      "test",
+      "aspec/specs/commandcode-support/spec.md",
+      "aspec/changes/archive/2026-10-07-add-commandcode-support"
     ],
     "units/_map.md": [
       "src",
@@ -106,7 +116,9 @@
       "profiles",
       "eslint.config.js",
       "docs",
-      "BACKLOG.md"
+      "BACKLOG.md",
+      "aspec/specs/commandcode-support/spec.md",
+      "aspec/changes/archive/2026-10-07-add-commandcode-support"
     ],
     "units/cli-install.md": [
       "src/cli",
@@ -122,7 +134,9 @@
       "profiles",
       ".opencode",
       "aspec/specs/artifact-update/spec.md",
-      "commands/cleto-update.md"
+      "commands/cleto-update.md",
+      "aspec/specs/commandcode-support/spec.md",
+      "aspec/changes/archive/2026-10-07-add-commandcode-support"
     ],
     "units/discovery-engine.md": [
       "src/core/discovery.js",
@@ -160,7 +174,9 @@
       "profiles",
       "CHANGELOG.md",
       ".ancletorc",
-      ".opencode"
+      ".opencode",
+      "aspec/specs/commandcode-support/spec.md",
+      "aspec/changes/archive/2026-10-07-add-commandcode-support"
     ],
     "inventory.md": [
       "package.json",
@@ -185,7 +201,9 @@
       "docs/skill-ancleto-update.md",
       "test/content-guards.test.js",
       "skills/ancleto-workflow/SKILL.md",
-      "package-lock.json"
+      "package-lock.json",
+      "aspec/specs/commandcode-support/spec.md",
+      "aspec/changes/archive/2026-10-07-add-commandcode-support"
     ]
   }
 }

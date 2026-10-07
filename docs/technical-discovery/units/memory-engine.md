@@ -5,8 +5,8 @@ read_when: "cómo funciona la memoria persistente, las tools del LLM, el working
 covers: [motor de memoria, tools, working-context, export/import/gc]
 sources: ["src/core/memory/**"]
 sourcesSha: c6c49e095b611f0fa4387d9c2555fc2f3d16634fc23c400ed1d1939b122f87d7
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 

@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.11.1` en `package.json`; `CHANGELOG.md` cubre `0.10.0` y `0.11.0`. | `.github/workflows/publish.yml`, `package.json`, `CHANGELOG.md` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.12.0` en `package.json`; `CHANGELOG.md` cubre hasta `0.12.0`. | `.github/workflows/publish.yml`, `package.json`, `CHANGELOG.md` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -40,6 +40,7 @@ frontmatter de agents la posee `src/core/adapters/frontmatter.js`:
 | `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) | identidad + aviso stderr |
 | `roo` | `.roo/skills` | — (no soportado) | — (no soportado) | identidad + aviso stderr |
 | `copilot` | — (no soportado) | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` | dropea claves no portables + nota de picker |
+| `commandcode` | `.commandcode/skills` | `.commandcode/agents/<n>.md` | `.commandcode/commands/<n>.md` | transformación completa (mapa de tools + `tools: "*"` + nota de modelo) |
 
 Con perfil `test`, el overlay (`profiles/test/`) se materializa en los mismos
 destinos del host. `ancleto check` valida que el frontmatter instalado coincida
@@ -49,9 +50,10 @@ con la salida del adaptador (warning no bloqueante). Detalle:
 ## MCP (Model Context Protocol)
 
 Configurados por `setupHostMcp` (dueño único): antigravity en
-`.agents/mcp_config.json`, copilot en `copilot-mcp.json` (merge en install,
-regeneración de rotas en upgrade sin tocar `copilot-instructions.md`); el resto
-en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp` lo
+`.agents/mcp_config.json`, commandcode en `.mcp.json` (scope project),
+copilot en `copilot-mcp.json` (merge en install, regeneración de rotas en
+upgrade sin tocar `copilot-instructions.md`); el resto en
+`.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp` lo
 evita. `import` regenera entradas rotas con rutas locales.
 
 | MCP | Tipo | Rol | Default |

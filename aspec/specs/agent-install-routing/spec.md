@@ -52,6 +52,15 @@ directorio base de otro host.
 - **THEN** las skills se escriben en `.roo/skills`
 - **AND** el CLI declara esa ruta con evidencia de fuente 3rd-party (no documentación oficial del host)
 
+#### Scenario: Command Code usa su directorio nativo por asset
+
+- **WHEN** se instala con `agent: commandcode`
+- **THEN** las skills se escriben en `.commandcode/skills`
+- **AND** los agents se escriben como `.commandcode/agents/<n>.md` con su frontmatter adaptado al
+  formato del host (ver `skill-frontmatter-adapters`)
+- **AND** los commands se escriben como `.commandcode/commands/<n>.md`
+- **AND** no se escribe ningún asset de `commandcode` en el directorio base de otro host
+
 ### Requirement: Cobertura de soporte por host y exclusión de assets no verificados
 
 El CLI SHALL tratar un asset como soportado por un host sólo cuando el directorio y el formato del host
@@ -170,19 +179,26 @@ directorio, el descubrimiento compartido es un efecto del host y el CLI NO SHALL
 ### Requirement: Configuración MCP específica de host fuera de alcance
 
 El CLI NO SHALL generar ni transformar configuración MCP específica de host como parte del ruteo
-multi-agente, con una **única excepción**: para `agent: antigravity` el CLI SHALL generar o mergear el MCP de
-workspace `.agents/mcp_config.json` (ver `antigravity-support`). `.mcp.json` (Claude) y `.vscode/mcp.json`
-(VS Code) SHALL quedar fuera de alcance. El CLI NO SHALL borrar ni pisar configuración MCP preexistente del
-usuario.
+multi-agente, con **dos excepciones**: para `agent: antigravity` el CLI SHALL generar o mergear el MCP
+de workspace `.agents/mcp_config.json` (ver `antigravity-support`), y para `agent: commandcode` el CLI
+SHALL generar o mergear el MCP de proyecto `.mcp.json` (ver `commandcode-support`). `.vscode/mcp.json`
+(VS Code) SHALL quedar fuera de alcance. El CLI NO SHALL borrar ni pisar configuración MCP preexistente
+del usuario.
 
-#### Scenario: El ruteo no genera config MCP de host fuera de la excepción
+#### Scenario: El ruteo no genera config MCP de host fuera de las excepciones
 
-- **WHEN** se instala con un host soportado distinto de `antigravity`
-- **THEN** el CLI NO SHALL crear `.mcp.json` ni `.vscode/mcp.json`
+- **WHEN** se instala con un host soportado distinto de `antigravity` y `commandcode`
+- **THEN** el CLI NO SHALL crear `.mcp.json`, `.agents/mcp_config.json` ni `.vscode/mcp.json`
 - **AND** la configuración MCP preexistente del usuario se conserva
 
 #### Scenario: `antigravity` sí obtiene su MCP de workspace
 
 - **WHEN** se instala con `agent: antigravity`
 - **THEN** el CLI crea o actualiza `.agents/mcp_config.json`
+- **AND** el contenido preexistente de `mcpServers` no se pisa
+
+#### Scenario: `commandcode` sí obtiene su MCP de proyecto
+
+- **WHEN** se instala con `agent: commandcode` y `--project`
+- **THEN** el CLI crea o actualiza `.mcp.json`
 - **AND** el contenido preexistente de `mcpServers` no se pisa

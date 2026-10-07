@@ -5,8 +5,8 @@ read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adap
 covers: [instalación, AGENT_TARGETS, frontmatter, MCP, perfiles, export/import]
 sources: ["src/cli/**", "src/core/adapters/**"]
 sourcesSha: 86eefeb896a883dd77d7c93b255060e77ff62fd311b64126fa2604fb84b4ac73
-generatedAt: 2026-10-06T23:01:00Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-07T23:35:00Z
+pluginVersion: 0.12.0
 skillVersion: '2.3'
 ---
 
@@ -36,7 +36,7 @@ importación openspec). Evidencia: `src/cli/index.js`, `README.md`.
 `AGENT_TARGETS` es la **fuente única de rutas** (D1): cada host declara
 `skills`, `agents` y `commands` con su `dir` y su convención de nombre
 (`ext`); `null` = asset no soportado por ese host. `SUPPORTED_AGENTS =
-['opencode','claude','vscode','antigravity','cursor','roo','copilot']`;
+['opencode','claude','vscode','antigravity','cursor','roo','copilot','commandcode']`;
 default `opencode`. `scanAgentFlag` valida `--agent` y `resolveAgent`
 prioriza flag → `.ancletorc` (`agent`) → wizard TTY → default. Evidencia:
 `src/cli/index.js`.
@@ -50,6 +50,7 @@ prioriza flag → `.ancletorc` (`agent`) → wizard TTY → default. Evidencia:
 | `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) |
 | `roo` | `.roo/skills` | — (no soportado) | — (no soportado) |
 | `copilot` | — (no soportado) | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` |
+| `commandcode` | `.commandcode/skills` | `.commandcode/agents/<n>.md` | `.commandcode/commands/<n>.md` |
 
 - **Antigravity no tiene directorio de commands**: sus `/cleto-*` se
   materializan como **command-skills** dentro de `.agents/skills/<n>/SKILL.md`
@@ -60,6 +61,11 @@ prioriza flag → `.ancletorc` (`agent`) → wizard TTY → default. Evidencia:
   `.github/prompts/` con ext `.prompt.md` (sin colisión). Skills `null` →
   aviso `skip` no bloqueante; los prompts son por repo. El tier nunca toca
   prompts.
+- **Command Code: layout nativo por asset.** `.commandcode/{skills,agents,commands}`;
+  los commands son custom slash commands (el body es el prompt, copia
+  verbatim) y los agents pasan por `adaptCommandCodeFrontmatter`. Command Code
+  también lee `.agents/skills` (compatibilidad), pero el CLI escribe en el
+  directorio nativo `.commandcode/skills`.
 - **`installAgentAssets(projectDir, agent)`** (dueño único): materializa
   skills, agents y commands en el destino nativo del host y devuelve las
   rutas escritas. Un asset `null` dispara `warnUnsupportedAsset` → `skip
@@ -83,12 +89,13 @@ frontmatter.
 | `opencode` | identidad | identidad |
 | `claude`, `vscode`, `copilot` | identidad | `dropManagedKeys` (dropea `AGENT_ADAPTER_DROP`) |
 | `antigravity` | identidad | `adaptAntigravityFrontmatter` |
+| `commandcode` | identidad | `adaptCommandCodeFrontmatter` |
 | `cursor`, `roo` | identidad + aviso stderr | identidad + aviso |
 | desconocido | identidad + aviso stderr | identidad + aviso |
 
 `AGENT_ADAPTER_DROP = {mode, color, temperature, permission, model, tools}`.
-Copilot además suma la nota de picker en el orchestrator (el tier no cambia
-modelos). Mensajes de aviso: `no documented frontmatter adaptation for host
+Copilot y Command Code suman una nota de modelo/picker en el orchestrator (el
+tier no cambia modelos). Mensajes de aviso: `no documented frontmatter adaptation for host
 '<host>'` (cursor/roo) y `unknown agent '<host>', passthrough` (desconocido);
 ninguno aborta.
 
@@ -131,13 +138,35 @@ expresa por `mcpServers` / `.agents/mcp_config.json`. Evidencia:
 `src/core/adapters/frontmatter.js`,
 `test/adapters-frontmatter.test.js`.
 
-## Validación de frontmatter en `ancleto check`
+### Command Code (`adaptCommandCodeFrontmatter`)
 
+Orden de emisión: `name` (inyectado del nombre de archivo), `description`
+(preservado), `tools` (lista de ids o `"*"`) y luego las claves extra no
+gestionadas. **Eliminados**: `mode`, `color`, `temperature`, `permission`.
+**`model` se omite** (Command Code hereda el modelo de sesión; nunca se mapea un
+id `opencode-go/*`).
+
+`tools` se traduce con `COMMANDCODE_TOOL_MAP` (ids verificados):
+`read→read_file`, `write→write_file`, `edit→edit_file`, `bash→shell_command`,
+`grep→grep`, `glob→glob`, `webfetch→web_fetch`, `websearch→web_search`,
+`todowrite→todo_write`. Las claves de memoria (`searchMemory`, `recordRule`,
+`recordDecision`) se emiten como tools MCP `mcp__ancleto-memory__<tool>`
+(`COMMANDCODE_MCP_TOOL_MAP`). Toda clave sin id verificado se omite con aviso
+`skip tool '<k>': no verified Command Code id for agent '<n>'`. **Diferencia
+clave**: en Command Code `tools` omitido significa "ninguna tool", por eso un
+origen sin `tools` emite `tools: "*"` (el default de opencode es "todas") y un
+`tools` con sólo claves `false` emite `tools: []`. El orchestrator suma
+`COMMANDCODE_MODEL_NOTE`. Evidencia: `src/core/adapters/frontmatter.js`,
+`test/adapters-frontmatter.test.js`,
+`aspec/specs/commandcode-support/spec.md`.
+
+## Validación de frontmatter en `ancleto check`
 T3 del delta `frontmatter-adapters`: `checkAgentsFrontmatter` recorre cada
 `.md` de un directorio de agents instalado, lee el origen y el instalado,
 aplica `adaptFrontmatter(origen, host, 'agents', name)` y compara. En
 opencode simula además la sustitución de `model:` del tier (`applyTier`); en
-copilot + orchestrator suma `COPILOT_MODEL_NOTE`. La divergencia se reporta
+copilot y commandcode, el orchestrator suma su nota de modelo (`COPILOT_MODEL_NOTE`
+/ `COMMANDCODE_MODEL_NOTE`). La divergencia se reporta
 como **warning (⚠), no bloqueante**; solo un archivo faltante (✖) altera el
 exit code. El host de cada directorio se deriva del manifiesto multi-host
 (`installedHostsFromPaths`). Evidencia: `src/cli/index.js`,
@@ -161,6 +190,11 @@ dentro del layout de skills. Evidencia: `src/cli/index.js`.
 - **Copilot**: `copilot-mcp.json` en la raíz (`mergeCopilotMcp` en install,
   `refreshCopilotMcp` en upgrade: regenera rotas y agrega ausentes sin tocar
   `copilot-instructions.md`).
+- **Command Code**: `.mcp.json` en la raíz (scope `project`) con
+  `{ "mcpServers": { "<n>": { "transport": "stdio", "command", "args", "env" } } }`
+  (`mergeCommandCodeMcp` en install, `refreshCommandCodeMcp` en upgrade). Sólo
+  con `--project` (es project scope). Merge no destructivo; JSON inválido avisa
+  sin escribir. Segunda excepción host-MCP junto a antigravity.
 - **Resto de hosts**: `mergeMcp` sobre `opencode.json` (targetDir =
   `.opencode` del proyecto o config global).
 - **`init` configura MCP** igual que `install`, con el mismo dueño y sin
@@ -277,8 +311,8 @@ host, re-aplica el tier y **regenera** el MCP local (`mcpCommandBroken` +
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCopilotMcp`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `mergeLocked`, `memoryExport`/`memoryImport`/`memoryGc`. |
-| `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`; dueño único de la transformación. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCopilotMcp`, `mergeCommandCodeMcp`/`refreshCommandCodeMcp`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `mergeLocked`, `memoryExport`/`memoryImport`/`memoryGc`. |
+| `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`, `COMMANDCODE_MCP_TOOL_MAP`; dueño único de la transformación. |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable (21 skills, incluye `ancleto-update`); en agents el frontmatter se adapta por host, en skills se copia. |

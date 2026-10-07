@@ -2816,3 +2816,151 @@ describe('CLI exclusiones del discovery (--exclude)', () => {
     })
   })
 })
+
+describe('CLI commandcode support (add-commandcode-support)', () => {
+  const regEnv = (dir) => ({ ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
+
+  it('init --agent commandcode rutea skills/agents/commands a .commandcode/*', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'commandcode', '--no-mcp'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.ok(existsSync(join(dir, '.commandcode', 'skills', 'triage-clarifier', 'SKILL.md')))
+      assert.ok(existsSync(join(dir, '.commandcode', 'agents', 'orchestrator.md')))
+      assert.ok(existsSync(join(dir, '.commandcode', 'commands', 'cleto-new.md')))
+      const rc = readRc(dir)
+      assert.deepEqual(rc.installedPaths.skills, ['.commandcode/skills'])
+      assert.deepEqual(rc.installedPaths.agents, ['.commandcode/agents'])
+      assert.deepEqual(rc.installedPaths.commands, ['.commandcode/commands'])
+    })
+  })
+
+  it('commandcode se preserva en un install posterior sin --agent', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'commandcode', '--no-mcp'], dir, regEnv(dir))
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).agent, 'commandcode')
+    })
+  })
+
+  it('adaptador commandcode: sin claves opencode, model ausente y tools mapeado', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'commandcode'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const out = readFileSync(join(dir, '.commandcode', 'agents', 'coder.md'), 'utf8')
+      assert.match(out, /^name: coder$/m)
+      assert.match(out, /^description: Implements approved changes from aspec artifacts or orchestrator instructions$/m)
+      assert.match(out, /^tools: \[read_file, write_file, edit_file, shell_command\]$/m)
+      assert.doesNotMatch(out, /^mode:/m)
+      assert.doesNotMatch(out, /^color:/m)
+      assert.doesNotMatch(out, /^temperature:/m)
+      assert.doesNotMatch(out, /^permission:/m)
+      assert.doesNotMatch(out, /^model:/m)
+      assert.doesNotMatch(out, /opencode-go/)
+    })
+  })
+
+  it('memory-keeper: tools MCP de Command Code y sin aviso para write/edit false', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'commandcode'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const mk = readFileSync(join(dir, '.commandcode', 'agents', 'memory-keeper.md'), 'utf8')
+      assert.match(mk, /^tools: \[read_file, grep, mcp__ancleto-memory__searchMemory, mcp__ancleto-memory__recordRule, mcp__ancleto-memory__recordDecision\]$/m)
+      assert.doesNotMatch(r.stderr, /skip tool '(write|edit)': no verified Command Code id for agent 'memory-keeper'/)
+    })
+  })
+
+  it('skill: true se omite con aviso y el orchestrator lleva la nota de modelo', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'commandcode'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const orch = readFileSync(join(dir, '.commandcode', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orch, /^tools: \[read_file\]$/m)
+      assert.match(orch, /Nota de modelo \(solo Command Code\)/)
+      assert.match(r.stderr, /skip tool 'skill': no verified Command Code id for agent 'orchestrator'/)
+    })
+  })
+
+  it('init commandcode crea .mcp.json con ancleto-memory (transport stdio, sin type/enabled)', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'commandcode', '--tier', 'minimo'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, '.mcp.json'), 'utf8'))
+      const mem = cfg.mcpServers['ancleto-memory']
+      assert.ok(mem, 'ancleto-memory presente')
+      assert.equal(mem.transport, 'stdio')
+      assert.equal(mem.command, process.execPath)
+      assert.deepEqual(mem.args.slice(-1), ['mcp'])
+      assert.equal('type' in mem, false)
+      assert.equal('enabled' in mem, false)
+    })
+  })
+
+  it('el merge de .mcp.json preserva homonimos y claves preexistentes', () => {
+    withDir((dir) => {
+      const prev = {
+        mcpServers: {
+          propio: { transport: 'stdio', command: 'propio-cmd', args: ['--x'] },
+          'ancleto-memory': { transport: 'stdio', command: 'memoria-propia', args: ['--keep'] }
+        },
+        customTop: 1
+      }
+      writeFileSync(join(dir, '.mcp.json'), JSON.stringify(prev, null, 2) + '\n')
+      const r = run(['init', '--agent', 'commandcode', '--tier', 'minimo'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, '.mcp.json'), 'utf8'))
+      assert.deepEqual(cfg.mcpServers.propio, { transport: 'stdio', command: 'propio-cmd', args: ['--x'] })
+      assert.deepEqual(cfg.mcpServers['ancleto-memory'], { transport: 'stdio', command: 'memoria-propia', args: ['--keep'] })
+      assert.equal(cfg.customTop, 1)
+    })
+  })
+
+  it('un .mcp.json invalido se avisa y no se sobrescribe', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, '.mcp.json'), '{ no es json')
+      const r = run(['init', '--agent', 'commandcode', '--tier', 'minimo'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(r.stderr, /no se pudo leer \.mcp\.json como JSON/)
+      assert.equal(readFileSync(join(dir, '.mcp.json'), 'utf8'), '{ no es json')
+    })
+  })
+
+  it('--no-mcp omite .mcp.json sin afectar el resto de los assets', () => {
+    withDir((dir) => {
+      const r = run(['init', '--agent', 'commandcode', '--no-mcp'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      assert.equal(existsSync(join(dir, '.mcp.json')), false)
+      assert.ok(existsSync(join(dir, '.commandcode', 'agents', 'coder.md')))
+      assert.ok(existsSync(join(dir, '.commandcode', 'commands', 'cleto-new.md')))
+      assert.ok(existsSync(join(dir, '.commandcode', 'skills', 'triage-clarifier', 'SKILL.md')))
+    })
+  })
+
+  it('upgrade regenera una entrada rota de .mcp.json (self-heal)', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'commandcode', '--tier', 'minimo'], dir, regEnv(dir))
+      const file = join(dir, '.mcp.json')
+      const cfg = JSON.parse(readFileSync(file, 'utf8'))
+      cfg.mcpServers['ancleto-memory'] = { transport: 'stdio', command: '/no/existe/ancleto', args: [] }
+      writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n')
+      const r = run(['upgrade', '--agent', 'commandcode'], dir, regEnv(dir))
+      assert.equal(r.status, 0)
+      const healed = JSON.parse(readFileSync(file, 'utf8'))
+      assert.equal(healed.mcpServers['ancleto-memory'].command, process.execPath)
+    })
+  })
+
+  it('check valida el layout commandcode sin faltantes ni divergencias de frontmatter', () => {
+    withDir((dir) => {
+      run(['init', '--agent', 'commandcode', '--tier', 'minimo'], dir, regEnv(dir))
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /0 faltantes/)
+      assert.match(r.stdout, /0 huerfanos/)
+      assert.match(r.stdout, /✔ \.commandcode\/agents/)
+      assert.match(r.stdout, /✔ \.commandcode\/skills/)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge/)
+      assert.doesNotMatch(r.stdout, /tier .* sin agentes locales/)
+    })
+  })
+})

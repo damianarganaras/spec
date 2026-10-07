@@ -5,7 +5,9 @@ import {
   parseFrontmatter,
   serializeFrontmatter,
   AGENT_ADAPTER_DROP,
-  ANTIGRAVITY_TOOL_MAP
+  ANTIGRAVITY_TOOL_MAP,
+  COMMANDCODE_TOOL_MAP,
+  COMMANDCODE_MCP_TOOL_MAP
 } from '../src/core/adapters/frontmatter.js'
 
 // Buffer para capturar `console.error` por test. Algunos casos (cursor/roo/
@@ -203,6 +205,91 @@ otra: clave
   it('sin frontmatter → contenido sin cambios', () => {
     const c = '# Solo body\nsin frontmatter'
     assert.equal(adaptFrontmatter(c, 'antigravity', 'agents', 'coder'), c)
+  })
+})
+
+describe('adaptFrontmatter — commandcode (transformación)', () => {
+  it('inyecta name y conserva description', () => {
+    const out = adaptFrontmatter(SAMPLE(), 'commandcode', 'agents', 'coder')
+    assert.match(out, /^name: coder$/m)
+    assert.match(out, /^description: agent de ejemplo$/m)
+  })
+
+  it('dropea mode/color/temperature/permission y omite model', () => {
+    const out = adaptFrontmatter(SAMPLE(), 'commandcode', 'agents', 'coder')
+    assert.doesNotMatch(out, /^mode:/m)
+    assert.doesNotMatch(out, /^color:/m)
+    assert.doesNotMatch(out, /^temperature:/m)
+    assert.doesNotMatch(out, /^permission:/m)
+    assert.doesNotMatch(out, /^model:/m)
+    assert.doesNotMatch(out, /opencode-go/)
+  })
+
+  it('tools como lista de ids verificados (sólo claves true)', () => {
+    const out = adaptFrontmatter(SAMPLE(), 'commandcode', 'agents', 'coder')
+    // source: read/edit/bash true, grep false -> sólo los 3 mapeados
+    assert.match(out, /^tools: \[read_file, edit_file, shell_command\]$/m)
+  })
+
+  it('las tools de memoria se emiten como tools MCP de Command Code', () => {
+    const extra = ['searchMemory: true', 'recordRule: true', 'recordDecision: true'].map((k) => `  ${k}`).join('\n') + '\n'
+    const out = adaptFrontmatter(SAMPLE(extra), 'commandcode', 'agents', 'memory-keeper')
+    assert.match(out, /^tools: \[read_file, edit_file, shell_command, mcp__ancleto-memory__searchMemory, mcp__ancleto-memory__recordRule, mcp__ancleto-memory__recordDecision\]$/m)
+  })
+
+  it('una clave sin id verificado se omite con aviso a stderr', () => {
+    stderrLines.length = 0
+    const out = adaptFrontmatter(SAMPLE('  skill: true\n  task: true\n'), 'commandcode', 'agents', 'orchestrator')
+    assert.doesNotMatch(out, /skill|task/)
+    for (const k of ['skill', 'task']) {
+      assert.ok(
+        stderrLines.some((l) => l === `skip tool '${k}': no verified Command Code id for agent 'orchestrator'`),
+        `debe avisar por la omisión de ${k}`
+      )
+    }
+  })
+
+  it('sin tools declarado → tools: "*" (default "todas" de opencode)', () => {
+    const src = `---\ndescription: sin tools\nmode: subagent\n---\n# body\n`
+    const out = adaptFrontmatter(src, 'commandcode', 'agents', 'x')
+    assert.match(out, /^tools: "\*"$/m)
+    assert.doesNotMatch(out, /^mode:/m)
+  })
+
+  it('tools con sólo claves false → tools: []', () => {
+    const src = `---\ndescription: vacio\ntools:\n  read: false\n  write: false\n---\n# body\n`
+    const out = adaptFrontmatter(src, 'commandcode', 'agents', 'x')
+    assert.match(out, /^tools: \[\]$/m)
+  })
+
+  it('skills/commands: identity (no adapta skills ni commands)', () => {
+    const c = SAMPLE()
+    assert.equal(adaptFrontmatter(c, 'commandcode', 'skills', 'triage-clarifier'), c)
+    assert.equal(adaptFrontmatter(c, 'commandcode', 'commands', 'cleto-new'), c)
+  })
+
+  it('sin frontmatter → contenido sin cambios', () => {
+    const c = '# Solo body\nsin frontmatter'
+    assert.equal(adaptFrontmatter(c, 'commandcode', 'agents', 'coder'), c)
+  })
+
+  it('COMMANDCODE_TOOL_MAP/COMMANDCODE_MCP_TOOL_MAP contienen sólo ids verificados', () => {
+    assert.deepEqual(COMMANDCODE_TOOL_MAP, {
+      read: 'read_file',
+      write: 'write_file',
+      edit: 'edit_file',
+      bash: 'shell_command',
+      grep: 'grep',
+      glob: 'glob',
+      webfetch: 'web_fetch',
+      websearch: 'web_search',
+      todowrite: 'todo_write'
+    })
+    assert.deepEqual(COMMANDCODE_MCP_TOOL_MAP, {
+      searchMemory: 'mcp__ancleto-memory__searchMemory',
+      recordRule: 'mcp__ancleto-memory__recordRule',
+      recordDecision: 'mcp__ancleto-memory__recordDecision'
+    })
   })
 })
 

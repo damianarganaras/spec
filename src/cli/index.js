@@ -36,13 +36,15 @@ Uso:
   ancleto install --tier <nivel>     normal | minimo | gratis (wizard interactivo en TTY)
   ancleto install --lang <codigo>    auto | es | en | pt (idioma de los artifacts; auto = idioma de la conversacion)
   ancleto install --exclude <globs>  Paths excluidos del discovery, coma-separados (ej: "**/*.png,docs")
-  ancleto install --agent <nombre>    opencode | claude | vscode | antigravity | cursor | roo | copilot (wizard si no esta guardado)
+  ancleto install --agent <nombre>    opencode | claude | vscode | antigravity | cursor | roo | copilot | commandcode (wizard si no esta guardado)
                                    Elige el layout nativo a materializar (directorio + convencion de
                                    nombre) y el adapter de frontmatter del host. NO arbitra el
                                    descubrimiento entre hosts: si dos leen el mismo directorio, eso es
                                    efecto del host (no se deduplica ni se elige "ganador").
                                    antigravity instala skills, agents adaptados y commands como skills
                                    (.agents/*) y mergea el MCP de workspace .agents/mcp_config.json.
+                                   commandcode instala skills, agents adaptados y commands en
+                                   .commandcode/* y mergea el MCP de proyecto .mcp.json.
   ancleto install --profile <perfil>  general | test (perfil de test automation con Playwright; persiste en .ancletorc)
   ancleto update [--project <dir>]    Alias de install (re-instala sobre lo existente)
                                    Parado en un proyecto con .ancletorc opera sobre ese proyecto;
@@ -612,7 +614,7 @@ async function applyTier(agentsDir, tier, models = null) {
   }
 }
 
-const SUPPORTED_AGENTS = ['opencode', 'claude', 'vscode', 'antigravity', 'cursor', 'roo', 'copilot']
+const SUPPORTED_AGENTS = ['opencode', 'claude', 'vscode', 'antigravity', 'cursor', 'roo', 'copilot', 'commandcode']
 const DEFAULT_AGENT = 'opencode'
 
 function askAgent() {
@@ -855,12 +857,48 @@ async function mergeCopilotMcp(projectDir, mcpMap) {
   return { file, added }
 }
 
+// Command Code: MCP de proyecto en `.mcp.json` (scope `project`, versionado con
+// el repo). Esquema del host: `{ mcpServers: { <name>: { transport: 'stdio',
+// command, args, env? } } }` (se descartan `type`/`enabled` de opencode). Merge NO
+// destructivo: se preservan `mcpServers` y demas claves top-level, no se pisa un
+// servidor homonimo, y un JSON invalido se avisa sin sobrescribir.
+function toCommandCodeServer(def) {
+  const command = Array.isArray(def.command) ? def.command : [def.command]
+  const server = { transport: 'stdio', command: command[0], args: command.slice(1) }
+  if (def.env) server.env = def.env
+  return server
+}
+
+async function mergeCommandCodeMcp(projectDir, mcpMap) {
+  if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
+  const file = join(projectDir, '.mcp.json')
+  let cfg = {}
+  if (await exists(file)) {
+    try {
+      cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    } catch {
+      console.warn('ancleto: no se pudo leer .mcp.json como JSON; MCP de Command Code no se modifico')
+      return { file, added: [] }
+    }
+  }
+  cfg.mcpServers = cfg.mcpServers || {}
+  const added = []
+  for (const [name, def] of Object.entries(mcpMap)) {
+    if (cfg.mcpServers[name]) continue
+    cfg.mcpServers[name] = toCommandCodeServer(def)
+    added.push(name)
+  }
+  await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
+  return { file, added }
+}
+
 // D6: dueno unico del MCP de host. Antigravity mergea `.agents/mcp_config.json`;
-// el resto conserva `mergeMcp` sobre opencode.json (targetDir = .opencode del
-// proyecto o config global).
+// Command Code mergea `.mcp.json`; el resto conserva `mergeMcp` sobre opencode.json
+// (targetDir = .opencode del proyecto o config global).
 async function setupHostMcp(targetDir, mcpMap, { projectDir = null, agent = null } = {}) {
   if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
   if (agent === 'antigravity' && projectDir) return mergeAntigravityMcp(projectDir, mcpMap)
+  if (agent === 'commandcode' && projectDir) return mergeCommandCodeMcp(projectDir, mcpMap)
   await mkdir(targetDir, { recursive: true })
   return mergeMcp(targetDir, mcpMap)
 }
@@ -888,6 +926,39 @@ async function refreshCopilotMcp(projectDir) {
   for (const [name, def] of Object.entries(fresh)) {
     if (!cfg.mcp[name]) {
       cfg.mcp[name] = def
+      fixed.push(`${name} (agregado)`)
+    }
+  }
+  await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
+  return { file, fixed }
+}
+
+// Regenera entradas rotas y agrega ausentes en `.mcp.json` de Command Code (para
+// upgrade). Mismo criterio que `refreshCopilotMcp`, con el esquema del host.
+async function refreshCommandCodeMcp(projectDir) {
+  const file = join(projectDir, '.mcp.json')
+  let cfg = {}
+  if (await exists(file)) {
+    try {
+      cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    } catch {
+      cfg = {}
+    }
+  }
+  cfg.mcpServers = cfg.mcpServers || {}
+  const fresh = buildDefaultMcp({ withEngram: Boolean(cfg.mcpServers.engram) })
+  const fixed = []
+  for (const [name, def] of Object.entries(cfg.mcpServers)) {
+    if (!fresh[name]) continue
+    const asArray = { command: [def.command, ...(Array.isArray(def.args) ? def.args : [])] }
+    if (mcpCommandBroken(asArray)) {
+      Object.assign(cfg.mcpServers[name], toCommandCodeServer(fresh[name]))
+      fixed.push(name)
+    }
+  }
+  for (const [name, def] of Object.entries(fresh)) {
+    if (!cfg.mcpServers[name]) {
+      cfg.mcpServers[name] = toCommandCodeServer(def)
       fixed.push(`${name} (agregado)`)
     }
   }
@@ -940,6 +1011,16 @@ const AGENT_TARGETS = {
     skills: null,
     agents: { dir: '.github/prompts', ext: '.prompt.md' },
     commands: { dir: '.github/prompts', ext: '.prompt.md' }
+  },
+  // Command Code: layout nativo por asset bajo `.commandcode/`. Los tres assets
+  // son nativos: skills (Agent Skills, identity), agents (frontmatter adaptado,
+  // ver `adaptCommandCodeFrontmatter`) y commands (custom slash commands, el body
+  // es el prompt, copia verbatim). El MCP de proyecto vive en `.mcp.json`
+  // (ver `mergeCommandCodeMcp`).
+  commandcode: {
+    skills: { dir: '.commandcode/skills' },
+    agents: { dir: '.commandcode/agents', ext: MD_EXT },
+    commands: { dir: '.commandcode/commands', ext: MD_EXT }
   }
 }
 
@@ -954,6 +1035,18 @@ Elegí el modelo en el picker de Copilot antes de empezar: los tiers de ancleto
 (normal|minimo|gratis) no cambian modelos acá, solo el nivel de esfuerzo:
 normal = flujo completo, minimo = pasos agrupados y económicos, gratis = modelo
 gratis disponible en tu cuenta.
+`
+
+// Solo Command Code: los tiers tampoco cambian modelos (el agent no fija `model`,
+// hereda el de la sesión); la nota lo recuerda al empezar.
+const COMMANDCODE_MODEL_NOTE = `
+## Nota de modelo (solo Command Code)
+
+Elegí el modelo con \`/model\` antes de empezar: los tiers de ancleto
+(normal|minimo|gratis) no cambian modelos en Command Code, solo el nivel de
+esfuerzo (normal = flujo completo, minimo = pasos agrupados y económicos,
+gratis = modelo gratis disponible en tu cuenta). Los subagentes heredan el
+modelo de la sesión porque su frontmatter no fija \`model\`.
 `
 
 // D12: asset no soportado -> no se escribe y se avisa a stderr (no bloqueante).
@@ -985,7 +1078,11 @@ async function installAssetFiles(cat, projectDir, spec, host, srcDir = null) {
     const base = e.name.slice(0, -MD_EXT.length)
     const content = await readFile(join(origin, e.name), 'utf8')
     const adapted = adaptFrontmatter(content, host, cat, base)
-    const body = (host === 'copilot' && cat === 'agents' && base === 'orchestrator') ? adapted + COPILOT_MODEL_NOTE : adapted
+    let body = adapted
+    if (cat === 'agents' && base === 'orchestrator') {
+      if (host === 'copilot') body += COPILOT_MODEL_NOTE
+      else if (host === 'commandcode') body += COMMANDCODE_MODEL_NOTE
+    }
     await writeFile(join(destDir, `${base}${spec.ext}`), body)
   }
 }
@@ -1487,6 +1584,12 @@ async function upgradeCmd(args) {
   if (agent === 'copilot') {
     const { file, fixed } = await refreshCopilotMcp(projectDir)
     console.log(`  ✔ prompts regenerados en .github/prompts (copilot-instructions.md intacto)`)
+    console.log(fixed.length
+      ? `  ✔ MCP regenerados en ${file}: ${fixed.join(', ')}`
+      : `  ✔ MCP sanos en ${file}, sin cambios`)
+  } else if (agent === 'commandcode') {
+    const { file, fixed } = await refreshCommandCodeMcp(projectDir)
+    console.log(`  ✔ skills actualizadas en ${skillsDir} (${ANCLETO_SKILLS.length} skills)`)
     console.log(fixed.length
       ? `  ✔ MCP regenerados en ${file}: ${fixed.join(', ')}`
       : `  ✔ MCP sanos en ${file}, sin cambios`)
@@ -2265,8 +2368,9 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
       source = source.replace(/^model: .*$/m, `model: ${tierModelsMap[name]}`)
     }
     let expectedContent = adaptFrontmatter(source, host, 'agents', name)
-    if (host === 'copilot' && name === 'orchestrator') {
-      expectedContent += COPILOT_MODEL_NOTE
+    if (name === 'orchestrator') {
+      if (host === 'copilot') expectedContent += COPILOT_MODEL_NOTE
+      else if (host === 'commandcode') expectedContent += COMMANDCODE_MODEL_NOTE
     }
     const installed = await readFile(join(cwd, dirRel, f), 'utf8')
     if (installed !== expectedContent) {

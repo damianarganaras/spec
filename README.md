@@ -77,7 +77,7 @@ Ancleto resuelve esto centralizando las reglas de negocio en un motor de memoria
 
 **Wizard interactivo** — Banner animado y menús navegables con flechas en `init` e `install`, sin librerías pesadas.
 
-**Hosts e IDEs (7)** — opencode, claude, vscode, antigravity, cursor, roo y copilot, cada uno con su layout nativo (Copilot: prompts en `.github/prompts` + MCP en `copilot-mcp.json`).
+**Hosts e IDEs (8)** — opencode, claude, vscode, antigravity, cursor, roo, copilot y commandcode, cada uno con su layout nativo (Copilot: prompts en `.github/prompts` + MCP en `copilot-mcp.json`; Command Code: `.commandcode/*` + MCP en `.mcp.json`).
 
 **Perfil de test automation** — `--profile test`: tester ampliado (planning/generation/healing/coverage), comandos `cleto-test-*` y estructura `testspec/` para proyectos Playwright.
 
@@ -151,6 +151,7 @@ del host (el CLI no deduplica ni elige un "ganador").
 | `cursor` | `.cursor/skills/<n>/SKILL.md` | — | — |
 | `roo` | `.roo/skills/<n>/SKILL.md` | — | — |
 | `copilot` | — | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` |
+| `commandcode` | `.commandcode/skills/<n>/SKILL.md` | `.commandcode/agents/<n>.md` (adaptado) | `.commandcode/commands/<n>.md` |
 
 Cada host recibe sus skills en **su** directorio nativo. **`.agents/skills` es un punto de lectura
 compartido** —lo leen opencode, Cursor, VS Code y Antigravity—, no un destino universal: Claude lee
@@ -172,18 +173,36 @@ for agent '<n>'`): un id inexistente cuelga el subagent. Los ids que sólo exist
 de MCP se expresa por `mcpServers`/`.agents/mcp_config.json`, nunca como tool id. El campo `skill` no
 es una tool: se cubre con el surfaceo automático de skills de Antigravity.
 
+**Command Code** (CLI `cmd`) usa su layout nativo por asset bajo `.commandcode/`: skills en
+`.commandcode/skills/<n>/SKILL.md` (Agent Skills, verbatim), agents en `.commandcode/agents/<n>.md`
+(frontmatter adaptado) y commands en `.commandcode/commands/<n>.md` (el body es el prompt, copia
+verbatim). Sus agents adaptan el frontmatter de opencode: `name` inyectado, `description` preservado,
+`mode`/`color`/`temperature`/`permission` eliminados, `model` **omitido** (el host hereda el modelo de
+sesión; elegilo con `/model`, el tier no lo reescribe) y `tools` como **lista** de ids verificados
+(`read`→`read_file`, `write`→`write_file`, `edit`→`edit_file`, `bash`→`shell_command`, `grep`→`grep`,
+`glob`→`glob`, `webfetch`→`web_fetch`, `websearch`→`web_search`, `todowrite`→`todo_write`). Las tools
+de memoria (`searchMemory`/`recordRule`/`recordDecision`) se emiten con la convención MCP de Command
+Code (`mcp__ancleto-memory__<tool>`). Una clave sin id verificado se omite con aviso
+(`skip tool '<k>': no verified Command Code id for agent '<n>'`). A diferencia de otros hosts, en
+Command Code `tools` **omitido** significa "ninguna tool": si el agent de origen no declara `tools`,
+se emite `tools: "*"` (el default de opencode es "todas"). El body de los commands invoca "the Skill
+tool" (no se transforma); en Command Code el equivalente es `/skill:<name>`.
+
 Los assets que un host no soporta (por ejemplo `agents`/`commands` de `cursor` y `roo`)
 **no se escriben** y el instalador avisa por `stderr`
 (`skip agents: not supported by host 'cursor'`) sin abortar. La instalación es **aditiva y no
 destructiva**: instalar con otro agente escribe en su base y preserva los layouts previos, y el
 manifiesto `.ancletorc.installedPaths` acumula la unión de los destinos realmente escritos.
 
-La **configuración MCP específica de host** está fuera de alcance con **una excepción**: para
+La **configuración MCP específica de host** está fuera de alcance con **dos excepciones**: para
 `agent: antigravity` el CLI genera o mergea (no destructivo) el MCP de workspace
-`.agents/mcp_config.json` con esquema `{ "mcpServers": { "<n>": { "command", "args", "env" } } }`,
-incluyendo el servidor de memoria `ancleto-memory`; preserva `mcpServers` preexistentes y no pisa
-homónimos. `.mcp.json` (Claude) y `.vscode/mcp.json` (VS Code) siguen fuera de alcance, al igual que el
-MCP global de Antigravity. `claude` se soporta con adaptación de frontmatter obligatoria para `agents`
+`.agents/mcp_config.json` con esquema `{ "mcpServers": { "<n>": { "command", "args", "env" } } }`, y
+para `agent: commandcode` el MCP de proyecto `.mcp.json` con esquema
+`{ "mcpServers": { "<n>": { "transport": "stdio", "command", "args", "env" } } }`; en ambos casos
+incluye el servidor de memoria `ancleto-memory`, preserva `mcpServers` preexistentes y no pisa
+homónimos. `.mcp.json` sólo lo gestiona `commandcode` (para `claude` sigue fuera de alcance), al igual
+que `.vscode/mcp.json` (VS Code) y el MCP global de Antigravity. `claude` se soporta con adaptación de
+frontmatter obligatoria para `agents`
 (se omiten `model`/`tools` sin equivalencia verificada y las claves
 `mode`/`color`/`temperature`/`permission`), sin MCP propio. **Copilot** instala agents y commands
 como prompt files en `.github/prompts/*.prompt.md` (mismo adapter, sin `model:`) y su MCP en

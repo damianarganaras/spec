@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.13.0] - 2026-10-07
+
+### Added
+- **Host `commandcode` (Command Code, CLI `cmd`)**: soporte nativo con layout `.commandcode/{skills,agents,commands}`, adaptador de frontmatter de agents (`adaptCommandCodeFrontmatter` + `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`), MCP de proyecto en `.mcp.json` (segunda excepción host-MCP, junto a antigravity) y nota de modelo en el orchestrator. En Command Code `tools` omitido significa "ninguna tool", por eso un origen sin `tools` emite `tools: "*"`. Spec nueva en `aspec/specs/commandcode-support/spec.md`; deltas en `agent-install-routing` y `skill-frontmatter-adapters`; tests en `test/cli.test.js` y `test/adapters-frontmatter.test.js`.
+
+### Changed
+- `README.md`: tabla de hosts (8) y documentación del MCP y del adaptador de Command Code.
+- Semilla de `docs/technical-discovery` regenerada (`READY`).
+
 ## [0.12.0] - 2026-10-06
 
 ### Added

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
 import { adaptFrontmatter, parseFrontmatter } from '../core/adapters/frontmatter.js'
-import { writeWorkingContext } from '../core/memory/working-context.js'
+import { writeWorkingContext, writeWorkingContextBlock, renderWorkingContextBlock } from '../core/memory/working-context.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
@@ -956,6 +956,45 @@ normal = flujo completo, minimo = pasos agrupados y económicos, gratis = modelo
 gratis disponible en tu cuenta.
 `
 
+// Directiva de uso de la compresion (caveman). Host-scoped: se materializa SOLO en
+// las superficies de hosts cuya configuracion MCP incluye la tool de compresion
+// (opencode/antigravity); nunca en texto compartido entre hosts (AGENTS.md o assets
+// copiados verbatim). Donde no hay tool, no hay instruccion.
+const CAVEMAN_USAGE_NOTE = `
+## Compresión de contexto (tool del host)
+
+Este host expone la tool de compresión (\`caveman_*\`). Comprimí los payloads grandes
+(salidas de tools, logs, diffs) antes de que entren a tu contexto, para bajar el consumo
+de tokens. La tool existe sólo en este host: no asumas su presencia en otro host ni
+agregues esta instrucción a archivos compartidos.
+`
+
+const COMPRESSION_HOSTS = new Set(['opencode', 'antigravity'])
+
+function hostSupportsCompression(host) {
+  return COMPRESSION_HOSTS.has(host)
+}
+
+// Fuente de verdad en disco de si la config MCP del host incluye la compresion.
+// Misma condicion que decide la materializacion de CAVEMAN_USAGE_NOTE y la espera de
+// `check`: el default es reversible y no depende de un binario detectado al vuelo.
+async function hostConfigHasCompression(projectDir, host) {
+  if (!hostSupportsCompression(host)) return false
+  const files = host === 'antigravity'
+    ? [join(projectDir, '.agents', 'mcp_config.json')]
+    : [join(projectDir, '.opencode', 'opencode.json'), join(projectDir, '.opencode', 'opencode.jsonc')]
+  for (const f of files) {
+    try {
+      const cfg = JSON.parse((await readFile(f, 'utf8')).replace(/^\uFEFF/, ''))
+      const servers = cfg.mcp || cfg.mcpServers || {}
+      if (servers && servers.caveman) return true
+    } catch {
+      // sin archivo o JSON invalido: ese candidato no aporta la tool
+    }
+  }
+  return false
+}
+
 // D12: asset no soportado -> no se escribe y se avisa a stderr (no bloqueante).
 function warnUnsupportedAsset(asset, agent) {
   console.error(`skip ${asset}: not supported by host '${agent}'`)
@@ -976,7 +1015,7 @@ async function copyDirTransformed(srcDir, destDir, host, assetKind) {
   }
 }
 
-async function installAssetFiles(cat, projectDir, spec, host, srcDir = null) {
+async function installAssetFiles(cat, projectDir, spec, host, srcDir = null, compression = false) {
   const destDir = join(projectDir, spec.dir)
   await mkdir(destDir, { recursive: true })
   const origin = srcDir || join(ROOT, cat)
@@ -985,7 +1024,9 @@ async function installAssetFiles(cat, projectDir, spec, host, srcDir = null) {
     const base = e.name.slice(0, -MD_EXT.length)
     const content = await readFile(join(origin, e.name), 'utf8')
     const adapted = adaptFrontmatter(content, host, cat, base)
-    const body = (host === 'copilot' && cat === 'agents' && base === 'orchestrator') ? adapted + COPILOT_MODEL_NOTE : adapted
+    let body = adapted
+    if (host === 'copilot' && cat === 'agents' && base === 'orchestrator') body += COPILOT_MODEL_NOTE
+    if (compression && cat === 'agents' && base === 'orchestrator') body += CAVEMAN_USAGE_NOTE
     await writeFile(join(destDir, `${base}${spec.ext}`), body)
   }
 }
@@ -1015,7 +1056,7 @@ async function installCommandSkills(projectDir, spec) {
 
 // Dueno unico de la instalacion de assets por proyecto: materializa skills,
 // agents y commands en el destino nativo del host y devuelve las rutas escritas.
-async function installAgentAssets(projectDir, agent) {
+async function installAgentAssets(projectDir, agent, { compression = false } = {}) {
   const model = AGENT_TARGETS[agent] || AGENT_TARGETS[DEFAULT_AGENT]
   const written = { agents: [], commands: [], skills: [] }
 
@@ -1038,7 +1079,7 @@ async function installAgentAssets(projectDir, agent) {
       await installCommandSkills(projectDir, spec)
       continue
     }
-    await installAssetFiles(cat, projectDir, spec, agent)
+    await installAssetFiles(cat, projectDir, spec, agent, null, compression)
     written[cat].push(spec.dir)
   }
   return written
@@ -1285,8 +1326,72 @@ function findInsertAnchor(local, source, name) {
   return local.length
 }
 
+// Firmas legadas de contenido PLANO que el merge por bloques LOCKED no reconcilia.
+// Cada entrada: { id, label, filename, heading, lines }. filename acota la firma al
+// archivo correcto (no a toda ruta que mergea TEMPLATES): asi un archivo sin firma
+// registrada (p. ej. PRODUCT.md, EXTENSIBLE) es un no-op. heading identifica el bloque
+// legado (distingue "no esta" de "personalizado"); lines son las lineas exactas que debe
+// tener para eliminarlo. Match por lineas completas, tolerando CRLF y espaciado.
+const LEGACY_SIGNATURES = [
+  {
+    id: 'validation-commands-flat',
+    label: 'validaciones',
+    filename: 'AGENTS.md',
+    heading: /^[ \t]*-[ \t]*\*\*Validaciones obligatorias antes de cerrar una tarea\*\*:[ \t]*$/,
+    lines: [
+      /^[ \t]*-[ \t]*`npm run typecheck`[ \t]+o[ \t]+`npx tsc --noEmit`[ \t]*$/,
+      /^[ \t]*-[ \t]*`npm run lint`[ \t]*$/,
+      /^[ \t]*-[ \t]*`npm test`[ \t]*$/
+    ]
+  }
+]
+
+// Reconciliacion de bloques planos legados (migracion de install/upgrade).
+// Segura: solo elimina con coincidencia EXACTA de la firma; si el bloque legado
+// esta personalizado (heading presente pero lineas distintas) avisa y NO toca.
+// Idempotente: tras eliminar, la firma ya no esta y re-ejecutar es un no-op.
+function reconcileLegacyBlocks(content, filename) {
+  const eol = content.includes('\r\n') ? '\r\n' : '\n'
+  const lines = content.split(/\r?\n/)
+  // La lista sigue si la linea es otro item (cualquier marcador `*`/`+`/`-`) o una
+  // continuacion indentada. En ese caso la firma fue extendida: no se elimina.
+  const isListContinuation = (line) => /^[ \t]*[*+-][ \t]/.test(line) || /^[ \t]+[^ \t]/.test(line)
+  const out = []
+  let warned = false
+  for (let i = 0; i < lines.length; i++) {
+    const sig = LEGACY_SIGNATURES.find((s) => s.filename === filename && s.heading.test(lines[i]))
+    if (sig) {
+      const next = i + 1 + sig.lines.length
+      const exact = sig.lines.every((re, k) => i + 1 + k < lines.length && re.test(lines[i + 1 + k]))
+      // La firma debe terminar ahi: si sigue otro item de lista (cualquier marcador
+      // `*`/`+`/`-`) o una linea de continuacion indentada, el bloque fue
+      // personalizado/extendido y NO se toca (nunca borrar fuera del bloque identificado).
+      const closed = next >= lines.length || !isListContinuation(lines[next])
+      if (exact && closed) {
+        i += sig.lines.length // salta el heading y sus lineas
+        continue
+      }
+      if (!warned) {
+        console.warn(`ancleto: bloque legado de ${sig.label} no reconocido en ${filename}; revisar`)
+        warned = true
+      }
+    }
+    out.push(lines[i])
+  }
+  return out.join(eol)
+}
+
+// Merge de un template sobre el contenido local: reconcilia los bloques planos
+// legados ANTES del merge por bloques LOCKED (el merge solo entiende marcadores
+// LOCKED). Punto unico para install/upgrade (copyTemplates) e import (importCmd):
+// ambos caminos deben dejar el proyecto coherente sin pasos manuales.
+function mergeTemplateInto(source, local, filename) {
+  return mergeLocked(source, reconcileLegacyBlocks(local, filename), filename)
+}
+
 // Solo mergea los templates raiz (AGENTS.md/PRODUCT.md). Los assets por host
-// los materializa installAgentAssets (dueno unico).
+// los materializa installAgentAssets (dueno unico). Antes del merge LOCKED se
+// reconcilian los bloques planos legados (el merge solo entiende marcadores LOCKED).
 async function copyTemplates(projectDir, profile = DEFAULT_PROFILE) {
   for (const t of TEMPLATES) {
     const target = join(projectDir, t)
@@ -1297,7 +1402,7 @@ async function copyTemplates(projectDir, profile = DEFAULT_PROFILE) {
       continue
     }
     const local = await readFile(target, 'utf8')
-    const merged = mergeLocked(source, local, t)
+    const merged = mergeTemplateInto(source, local, t)
     if (merged !== local) {
       await writeFile(target, merged)
     }
@@ -1397,7 +1502,9 @@ async function install(args) {
     await scaffoldAspec(projectDir)
     if (profile === 'test') await scaffoldTestspec(projectDir)
     await refreshWorkingContext(projectDir)
-    const written = await installAgentAssets(projectDir, agent)
+    const written = await installAgentAssets(projectDir, agent, {
+      compression: hostSupportsCompression(agent) && Boolean(mcpMap.caveman)
+    })
     if (profile === 'test') await installProfileOverlay(projectDir, agent)
     await writeManifest(projectDir, {
       agent,
@@ -1470,7 +1577,9 @@ async function upgradeCmd(args) {
   const profile = scanProfileFlag(args) || validProfile(rc.profile) || DEFAULT_PROFILE
   await copyTemplates(projectDir, profile)
   if (profile === 'test') await scaffoldTestspec(projectDir)
-  const written = await installAgentAssets(projectDir, agent)
+  const written = await installAgentAssets(projectDir, agent, {
+    compression: await hostConfigHasCompression(projectDir, agent)
+  })
   if (profile === 'test') await installProfileOverlay(projectDir, agent)
   const wentContext = await refreshWorkingContext(projectDir)
   const manifest = await writeManifest(projectDir, {
@@ -1579,7 +1688,13 @@ async function initProject(args) {
       gratisModelOrigin = 'detección automática'
     }
   }
-  const written = await installAgentAssets(projectDir, agent)
+  // D7: init configura el MCP del host igual que install (mismo dueno, sin rama
+  // especial por host); --no-mcp conserva el escape. Se resuelve antes de escribir
+  // los agents para materializar la directiva host-scoped solo donde hay la tool.
+  const mcpMap = withMcp ? buildDefaultMcp({}) : {}
+  const written = await installAgentAssets(projectDir, agent, {
+    compression: hostSupportsCompression(agent) && Boolean(mcpMap.caveman)
+  })
   if (profile === 'test') await installProfileOverlay(projectDir, agent)
   const manifest = await writeManifest(projectDir, {
     azure,
@@ -1604,7 +1719,6 @@ async function initProject(args) {
   await registerProject(projectDir, { agent, tier: tier || null })
   // D7: init configura el MCP del host igual que install (mismo dueno, sin rama
   // especial por host); --no-mcp conserva el escape.
-  const mcpMap = withMcp ? buildDefaultMcp({}) : {}
   const mcpRes = await setupHostMcp(join(projectDir, '.opencode'), mcpMap, { projectDir, agent })
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
   if (mcpRes.added.length) console.log(`ancleto: MCP configurados: ${mcpRes.added.join(', ')} en ${mcpRes.file}`)
@@ -1939,7 +2053,15 @@ async function discovery(flags) {
 
 async function refreshWorkingContext(projectDir, scope = 'project') {
   const dbPath = defaultMemoryDbPath(projectDir)
-  if (!(await exists(dbPath))) return null
+  if (!(await exists(dbPath))) {
+    // Dia-cero: sin base de memoria no se abre el motor; la topologia no depende de
+    // reglas ni de la DB, asi que se materializa igual cuando existe `.discovery-map.json`.
+    // Sin topologia no se crea contenido ficticio (no se escribe el archivo). El render
+    // (con o sin motor) tiene un unico camino en `renderWorkingContextBlock`.
+    const topoBlock = renderWorkingContextBlock(null, projectDir, scope)
+    if (topoBlock === null) return null
+    return writeWorkingContextBlock(projectDir, topoBlock)
+  }
   const engine = createMemoryEngine(dbPath)
   try {
     return writeWorkingContext(engine, projectDir, scope)
@@ -1951,14 +2073,17 @@ async function refreshWorkingContext(projectDir, scope = 'project') {
 async function memoryContext(flags) {
   const scope = flagValue(flags, '--scope') || 'project'
   const out = flagValue(flags, '--out')
-  const dbPath = defaultMemoryDbPath()
-  if (!(await exists(dbPath))) {
-    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
-    process.exit(0)
-  }
-  const engine = createMemoryEngine(dbPath)
+  const projectDir = process.cwd()
+  const dbPath = defaultMemoryDbPath(projectDir)
+  // Dia-cero: sin base de memoria se renderiza igual la topologia (sin abrir el motor),
+  // por el mismo camino que el refresh de lifecycle. Sin topologia ni reglas no se
+  // fabrica contenido: el bloque es null.
+  const engine = (await exists(dbPath)) ? createMemoryEngine(dbPath) : null
+  // Paridad con `writeWorkingContextBlock`: el archivo destino se materializa aunque
+  // falte su directorio (dia-cero crea `.ancleto/` si no existia).
+  if (out) await mkdir(dirname(resolve(out)), { recursive: true })
   try {
-    const block = engine.buildWorkingContext(scope)
+    const block = renderWorkingContextBlock(engine, projectDir, scope)
     if (block === null) {
       if (out) await writeFile(resolve(out), '')
       console.error(`ancleto: sin reglas activas para el scope "${scope}"`)
@@ -1971,7 +2096,7 @@ async function memoryContext(flags) {
       console.log(block)
     }
   } finally {
-    engine.close()
+    if (engine) engine.close()
   }
 }
 
@@ -2267,6 +2392,9 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
     let expectedContent = adaptFrontmatter(source, host, 'agents', name)
     if (host === 'copilot' && name === 'orchestrator') {
       expectedContent += COPILOT_MODEL_NOTE
+    }
+    if (name === 'orchestrator' && (await hostConfigHasCompression(cwd, host))) {
+      expectedContent += CAVEMAN_USAGE_NOTE
     }
     const installed = await readFile(join(cwd, dirRel, f), 'utf8')
     if (installed !== expectedContent) {
@@ -2768,7 +2896,7 @@ async function importCmd(args) {
         continue
       }
       const current = await readFile(target, 'utf8')
-      const merged = mergeLocked(content, current, t)
+      const merged = mergeTemplateInto(content, current, t)
       if (merged !== current) await writeFile(target, merged)
     }
     for (const d of ASSETS) {
@@ -2778,7 +2906,9 @@ async function importCmd(args) {
     const rcNow = await readAncletorc(projectDir)
     const agent = (rcNow?.agent && SUPPORTED_AGENTS.includes(rcNow.agent)) ? rcNow.agent : DEFAULT_AGENT
     const importProfile = validProfile(rcNow?.profile) || DEFAULT_PROFILE
-    await installAgentAssets(projectDir, agent)
+    await installAgentAssets(projectDir, agent, {
+      compression: hostSupportsCompression(agent) && Boolean(buildDefaultMcp({ withEngram: manifest?.flags?.engram === true }).caveman)
+    })
     if (importProfile === 'test') await installProfileOverlay(projectDir, agent)
     if (manifest.tier && TIERS[manifest.tier]) {
       await applyTier(join(projectDir, '.opencode', 'agents'), manifest.tier, tierModels(manifest.tier, TIERS, manifest.gratisModel))

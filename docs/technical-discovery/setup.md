@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers y validaciones"
-generatedAt: 2026-10-02T20:32:00Z
-pluginVersion: 0.11.0
+generatedAt: 2026-10-14T22:01:41Z
+pluginVersion: 0.11.1
 skillVersion: '2.3'
 ---
 
@@ -50,27 +50,29 @@ el MCP del host por defecto; `--no-mcp` lo evita.
 ## Configuración persistida
 
 - **`.ancletorc`** (raíz): manifiesto de instalación (`schemaVersion`, `version`,
-  `installedAt`, `installedPaths`) + `discovery` (`outputDir`, `exclude`), `agent`, `language`,
-  `profile` (`general`|`test`), `azure.enabled`, `gratisModel`. `installedPaths` guarda la
-  **unión de destinos realmente escritos** por host (`templates`, `agents`, `commands`,
-  `skills`); para antigravity `commands` queda vacío (los commands viven como skills). **No
-  editar a mano durante el seed**; se consume resuelto desde `ancleto discovery --check`.
-  En este checkout `.ancletorc` **existe** (gitignored, no versionado); el contrato de
-  contenido se describe por código, no por lectura directa del manifiesto.
+  `installedAt`, `installedPaths`) + `discovery` (`outputDir`, `tier`, `exclude`), `agent`,
+  `language`, `profile` (`general`|`test`), `azure.enabled`, `gratisModel`. `installedPaths`
+  guarda la **unión de destinos realmente escritos** por host (`templates`, `agents`,
+  `commands`, `skills`); para antigravity `commands` queda vacío (los commands viven como
+  skills). **No editar a mano durante el seed**; se consume resuelto desde
+  `ancleto discovery --check`. En este checkout `.ancletorc` **existe** (gitignored, no
+  versionado); el contrato de contenido se describe por código, no por lectura directa.
 - **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/reviewer ampliados
   (planning/generation/healing/coverage), comandos `cleto-test-*`, estructura `testspec/` y
   bloque LOCKED de convenciones Playwright; instalable con cualquier host (incluido copilot).
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
-  En este checkout existe `.opencode/.ancleto-tier` con valor `gratis`, por lo que el tier
-  resuelto es **`gratis`**. El tier decide modelos de los agents y la agresividad del pack.
-  Evidencia: `src/core/repomix-tier.js`, `.opencode/.ancleto-tier`,
-  `ancleto discovery --check`.
+  En este checkout existe `.opencode/.ancleto-tier` con valor `minimo`, por lo que el tier
+  resuelto es **`minimo`**. El tier decide modelos de los agents y la agresividad del pack.
+  Evidencia: `src/core/repomix-tier.js`, `.opencode/.ancleto-tier`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`).
   Los agents de claude/vscode/antigravity/copilot se adaptan de frontmatter. Detalle:
   `units/cli-install.md`.
 - **MCP del host**: antigravity en `.agents/mcp_config.json`; el resto en
   `.opencode/opencode.json` (ver `integrations.md`).
+- **`AGENTS.md`**: bloques `LOCKED` que `install`/`update` re-aplican — `memory-boundary`,
+  `artifacts-language` (**fuente única** de la regla de idioma) y `seed-freshness` (**fuente
+  única** de la regla de frescura del seed al archivar), más `test-block`.
 - **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`); ignorado por git.
 
 ## Tiers de costo
@@ -78,10 +80,12 @@ el MCP del host por defecto; `--no-mcp` lo evita.
 | Tier | Modelos y empaquetado |
 |---|---|
 | `normal` | Modelos balanceados (`qwen3.7-plus`, `minimax-m3`, etc.), sin restricción de pack. |
-| `minimo` | Un único modelo `opencode-go/deepseek-v4.1-flash` para los 10 agents; pack comprimido y excluye tests/docs/markdown. |
+| `minimo` | Un único modelo `opencode-go/deepseek-v4.1-flash` para los 10 agents; pack comprimido (`--compress`) y excluye tests/docs/markdown. **Tier resuelto en este checkout.** |
 | `gratis` | Muse Spark 1.3 Free si está habilitado en la cuenta; fallback `opencode/big-pickle`; token budget estricto (50k). Mismos ignores que `minimo`. |
 
 Evidencia: `src/core/tier-models.js`, `src/core/repomix-tier.js`, `README.md`.
+Nota: `readProjectTier` cae en `gratis` **por default** cuando no existe `.ancleto-tier`; el
+tier resuelto en este checkout es `minimo` por el archivo del proyecto.
 
 ## Variables de entorno
 
@@ -104,8 +108,9 @@ Evidencia: `README.md`, `src/cli/index.js`, `.github/workflows/publish.yml`.
 - **Suite**: `npm test` → `node --test "test/*.test.js"` (10 archivos: `adapters-frontmatter`,
   `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `linter-config`, `mcp`,
   `memory-engine`, `tier-models`, `working-context`). **381 tests / 82 suites en verde** en
-  v0.10.0 (heredado del seed previo; no re-ejecutado en esta regeneración porque `test/**`
-  queda fuera del pack del tier `gratis`). Evidencia: `test/`, `CHANGELOG.md`.
+  v0.10.0 (cifra heredada; no re-ejecutada en esta regeneración porque `test/**` queda fuera
+  del pack). `content-guards` fue relajado a **keywords de comportamiento** por el change
+  `token-budget`. Evidencia: `test/`, `CHANGELOG.md`, `aspec/changes/token-budget/`.
 - Validaciones obligatorias del repo (definidas en `AGENTS.md`): `npm run typecheck` o
   `npx tsc --noEmit`, `npm run lint`, `npm test`. **Observación**: este repo es JavaScript
   puro y `package.json` **no define** `typecheck`; `lint` y `test` sí existen desde el change
@@ -123,4 +128,5 @@ Evidencia: `README.md`, `src/cli/index.js`, `.github/workflows/publish.yml`.
   pushear. Evidencia: `AGENTS.md`, `BACKLOG.md`.
 - Idioma de artifacts: español (`language: "es"` en el repo dogfooded); keywords y nombres de
   archivo siempre en inglés literal (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`).
-  Evidencia: `AGENTS.md`.
+  Única fuente canónica del texto: `LOCKED: artifacts-language` en `AGENTS.md`; las skills y
+  agentes la referencian. Evidencia: `AGENTS.md`, `templates/AGENTS.md`.

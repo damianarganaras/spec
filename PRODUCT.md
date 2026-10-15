@@ -17,7 +17,7 @@
 - **Runtime**: Node.js ≥ 24.0.0 (obligatorio: `engines.node`; el motor de memoria usa `node:sqlite`).
 - **Language**: JavaScript (ESM, `"type": "module"`). El paquete no tiene TypeScript ni `tsconfig.json`.
 - **Framework**: ninguno (CLI ESM sin framework externo); la UI de terminal (banner y menús TTY) es propia, en `src/cli/ui.js`.
-- **Testing**: Node Test Runner nativo (`node --test test/*.test.js`); 7 archivos de suite.
+- **Testing**: Node Test Runner nativo (`node --test "test/*.test.js"`); el comando de test declarado y su invocación acotada están en `## Project Commands`.
 - **Infra / CI/CD**: GitHub Actions (`.github/workflows/publish.yml`): `npm ci` + tests y publicación a npm al pushear un tag `v*`. Empaquetado de contexto con **Repomix** (on-demand, opcional; se resuelve por `PATH` o vía `npx`).
 
 ---
@@ -91,7 +91,7 @@ Guardrails del repositorio (fuente: `AGENTS.md`):
 - **TypeScript strict** (`strict: true`). _Nota: este paquete es JavaScript ESM puro; la regla es genérica del template `AGENTS.md` y no hay `tsconfig.json` (ver Project Commands)._
 - **Commits**: Conventional Commits (`feat(scope):`, `fix(scope):`, `chore(scope):`). No commitear directo a ramas protegidas (`main`, `master`).
 - **Seguridad**: toda operación destructiva (borrado de BD, archivos clave, deploys) requiere confirmación explícita del usuario.
-- **Validaciones obligatorias antes de cerrar una tarea**: `npm run typecheck` (o `npx tsc --noEmit`), `npm run lint`, `npm test`. _Nota: `package.json` no define esos scripts (ver Project Commands)._
+- **Validaciones antes de cerrar una tarea (declarativas)**: se corre solo lo que este proyecto declara en `## Project Commands` (fuente única); si un comando no está declarado, se saltea y se registra la omisión, nunca se inventa (ver el bloque LOCKED `validation-commands` de `AGENTS.md`).
 - **Protocolo de memoria reactiva**: invocar `searchMemory` antes de modificar/revertir una decisión de diseño previa, ante un `<ContextOverflowWarning>`, o antes de refactorizaciones mayores y cambios de contratos de API/persistencia.
 - **Frontera de memoria**: la memoria **del repo** (`.ancleto/memory.db`) guarda reglas y decisiones del proyecto y se comparte; la **del agente** (p. ej. engram) es de sesión. Una entrada vive en una sola.
 
@@ -112,10 +112,13 @@ Guardrails del repositorio (fuente: `AGENTS.md`):
 
 ## Project Commands
 
-- **No hay scripts npm definidos en `package.json`** (el archivo no tiene sección `scripts`), por lo que `npm run dev`, `npm run build`, `npm run lint` y `npm test` del template **no existen en este repo**. Discrepancia declarada: las validaciones obligatorias de `AGENTS.md` (`npm run typecheck`, `npm run lint`, `npm test`) apuntan a scripts ausentes.
-- **Tests (runner real)**: `node --test test/*.test.js`.
-- **CLI**: `node src/cli/index.js <comando>` — o, instalado, `ancleto <comando>` / `aspec <comando>` (`init`, `install`, `update`, `upgrade`, `discovery`, `mcp`, `memory`, `specs`, `stats`, `projects`, `check`, `doctor`).
+Comandos declarados de este repositorio (fuente única que consumen las validaciones declarativas de `AGENTS.md`):
+
+- **Lint**: `npm run lint` (`eslint src/ test/`; flat config `eslint.config.js`).
+- **Tests**: `npm test` (`node --test "test/*.test.js"`). Para validaciones acotadas, pasar **rutas explícitas** al archivo relevante; nunca `node --test` sin acotar (descubre archivos fuera de la suite declarada).
+- **Format**: no configurado (`not-configured`) — el repo no declara formatter.
 - **Typecheck**: no aplica (paquete JavaScript, sin `tsconfig.json`).
+- **CLI**: `node src/cli/index.js <comando>` — o, instalado, `ancleto <comando>` / `aspec <comando>` (`init`, `install`, `update`, `upgrade`, `discovery`, `mcp`, `memory`, `specs`, `stats`, `projects`, `check`, `doctor`).
 
 <!-- LOCKED: test-block -->
 Contexto gestionado por @ancleto/spec — no editar: se re-aplica en cada actualizacion.

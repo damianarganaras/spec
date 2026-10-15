@@ -117,7 +117,7 @@ Do not treat archive as a blind file move.
 
 When a completed change modifies behavior through aspec deltas, `aspec/specs/` must reflect that completed behavior before the change is archived.
 
-**Language**: write spec content in the user's conversation language (or the project's configured `language` in `.ancletorc`). The requirement/scenario keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) are literal and MUST NOT be translated. Paths, file names, and identifiers stay unchanged.
+**Language**: follow the `LOCKED: artifacts-language` block in `AGENTS.md` (single source of truth for artifact language and literal keywords). Paths, file names, and identifiers stay unchanged.
 
 Handle these delta sections carefully:
 

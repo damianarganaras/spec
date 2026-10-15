@@ -76,7 +76,7 @@ Create a pull request following semantic standards.
 
    ## Test Plan
 
-   - [ ] Unit tests pass (`npm test`)
+   - [ ] Unit tests pass (run the project's declared test command — see `PRODUCT.md` → `## Project Commands`)
    - [ ] Integration tests pass (if applicable)
    - [ ] Manual testing performed
    - [ ] Tested on [environment/browser/device]

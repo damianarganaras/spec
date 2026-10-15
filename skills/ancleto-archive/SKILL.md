@@ -10,7 +10,7 @@ metadata:
 
 # aspec Archive
 
-**Artifacts language**: write artifact content in the user's conversation language (or the project's configured `language` in `.ancletorc`). Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) and file/directory names are literal and MUST NOT be translated.
+**Artifacts language**: follow the `LOCKED: artifacts-language` block in `AGENTS.md` (single source of truth for artifact language and literal keywords).
 
 Archive a completed change: check completion, sync delta specs, move the directory. No external binaries.
 
@@ -46,14 +46,7 @@ Check for delta specs at `aspec/changes/<name>/specs/`; if none, proceed without
 
 ### 3. Check technical seed freshness
 
-If the `ancleto` CLI is available in this project, run `ancleto discovery --check` (read-only) and read its JSON `state` and `impact`.
-
-- **`STALE` with `impact: material`**: warn that the technical seed is out of date in material areas, and offer to regenerate it now (follow the `ancleto-technical-discovery` skill) or to continue archiving with the stale seed.
-- **`STALE` with `impact: minor`**: continue without offering — the seed is still usable; record the drift in the summary.
-- **Any other state**: continue without comment.
-- Never regenerate automatically — regenerate only with the user's explicit approval.
-- If the user declines, continue the archive normally and record the stale seed in the summary.
-- If the CLI is unavailable, skip this step.
+Follow the `LOCKED: seed-freshness` block in `AGENTS.md` (single source of truth for this rule). If the `ancleto` CLI is available in this project, run `ancleto discovery --check` (read-only) and read its JSON `state` and `impact` to apply that rule; if the CLI is unavailable, skip this step.
 
 ### 4. Perform the archive
 
@@ -96,7 +89,7 @@ If warnings applied (incomplete tasks, skipped sync, stale seed), show an "Archi
 
 - Always prompt for change selection if not provided.
 - Don't block archiving on warnings — inform and confirm.
-- Never regenerate the technical seed automatically: offer it, and continue the archive if the user declines.
+- Seed freshness follows the `LOCKED: seed-freshness` rule in `AGENTS.md`.
 - If the target archive directory exists, fail instead of overwriting.
 - Delete scaffold-only files (`context.md`) before moving; never archive them.
 - `recordRule`/`recordDecision` accept only `memory_key`, `content`, `justification`, `scope`. Never send `source`, `confidence`, `status` or `id` — the runtime manages those.

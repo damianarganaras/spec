@@ -72,7 +72,7 @@ function publicNode(row) {
   }
 }
 
-function formatTopologyBlock(topo) {
+export function formatTopologyBlock(topo) {
   if (!topo) return null
   const entries = Object.entries(topo.tree_summary)
     .sort((a, b) => a[0].localeCompare(b[0]))

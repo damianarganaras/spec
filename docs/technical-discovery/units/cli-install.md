@@ -4,9 +4,9 @@ kind: dossier
 read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, commands como skills, wizard, MCP y portabilidad"
 covers: [instalación, AGENT_TARGETS, frontmatter, MCP, perfiles, export/import]
 sources: ["src/cli/**", "src/core/adapters/**"]
-sourcesSha: 86eefeb896a883dd77d7c93b255060e77ff62fd311b64126fa2604fb84b4ac73
-generatedAt: 2026-10-02T20:32:00Z
-pluginVersion: 0.11.0
+sourcesSha: 1af6fdf1a0953b5d84f68867c6dc6750c3872d5157e35d4f0dc6e82c33fd2cda
+generatedAt: 2026-10-14T22:01:41Z
+pluginVersion: 0.11.1
 skillVersion: '2.3'
 ---
 
@@ -151,6 +151,22 @@ el asset vive dentro del layout de skills. Evidencia: `src/cli/index.js`.
   `PATH`; `engram` solo con `--with-engram`; `azure-devops` si `azure.enabled: true`.
   Evidencia: `src/cli/index.js`.
 
+## Compresión host-scoped (caveman) — change activo `token-budget`
+
+- `buildDefaultMcp` sigue dando de alta el MCP de compresión (caveman) por defecto cuando su
+  binario está disponible, como **configuración del host** (`opencode.json` para opencode,
+  `.agents/mcp_config.json` para antigravity) vía `setupHostMcp`; para el resto de hosts el MCP
+  de host queda fuera de alcance.
+- **La directiva de uso es condicional al host**: `hostSupportsCompression` /
+  `hostConfigHasCompression` leen la config MCP del host y deciden si materializar
+  `CAVEMAN_USAGE_NOTE`; esa pista se escribe **solo** en las superficies de un host que tiene la
+  tool y **nunca** en texto compartido entre hosts (`AGENTS.md` o assets copiados verbatim).
+  Contrato: *donde no hay tool, no hay instrucción*. `installAssetFiles(..., compression)`
+  propaga la decisión al escribir.
+- El default es **reversible a opt-in** mediante compuerta de medición con `ancleto stats`: si
+  el consumo neto no baja en la ventana de observación, vuelve a opt-in.
+  Evidencia: `src/cli/index.js`, `aspec/changes/token-budget/specs/agent-install-routing/spec.md`.
+
 ## Perfil `test` (overlay, `installProfileOverlay`)
 
 Con `profile: test` (`--profile`, `test:playwright` como alias; `SUPPORTED_PROFILES =
@@ -199,8 +215,10 @@ aplica portables, reinstala assets del host, re-aplica el tier y **regenera** el
 5. `scaffoldAspec` (+ `scaffoldTestspec` con perfil `test`) crean estructura sin pisar.
 6. `applyTier` reescribe la línea `model:` de cada agente; resuelve `gratisModel` y lo guarda en
    `.ancletorc`. Paridad `init`/`install` en el tier guardado (v0.6.36/v0.6.37).
-7. `setupHostMcp` configura el MCP del host de forma **no destructiva**. `upgrade` sin
-   `.ancletorc` migra `openspec/` si lo hay en lugar de exigir `init`.
+7. `setupHostMcp` configura el MCP del host de forma **no destructiva**; en `init` el MCP se
+   resuelve **antes** de escribir los agents para materializar la directiva de compresión
+   host-scoped solo donde hay la tool. `upgrade` sin `.ancletorc` migra `openspec/` si lo hay en
+   lugar de exigir `init`.
 8. `writeManifest` actualiza `.ancletorc` y `registerProject` anota el repo en
    `~/.config/ancleto/projects.json` (override: `ANCLETO_PROJECTS_FILE`).
 9. `refreshWorkingContext` regenera `.ancleto/working-context.md` desde la memoria.
@@ -232,7 +250,7 @@ aplica portables, reinstala assets del host, re-aplica el tier y **regenera** el
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCopilotMcp`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `mergeLocked`, `memoryExport`/`memoryImport`/`memoryGc`. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `mergeLocked`, `refreshWorkingContext`/`memoryContext`, `memoryExport`/`memoryImport`/`memoryGc`. |
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`; dueño único de la transformación. |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED/EXTENSIBLE. |

@@ -19,10 +19,6 @@ En caso de conflicto, prevalece la documentación más específica del área afe
   `chore(scope): ...`). No realizar commits directos a ramas protegidas (`main`, `master`).
 - **Seguridad**: Toda operación destructiva (borrado de BD, archivos clave, deploys)
   requiere confirmación explícita del usuario.
-- **Validaciones obligatorias antes de cerrar una tarea**:
-  - `npm run typecheck` o `npx tsc --noEmit`
-  - `npm run lint`
-  - `npm test`
 
 ## Memoria Persistente (Protocolo Reactivo)
 
@@ -49,6 +45,17 @@ conflicto, prevalece el diseño vigente.
   diga la memoria.
 - Si la memoria contradice el estado actual del código o los guardrails de este archivo,
   reportá la discrepancia en lugar de aplicarla a ciegas.
+
+<!-- LOCKED: validation-commands -->
+- **Validaciones antes de cerrar una tarea (declarativas)**: se corre **solo** lo que el proyecto
+  declare en `PRODUCT.md` → `## Project Commands`, usando el comando que el proyecto declaró. Si un
+  comando **no está declarado**, esa validación se **saltea y se registra la omisión**; **nunca se
+  inventa** ni se asume un runner, linter, formatter o typechecker.
+  - **Format check**: corre solo si el proyecto declara un formatter; si no lo declara, se reporta
+    `not-configured` (no es un fallo).
+  - **Tests**: por el comando declarado (p. ej. `npm test`) o con **rutas explícitas**; **nunca**
+    `node --test` sin acotar, que descubre archivos fuera de la suite declarada.
+<!-- /LOCKED: validation-commands -->
 
 <!-- LOCKED: memory-boundary -->
 ### Frontera: memoria del repo vs memoria del agente
@@ -78,6 +85,16 @@ comparte.
   Los keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`, `ADDED/MODIFIED/REMOVED/RENAMED
   Requirements`) y los nombres de archivos y directorios son literales en inglés y **no se traducen**.
 <!-- /LOCKED: artifacts-language -->
+
+<!-- LOCKED: seed-freshness -->
+### Frescura del technical seed al cerrar un change
+
+Al archivar un change, verificá la frescura del seed antes de cerrar: delegá el chequeo read-only del
+estado y, si está `STALE` con `impact: material`, avisá y ofrecé regenerarlo **sólo con aprobación
+explícita** del usuario — nunca de forma automática. Si el estado es `STALE` con `impact: minor`,
+continuá el archive normalmente y anotá la deriva en el resumen. Si el usuario declina, no bloquees:
+continuá y registralo.
+<!-- /LOCKED: seed-freshness -->
 
 ## Tools de Soporte
 

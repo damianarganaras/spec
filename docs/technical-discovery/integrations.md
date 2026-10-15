@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-14T22:01:41Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-15T11:49:04Z
+pluginVersion: 0.13.0
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.11.1`. | `.github/workflows/publish.yml`, `package.json`, `CHANGELOG.md` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.13.0`. | `.github/workflows/publish.yml`, `package.json` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -40,6 +40,7 @@ resuelve el destino con `AGENT_TARGETS` (fuente única de rutas) y lo registra e
 | `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) | identidad + aviso stderr |
 | `roo` | `.roo/skills` | — (no soportado) | — (no soportado) | identidad + aviso stderr |
 | `copilot` | — (no soportado) | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` | dropea claves no portables + nota de picker |
+| `commandcode` | `.commandcode/skills` | `.commandcode/agents/<n>.md` | `.commandcode/commands/<n>.md` | transformación (tools como lista; `model` omitido) |
 
 Con perfil `test`, el overlay (`profiles/test/`) se materializa en los mismos destinos del
 host. `ancleto check` valida que el frontmatter instalado coincida con la salida del adaptador
@@ -47,10 +48,11 @@ host. `ancleto check` valida que el frontmatter instalado coincida con la salida
 
 ## MCP (Model Context Protocol)
 
-Configurados por `setupHostMcp` (dueño único): antigravity en `.agents/mcp_config.json`,
-copilot en `copilot-mcp.json` (merge en install, regeneración de rotas en upgrade sin tocar
-`copilot-instructions.md`); el resto en `.opencode/opencode.json`. `init` e `install` los
-configuran; `--no-mcp` lo evita. `import` regenera entradas rotas con rutas locales.
+Configurados por `setupHostMcp` (dueño único) con **dos excepciones de host-MCP**: antigravity
+en `.agents/mcp_config.json` y commandcode en `.mcp.json`; copilot en `copilot-mcp.json`
+(merge en install, regeneración de rotas en upgrade sin tocar `copilot-instructions.md`); el
+resto en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp` lo evita.
+`import` regenera entradas rotas con rutas locales.
 
 | MCP | Tipo | Rol | Default |
 |---|---|---|---|
@@ -59,8 +61,7 @@ configuran; `--no-mcp` lo evita. `import` regenera entradas rotas con rutas loca
 | `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`), no se agrega por defecto por su costo (~4.900 tokens/request). | Deshabilitado |
 | `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Solo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
 
-Evidencia: `src/cli/index.js`, `README.md`, `BACKLOG.md`,
-`aspec/changes/token-budget/specs/agent-install-routing/spec.md`.
+Evidencia: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-routing/spec.md`.
 
 ## Observabilidad / telemetría
 
@@ -71,8 +72,8 @@ Evidencia: `src/cli/index.js`, `README.md`, `BACKLOG.md`,
 ## Azure DevOps (opcional, apagado)
 
 - Gate en `.ancletorc` → en este checkout `.ancletorc` existe pero su contenido no se lee
-  durante el seed (contrato: se consume resuelto vía `--check`); el default documentado es
-  apagado.
+  durante el seed (contrato: se consume resuelto vía `--check`); `PRODUCT.md` declara el estado
+  apagado en este repositorio.
 - El comando `/cleto-pr` usa GitHub por defecto; con Azure habilitado cambia el flujo. Setup:
   `az extension add --name azure-devops` + `az login` (extensión, no dependencia del paquete).
   Evidencia: `README.md`, `PRODUCT.md`.

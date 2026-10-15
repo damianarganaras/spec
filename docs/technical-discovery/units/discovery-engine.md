@@ -1,12 +1,12 @@
 ---
 node: units/discovery-engine
 kind: dossier
-read_when: "cómo se genera el mapa topológico, el pack Repomix y el presupuesto por tier"
+read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed y el presupuesto por tier"
 covers: [topologia, empaquetado, tiers, tokens]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js"]
 sourcesSha: 890886ffbbacbdaf0fd546cdd2c9aafb323fb339ce49658d7ecef3b177e7d4f4
-generatedAt: 2026-10-14T22:01:41Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-15T11:49:04Z
+pluginVersion: 0.13.0
 skillVersion: '2.3'
 ---
 
@@ -40,8 +40,8 @@ modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
   (+`test/**`, `docs/**`, `**/*.md`; `--compress`), `gratis` (igual que `minimo` + budget 50000).
 - `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
   En este checkout existe `.opencode/.ancleto-tier` con valor `minimo`, por lo que el tier
-  resuelto es `minimo` por archivo (antes, `gratis`). `normal` no comprime; `minimo` y `gratis`
-  comparten los ignores (tests/docs/markdown), y solo `gratis` fija budget (50k).
+  resuelto es `minimo` por archivo. `normal` no comprime; `minimo` y `gratis` comparten los
+  ignores (tests/docs/markdown), y solo `gratis` fija budget (50k).
 - `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
   + `--ignore` del usuario, y agrega `--compress` si el tier o el flag lo piden. No permite
   reemplazar los ignores por un `--ignore` vacío.
@@ -64,8 +64,8 @@ modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
    `rel \0 longitud \0 contenido \n` por archivo ordenado.
 3. Si hay estado previo, `computeImpact` compara por archivo y por área (primer nivel) y
    clasifica `impact`: `material` si cambió un archivo material (`package.json`, configs de
-   runtime, `index.html`, `src/main|index.*`) o apareció/desapareció un área raíz; si no,
-   `minor`; si no hay cambios atribuibles, `none`.
+   runtime, `index.html`, `src/main|index.*`), apareció/desapareció un área raíz o un archivo
+   material; si no, `minor`; si no hay cambios atribuibles, `none`.
 4. `readSeedMap` + `affectedDocsFor` cruzan áreas cambiadas con `seed-map.json` para acotar la
    regeneración a `affectedDocs`.
 5. El pack (`--compress`) escribe estado en `docs/technical-discovery/.discovery-state.json`
@@ -76,6 +76,8 @@ modelos por tier (`tier-models.js`). Evidencia: `README.md`, firmas del pack.
 - `--check` no empaqueta: es state-only sobre hashes.
 - El pack comprimido solo expone firmas (no cuerpos), lo que limita la evidencia de `src/**`.
 - El tier decide también qué markdown/test queda fuera del pack; el seed debe anotarlo.
+- `optimizacion-de-tokens.md` señala que `impact` se deriva por **archivo/área**, no por
+  **contrato** (deuda B6 en `BACKLOG.md`): puede dar falsos positivos/negativos.
 
 ## Paths clave
 

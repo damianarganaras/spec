@@ -5,8 +5,8 @@ read_when: "cómo funciona la memoria persistente, las tools del LLM, el working
 covers: [motor de memoria, tools, working-context, día-cero, procedencia source, export/import/gc]
 sources: ["src/core/memory/**"]
 sourcesSha: 5a36e6c3622e5ed4b3f411a8ad717d7d743f554a1741b0f12ce5bf7593d1b683
-generatedAt: 2026-10-14T22:01:41Z
-pluginVersion: 0.11.1
+generatedAt: 2026-10-15T11:49:04Z
+pluginVersion: 0.13.0
 skillVersion: '2.3'
 ---
 
@@ -33,11 +33,11 @@ inyectado al system prompt y el doctor. Evidencia: `README.md`,
 | Archivo | Rol |
 |---|---|
 | `src/core/memory/database.js` | Abre la DB (`openDatabase`), PRAGMAs (`WAL`, `foreign_keys`, `busy_timeout=5000`), migraciones idempotentes, FTS5 external-content, triggers, `checkpointDatabase` (merge del WAL). |
-| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext`, `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode` (procedencia `source`), `listNodes`, `formatTopologyBlock`, **`exportActive`, `importNodes`, `gcSuperseded`**, `sanitizePaths`, `checkpoint`, `close`. |
+| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext`, `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode` (procedencia `source`), `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `sanitizePaths`, `checkpoint`, `close`. |
 | `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de las 3 tools) y `createMemoryToolkit`. |
 | `src/core/memory/mcp-server.js` | `createMemoryServer`/`serveMemoryMcp`: servidor MCP stdio sin dependencias; maneja JSON-RPC, `handle`, `respond`, `fail`. |
 | `src/core/memory/doctor.js` | `memoryDoctor`: integridad, detección de inconsistencias FTS5 y rebuild de índice / duplicados de activas. |
-| `src/core/memory/working-context.js` | Render único (`renderWorkingContextBlock`) + persistencia (`writeWorkingContext`, `writeWorkingContextBlock`), trigger de refresh (`shouldRefreshWorkingContext`) y resolución de raíz (`resolveMemoryProjectRoot`, `workingContextPath`); **día-cero** sin DB desde la topología. |
+| `src/core/memory/working-context.js` | Render único (`renderWorkingContextBlock`) + persistencia (`writeWorkingContext`, `writeWorkingContextBlock`), trigger de refresh (`shouldRefreshWorkingContext`) y resolución de raíz (`resolveMemoryProjectRoot`, `workingContextPath`); día-cero sin DB desde la topología. |
 
 ## Operaciones export / import / gc (`memory-ops-export-import-gc`)
 
@@ -55,11 +55,10 @@ Expuestas como subcomandos del grupo `memory`:
 - **`ancleto memory gc [--dry-run] [--days N]`** → `gcSuperseded({days, dryRun})`: purga nodos
   `superseded` con antigüedad mayor al umbral (default 30 días). La antigüedad se mide con
   `created_at` como **proxy** (no existe `superseded_at`). Tras el DELETE hace `VACUUM` +
-  `REINDEX` post-commit (SQLite no permite `VACUUM` en transacción); si la compactación falla,
-  la DB queda consistente. `--dry-run` solo reporta conteo y bytes estimados. Los nodos
-  activos nunca se tocan.
+  `REINDEX` post-commit; si la compactación falla, la DB queda consistente. `--dry-run` solo
+  reporta conteo y bytes estimados. Los nodos activos nunca se tocan.
 
-## Working-context día-cero y render compartido (`token-budget`)
+## Working-context día-cero y render compartido (`token-budget`, archivado)
 
 - **Un único render**: `renderWorkingContextBlock(engine, projectRoot, scope)` en
   `src/core/memory/working-context.js` compone el bloque (topología + reglas activas) y es el
@@ -68,32 +67,30 @@ Expuestas como subcomandos del grupo `memory`:
   escritura síncrona del artefacto; `writeWorkingContext` mantiene la firma con raíz explícita.
 - **Día-cero (opción a)**: si **no** existe `.ancleto/memory.db` pero sí `.discovery-map.json`,
   el CLI materializa igual `.ancleto/working-context.md` con el bloque `<ProjectTopology>`
-  (creando `.ancleto/` si falta) **sin abrir el motor**. El bloque de topología no depende de la
-  DB ni de reglas. La composición usa `readTopologySummary` + `formatTopologyBlock` (exportado
-  por `engine.js`). Sin topología ni reglas, el bloque es `null`: no se crea contenido ficticio.
+  (creando `.ancleto/` si falta) **sin abrir el motor**. La composición usa `readTopologySummary`
+  + `formatTopologyBlock` (exportado por `engine.js`). Sin topología ni reglas, el bloque es
+  `null`: no se crea contenido ficticio.
 - **Contrato del motor preservado**: `buildWorkingContext` conserva firma y default
   (`scope, maxTokens=MAX_TOKENS, cwd=process.cwd()`) y sigue devolviendo `null` sin topología ni
   reglas; la materialización día-cero vive en la capa CLI. Evidencia: `src/cli/index.js`
   (`refreshWorkingContext`, `memoryContext`), `src/core/memory/working-context.js`,
-  `src/core/memory/engine.js` (`formatTopologyBlock`),
-  `aspec/changes/token-budget/specs/memory-engine/spec.md`.
+  `aspec/specs/memory-engine/spec.md`,
+  `aspec/changes/archive/2026-10-14-token-budget/specs/memory-engine/spec.md`.
 
-## Procedencia de escritura (`source`, `memory-actor-provenance`)
+## Procedencia de escritura (`source`, `memory-actor-provenance`, archivado)
 
 - `source` es un atributo de **procedencia runtime-owned**: se resuelve exclusivamente desde
   `context.source || 'runtime'` y **nunca** desde `input` (un `source` forjado en los args se
   ignora, igual que `id`/`status`/`confidence`). Vocabulario estable por superficie de escritura:
   `mcp:ancleto-memory` (tools MCP), `cli:import` (import del CLI), `runtime` (default
-  programático) y `agent:<rol>` (solo si un runtime confiable lo provee; el rol del LLM no es
-  observable y no se registra como verificado).
+  programático) y `agent:<rol>` (solo si un runtime confiable lo provee).
 - **Exposición**: se muestra en la lectura de operador (`listNodes`, `ancleto memory list
-  --json`), pero **no** en `searchMemory` ni en las firmas JSON Schema de las tools MCP
-  (encapsulamiento preservado).
+  --json`), pero **no** en `searchMemory` ni en las firmas JSON Schema de las tools MCP.
 - **Frontera auditoría vs enforcement**: la procedencia es **descriptiva**; el motor **no**
   autoriza ni deniega escrituras en base a ella (MCP stdio sin canal de identidad autenticado).
-  El enforcement de ownership no es sostenible y no se promete. No hay cambio de schema.
-  Evidencia: `src/core/memory/engine.js` (`recordNode`), `src/core/memory/mcp-server.js`,
-  `src/core/memory/tools.js`, `aspec/changes/archive/2026-10-05-memory-actor-provenance/`.
+  No hay cambio de schema. Evidencia: `src/core/memory/engine.js` (`recordNode`),
+  `src/core/memory/mcp-server.js`, `src/core/memory/tools.js`,
+  `aspec/changes/archive/2026-10-05-memory-actor-provenance/`.
 
 ## Flujo
 
@@ -137,7 +134,8 @@ Expuestas como subcomandos del grupo `memory`:
 | `src/core/memory/database.js` | Conexión, PRAGMAs, migraciones, FTS5. |
 | `src/core/memory/engine.js` | `buildWorkingContext`, `searchMemory`, `recordNode`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `sanitizePaths`. |
 | `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext`, `resolveMemoryProjectRoot` (día-cero). |
-| `aspec/changes/token-budget/specs/memory-engine/spec.md` | Contrato de día-cero y coherencia documentado↔inyección. |
+| `aspec/specs/memory-engine/spec.md` | Contrato de día-cero y coherencia documentado↔inyección. |
+| `aspec/changes/archive/2026-10-14-token-budget/` | Delta de día-cero del working-context. |
 | `aspec/changes/archive/2026-10-05-memory-actor-provenance/` | Contrato de procedencia `source` (auditoría vs enforcement). |
 | `src/core/memory/tools.js` | Contrato JSON Schema de las 3 tools. |
 | `src/core/memory/mcp-server.js` | Transporte MCP stdio. |

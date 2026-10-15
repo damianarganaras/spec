@@ -12,12 +12,12 @@ export const AGENT_ADAPTER_DROP = new Set(['mode', 'color', 'temperature', 'perm
 // Hosts conocidos por el modulo. Cualquier host fuera de este conjunto cae en la
 // rama `unknown` (no aborta; emite aviso a stderr y retorna el contenido sin
 // cambios).
-const KNOWN_HOSTS = new Set(['opencode', 'claude', 'vscode', 'antigravity', 'cursor', 'roo', 'copilot'])
+const KNOWN_HOSTS = new Set(['opencode', 'claude', 'vscode', 'antigravity', 'cursor', 'roo', 'copilot', 'commandcode'])
 
 // Hosts para los que existe una transformacion documentada de agents
 // (distinta de identidad). Cursor y Roo viven fuera: no hay formato de frontmatter
 // propio, así que la adaptación es passthrough con aviso.
-const TRANSFORM_AGENTS = new Set(['claude', 'vscode', 'antigravity', 'copilot'])
+const TRANSFORM_AGENTS = new Set(['claude', 'vscode', 'antigravity', 'copilot', 'commandcode'])
 
 // Tabla unica (fijada contra la tabla oficial de frontmatter de Custom
 // Subagents) de ids de Antigravity. Conjunto CERRADO: solo se emiten estos ids.
@@ -33,6 +33,31 @@ export const ANTIGRAVITY_TOOL_MAP = {
   grep: 'grep_search',
   bash: 'run_command',
   todowrite: 'manage_task'
+}
+
+// Tabla unica (fijada contra la documentacion oficial de Command Code) de ids de
+// tools. Conjunto CERRADO: solo se emiten estos ids. Toda clave del mapa `tools`
+// de opencode sin id aqui se omite con aviso a stderr (nunca en silencio).
+export const COMMANDCODE_TOOL_MAP = {
+  read: 'read_file',
+  write: 'write_file',
+  edit: 'edit_file',
+  bash: 'shell_command',
+  grep: 'grep',
+  glob: 'glob',
+  webfetch: 'web_fetch',
+  websearch: 'web_search',
+  todowrite: 'todo_write'
+}
+
+// Tools de la memoria propia del framework. Command Code expone los servers MCP
+// con la convencion documentada `mcp__<server>__<tool>`; `ancleto-memory` es el
+// server que registra `buildDefaultMcp`. Estas claves del mapa `tools` de opencode
+// son sus tools, asi que se emiten con el nombre MCP completo.
+export const COMMANDCODE_MCP_TOOL_MAP = {
+  searchMemory: 'mcp__ancleto-memory__searchMemory',
+  recordRule: 'mcp__ancleto-memory__recordRule',
+  recordDecision: 'mcp__ancleto-memory__recordDecision'
 }
 
 // Parser propio sin dependencias. Cada entrada conserva su clave y sus lineas
@@ -147,6 +172,45 @@ function adaptAntigravityFrontmatter(content, name) {
   return serializeFrontmatter(parsed)
 }
 
+// Adapta el frontmatter de un agent de opencode al de Command Code. `name` (el
+// host lo requiere; default filename) se inyecta desde el nombre del archivo.
+// `description` se preserva. `mode`/`color`/`temperature`/`permission` se eliminan
+// y `model` se omite: Command Code hereda el modelo de sesion cuando no se declara
+// (nunca se mapea un id de `opencode-go/*`). `tools` sale como lista de ids
+// verificados (o `"*"` si el origen no declara tools: el default de opencode es
+// "todas" y el de Command Code es "ninguna"). Una clave sin id verificado se omite
+// con aviso a stderr (nunca en silencio).
+function adaptCommandCodeFrontmatter(content, name) {
+  const parsed = parseFrontmatter(content)
+  if (!parsed.hasFrontmatter) return content
+  const byKey = (k) => parsed.entries.find((e) => e.key === k)
+
+  const managed = new Set([...AGENT_ADAPTER_DROP, 'name', 'description', 'tools'])
+  const kept = parsed.entries.filter((e) => e.key && !managed.has(e.key))
+
+  const toolsEntry = byKey('tools')
+  const toolIds = []
+  if (toolsEntry) {
+    for (const { key, value } of parseToolFlags(toolsEntry)) {
+      if (value === 'false') continue
+      const id = COMMANDCODE_TOOL_MAP[key] || COMMANDCODE_MCP_TOOL_MAP[key]
+      if (id) {
+        toolIds.push(id)
+        continue
+      }
+      console.error(`skip tool '${key}': no verified Command Code id for agent '${name}'`)
+    }
+  }
+
+  const out = [{ key: 'name', lines: [`name: ${name}`] }]
+  const description = byKey('description')
+  if (description) out.push(description)
+  out.push(toolsEntry ? { key: 'tools', lines: [`tools: [${toolIds.join(', ')}]`] } : { key: 'tools', lines: ['tools: "*"'] })
+  out.push(...kept)
+  parsed.entries = out
+  return serializeFrontmatter(parsed)
+}
+
 // Elimina las claves gestionadas por el adaptador (mode/color/temperature/
 // permission/model/tools) preservando el resto y el body. Para claude, vscode y
 // copilot. Si no hay frontmatter, retorna el contenido sin cambios.
@@ -166,6 +230,8 @@ function dropManagedKeys(content) {
 //   opencode                    → identity (passthrough)
 //   antigravity + agents        → adaptAntigravityFrontmatter(content, name)
 //   antigravity + (skills/cmds) → identity
+//   commandcode + agents        → adaptCommandCodeFrontmatter(content, name)
+//   commandcode + (skills/cmds) → identity
 //   claude/vscode/copilot + ags → dropManagedKeys(content)
 //   claude/vscode/copilot + sk  → identity
 //   cursor/roo                  → identity + aviso stderr (sin formato documentado)
@@ -182,5 +248,6 @@ export function adaptFrontmatter(content, host, assetKind, name) {
   if (assetKind !== 'agents') return content
   if (!TRANSFORM_AGENTS.has(host)) return content // opencode u otro conocido sin transform
   if (host === 'antigravity') return adaptAntigravityFrontmatter(content, name)
+  if (host === 'commandcode') return adaptCommandCodeFrontmatter(content, name)
   return dropManagedKeys(content)
 }

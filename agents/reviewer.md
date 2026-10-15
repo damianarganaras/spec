@@ -95,16 +95,16 @@ If the received context is not enough to resolve the write surface or the read-m
 
 1. Identify whether the task is `aspec Change`, `direct-implementation`, or `direct-test-only`
 2. Read only the minimum relevant approved inputs and changed implementation files. When the change signals a guarantee (`S1 ∧ S2`, `aspec Change` mode only), that minimum additionally includes the source of the operations that can mutate the protected state, even beyond the diff
-3. Review the task-owned files, related tests, and Validation Ledger produced for the approved scope
+3. Review the `affected-set` and its tests against the prearmed, closed Validation Ledger supplied for the approved scope
 4. Check for correctness issues, missing coverage, convention violations, and scope creep
-5. If a finding requires command evidence absent from the Validation Ledger, report the missing evidence to `@orchestrator`; do not run the command yourself
+5. Treat the prearmed Validation Ledger as evidence: consume it without reconstructing or re-running anything. Do not request a re-delegation to `@tester` for command evidence that is missing or inconclusive **within the covered scope** — a ledger that does not cover a scope command is an orchestrator precondition failure, not a reviewer request. You still report missing **context** (not command evidence) needed for the guarantee verification. You do not have Bash and must not run commands yourself
 6. Return a short structured review report
 
 ## Scope Review Rules
 
 Review the changed files against the approved request or aspec scope.
 
-Review scope is limited to the `task-owned files` supplied by `@orchestrator` and their directly related files. Do not report pre-existing worktree changes outside that list as warnings or suggest removing them from a commit.
+Review scope is the `affected-set` supplied by `@orchestrator` — the deterministically propagated closure of dependents, including the `task-owned files` themselves — not just the changed files. Do not report pre-existing worktree changes outside that set as warnings or suggest removing them from a commit.
 
 This scope limit does not apply to a `GUARANTEE NOT SUSTAINED` finding: a guarantee can be falsified by an operation outside the `task-owned files` and outside the diff, and the finding is not discarded or downgraded for that reason. See "Guarantee Verification Under the Real Model".
 
@@ -167,7 +167,7 @@ Do not block on minor style nits when the change is otherwise correct.
 
 ## Validation Evidence
 
-Treat the tester's Validation Ledger as evidence. A `pre-existing-unrelated` entry is a non-blocking residual limitation: do not elevate it to a warning unless the review finds evidence that it affects task-owned files. When evidence is missing or inconclusive, report exactly what `@tester` would need to verify. You do not have Bash and must not run commands or external requests.
+The tester's prearmed Validation Ledger is the authoritative evidence for the covered scope: consume it as-is, and do not reconstruct or summarize it. A `pre-existing-unrelated` entry is a non-blocking residual limitation: do not elevate it to a warning unless the review finds evidence that it affects task-owned files. A `not-configured` entry is a registered non-failure (the project declares no such command): it closes the ledger for that command and is not missing evidence. When the ledger covers a scope command as `inconclusive`, treat it as evidence and do not request a re-delegation to `@tester` within the covered scope. Report missing **context** (not command evidence) needed to resolve the guarantee verification. You do not have Bash and must not run commands or external requests.
 
 ## Memory Candidate Review
 
@@ -194,7 +194,7 @@ Return a short structured report with:
 - `SPEC UPDATE RECOMMENDED` flag when a `direct-implementation` change modified documented behavior
 - `GUARANTEE NOT SUSTAINED` flag when the proposal's guarantee does not hold under the real model (`aspec Change` mode only), naming the guarantee, the falsifying operation, and the protected state
 - `MEMORY CANDIDATE`: one lesson worth keeping in the team memory, or "none" with the reason automatic storage is not recommended
-- missing or inconclusive command evidence that requires focused verification by `@tester`, or "none"
+- missing **context** for the guarantee verification (not command evidence; the prearmed ledger covers the review scope), or "none"
 - overall review verdict
 
 **Output cap**: at most 5 findings per severity (`CRITICAL`, `WARNING`, `SUGGESTION`); if more exist, keep the 5 highest-impact and state the count of the rest, offering detail on request. `Summary` max 5 lines. Cite `file:line`; never paste diffs or code.

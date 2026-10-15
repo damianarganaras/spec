@@ -575,3 +575,76 @@ describe('content guards - contrato de validaciones declarativo', () => {
     assert.match(t, /affected set/)
   })
 })
+
+describe('content guards - throughput-pipeline', () => {
+  const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
+
+  it('el orchestrator declara la delegación paralela de finalización y memoria (sin serializar)', () => {
+    const t = readAgent('orchestrator')
+    assert.match(t, /Finalization \/ Archive ∥ Memory Record/)
+    assert.match(t, /in parallel/)
+    assert.match(t, /disjoint surfaces/)
+    assert.match(t, /do not wait for one to finish before starting the other/)
+    assert.match(t, /With no real candidate, delegate only `@documenter`/)
+  })
+
+  it('el orchestrator declara la memoria en un solo paso sin ping-pong Optional Draft sin candidato', () => {
+    const t = readAgent('orchestrator')
+    assert.match(t, /at most \*\*one\*\* memory call/)
+    assert.match(t, /never chain Automatic Record → Optional Draft → approval → User-Approved Record when there is no candidate/)
+    assert.match(t, /do \*\*not\*\* invoke Optional Draft/)
+    assert.match(t, /Reserve User-Approved Record for an explicit user request/)
+  })
+
+  it('el tester declara el affected-set determinístico por grafo de imports con dependientes', () => {
+    const t = readAgent('tester')
+    assert.match(t, /deterministic `affected-set`/)
+    assert.match(t, /transitive closure of \*\*dependents\*\* on the project's import graph/)
+    assert.match(t, /ancleto affected/)
+    assert.match(t, /same repository state plus the same seed yields the same set/)
+    // Clasificador conservador por argumento: una llamada `import(`/`require(` es estática sólo si
+    // su argumento es un string literal puro (tras espacios y comentarios) seguido de `)`; cualquier
+    // otro argumento es `inconclusive`. El relativo irresoluble también es `inconclusive`; los
+    // specifiers no relativos (paquetes/builtins/alias) son externos y NUNCA inconclusos.
+    assert.match(t, /classifies each \*\*by its argument\*\*/)
+    assert.match(t, /\*\*pure string literal followed by `\)`\*\*/)
+    assert.match(t, /\*\*conservative by design\*\*/)
+    // La frontera se fija en ambos lados: el argumento no literal es inconcluso…
+    assert.match(t, /\*\*any other argument\*\*[\s\S]*?is `inconclusive`/)
+    // …y el relativo irresoluble también lo es.
+    assert.match(t, /An \*\*unresolved relative\*\* specifier is also `inconclusive`/)
+    assert.match(t, /external by construction/)
+    assert.match(t, /never `inconclusive`/)
+  })
+
+  it('el tester devuelve un Validation Ledger completo y cerrado con clasificación terminal', () => {
+    const t = readAgent('tester')
+    assert.match(t, /complete and closed\*\* Validation Ledger/)
+    assert.match(t, /registered non-failure that closes that command/)
+    assert.match(t, /`not-configured`/)
+  })
+
+  it('el reviewer consume el ledger prearmado cerrado y el affected-set como scope sin re-verificación dentro del scope', () => {
+    const t = readAgent('reviewer')
+    assert.match(t, /prearmed, closed Validation Ledger/)
+    assert.match(t, /Review scope is the `affected-set` supplied by `@orchestrator`/)
+    assert.match(t, /consume it as-is/)
+    assert.match(t, /Do not request a re-delegation to `@tester`/)
+    assert.match(t, /`not-configured` entry is a registered non-failure/)
+    assert.match(t, /missing \*\*context\*\*/)
+  })
+
+  it('el orchestrator arma/verifica el cierre del ledger antes de delegar el review', () => {
+    const t = readAgent('orchestrator')
+    assert.match(t, /arm\/verify the prearmed Validation Ledger is closed/)
+    assert.match(t, /do NOT delegate the review — stop at `@tester`/)
+    assert.match(t, /`not-configured` entry closes that command/)
+  })
+
+  it('el memory-keeper declara el cierre paralelo sin depender del archive y Optional Draft solo a pedido', () => {
+    const t = readAgent('memory-keeper')
+    assert.match(t, /in parallel/)
+    assert.match(t, /never need the archive's output/)
+    assert.match(t, /Called only when the user explicitly requests an optional draft/)
+  })
+})

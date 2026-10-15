@@ -6,8 +6,9 @@ Ruteo nativo de instalación de assets (`skills`, `agents`, `commands`) por host
 de destino por host con directorio y convención de nombre, la cobertura de soporte por host y la
 exclusión de assets no verificados, el aviso no bloqueante por asset no soportado, el manifiesto veraz y
 acumulativo, el default `opencode` no destructivo, la consistencia del catálogo de skills, la frontera de
-`.agents/skills` como punto de lectura compartido, la semántica de `--agent` y la exclusión de la
-configuración MCP específica de host (con la excepción del MCP de workspace de `antigravity`).
+`.agents/skills` como punto de lectura compartido, la semántica de `--agent`, la exclusión de la
+configuración MCP específica de host (con la excepción del MCP de workspace de `antigravity`) y la
+compresión por defecto con uso condicional host-scoped y compuerta de medición.
 
 ## Requirements
 
@@ -181,7 +182,7 @@ directorio, el descubrimiento compartido es un efecto del host y el CLI NO SHALL
 El CLI NO SHALL generar ni transformar configuración MCP específica de host como parte del ruteo
 multi-agente, con **dos excepciones**: para `agent: antigravity` el CLI SHALL generar o mergear el MCP
 de workspace `.agents/mcp_config.json` (ver `antigravity-support`), y para `agent: commandcode` el CLI
-SHALL generar o mergear el MCP de proyecto `.mcp.json` (ver `commandcode-support`). `.vscode/mcp.json`
+SHALL generar o mergear el MCP de proyecto `.mcp.json` (ver `commandcode-support`). El MCP de compresión (caveman) y el de memoria propia se configuran como servidores MCP del host por defecto (`opencode.json` para `opencode` y el de workspace para `antigravity`); no habilitan configuración MCP de host nueva para el resto de los hosts. `.vscode/mcp.json`
 (VS Code) SHALL quedar fuera de alcance. El CLI NO SHALL borrar ni pisar configuración MCP preexistente
 del usuario.
 
@@ -202,3 +203,34 @@ del usuario.
 - **WHEN** se instala con `agent: commandcode` y `--project`
 - **THEN** el CLI crea o actualiza `.mcp.json`
 - **AND** el contenido preexistente de `mcpServers` no se pisa
+
+#### Scenario: caveman no habilita MCP de host nuevo fuera de la excepción
+
+- **WHEN** se instala con el binario de caveman disponible en un host distinto de `opencode` y `antigravity`
+- **THEN** el CLI conserva el MCP de compresión como comportamiento por defecto del host permitido
+- **AND** NO SHALL crear configuración MCP de host nueva para ese otro host
+
+### Requirement: Compresión por defecto con uso condicional host-scoped y compuerta de medición
+
+El CLI SHALL configurar el MCP de compresión (caveman) por defecto cuando su binario esté disponible, como configuración del host (`opencode.json` para `opencode`, `.agents/mcp_config.json` para `antigravity`), sin introducir configuración MCP de host fuera de esa excepción. La directiva de uso de la compresión SHALL ser condicional al host: SHALL materializarse sólo en superficies de un host cuya configuración MCP incluya la tool de compresión y NO SHALL escribirse en texto compartido entre hosts. El default SHALL ser reversible a opt-in mediante una compuerta de medición: si el consumo neto medido con `ancleto stats` no desciende en la ventana de observación definida, el default SHALL volver a opt-in.
+
+#### Scenario: Default cuando el binario está disponible
+
+- **WHEN** se instala y el binario de caveman está disponible en el sistema
+- **THEN** el CLI configura el MCP de compresión para el host
+- **AND** no agrega configuración MCP de host fuera de `opencode`/`antigravity`
+
+#### Scenario: La directiva de uso no se filtra a texto compartido
+
+- **WHEN** se instala para un host que no incluye la tool de compresión
+- **THEN** ningún asset compartido entre hosts contiene la directiva de uso de la compresión
+
+#### Scenario: La directiva vive sólo donde existe la tool
+
+- **WHEN** se instala para un host cuya configuración MCP incluye la tool de compresión
+- **THEN** la directiva de uso se materializa sólo en las superficies de ese host
+
+#### Scenario: La compuerta revierte a opt-in
+
+- **WHEN** la medición con `ancleto stats` no observa un descenso neto en la ventana definida
+- **THEN** el default de caveman se revierte a opt-in

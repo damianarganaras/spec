@@ -88,11 +88,11 @@ Source: {DOCS_URL | "Web search: {query}" | "Internal knowledge base"}
 
 ### Requirement: Verification
 
-- REQ-V-001: The project SHALL compile without TypeScript errors
+- REQ-V-001: The project SHALL pass its declared typecheck/compile command
 - REQ-V-002: The project SHALL pass all tests after the migration
 - REQ-V-003: The project SHALL pass lint without errors
 
-{REQ-V-003 only if the lint script exists}
+{Emit each REQ-V-* only when the project declares its command in `PRODUCT.md` → `## Project Commands`; skip and record the omission otherwise — never assume a runner, linter, formatter or typechecker}
 
 ### Requirement: Analysis coverage
 
@@ -169,33 +169,19 @@ Source: {DOCS_URL | "Web search: {query}" | "Internal knowledge base"}
 
 ## Phase 6: Verification
 
-- [ ] **T-V-001** TypeScript compiles:
-  ```bash
-  npx tsc --noEmit
-  # Nx monorepos: npx nx affected --target=typecheck
-  ```
-- [ ] **T-V-002** Build passes:
-  ```bash
-  npm run build
-  # Nx monorepos: npx nx affected --target=build
-  ```
-- [ ] **T-V-003** Lint passes:
-  ```bash
-  npm run lint
-  # Nx monorepos: npx nx affected:lint
-  ```
-- [ ] **T-V-004** Tests pass:
-  ```bash
-  npm test
-  # Nx monorepos: npx nx affected --target=test
-  ```
-- [ ] **T-V-005** CI tests:
-  ```bash
-  npm run test:ci
-  ```
+> Each verification step runs the command the project declares in `PRODUCT.md` → `## Project Commands`.
+> Emit a step only when the project declares its command; skip and record the omission otherwise —
+> never assume a runner, linter, formatter or typechecker (Nx monorepos: only when declared, run the
+> declared target).
+
+- [ ] **T-V-001** Typecheck/compile passes (only if the project declares a typecheck command)
+- [ ] **T-V-002** Build passes (only if the project declares a build command)
+- [ ] **T-V-003** Lint passes (using the declared lint command)
+- [ ] **T-V-004** Tests pass (using the declared test command)
+- [ ] **T-V-005** CI tests pass (only if the project declares a CI test command)
 - [ ] **T-V-900** Coverage: confirm file counts; classify `UNSURE_MATCHES[]`.
 
-{T-V-002..T-V-005 only when the script exists}
+{Each T-V-* only when the project declares its command in `PRODUCT.md` → `## Project Commands`}
 
 ````
 

@@ -20,7 +20,7 @@ Perform a comprehensive security audit of the project.
 Determine if the user wants to review a specific file, recent changes, or the whole project. 
 
 ### 2. Basic Static Analysis
-Run existing built-in static analysis tools (e.g., `npm run lint`) to catch obvious security issues caught by linters.
+Run the project's declared static-analysis/lint command (see `PRODUCT.md` → `## Project Commands`) to catch obvious security issues caught by linters. If the project declares no such command, report `not-configured` — do not assume a linter.
 
 ### 3. Agent Manual Review
 Actively search for vulnerabilities in the target scope using file viewing and grep tools. Look for:

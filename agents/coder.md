@@ -92,7 +92,7 @@ If the runtime is read-only or plan-only:
 2. Read only the minimum approved inputs needed for the task
 3. Inspect the relevant current implementation in the codebase
 4. Implement the smallest correct change
-5. Keep modified production files compatible with the repository's Prettier rules using `write` or `edit`; do not run formatting commands. Leave format check, lint, tests, affected validation, and diagnostics to `@tester` after all task edits are complete.
+5. Keep modified production files compatible with the project's declared formatter (if any) using `write` or `edit`; do not run formatting commands. If the project declares no formatter, the format check is `not-configured`. Leave format check, lint, tests, affected validation, and diagnostics to `@tester` after all task edits are complete.
 6. Return a short structured summary
 
 ## Repository Rules
@@ -114,7 +114,7 @@ Follow the conventions in:
 - If solving the task would require changing shared helpers, shared utils, or broader logic used by other areas, escalate back to `@orchestrator` unless that broader scope was explicitly approved
 - If an implementation choice would materially change the technical approach compared to the approved change inputs, escalate instead of guessing
 - Do not validate by browsing external, staging, or production URLs
-- Keep all created or modified files consistent with the project's Prettier formatting and relevant ESLint rules
+- Keep all created or modified files consistent with the project's declared formatter and linter (see `PRODUCT.md` → `## Project Commands`); if the project declares no formatter, the format check is `not-configured`
 - Limit formatting and lint-related fixes to the files you changed
 - Do not expand scope to clean up unrelated lint or formatting issues elsewhere in the repo
 - Read only relevant files; avoid unnecessary codebase exploration

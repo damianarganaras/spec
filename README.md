@@ -327,7 +327,7 @@ cd tu-proyecto
 ancleto init              # Crea .ancletorc, aspec/, AGENTS.md y PRODUCT.md
 ```
 
-`init` **no pisa** lo que ya existe: si tu repo tiene su propio `AGENTS.md` o `PRODUCT.md`, los respeta (solo fusiona los bloques `<!-- LOCKED -->` del template). Además materializa `.ancleto/working-context.md` con tus reglas activas cuando hay memoria — es el bloque que el orquestador inyecta al arrancar.
+`init` **no pisa** lo que ya existe: si tu repo tiene su propio `AGENTS.md` o `PRODUCT.md`, los respeta (solo fusiona los bloques `<!-- LOCKED -->` del template). Además materializa `.ancleto/working-context.md` con tus reglas activas y, desde el día cero, con el bloque `<ProjectTopology>` —aunque todavía no exista memoria— es el bloque que el orquestador inyecta al arrancar.
 
 Si el repo trae una carpeta legacy `openspec/`, `init`, `install --project` y `upgrade` la detectan y migran su contenido a `aspec/` **por copia**, sin prompts, cuando `aspec/` no existe o sólo tiene el scaffold: conservan `openspec/` como backup y escriben el marcador `aspec/.migrated-from-openspec`. Si `aspec/` ya tiene contenido real propio no fusionan las carpetas y avisan para revisión manual, y si el marcador ya existe la corrida es un no-op silencioso.
 
@@ -432,7 +432,7 @@ Funciona en tres piezas que comparten el mismo archivo:
 
 Cada entrada tiene un `scope`: `project` (default), `feature` o `task`. Solo las **reglas** activas con scope `project` entran en `<ProjectMemoryRules>`; las **decisiones** con scope `project` se recuperan reactivamente con `searchMemory` y no se inyectan de forma proactiva. El orquestador inyecta los bloques `<ProjectMemoryRules>` y `<ProjectTopology>` en el system prompt de tu agente desde el día cero —incluso sin reglas previas— para que no repita errores ya resueltos.
 
-> El mismo motor se puede consultar a mano desde la terminal: `ancleto memory context --scope project`. El archivo `.ancleto/working-context.md` que lee el orquestador se regenera en los lifecycle points (`init`, `install --project`, `upgrade` y `memory context --out`) y también **on-write**, cuando una escritura MCP lo altera: al registrar una `rule` con scope `project` o al superseder una `memory_key` existente (sin importar `type` ni `scope`).
+> El mismo motor se puede consultar a mano desde la terminal: `ancleto memory context --scope project`. El archivo `.ancleto/working-context.md` que lee el orquestador se regenera en los lifecycle points (`init`, `install --project`, `upgrade` y `memory context --out`) —desde el día cero, con el bloque `<ProjectTopology>` aunque todavía no exista memoria— y también **on-write**, cuando una escritura MCP lo altera: al registrar una `rule` con scope `project` o al superseder una `memory_key` existente (sin importar `type` ni `scope`).
 
 **Dos memorias, sin mezcla.** La memoria **del repositorio** (esta, `.ancleto/memory.db`) guarda reglas y decisiones del proyecto y se comparte con el equipo. Si el runtime expone además una memoria **del agente** (por ejemplo engram, habilitable con `--with-engram`), esa guarda notas de sesión, no del repo. **Una entrada vive en una sola**: si un futuro agente del equipo debería encontrarla, va al repo.
 

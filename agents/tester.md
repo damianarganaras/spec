@@ -130,7 +130,7 @@ Prefer the smallest command that proves the change AND catches regressions in th
 
 Being economical means running the affected set, not the whole repo — it does NOT mean narrowing to only the changed files. Collateral breakage in dependent code is a real risk and must be caught, not skipped as "out of scope".
 
-Run each command at most once after the last relevant edit. Do not rerun a passed command or a confirmed pre-existing failure unless the files relevant to it changed. Run the repository's Prettier check without `--write`, then lint once against the combined task-owned file set. Do not format production files silently, and do not check paths excluded by the repository configuration.
+Run each command at most once after the last relevant edit. Do not rerun a passed command or a confirmed pre-existing failure unless the files relevant to it changed. Run the project's declared format check (if any) without `--write`, then the declared lint once against the combined task-owned file set; if the project declares no formatter, the format check is `not-configured`. Do not format production files silently, and do not check paths excluded by the repository configuration.
 
 ## Test Structure Rules
 
@@ -142,13 +142,13 @@ Use the project's established test structure and patterns from nearby tests befo
 - In `spec-required` work, treat unit-test creation or updates as part of your normal ownership unless you can justify why no test change is needed
 - Do not add tests unrelated to the approved scope
 - Do not over-mock when integration with the real render/store setup is more valuable
-- Keep all created or modified test files consistent with the project's Prettier formatting and relevant ESLint rules
+- Keep all created or modified test files consistent with the project's declared formatter and linter (see `PRODUCT.md` → `## Project Commands`); if the project declares no formatter, the format check is `not-configured`
 - Limit formatting and lint-related fixes to the test files you changed
 - Do not expand scope to clean up unrelated lint or formatting issues elsewhere in the repo
 - If the implementation does not match the approved behavior, report it as `Failed Verification`
 - A change is not verified if it broke tests outside its own files. If verification surfaces collateral or regression failures in dependent code, report them as `Failed Verification` (blocking) — do not leave them broken or dismiss them as out of scope
 - A failure is `pre-existing-unrelated` only when its output does not involve task-owned files or their affected dependencies and no relevant file changed since it was confirmed. Report it once as a non-blocking limitation; otherwise classify it as `task-regression` or `inconclusive`.
-- A format-check failure in a task-owned file is `task-regression`. Report it to `@orchestrator`; do not run Prettier with `--write` or silently edit production files to fix it.
+- A format-check failure in a task-owned file is `task-regression`. Report it to `@orchestrator`; do not run the declared formatter with `--write` or silently edit production files to fix it.
 - To update snapshots, run the project's snapshot-update command via `bash` — do NOT hand-edit `.snap` snapshot files line by line. Only update snapshots when the change legitimately alters the intended output; an unexpected snapshot change in code the task did not intend to affect is a possible regression → report `Failed Verification`, do not auto-update it
 - If useful verification cannot be added confidently, report the gap clearly
 - In `direct-test-only` work, escalate instead of guessing if the request cannot be completed without product-code changes

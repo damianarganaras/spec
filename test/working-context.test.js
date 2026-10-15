@@ -8,10 +8,12 @@ import { createMemoryToolHandlers, createMemoryToolkit } from '../src/core/memor
 import { createMemoryServer } from '../src/core/memory/mcp-server.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
 import {
+  renderWorkingContextBlock,
   resolveMemoryProjectRoot,
   shouldRefreshWorkingContext,
   workingContextPath,
-  writeWorkingContext
+  writeWorkingContext,
+  writeWorkingContextBlock
 } from '../src/core/memory/working-context.js'
 
 // Patron de test/memory-engine.test.js: node:test + mkdtempSync + DB temporal.
@@ -117,6 +119,51 @@ describe('working-context — writeWorkingContext', () => {
       } finally {
         engine.close()
       }
+    })
+  })
+})
+
+describe('working-context — render compartido y escritura (día-cero)', () => {
+  it('con engine el render delega en buildWorkingContext (mismo bloque)', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'rc-rule', type: 'rule', scope: 'project', content: 'regla compartida' })
+        assert.equal(
+          renderWorkingContextBlock(engine, dir),
+          engine.buildWorkingContext('project', undefined, dir)
+        )
+        assert.match(renderWorkingContextBlock(engine, dir), /\[rc-rule\] regla compartida/)
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('sin engine es día-cero: solo topología, o null sin mapa (sin contenido ficticio)', () => {
+    withProject((dir) => {
+      assert.equal(renderWorkingContextBlock(null, dir), null, 'sin discovery-map no hay bloque')
+      writeFileSync(join(dir, '.discovery-map.json'), JSON.stringify({
+        last_updated: '2020-01-01T00:00:00.000Z',
+        total_files: 7,
+        tree_summary: { src: 5, test: 2 },
+        root_files: []
+      }) + '\n')
+      const block = renderWorkingContextBlock(null, dir)
+      assert.match(block, /^<ProjectTopology>/)
+      assert.match(block, /Total files: 7/)
+      assert.doesNotMatch(block, /<ProjectMemoryRules>/)
+    })
+  })
+
+  it('writeWorkingContextBlock persiste el bloque con salto final y null -> vacío', () => {
+    withProject((dir) => {
+      const ret = writeWorkingContextBlock(dir, '<ProjectTopology>\nTotal files: 1\n</ProjectTopology>')
+      assert.equal(ret, workingContextPath(dir))
+      assert.equal(readFileSync(ret, 'utf8').endsWith('\n'), true)
+      assert.equal(writeWorkingContextBlock(dir, null), null)
+      assert.equal(readFileSync(workingContextPath(dir), 'utf8'), '')
+      assert.equal(writeWorkingContextBlock(null, 'x'), null)
     })
   })
 })

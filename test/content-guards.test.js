@@ -37,29 +37,28 @@ const CONTENT_FILES = [
 ]
 
 describe('content guards — idioma de artefactos', () => {
-  it('spec-writer escribe contenido en el idioma de la conversacion, keywords literales', () => {
+  it('spec-writer referencia la fuente unica del idioma (no redeclara el literal)', () => {
     const t = readFileSync(join(ROOT, 'agents', 'spec-writer.md'), 'utf8')
-    assert.match(t, /conversation language/)
-    assert.match(t, /MUST NOT be translated/)
-    assert.match(t, /WHEN`\/`THEN`\/`AND`/)
+    assert.match(t, /LOCKED: artifacts-language/)
+    assert.match(t, /AGENTS\.md/)
     assert.doesNotMatch(t, /All artifact content MUST be written in English/, 'no debe quedar la regla vieja')
   })
 
-  it('documenter escribe contenido en el idioma de la conversacion', () => {
+  it('documenter referencia la fuente unica del idioma (no redeclara el literal)', () => {
     const t = readFileSync(join(ROOT, 'agents', 'documenter.md'), 'utf8')
-    assert.match(t, /conversation language/)
-    assert.match(t, /MUST NOT be translated/)
+    assert.match(t, /LOCKED: artifacts-language/)
+    assert.match(t, /AGENTS\.md/)
     assert.doesNotMatch(t, /spec artifacts are written in English/, 'no debe quedar la regla vieja')
   })
 
-  it('las skills que escriben artefactos declaran el idioma configurable', () => {
+  it('las skills que escriben artefactos referencian la fuente unica del idioma', () => {
     for (const s of ARTIFACT_SKILLS) {
       const p = join(ROOT, 'skills', s, 'SKILL.md')
       assert.ok(existsSync(p), `falta ${s}`)
       const t = readFileSync(p, 'utf8')
       assert.match(t, /\*\*Artifacts language\*\*/, `${s} sin linea de idioma`)
-      assert.match(t, /conversation language/, `${s} sin idioma de conversacion`)
-      assert.match(t, /MUST NOT be translated/, `${s} sin regla de keywords literales`)
+      assert.match(t, /LOCKED: artifacts-language/, `${s} no referencia la fuente unica`)
+      assert.match(t, /AGENTS\.md/, `${s} no referencia AGENTS.md`)
       assert.doesNotMatch(t, /write every artifact in English/, `${s} con la regla vieja`)
     }
   })
@@ -221,18 +220,26 @@ describe('content guards - tope de output y destilado del retorno (issues #25 y 
 })
 
 describe('content guards - frescura del seed al archivar (issue #17)', () => {
-  it('la skill ancleto-archive chequea STALE y ofrece regenerar sin automatico', () => {
-    const t = readFileSync(join(ROOT, 'skills', 'ancleto-archive', 'SKILL.md'), 'utf8')
-    assert.match(t, /ancleto discovery --check/)
-    assert.match(t, /Never regenerate automatically/)
-    assert.match(t, /If the user declines, continue the archive/)
+  it('templates/AGENTS.md es la fuente unica de la frescura del seed', () => {
+    const t = readFileSync(join(ROOT, 'templates', 'AGENTS.md'), 'utf8')
+    assert.match(t, /<!-- LOCKED: seed-freshness -->/)
+    assert.match(t, /impact: material/)
+    assert.match(t, /impact: minor/)
+    assert.match(t, /nunca de forma automática/i)
   })
 
-  it('el orchestrator chequea la frescura del seed antes de archivar', () => {
+  it('la skill ancleto-archive delega la regla a su fuente unica y corre el check', () => {
+    const t = readFileSync(join(ROOT, 'skills', 'ancleto-archive', 'SKILL.md'), 'utf8')
+    assert.match(t, /ancleto discovery --check/)
+    assert.match(t, /LOCKED: seed-freshness/)
+    assert.match(t, /AGENTS\.md/)
+  })
+
+  it('el orchestrator delega la frescura del seed a la fuente unica', () => {
     const t = readFileSync(join(ROOT, 'agents', 'orchestrator.md'), 'utf8')
     assert.match(t, /Check the seed freshness before closing/)
-    assert.match(t, /state is `STALE` with `impact: material`/)
-    assert.match(t, /with `impact: minor`, continue the archive normally/)
+    assert.match(t, /LOCKED: seed-freshness/)
+    assert.match(t, /AGENTS\.md/)
   })
 })
 
@@ -282,18 +289,17 @@ describe('content guards - telemetria de tokens (issue #27)', () => {
 })
 
 describe('content guards - seed: sin oferta con impact minor (Release 1)', () => {
-  it('el orchestrator no ofrece regenerar con impact minor', () => {
+  it('el orchestrator no ofrece regenerar con impact minor (tabla de estado del seed)', () => {
     const t = readFileSync(join(ROOT, 'agents', 'orchestrator.md'), 'utf8')
     assert.match(t, /`STALE` \(minor\)/)
     assert.match(t, /do not offer regeneration/)
-    assert.match(t, /state is `STALE` with `impact: material`/)
   })
 
-  it('la skill archive continua sin ofrecer con impact minor', () => {
-    const t = readFileSync(join(ROOT, 'skills', 'ancleto-archive', 'SKILL.md'), 'utf8')
-    assert.match(t, /`STALE` with `impact: minor`/)
-    assert.match(t, /continue without offering/)
-    assert.match(t, /`STALE` with `impact: material`/)
+  it('la fuente unica distingue minor de material y no regenera automatico', () => {
+    const t = readFileSync(join(ROOT, 'templates', 'AGENTS.md'), 'utf8')
+    assert.match(t, /impact: minor/)
+    assert.match(t, /impact: material/)
+    assert.match(t, /nunca de forma automática/i)
   })
 
   it('la skill technical-discovery distingue minor de material', () => {
@@ -417,7 +423,7 @@ describe('content guards - garantía del proposal vs modelo real (reviewer-guara
     )
   })
 
-  it('el orchestrator trata GUARANTEE NOT SUSTAINED como bloqueo y lo preserva en el destilado y la salida esperada', () => {
+  it('el orchestrator trata GUARANTEE NOT SUSTAINED como bloqueo y delega el contrato de salida', () => {
     const t = readAgent('orchestrator')
     assert.match(
       t,
@@ -425,6 +431,147 @@ describe('content guards - garantía del proposal vs modelo real (reviewer-guara
     )
     assert.match(t, /do not advance toward archive while it is present/)
     assert.match(t, /flags \(`SPEC UPDATE RECOMMENDED`, `SEED_ACTION_REQUIRED`, `GUARANTEE NOT SUSTAINED`\)/)
-    assert.match(t, /`GUARANTEE NOT SUSTAINED` flag when the proposal's guarantee does not hold under the real model/)
+    assert.match(t, /### Expected output — owned by each agent/)
+  })
+})
+
+describe('content guards - dedupe del orquestador (token-budget)', () => {
+  it('Runtime Safety tiene un único hogar y el Workflow sólo lo referencia', () => {
+    const t = readFileSync(join(ROOT, 'agents', 'orchestrator.md'), 'utf8')
+    const declarations = t.match(/runtime environment indicates plan mode, read-only mode/g) || []
+    assert.equal(declarations.length, 1, 'la regla de plan/read-only debe declararse una sola vez')
+    assert.match(t, /apply the \*\*Runtime Safety\*\* rule declared once in Enforcement Rules/)
+  })
+})
+
+describe('content guards - compresión host-scoped (token-budget)', () => {
+  it('la directiva existe en su fuente y se materializa sólo por la compuerta de compresión', () => {
+    const cli = readFileSync(join(ROOT, 'src', 'cli', 'index.js'), 'utf8')
+    // Positivo: donde hay tool, hay instrucción — la directiva existe en su fuente.
+    assert.match(cli, /Compresión de contexto \(tool del host\)/)
+    assert.match(cli, /caveman_\*/)
+    // Acotada a los hosts de la excepción vigente (opencode/antigravity)...
+    assert.match(cli, /COMPRESSION_HOSTS = new Set\(\['opencode', 'antigravity'\]\)/)
+    // ...y con la compresión del tramo como única compuerta de materialización.
+    assert.match(cli, /if \(compression[^\n]*\)[^\n]*CAVEMAN_USAGE_NOTE/)
+  })
+
+  it('ningún asset compartido entre hosts contiene la directiva de compresión', () => {
+    const shared = [
+      join(ROOT, 'AGENTS.md'),
+      ...mdFiles(join(ROOT, 'templates')),
+      ...mdFiles(join(ROOT, 'agents')),
+      ...mdFiles(join(ROOT, 'skills')),
+      ...mdFiles(join(ROOT, 'commands'))
+    ]
+    for (const f of shared) {
+      const rel = f.replace(ROOT, '')
+      const t = readFileSync(f, 'utf8')
+      assert.doesNotMatch(t, /caveman_\*/, `directiva de compresión filtrada a ${rel}`)
+      assert.doesNotMatch(t, /Compresión de contexto \(tool del host\)/, `directiva de compresión filtrada a ${rel}`)
+    }
+  })
+})
+
+describe('content guards - contrato de validaciones declarativo', () => {
+  const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
+  const read = (...parts) => readFileSync(join(ROOT, ...parts), 'utf8')
+
+  it('templates/AGENTS.md declara la política declarativa en un bloque LOCKED', () => {
+    const t = read('templates', 'AGENTS.md')
+    assert.match(t, /<!-- LOCKED: validation-commands -->/)
+    assert.match(t, /<!-- \/LOCKED: validation-commands -->/)
+    assert.match(t, /PRODUCT\.md/)
+    assert.match(t, /## Project Commands/)
+    assert.match(t, /not-configured/)
+    assert.match(t, /nunca se\s+inventa/i)
+  })
+
+  it('templates/AGENTS.md no fija un typecheck ni un formatter concreto', () => {
+    const t = read('templates', 'AGENTS.md')
+    assert.doesNotMatch(t, /npm run typecheck/)
+    assert.doesNotMatch(t, /npx tsc --noEmit/)
+    assert.doesNotMatch(t, /Prettier/)
+  })
+
+  it('coder y tester usan el formatter/linter declarado y no hardcodean Prettier', () => {
+    for (const name of ['coder', 'tester']) {
+      const t = readAgent(name)
+      assert.doesNotMatch(t, /Prettier/, `${name} no debe hardcodear Prettier`)
+      assert.match(t, /PRODUCT\.md/, `${name} debe referenciar los comandos declarados`)
+      assert.match(t, /## Project Commands/, `${name} debe referenciar ## Project Commands`)
+    }
+  })
+
+  it('los templates de upgrade referencian los comandos declarados y no fijan comandos npm', () => {
+    const t = read('skills', 'ancleto-upgrade', 'references', 'templates.md')
+    assert.match(t, /PRODUCT\.md/)
+    assert.match(t, /## Project Commands/)
+    assert.doesNotMatch(t, /npx tsc --noEmit/)
+    assert.doesNotMatch(t, /npm run build/)
+    assert.doesNotMatch(t, /npm run lint/)
+    assert.doesNotMatch(t, /npm run test:ci/)
+    assert.doesNotMatch(t, /npm test/)
+  })
+
+  it('la skill ancleto-pr usa el comando de test declarado y no fija npm test', () => {
+    const t = read('skills', 'ancleto-pr', 'SKILL.md')
+    assert.doesNotMatch(t, /npm test/)
+    assert.match(t, /PRODUCT\.md/)
+    assert.match(t, /## Project Commands/)
+  })
+
+  it('PRODUCT.md alinea las validaciones con ## Project Commands sin typecheck ni nota stale', () => {
+    const t = read('PRODUCT.md')
+    assert.match(t, /## Project Commands/)
+    assert.doesNotMatch(t, /npm run typecheck/)
+    assert.doesNotMatch(t, /npx tsc --noEmit/)
+    assert.doesNotMatch(t, /no define esos scripts/i)
+  })
+
+  it('security y upgrade (SKILL) referencian los comandos declarados y no fijan comandos concretos', () => {
+    const sec = read('skills', 'ancleto-security', 'SKILL.md')
+    assert.doesNotMatch(sec, /npm run lint/)
+    assert.doesNotMatch(sec, /Prettier|ESLint/)
+    assert.match(sec, /PRODUCT\.md/)
+    assert.match(sec, /## Project Commands/)
+    const up = read('skills', 'ancleto-upgrade', 'SKILL.md')
+    assert.doesNotMatch(up, /build\/lint\/test\/test:ci\/typecheck/)
+    assert.match(up, /PRODUCT\.md/)
+    assert.match(up, /## Project Commands/)
+  })
+
+  it('templates/AGENTS.md acota la invocación de la suite (rutas explícitas, nunca node --test pelado)', () => {
+    const t = read('templates', 'AGENTS.md')
+    assert.match(t, /rutas explícitas/i)
+    assert.match(t, /node --test/)
+    assert.match(t, /sin acotar/i)
+  })
+
+  it('upgrade templates.md condiciona typecheck y la variante Nx a que el proyecto los declare', () => {
+    const t = read('skills', 'ancleto-upgrade', 'references', 'templates.md')
+    assert.match(t, /only if the project declares a typecheck command/)
+    assert.match(t, /only when declared/i)
+    assert.match(t, /declared target/i)
+    assert.doesNotMatch(t, /npx nx affected/)
+  })
+
+  it('PRODUCT.md no duplica la lista de validaciones ni arrastra un conteo stale de la suite', () => {
+    const t = read('PRODUCT.md')
+    assert.match(t, /## Project Commands/)
+    // El conteo de la suite no debe fijarse (evita staleness respecto de test/*.test.js).
+    assert.doesNotMatch(t, /\d+\s+archivos de suite/i)
+    // La seccion de guardrails referencia la fuente unica y NO reenumera comandos.
+    const guardrails = t.split('## Critical Files & Guardrails')[1].split(/\n## /)[0]
+    assert.match(guardrails, /## Project Commands/)
+    assert.match(guardrails, /validation-commands/)
+    assert.doesNotMatch(guardrails, /npm run lint|npm test/)
+  })
+
+  it('tester conserva la prioridad de verificación y el affected-set (dependientes)', () => {
+    const t = readAgent('tester')
+    assert.match(t, /Verification priority/)
+    assert.match(t, /code the change AFFECTS/)
+    assert.match(t, /affected set/)
   })
 })

@@ -19,7 +19,7 @@ metadata:
 
 # ancleto-upgrade
 
-**Artifacts language**: write artifact content in the user's conversation language (or the project's configured `language` in `.ancletorc`). Keywords (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`, `ADDED/MODIFIED/REMOVED/RENAMED Requirements`) and file/directory names are literal and MUST NOT be translated.
+**Artifacts language**: follow the `LOCKED: artifacts-language` block in `AGENTS.md` (single source of truth for artifact language and literal keywords).
 
 Generate an aspec change migrating any library/runtime to a new major version; never edit code.
 
@@ -284,7 +284,7 @@ Read `references/templates.md`; write in order `proposal.md`, `specs/{LIBRARY_SL
 Library: {LIBRARY} {CURRENT_VERSION} → v{TARGET_VERSION} | Docs: {URL(s) | "None found — VERSION_PATTERNS only"}
 Patterns: {N} version (high) + {N} semantic (docs) | Analysis: {source_files_scanned} source / {test_files_scanned} tests / {config_files_scanned} config / {total_matches} matches
 Affected: {N} package.json, {N} config, {N} code, {N} tests | Breaking changes: {id/severity/description/occurrences/confidence | "None detected"}
-Low confidence: {file:line + reason | "None"} | Scripts: build/lint/test/test:ci/typecheck yes|no
+Low confidence: {file:line + reason | "None"} | Validation commands: {the project's declared commands from `PRODUCT.md` → `## Project Commands` | "not-configured"}
 Artifacts: proposal.md ✅ | specs/{LIBRARY_SLUG}{TARGET_VERSION}.md ✅ | tasks.md ✅ ({N} tasks, 6 phases) | design.md ✅
 Implement: /cleto-apply {CHANGE_NAME}
 ```

@@ -67,7 +67,8 @@ When reporting results:
 - state whether they passed or failed
 - summarize any failures or gaps that remain
 - clearly separate verified behavior from unverified assumptions
-- classify every command in the Validation Ledger as `passed`, `task-regression`, `pre-existing-unrelated`, or `inconclusive`
+- classify every command in the Validation Ledger as `passed`, `task-regression`, `pre-existing-unrelated`, `not-configured`, or `inconclusive`
+- return a **complete and closed** Validation Ledger for the review scope: every command relevant to it —the change's tests, the tests of the affected set, and the declared format check and lint— has an entry with a terminal classification. A `not-configured` entry (the project declares no formatter, or no such command) is a registered non-failure that closes that command, consistent with the `LOCKED: validation-commands` policy; it is not a missing entry and does not block the review
 
 ## Input Modes
 
@@ -130,6 +131,8 @@ Prefer the smallest command that proves the change AND catches regressions in th
 
 Being economical means running the affected set, not the whole repo — it does NOT mean narrowing to only the changed files. Collateral breakage in dependent code is a real risk and must be caught, not skipped as "out of scope".
 
+The affected set is the deterministic `affected-set`: the transitive closure of **dependents** on the project's import graph, seeded by the task-owned files, plus those files themselves. Compute it with the mechanism the project declares in `PRODUCT.md` → `## Project Commands`; when the project declares none, use the read-only CLI `ancleto affected [--cwd <dir>] [--json] <file...>`. Its import graph covers the static forms `import`, `import … from`, `export … from`, `require(...)` and `import(...)` over `.js/.mjs/.cjs/.ts/.tsx`, respects the project's ignores, and is reproducible: the same repository state plus the same seed yields the same set. Report the computed `affected-set` as your verification target. Non-relative specifiers (npm packages, Node builtins, and path aliases) are **external by construction**: they never generate a dependency edge and are never `inconclusive`; the read-only surface reports a **count** of them as data, not as a warning. The graph scans only the call forms `import(` and `require(` and classifies each **by its argument**, not by its content: when the argument —after spaces and comments— is a **pure string literal followed by `)`**, the call is static (category 1 if the literal is a resolvable relative, category 2 if it is non-relative); **any other argument** —a bare expression, a **literal prefix followed by an expression** (`'./x' + y`), a template with an expression, a parenthesized argument, etc.— is `inconclusive`. The classifier is **conservative by design**: when in doubt it reports `inconclusive`, never silence, and it promises nothing about dynamics it does not scan. An **unresolved relative** specifier is also `inconclusive`; do not assume any `inconclusive` case covered. To cover path aliases, the project must declare its own affected mechanism in `PRODUCT.md` → `## Project Commands`.
+
 Run each command at most once after the last relevant edit. Do not rerun a passed command or a confirmed pre-existing failure unless the files relevant to it changed. Run the project's declared format check (if any) without `--write`, then the declared lint once against the combined task-owned file set; if the project declares no formatter, the format check is `not-configured`. Do not format production files silently, and do not check paths excluded by the repository configuration.
 
 ## Test Structure Rules
@@ -161,7 +164,8 @@ After validation, return a short structured summary including:
 - tests created or updated
 - `task-owned test files`: the exact tests modified during this delegation
 - `final task-owned files`: the coder's task-owned files plus tests modified during this delegation
-- `Validation Ledger`: each command, outcome classification, and related files when it failed
+- `affected-set`: the deterministic closure of dependents (plus the files themselves) used as the verification target, together with the count of non-relative (external) specifiers reported as data and the inconclusive cases (`import(...)` / `require(...)` calls whose argument is not a pure string literal, and unresolved relatives) reported as `unresolved`
+- `Validation Ledger`: complete and closed for the review scope — each command, outcome classification (including `not-configured`), and related files when it failed
 - verification result
 - whether reclassification was required
 - failed verification items, if any

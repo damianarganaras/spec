@@ -5,8 +5,8 @@ read_when: "cómo funciona la memoria persistente, las tools del LLM, el working
 covers: [motor de memoria, tools, working-context, día-cero, procedencia source, export/import/gc]
 sources: ["src/core/memory/**"]
 sourcesSha: 5a36e6c3622e5ed4b3f411a8ad717d7d743f554a1741b0f12ce5bf7593d1b683
-generatedAt: 2026-10-15T11:49:04Z
-pluginVersion: 0.13.0
+generatedAt: 2026-10-15T17:14:12Z
+pluginVersion: 0.13.1
 skillVersion: '2.3'
 ---
 
@@ -91,6 +91,18 @@ Expuestas como subcomandos del grupo `memory`:
   No hay cambio de schema. Evidencia: `src/core/memory/engine.js` (`recordNode`),
   `src/core/memory/mcp-server.js`, `src/core/memory/tools.js`,
   `aspec/changes/archive/2026-10-05-memory-actor-provenance/`.
+
+## Cierre del pipeline: memoria en un paso (`throughput-pipeline`, archivado)
+
+El change archivado `throughput-pipeline` **no cambia el motor ni el schema** (las fuentes
+`src/core/memory/**` no cambiaron de contenido). Ajusta el **contrato de cierre** en los prompts:
+el cierre hace **como máximo una** llamada a memoria y **solo** con candidato real (Automatic
+Record); sin candidato no se invoca Optional Draft ni se pide aprobación, y User-Approved Record
+queda a pedido explícito del usuario. La paralelización `@documenter` ∥ `@memory-keeper` del
+cierre escribe en `.ancleto/memory.db` sobre superficie disjunta del archive, con la misma
+tooling (MCP `ancleto-memory`). Evidencia: `agents/memory-keeper.md`, `agents/orchestrator.md`,
+`aspec/specs/prompt-contracts/spec.md`,
+`aspec/changes/archive/2026-10-15-throughput-pipeline/`.
 
 ## Flujo
 

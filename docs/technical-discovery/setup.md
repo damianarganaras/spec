@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-10-15T11:49:04Z
-pluginVersion: 0.13.0
+generatedAt: 2026-10-15T17:14:12Z
+pluginVersion: 0.13.1
 skillVersion: '2.3'
 ---
 
@@ -30,6 +30,7 @@ ancleto export [--tar <file>]     # bundle portable + manifest.json sin rutas
 ancleto import <bundle> [--repair] | ancleto import --repair  # restaura regenerando el MCP local
 ancleto discovery --check         # estado del seed en JSON (READY/STALE/PARTIAL/MISSING) + config
 ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
+ancleto affected [--cwd <dir>] [--json] <archivo...>   # affected-set read-only (grafo de imports)
 ancleto mcp                       # servidor MCP stdio de memoria propia
 ancleto memory context [--scope X] [--out <archivo>]
 ancleto memory list [--type X] [--scope X] [--all] [--json]
@@ -47,6 +48,8 @@ Evidencia: `src/cli/index.js`, `README.md`. `install` sin `--project`/`--global`
 el proyecto actual si hay `.ancletorc`; `--global` fuerza el alcance global. `init` configura
 el MCP del host por defecto; `--no-mcp` lo evita. `--agent` acepta 8 hosts (`opencode`
 default, `claude`, `vscode`, `antigravity`, `cursor`, `roo`, `copilot`, `commandcode`).
+`ancleto affected` es **read-only**: reporta el `affected-set` por stdout, los inconclusos por
+stderr y omite la línea de externos cuando el conteo es 0 (`externalCount` sigue en `--json`).
 
 ## Configuración persistida
 
@@ -120,11 +123,13 @@ El contrato es **declarativo** (change archivado `2026-10-14-contrato-validacion
   mantiene la regla genérica de template "TypeScript strict" en "Guardrails & Conventions").
 - **Tests acotados**: para validar un subconjunto, pasar **rutas explícitas** al archivo
   relevante; **nunca** `node --test` sin acotar (descubre archivos fuera de la suite declarada).
-- **Suite**: 10 archivos (`adapters-frontmatter`, `cli`, `content-guards`, `discovery-tier`,
-  `discovery-topology`, `linter-config`, `mcp`, `memory-engine`, `tier-models`,
-  `working-context`); `content-guards` asierta **behavior** (keywords y salvaguardas), no la
-  redacción literal. La cifra de tests en verde **no se re-ejecutó** en esta regeneración
-  (el tier `minimo` excluye `test/**` del pack). Evidencia: `test/`, `aspec/specs/prompt-contracts/spec.md`.
+- **Suite**: 11 archivos (`adapters-frontmatter`, **`affected-set`**, `cli`, `content-guards`,
+  `discovery-tier`, `discovery-topology`, `linter-config`, `mcp`, `memory-engine`,
+  `tier-models`, `working-context`); `content-guards` asierta **behavior** (keywords y
+  salvaguardas), no la redacción literal. La última cifra registrada por el change
+  `throughput-pipeline` fue **492 tests / 100 suites** (no se re-ejecutó en esta regeneración:
+  el tier `minimo` excluye `test/**` del pack). Evidencia: `test/`,
+  `aspec/specs/prompt-contracts/spec.md`.
 - **CI**: `.github/workflows/publish.yml` corre `npm ci` + `npm run lint` + `node --test
   test/*.test.js` y publica a npm al pushear un tag `v*` (o `workflow_dispatch`), con canary
   no bloqueante y creación del Release. El lint bloquea el publish. Evidencia:

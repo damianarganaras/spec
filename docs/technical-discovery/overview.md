@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-10-15T11:49:04Z
-pluginVersion: 0.13.0
+generatedAt: 2026-10-15T17:14:12Z
+pluginVersion: 0.13.1
 skillVersion: '2.3'
 ---
 
@@ -28,17 +28,18 @@ CLI monolítica en ESM, sin framework externo. Capas:
 
 | Capa | Ruta | Rol |
 |---|---|---|
-| CLI / orquestación | `src/cli/index.js` | Parsing de comandos, `init`/`install`/`update`/`upgrade`, instalación por host, perfiles, export/import, discovery, memoria y sus ops, projects, stats, doctor, MCP; merge de templates; directiva de compresión host-scoped y working-context día-cero. |
+| CLI / orquestación | `src/cli/index.js` | Parsing de comandos, `init`/`install`/`update`/`upgrade`, instalación por host, perfiles, export/import, discovery, memoria y sus ops, `specs check`, **`affected`**, projects, stats, doctor, MCP; merge de templates; directiva de compresión host-scoped y working-context día-cero. |
 | UI de terminal | `src/cli/ui.js` | Banner ASCII animado y menús TTY (Raw Mode) sin librerías; helpers de color. |
 | Adaptación de frontmatter | `src/core/adapters/frontmatter.js` | **Módulo puro, dueño único** de la transformación de frontmatter por host/assetKind (incluye Antigravity y Command Code). |
 | Discovery | `src/core/discovery.js` | Mapa topológico `.discovery-map.json`. |
+| Affected-set | `src/core/affected-set.js` | Grafo de imports zero-dep; clausura transitiva de **dependientes** (determinista) para el scope de review y la verificación. |
 | Empaquetado y tiers | `src/core/repomix-tier.js` | Args de Repomix, ignores por tier, `--compress`, token budget. |
 | Selección de modelos | `src/core/tier-models.js` | Modelos por tier, resolución de tier gratis (Muse Spark/probe/env). |
 | Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (search/record/export/import/gc, `formatTopologyBlock`, procedencia `source`), `tools`, `mcp-server`, `doctor`, `working-context` (render compartido). |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 16 commands, skills nativas, 2 templates + perfil `test`). |
-| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (17 capacidades) + 1 change activo diferido + `changes/archive/` (22). |
+| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (17 capacidades) + 1 change activo diferido + `changes/archive/` (23). |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
-| Tests | `test/*.test.js` | Suite `node --test` (10 archivos; no re-ejecutada en esta regeneración). |
+| Tests | `test/*.test.js` | Suite `node --test` (11 archivos; no re-ejecutada en esta regeneración). |
 | Análisis (no runtime) | `optimizacion-de-tokens.md` | Barrido de costo de tokens del producto y matriz de decisión de la promesa "token-economy". |
 
 Entry point único: `src/cli/index.js` (`bin.ancleto` y `bin.aspec`). No hay servidor ni base
@@ -63,6 +64,10 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   passthrough con aviso.
 - **Discovery**: `--check` reporta estado del seed (`READY`/`STALE`/`PARTIAL`/`MISSING`) con
   `impact` (`none`/`minor`/`material`) y `affectedDocs`; el pack (Repomix) se genera on-demand.
+- **Affected-set**: `computeAffectedSet({ rootDir, seeds })` devuelve `{ seeds, affected,
+  unresolved, externalCount }`; `affected` es la clausura de dependientes (más las semillas)
+  sobre el grafo de imports. Se invoca read-only vía `ancleto affected` y es el scope de review
+  del ciclo SDD. Detalle: `units/discovery-engine.md`.
 - **Memoria**: 3 tools (`searchMemory`, `recordRule`, `recordDecision`) sobre SQLite + FTS5 con
   supersesión atómica por `memory_key` y **procedencia `source` runtime-owned** (`mcp:ancleto-memory`,
   `cli:import`, `runtime`, `agent:<rol>`), expuesta como MCP stdio (`ancleto mcp`). Los
@@ -105,13 +110,21 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
    para mudar proyectos entre máquinas. Con perfil `test`, el orchestrator rutea lo test-only
    al tester ampliado (`cleto-test-*`). Evidencia: `commands/`, `skills/`,
    `aspec/changes/archive/`.
-7. **Validación local** — contrato **declarativo**: se corre solo lo declarado en `PRODUCT.md` →
+7. **Cierre del change (pipeline de throughput)** — el tester computa el `affected-set` con
+   `ancleto affected` (dependientes, no solo archivos tocados) y produce un Validation Ledger
+   completo y cerrado; el orquestador arma/verifica el cierre y delega el review con el
+   `affected-set` como scope. Tras la aprobación de archive y con candidato real de memoria,
+   delega `@documenter` ∥ `@memory-keeper`; el cierre hace **como máximo una** llamada a
+   memoria. Evidencia: `agents/orchestrator.md`, `agents/tester.md`, `agents/reviewer.md`,
+   `aspec/specs/prompt-contracts/spec.md`, `aspec/specs/review/spec.md`,
+   `aspec/changes/archive/2026-10-15-throughput-pipeline/`.
+8. **Validación local** — contrato **declarativo**: se corre solo lo declarado en `PRODUCT.md` →
    `## Project Commands` (aquí `npm run lint` y `npm test`). Evidencia: `AGENTS.md`
    (`LOCKED: validation-commands`), `PRODUCT.md`, `package.json`.
 
 ## Estado del repositorio
 
-Versión `0.13.0` en rama `development` (`CHANGELOG.md` cubre hasta `0.12.1`). Dogfooding
+Versión `0.13.1` en rama `development` (`CHANGELOG.md` cubre hasta `0.12.1`). Dogfooding
 histórico: el framework fue inicializado sobre este repo; este checkout **sí materializa
 `.ancletorc` y `.opencode/`** (ambos gitignored, no versionados) y persiste `AGENTS.md`,
 `PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier resuelto es `minimo` vía

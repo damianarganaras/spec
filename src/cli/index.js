@@ -14,6 +14,7 @@ import { writeWorkingContext, writeWorkingContextBlock, renderWorkingContextBloc
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
+import { computeAffectedSet } from '../core/affected-set.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
 import { tierModels, gratisModel, envGratisModel, isKnownGratisModel, MUSE_SPARK_MODEL, GRATIS_FALLBACK_MODEL } from '../core/tier-models.js'
@@ -59,6 +60,10 @@ Uso:
   ancleto specs check [--change <name>] [--json]
                                    Valida keywords canonicos (### Requirement:, WHEN, THEN)
                                    en aspec/specs y, con --change, en los deltas del change
+  ancleto affected [--cwd <dir>] [--json] <archivo...>
+                                   Computa el affected-set (clausura de dependientes por el grafo
+                                   de imports) sembrado por los archivos dados (read-only; reporta
+                                   el conteo de specifiers externos no relativos como dato)
   ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
                                    Tokens por sesion de opencode (entrada/salida/razonamiento/cache),
                                    con rollup de subagentes y desglose por agente con --session
@@ -2598,6 +2603,50 @@ async function specsCheckCommand(args) {
   process.exit(ok ? 0 : 1)
 }
 
+// Read-only: computa el affected-set (dependientes incluidos) sin escribir nada.
+async function affectedCommand(args) {
+  const asJson = args.includes('--json')
+  const ci = args.indexOf('--cwd')
+  if (ci >= 0 && ci + 1 >= args.length) {
+    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] <archivo...>')
+    process.exit(1)
+  }
+  const cwd = ci >= 0 ? resolve(args[ci + 1]) : process.cwd()
+  const seeds = []
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--json') continue
+    if (a === '--cwd') {
+      i += 1
+      continue
+    }
+    seeds.push(a)
+  }
+  if (seeds.length === 0) {
+    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] <archivo...>')
+    process.exit(1)
+  }
+  const { seeds: normalizedSeeds, affected, unresolved, externalCount } = computeAffectedSet({
+    rootDir: cwd,
+    seeds
+  })
+  if (asJson) {
+    console.log(JSON.stringify({ seeds: normalizedSeeds, affected, unresolved, externalCount }, null, 2))
+    return
+  }
+  for (const f of affected) console.log(f)
+  // Dato informativo (no warning ni error): cuantos specifiers no relativos se
+  // trataron como externos. Va a stderr para no ensuciar la lista de stdout y
+  // se omite cuando el conteo es 0 (el campo `externalCount` sigue en --json).
+  if (externalCount > 0) {
+    console.error(`ancleto: affected: ${externalCount} specifier(s) externos (no relativos; dato informativo)`)
+  }
+  if (unresolved.length > 0) {
+    console.error(`ancleto: affected: ${unresolved.length} import(s) no resueltos (inconclusos)`)
+    for (const u of unresolved) console.error(`  ? ${u.file}: ${u.specifier}`)
+  }
+}
+
 function opencodeDbPath() {
   return process.env.ANCLETO_OPENCODE_DB || join(homedir(), '.local', 'share', 'opencode', 'opencode.db')
 }
@@ -3100,6 +3149,9 @@ switch (cmd) {
     break
   case 'specs':
     await specsCheckCommand(rest)
+    break
+  case 'affected':
+    await affectedCommand(rest)
     break
   case 'stats':
     await statsCommand(rest)

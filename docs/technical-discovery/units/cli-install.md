@@ -1,12 +1,12 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP y portabilidad"
-covers: [instalación, AGENT_TARGETS, frontmatter, merge de templates, MCP, perfiles, export/import]
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad y el subcomando read-only affected"
+covers: [instalación, AGENT_TARGETS, frontmatter, merge de templates, MCP, perfiles, export/import, affected]
 sources: ["src/cli/**", "src/core/adapters/**"]
-sourcesSha: 16c199cc8d15b0ff275d52e37ebaed34d3703d437a949f03f542cbed20c3221e
-generatedAt: 2026-10-15T11:49:04Z
-pluginVersion: 0.13.0
+sourcesSha: d215b7400aee46e57ea26ff8e065e0f7654c582e9019e6ebce2c9d457eae7d31
+generatedAt: 2026-10-15T17:14:12Z
+pluginVersion: 0.13.1
 skillVersion: '2.3'
 ---
 
@@ -23,11 +23,13 @@ Evidencia: `package.json`, `src/cli/index.js`.
 ## Superficie de comandos
 
 `install`, `update`, `upgrade`, `init`, `export` (`--tar`), `import` (`<bundle>`/`--repair`),
-`discovery` (`--check` / pack), `mcp`, `memory (context|list|doctor|export|import|gc)`,
+`discovery` (`--check` / pack), `affected` (read-only: `[--cwd <dir>] [--json] <archivo...>`),
+`mcp`, `memory (context|list|doctor|export|import|gc)`,
 `specs check`, `stats`, `projects (list|scan|prune|info|update)`, `list --projects`, `check`,
 `doctor`, `--help`, `--version`. Flags transversales: `--agent`, `--tier`, `--lang`,
 `--profile`, `--exclude`, `--no-mcp`, `--with-engram`, `--yes` (solo importación openspec).
-Evidencia: `src/cli/index.js`, `README.md`.
+Evidencia: `src/cli/index.js`, `README.md`. `affected` delega en `computeAffectedSet`
+(`src/core/affected-set.js`); es **read-only** y no forma parte del flujo de instalación.
 
 ## Modelo único de destinos por host (`AGENT_TARGETS`)
 
@@ -252,6 +254,8 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
   preserva. `installedPaths` es la unión de destinos escritos; no se borran rutas previas.
 - **Paridad `init`/`install`** en flags y tier guardado, incluido re-init sin flags.
 - **`--check` no empaqueta**: state-only sobre hashes.
+- **`ancleto affected` es read-only**: no escribe nada; delega el grafo de imports en
+  `src/core/affected-set.js` y reporta `affected`/`unresolved`/`externalCount`.
 - **Errores no bloqueantes**: binarios ausentes (MCP/git/gh/az), assets no soportados y
   divergencias de frontmatter se omiten con warning a stderr.
 - `ancleto --version` lee `package.json` en runtime (no hardcodeado).
@@ -260,7 +264,7 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `memoryExport`/`memoryImport`/`memoryGc`. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `memoryExport`/`memoryImport`/`memoryGc`, `affectedCommand`. |
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`; dueño único de la transformación. |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED (incl. `validation-commands`)/EXTENSIBLE. |

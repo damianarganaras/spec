@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-15T11:49:04Z
-pluginVersion: 0.13.0
+generatedAt: 2026-10-15T17:14:12Z
+pluginVersion: 0.13.1
 skillVersion: '2.3'
 ---
 
@@ -180,17 +180,55 @@ skillVersion: '2.3'
     principales y pregunta el modo de escritura (in-place vs `rev2`). Evidencia:
     `skills/ancleto-update/SKILL.md`, `commands/cleto-update.md`,
     `aspec/specs/artifact-update/spec.md`.
+25. **Affected-set determinístico por grafo de imports (`throughput-pipeline`, archivado 2026-10-15).**
+    El conjunto afectado es la **clausura transitiva de dependientes** sobre el grafo de imports
+    del proyecto, sembrada por los `task-owned files` e incluyendo siempre los archivos tocados;
+    es **determinístico** (mismo estado + misma semilla → mismo conjunto), **objetivo de
+    verificación** de `@tester` y **scope de review** de `@reviewer`. Vive en
+    `src/core/affected-set.js` (zero-dep) y se expone **read-only** por
+    `ancleto affected [--cwd <dir>] [--json] <archivo...>`. Cobertura: formas estáticas `import`,
+    `import … from`, `export … from`, `require(...)` e `import(...)` con literal puro, sobre
+    `.js/.mjs/.cjs/.ts/.tsx`; respeta los ignores de topología. **Taxonomía cerrada (4
+    categorías)**: (1) relativo resoluble → arista; (2) no relativo (paquete/builtin/**alias**)
+    → `externalCount`, sin arista ni `unresolved`; (3) llamada `import(...)`/`require(...)` con
+    **argumento no literal** → `unresolved`; (4) relativo irresoluble → `unresolved`. El
+    **clasificador es conservador por argumento** (no por contenido): solo un literal puro
+    seguido de `)` es estático; ante la duda reporta `unresolved`, nunca en silencio.
+    `externalCount` es **dato informativo** (conteo de ocurrencias, no de specifiers distintos),
+    no warning ni error. Si el proyecto declara su propio mecanismo de afectados en `PRODUCT.md`
+    → `## Project Commands`, ese tiene prioridad (los **alias** quedan delegados a ese mecanismo).
+    Evidencia: `src/core/affected-set.js`, `src/cli/index.js` (`affectedCommand`),
+    `aspec/specs/prompt-contracts/spec.md`, `test/affected-set.test.js`.
+26. **Pipeline de mayor throughput (`throughput-pipeline`).** Cuatro contratos de prompt reducen
+    round-trips sin degradar salvaguardas: (a) **cierre en paralelo**: tras la aprobación de
+    archive y **con candidato real**, `@orchestrator` delega `@documenter` ∥ `@memory-keeper`
+    (superficies disjuntas `aspec/` vs `.ancleto/memory.db`, sin dependencia de salida); si el
+    registro necesitara el resultado del archive, no se paraleliza y se reporta bloqueo.
+    (b) **reviewer sin rebote**: `@tester` produce un **Validation Ledger completo y cerrado** y
+    `@orchestrator` lo arma/verifica antes de delegar; `@reviewer` lo consume sin reconstruirlo
+    ni pedir re-verificación dentro del scope cubierto (`bash:false` y bloqueo por `CRITICAL`
+    preservados). (c) **affected-set** como scope (regla 25). (d) **memoria en un solo paso**:
+    como máximo **una** llamada, solo con candidato real; sin candidato no hay Optional Draft ni
+    aprobación; User-Approved Record queda a pedido explícito. Evidencia:
+    `agents/{orchestrator,tester,reviewer,memory-keeper}.md`,
+    `aspec/specs/prompt-contracts/spec.md`, `aspec/specs/review/spec.md`,
+    `aspec/changes/archive/2026-10-15-throughput-pipeline/`.
 
 ## Seed incremental (contrato del discovery)
 
 - `ancleto discovery --check` devuelve `state` + `impact`:
-  - `none` → sin cambios; `minor` → cambios no materiales (el agente trabaja y lo anota, no
+- `none` → sin cambios; `minor` → cambios no materiales (el agente trabaja y lo anota, no
     ofrece regenerar); `material` → cambió un config de runtime, entry point o apareció/desapareció
     un directorio raíz nuevo (o un archivo material como `package.json`; ej. esta regeneración:
-    `package.json` + nuevo `optimizacion-de-tokens.md`).
+    `package.json` `0.13.0`→`0.13.1` + areas `agents`/`aspec`/`src`/`test` por
+    `throughput-pipeline`).
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **solo** esos
-  documentos. El mapeo vive en `seed-map.json` (lo mantiene la skill); sin ese archivo la
-  regeneración es completa.
+    documentos. El mapeo vive en `seed-map.json` (lo mantiene la skill); sin ese archivo la
+    regeneración es completa.
+- **`affectedDocs` (seed) ≠ `affected-set` (change).** `ancleto discovery --check` devuelve
+    `affectedDocs` (documentos del seed a reescribir); `ancleto affected` computa el
+    `affected-set` (clausura de dependientes por grafo de imports). Son homónimos con semántica
+    distinta: no confundir el scope de regeneración del seed con el scope de review del change.
 - Al archivar un change, el seed puede quedar `STALE`; `AGENTS.md` (`LOCKED: seed-freshness`)
   define el procedimiento (verificar, avisar, regenerar solo con aprobación).
 - `EXPECTED_DOCS` del CLI = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`,
@@ -238,13 +276,27 @@ skillVersion: '2.3'
   transversal). Los tiers `normal`/`minimo` no fijan `tokenBudget` (solo `gratis`, 50k).
 - **Branch protection honor-based.** `AGENTS.md`/`BACKLOG.md` declaran `main` protegida, pero
   el remoto no aplica protection real (B3). Evidencia: `BACKLOG.md`.
+- **Cobertura del affected-set acotada por diseño.** El grafo cubre solo formas estáticas de
+  `import`/`require` con literal puro; los imports dinámicos no escaneados (`require?.(…)`,
+  `(require)(…)`, acceso computed `obj['require'](…)`) y los **alias de paths** quedan
+  **delegados** al mecanismo declarado por el proyecto en `PRODUCT.md` → `## Project Commands`;
+  los no relativos se cuentan como `externalCount`. El helper no lee config de alias y **no
+  promete universalidad**: no debe asumirse cobertura total. Es acotación por diseño, no un
+  hueco. Evidencia: `src/core/affected-set.js`, `aspec/specs/prompt-contracts/spec.md`.
+- **Prompts del pipeline fuera del pack.** Los contratos del pipeline de throughput viven en
+  `agents/{orchestrator,tester,reviewer,memory-keeper}.md`, que el tier `minimo` ignora
+  (`**/*.md`); el seed los describe por las specs fuente y lectura puntual, no por el pack.
+  `test/content-guards.test.js` los ancla por keywords de comportamiento.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, `mcp_config.json`,
   `.mcp.json`, CI o Azure. Las variables se nombran y su valor se omite.
-- **Deuda resuelta en 0.13.0**: (a) el contrato de validaciones dejó de hardcodear
+- **Deuda resuelta en 0.13.x**: (a) el contrato de validaciones dejó de hardcodear
   `typecheck`/`lint`/`test` y pasó a ser declarativo (`contrato-validaciones`); (b) la dedupe de
   reglas y el día-cero del working-context (`token-budget`); (c) `PRODUCT.md` ya declara
-  `## Project Commands` y alinea sus guardrails (ya no afirma que no hay scripts npm).
-  Evidencia: `CHANGELOG.md`, `aspec/changes/archive/2026-10-14-*`, `PRODUCT.md`.
+  `## Project Commands` y alinea sus guardrails (ya no afirma que no hay scripts npm);
+  (d) el pipeline de cierre redujo round-trips (`throughput-pipeline`: paralelización, ledger
+  prearmado, affected-set determinístico, memoria en un paso) sin cambiar el schema de memoria.
+  Evidencia: `CHANGELOG.md`, `aspec/changes/archive/2026-10-14-*`,
+  `aspec/changes/archive/2026-10-15-throughput-pipeline/`, `PRODUCT.md`.
 
 ## Decisiones registradas en memoria del repo
 

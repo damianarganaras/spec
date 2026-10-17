@@ -1577,6 +1577,77 @@ describe('CLI memory context día-cero (token-budget)', () => {
   })
 })
 
+describe('CLI memory import refresca el working-context', () => {
+  const entry = (over = {}) => ({
+    memory_key: 'imp-rule',
+    type: 'rule',
+    scope: 'project',
+    content: 'Regla importada por CLI.',
+    createdAt: '2020-01-01T00:00:00.000Z',
+    ...over
+  })
+
+  it('importar una rule de proyecto materializa e incluye la regla en el working-context', () => {
+    withDir((dir) => {
+      writeFileSync(join(dir, 'rules.json'), JSON.stringify([entry()]) + '\n')
+      const r = run(['memory', 'import', 'rules.json'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /import OK/)
+      const out = join(dir, '.ancleto', 'working-context.md')
+      assert.equal(existsSync(out), true)
+      const wc = readFileSync(out, 'utf8')
+      assert.match(wc, /<ProjectMemoryRules>/)
+      assert.match(wc, /\[imp-rule\] Regla importada por CLI\./)
+    })
+  })
+
+  it('importar solo una decision no proyectada no crea el working-context', () => {
+    withDir((dir) => {
+      writeFileSync(
+        join(dir, 'rules.json'),
+        JSON.stringify([entry({ memory_key: 'imp-dec', type: 'decision', scope: 'feature' })]) + '\n'
+      )
+      const r = run(['memory', 'import', 'rules.json'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /import OK/)
+      assert.equal(existsSync(join(dir, '.ancleto', 'working-context.md')), false)
+    })
+  })
+
+  it('si el refresh falla, la importación persiste y solo se avisa por stderr', () => {
+    withDir((dir) => {
+      // `.ancleto/working-context.md` como directorio: leer/escribir el artefacto falla
+      mkdirSync(join(dir, '.ancleto', 'working-context.md'), { recursive: true })
+      writeFileSync(join(dir, 'rules.json'), JSON.stringify([entry()]) + '\n')
+      const r = run(['memory', 'import', 'rules.json'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /import OK/)
+      assert.match(r.stderr, /no se pudo refrescar el working-context/)
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        assert.equal(engine.listNodes({ scope: 'project' }).length, 1, 'el nodo queda persistido')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('memory doctor reporta staleness del working-context sin alterar el exit code', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.ancleto'), { recursive: true })
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'doc-rule', type: 'rule', scope: 'project', content: 'regla sin materializar' })
+      } finally {
+        engine.close()
+      }
+      const r = run(['memory', 'doctor'], dir)
+      assert.equal(r.status, 0, 'el staleness es advisory: no rompe el exit code')
+      assert.match(r.stdout, /Working-context: ausente/)
+    })
+  })
+})
+
 describe('CLI directiva de compresión host-scoped (token-budget)', () => {
   const CAVEMAN_MCP = JSON.stringify({
     mcp: { caveman: { type: 'local', enabled: true, command: ['caveman-mcp'] } }

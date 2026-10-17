@@ -8,6 +8,8 @@ import { createMemoryToolHandlers, createMemoryToolkit } from '../src/core/memor
 import { createMemoryServer } from '../src/core/memory/mcp-server.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
 import {
+  checkWorkingContextFreshness,
+  refreshWorkingContextOnWrite,
   renderWorkingContextBlock,
   resolveMemoryProjectRoot,
   shouldRefreshWorkingContext,
@@ -164,6 +166,100 @@ describe('working-context — render compartido y escritura (día-cero)', () => 
       assert.equal(writeWorkingContextBlock(dir, null), null)
       assert.equal(readFileSync(workingContextPath(dir), 'utf8'), '')
       assert.equal(writeWorkingContextBlock(null, 'x'), null)
+    })
+  })
+})
+
+describe('working-context — checkWorkingContextFreshness (staleness)', () => {
+  it('ausente: hay reglas activas pero el archivo no existe', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'fr-rule', type: 'rule', scope: 'project', content: 'regla fresca' })
+        assert.equal(checkWorkingContextFreshness(engine, dir).state, 'ausente')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('ok cuando el archivo coincide con el bloque renderizado', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'fr-rule', type: 'rule', scope: 'project', content: 'regla fresca' })
+        writeWorkingContext(engine, dir)
+        assert.equal(checkWorkingContextFreshness(engine, dir).state, 'ok')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('ok sin nada que inyectar (sin reglas ni topología) y sin archivo', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        assert.equal(checkWorkingContextFreshness(engine, dir).state, 'ok')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('desactualizado cuando difiere y NO muta el archivo', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'fr-rule', type: 'rule', scope: 'project', content: 'regla fresca' })
+        writeWorkingContext(engine, dir)
+        writeFileSync(workingContextPath(dir), 'contenido obsoleto\n')
+        assert.equal(checkWorkingContextFreshness(engine, dir).state, 'desactualizado')
+        assert.equal(readFileSync(workingContextPath(dir), 'utf8'), 'contenido obsoleto\n', 'el chequeo es read-only')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+})
+
+describe('working-context — refreshWorkingContextOnWrite (escrituras CLI)', () => {
+  it('escribe el artefacto cuando hay una regla de proyecto', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'imp-rule', type: 'rule', scope: 'project', content: 'regla importada' })
+        assert.equal(refreshWorkingContextOnWrite(engine, dir), workingContextPath(dir))
+        assert.match(readFileSync(workingContextPath(dir), 'utf8'), /\[imp-rule\] regla importada/)
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('no crea archivo cuando la escritura no altera el bloque', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'imp-dec', type: 'decision', scope: 'feature', content: 'decision feature' })
+        assert.equal(refreshWorkingContextOnWrite(engine, dir), null)
+        assert.equal(existsSync(workingContextPath(dir)), false)
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('no reescribe si el contenido ya coincide', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'imp-rule', type: 'rule', scope: 'project', content: 'regla importada' })
+        assert.equal(refreshWorkingContextOnWrite(engine, dir), workingContextPath(dir))
+        assert.equal(refreshWorkingContextOnWrite(engine, dir), null, 'segundo refresh idempotente: sin cambio')
+      } finally {
+        engine.close()
+      }
     })
   })
 })

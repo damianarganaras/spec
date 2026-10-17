@@ -37,7 +37,7 @@ inyectado al system prompt y el doctor. Evidencia: `README.md`,
 | `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de las 3 tools) y `createMemoryToolkit`. |
 | `src/core/memory/mcp-server.js` | `createMemoryServer`/`serveMemoryMcp`: servidor MCP stdio sin dependencias; maneja JSON-RPC, `handle`, `respond`, `fail`. |
 | `src/core/memory/doctor.js` | `memoryDoctor`: integridad, detección de inconsistencias FTS5 y rebuild de índice / duplicados de activas. |
-| `src/core/memory/working-context.js` | Render único (`renderWorkingContextBlock`) + persistencia (`writeWorkingContext`, `writeWorkingContextBlock`), trigger de refresh (`shouldRefreshWorkingContext`) y resolución de raíz (`resolveMemoryProjectRoot`, `workingContextPath`); día-cero sin DB desde la topología. |
+| `src/core/memory/working-context.js` | Render único (`renderWorkingContextBlock`) + persistencia (`writeWorkingContext`, `writeWorkingContextBlock`), trigger de refresh (`shouldRefreshWorkingContext`), refresh compare-based de la CLI (`refreshWorkingContextOnWrite`), chequeo de frescura (`checkWorkingContextFreshness`) y resolución de raíz (`resolveMemoryProjectRoot`, `workingContextPath`); día-cero sin DB desde la topología. |
 
 ## Operaciones export / import / gc (`memory-ops-export-import-gc`)
 
@@ -117,11 +117,15 @@ tooling (MCP `ancleto-memory`). Evidencia: `agents/memory-keeper.md`, `agents/or
    —(a) el nodo entrante es `rule` + scope `project`, o (b) hubo supersesión (cualquier
    `memory_key` pudo retirar del bloque una rule `project`). El over-refresh intencional es
    aceptable porque el único consumidor lee el archivo una vez por sesión.
+   Las **escrituras del CLI** (`ancleto memory import`) refrescan por `refreshWorkingContextOnWrite`
+   (compare-based: reescribe solo si el bloque renderizado difiere del archivo), reusando la
+   conexión abierta; el refresh no es exclusivo de MCP.
 5. `buildWorkingContext(scope, maxTokens)`: materializa `<ProjectMemoryRules>` (reglas activas,
    scope `project`) y `<ProjectTopology>`; trunca de forma segura con `<ContextOverflowWarning>`
    si excede el presupuesto.
 6. `ancleto memory doctor`: verifica integridad, reconstruye FTS5 y fusiona el WAL para dejar el
-   `.db` seguro de copiar.
+   `.db` seguro de copiar. Además reporta de forma **advisory** (no afecta el exit code) la frescura
+   del working-context vía `checkWorkingContextFreshness` (`ok`/`ausente`/`desactualizado`).
 
 ## Reglas invariantes
 

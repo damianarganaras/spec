@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-15T17:14:12Z
-pluginVersion: 0.13.1
+generatedAt: 2026-10-17T04:04:04Z
+pluginVersion: 0.13.2
 skillVersion: '2.3'
 ---
 
@@ -122,7 +122,7 @@ skillVersion: '2.3'
     ambos de forma **no destructiva** (preservan `mcpServers` y claves top-level, no pisan
     homónimos; un JSON inválido avisa sin escribir). Copilot mergea `copilot-mcp.json`
     (`refreshCopilotMcp` regenera rotas en `upgrade` sin tocar `copilot-instructions.md`). El
-    resto conserva `mergeMcp` sobre `opencode.json`. `init` y `install` configuran MCP igual;
+    resto conserva `mergeMcp` sobre `opencode.json`. `init` e `install` configuran MCP igual;
     `--no-mcp` es el escape. Evidencia: `src/cli/index.js`, `README.md`.
 16. **Perfil `test`: overlay, no fork.** `installProfileOverlay` reinstala
     `profiles/test/agents` + `commands` sobre los destinos nativos del host (misma ext y
@@ -213,6 +213,38 @@ skillVersion: '2.3'
     `agents/{orchestrator,tester,reviewer,memory-keeper}.md`,
     `aspec/specs/prompt-contracts/spec.md`, `aspec/specs/review/spec.md`,
     `aspec/changes/archive/2026-10-15-throughput-pipeline/`.
+27. **Refresh on-write del working-context en **ambas** superficies** (change abierto
+    `memory-cli-writes-refresh-working-context`, archivo al cierre del seed). El bloque
+    `<ProjectMemoryRules>` de `.ancleto/working-context.md` se regenera tras cualquier
+    escritura que pueda alterarlo: (a) **MCP** — filtrado por
+    `shouldRefreshWorkingContext(result)` (regla directa `rule` + scope `project`, o cualquier
+    supersesión de `memory_key`); (b) **CLI** — `refreshWorkingContextOnWrite(engine,
+    projectRoot, scope)` en `src/core/memory/working-context.js`, **compare-based**: reescribe
+    el archivo **solo si** el bloque renderizado difiere del contenido en disco (con
+    normalización CRLF/espacios/salto final), no crea un archivo vacío y **reusa la conexión
+    abierta** (no abre un segundo engine). `memory import` lo invoca dentro de un `try/catch`
+    aislado: si el refresh falla, la importación se considera exitosa y el fallo se reporta
+    por stderr (mismo criterio de robustez que el refresh MCP). La regeneración usa el **mismo
+    camino único de render** (`renderWorkingContextBlock`) que el refresh de lifecycle y
+    `memory context`. Evidencia: `src/cli/index.js` (`memoryImport`),
+    `src/core/memory/working-context.js`,
+    `aspec/changes/memory-cli-writes-refresh-working-context/`,
+    `aspec/specs/memory-engine/spec.md` (Requirement "Frescura del working-context tras
+    escrituras de la CLI").
+28. **Detección de staleness del working-context (advisory, no altera el exit code)** (change
+    abierto `memory-cli-writes-refresh-working-context`). `checkWorkingContextFreshness(engine,
+    projectRoot, scope)` en `src/core/memory/working-context.js` renderiza el bloque esperado
+    con `renderWorkingContextBlock` y lo compara (CRLF, espacios finales por línea, salto
+    final) contra `.ancleto/working-context.md`, devolviendo `ok` / `ausente` /
+    `desactualizado`. **Read-only**: nunca reescribe el archivo. Expuesto como línea
+    `Working-context: <estado>` en `ancleto memory doctor` (`memoryDoctorCmd` en
+    `src/cli/index.js`); el exit code sigue midiendo la integridad de la DB (el staleness es
+    advisory). Cuando no está `ok`, `memory doctor` sugiere `ancleto memory context --out`
+    para corregir. Evidencia: `src/core/memory/working-context.js`,
+    `src/cli/index.js` (`memoryDoctorCmd`),
+    `aspec/changes/memory-cli-writes-refresh-working-context/`,
+    `aspec/specs/memory-engine/spec.md` (Requirement "Detección de staleness del
+    working-context").
 
 ## Seed incremental (contrato del discovery)
 
@@ -220,8 +252,8 @@ skillVersion: '2.3'
 - `none` → sin cambios; `minor` → cambios no materiales (el agente trabaja y lo anota, no
     ofrece regenerar); `material` → cambió un config de runtime, entry point o apareció/desapareció
     un directorio raíz nuevo (o un archivo material como `package.json`; ej. esta regeneración:
-    `package.json` `0.13.0`→`0.13.1` + areas `agents`/`aspec`/`src`/`test` por
-    `throughput-pipeline`).
+    `package.json` `0.13.1`→`0.13.2` + areas `agents`/`aspec`/`src`/`test` por
+    `memory-cli-writes-refresh-working-context`).
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **solo** esos
     documentos. El mapeo vive en `seed-map.json` (lo mantiene la skill); sin ese archivo la
     regeneración es completa.
@@ -289,14 +321,27 @@ skillVersion: '2.3'
   `test/content-guards.test.js` los ancla por keywords de comportamiento.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, `mcp_config.json`,
   `.mcp.json`, CI o Azure. Las variables se nombran y su valor se omite.
+- **Refresh on-write CLI compare-based es robusto pero best-effort.** Un fallo del refresh en
+  `memory import` **no** invalida la importación (la DB queda consistente); el fallo se reporta
+  por stderr y `memory doctor` lo expone como `Working-context: ausente` o
+  `desactualizado`. El operador puede corregir con `ancleto memory context --out`. Evidencia:
+  `src/cli/index.js` (`memoryImport`), `aspec/specs/memory-engine/spec.md`.
+- **Staleness advisory puede dar falsos positivos/negativos triviales.** La normalización del
+  bloque es acotada (CRLF, espacios finales, salto final); cambios cosméticos mayores (orden
+  de items, comillas, indentación) podrían disparar `desactualizado` aunque el contenido sea
+  semánticamente equivalente. Riesgo aceptable por diseño (se prefiere reportar a silenciar).
+  Evidencia: `src/core/memory/working-context.js` (`normalizeBlock`).
 - **Deuda resuelta en 0.13.x**: (a) el contrato de validaciones dejó de hardcodear
   `typecheck`/`lint`/`test` y pasó a ser declarativo (`contrato-validaciones`); (b) la dedupe de
   reglas y el día-cero del working-context (`token-budget`); (c) `PRODUCT.md` ya declara
   `## Project Commands` y alinea sus guardrails (ya no afirma que no hay scripts npm);
   (d) el pipeline de cierre redujo round-trips (`throughput-pipeline`: paralelización, ledger
-  prearmado, affected-set determinístico, memoria en un paso) sin cambiar el schema de memoria.
-  Evidencia: `CHANGELOG.md`, `aspec/changes/archive/2026-10-14-*`,
-  `aspec/changes/archive/2026-10-15-throughput-pipeline/`, `PRODUCT.md`.
+  prearmado, affected-set determinístico, memoria en un paso) sin cambiar el schema de memoria;
+  (e) `0.13.2` (cambio abierto `memory-cli-writes-refresh-working-context`) extiende el refresh
+  on-write al CLI y agrega el chequeo advisory de staleness, sin nuevos deps ni cambios de
+  schema. Evidencia: `CHANGELOG.md`, `aspec/changes/archive/2026-10-14-*`,
+  `aspec/changes/archive/2026-10-15-throughput-pipeline/`,
+  `aspec/changes/memory-cli-writes-refresh-working-context/`, `PRODUCT.md`.
 
 ## Decisiones registradas en memoria del repo
 

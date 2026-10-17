@@ -1,12 +1,12 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el working-context (día-cero), la procedencia source y las ops export/import/gc"
-covers: [motor de memoria, tools, working-context, día-cero, procedencia source, export/import/gc]
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el working-context (día-cero), el refresh on-write (MCP y CLI), la procedencia source, las ops export/import/gc y el chequeo advisory de staleness"
+covers: [motor de memoria, tools, working-context, día-cero, procedencia source, export/import/gc, refresh on-write CLI, staleness advisory]
 sources: ["src/core/memory/**"]
-sourcesSha: 5a36e6c3622e5ed4b3f411a8ad717d7d743f554a1741b0f12ce5bf7593d1b683
-generatedAt: 2026-10-15T17:14:12Z
-pluginVersion: 0.13.1
+sourcesSha: d8d1d65d2906d95ef70d8e7dd776859471f83ad16387dd7f0c2cf99125d92611
+generatedAt: 2026-10-17T04:04:04Z
+pluginVersion: 0.13.2
 skillVersion: '2.3'
 ---
 
@@ -16,16 +16,20 @@ skillVersion: '2.3'
 
 Retener reglas y decisiones del proyecto entre sesiones de IA, en una base SQLite **local**
 (`.ancleto/memory.db`), sin bases vectoriales. Un mismo motor soporta cuatro consumidores:
-tools MCP del LLM, subcomandos CLI (incluidas las ops export/import/gc), el working-context
-inyectado al system prompt y el doctor. Evidencia: `README.md`,
-`DESIGN-memory-engine-v0.2.0.md`, `aspec/specs/memory-ops/spec.md`.
+tools MCP del LLM, subcomandos CLI (incluidas las ops export/import/gc y el chequeo advisory),
+el working-context inyectado al system prompt y el doctor. Evidencia: `README.md`,
+`DESIGN-memory-engine-v0.2.0.md`, `aspec/specs/memory-ops/spec.md`,
+`aspec/specs/memory-engine/spec.md`,
+`aspec/changes/memory-cli-writes-refresh-working-context/`.
 
 ## Recorrido relevante
 
 1. `ancleto mcp` arranca `serveMemoryMcp`, que abre la DB y publica 3 tools al IDE.
 2. `recordRule`/`recordDecision` supersede atómicamente por `memory_key` y puede refrescar el
-   working-context.
-3. `ancleto memory export|import|gc` mueven/purgan nodos sin cambiar el schema.
+   working-context (filtrado por `shouldRefreshWorkingContext`).
+3. `ancleto memory export|import|gc|context|list|doctor` mueven/inspeccionan/purgan/regeneran
+   nodos; `memory import` refresca el working-context compare-based;
+   `memory doctor` agrega una línea advisory de frescura del working-context.
 4. `buildWorkingContext` materializa `<ProjectMemoryRules>`/`<ProjectTopology>` para el prompt.
 
 ## Componentes
@@ -34,10 +38,10 @@ inyectado al system prompt y el doctor. Evidencia: `README.md`,
 |---|---|
 | `src/core/memory/database.js` | Abre la DB (`openDatabase`), PRAGMAs (`WAL`, `foreign_keys`, `busy_timeout=5000`), migraciones idempotentes, FTS5 external-content, triggers, `checkpointDatabase` (merge del WAL). |
 | `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext`, `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode` (procedencia `source`), `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `sanitizePaths`, `checkpoint`, `close`. |
-| `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de las 3 tools) y `createMemoryToolkit`. |
+| `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de las 3 tools) y `createMemoryToolkit`; tras `recordNode`, evalúa `shouldRefreshWorkingContext(result)` y, si aplica, llama `writeWorkingContext(engine, projectRoot)` dentro de un `try/catch`. |
 | `src/core/memory/mcp-server.js` | `createMemoryServer`/`serveMemoryMcp`: servidor MCP stdio sin dependencias; maneja JSON-RPC, `handle`, `respond`, `fail`. |
 | `src/core/memory/doctor.js` | `memoryDoctor`: integridad, detección de inconsistencias FTS5 y rebuild de índice / duplicados de activas. |
-| `src/core/memory/working-context.js` | Render único (`renderWorkingContextBlock`) + persistencia (`writeWorkingContext`, `writeWorkingContextBlock`), trigger de refresh (`shouldRefreshWorkingContext`), refresh compare-based de la CLI (`refreshWorkingContextOnWrite`), chequeo de frescura (`checkWorkingContextFreshness`) y resolución de raíz (`resolveMemoryProjectRoot`, `workingContextPath`); día-cero sin DB desde la topología. |
+| `src/core/memory/working-context.js` | Render único (`renderWorkingContextBlock`) + persistencia (`writeWorkingContext`, `writeWorkingContextBlock`), trigger MCP (`shouldRefreshWorkingContext`), **refresh on-write CLI compare-based** (`refreshWorkingContextOnWrite`), **chequeo de staleness advisory** (`checkWorkingContextFreshness`), normalización acotada (`normalizeBlock`, `readWorkingContextFile`), resolución de raíz (`resolveMemoryProjectRoot`, `workingContextPath`); día-cero sin DB desde la topología. |
 
 ## Operaciones export / import / gc (`memory-ops-export-import-gc`)
 
@@ -52,19 +56,35 @@ Expuestas como subcomandos del grupo `memory`:
   existe (con el `createdAt` del JSON); si existe activo, supersede solo cuando el `createdAt`
   del JSON es más reciente (empate/no más nuevo = no-op → idempotente); si existe superseded,
   lo saltea (los superseded **no se reactivan**). Reporta insertados/actualizados/omitidos.
+  Tras la importación, **`memoryImport`** en `src/cli/index.js` invoca
+  `refreshWorkingContextOnWrite(engine, projectDir)` dentro de un `try/catch` aislado
+  (`memoryImport` se considera exitoso aunque el refresh falle; el fallo se reporta por stderr).
 - **`ancleto memory gc [--dry-run] [--days N]`** → `gcSuperseded({days, dryRun})`: purga nodos
   `superseded` con antigüedad mayor al umbral (default 30 días). La antigüedad se mide con
   `created_at` como **proxy** (no existe `superseded_at`). Tras el DELETE hace `VACUUM` +
   `REINDEX` post-commit; si la compactación falla, la DB queda consistente. `--dry-run` solo
-  reporta conteo y bytes estimados. Los nodos activos nunca se tocan.
+  reporta conteo y bytes estimados. Los nodos activos nunca se tocan. **`memory gc` no dispara
+  refresh** (purga superseded sin alterar el bloque de reglas activas).
+- **`ancleto memory doctor [--rebuild]`** → además del chequeo de integridad habitual
+  (PRAGMAs, FTS5, duplicados), emite la línea **advisory**
+  `Working-context: <ok|ausente|desactualizado>` usando `checkWorkingContextFreshness` con
+  `createReadonlyMemoryEngine` (no toca el WAL ni migra). El exit code sigue midiendo la
+  integridad de la DB. Cuando no está `ok`, sugiere `ancleto memory context --out` para corregir.
+  Evidencia: `src/cli/index.js` (`memoryDoctorCmd`), `src/core/memory/working-context.js`,
+  `aspec/changes/memory-cli-writes-refresh-working-context/`.
+- **`ancleto memory list [--type X] [--scope X] [--all] [--json]`** y
+  **`ancleto memory context [--scope X] [--out <archivo>]`** completan la superficie.
+  `memory list` es **read-only** (no toca la base); `memory context` materializa
+  `.ancleto/working-context.md` por el mismo camino único de render.
 
 ## Working-context día-cero y render compartido (`token-budget`, archivado)
 
 - **Un único render**: `renderWorkingContextBlock(engine, projectRoot, scope)` en
   `src/core/memory/working-context.js` compone el bloque (topología + reglas activas) y es el
-  camino compartido por el refresh de lifecycle y por `ancleto memory context`; cada consumidor
-  decide el destino. `writeWorkingContextBlock(projectRoot, block)` es el dueño único de la
-  escritura síncrona del artefacto; `writeWorkingContext` mantiene la firma con raíz explícita.
+  camino compartido por el refresh de lifecycle, el refresh on-write MCP, el refresh on-write CLI
+  y `ancleto memory context`; cada consumidor decide el destino. `writeWorkingContextBlock(projectRoot, block)`
+  es el dueño único de la escritura síncrona del artefacto; `writeWorkingContext` mantiene la
+  firma con raíz explícita.
 - **Día-cero (opción a)**: si **no** existe `.ancleto/memory.db` pero sí `.discovery-map.json`,
   el CLI materializa igual `.ancleto/working-context.md` con el bloque `<ProjectTopology>`
   (creando `.ancleto/` si falta) **sin abrir el motor**. La composición usa `readTopologySummary`
@@ -104,6 +124,58 @@ tooling (MCP `ancleto-memory`). Evidencia: `agents/memory-keeper.md`, `agents/or
 `aspec/specs/prompt-contracts/spec.md`,
 `aspec/changes/archive/2026-10-15-throughput-pipeline/`.
 
+## Refresh on-write en **ambas** superficies (`memory-cli-writes-refresh-working-context`, abierto)
+
+El bloque `<ProjectMemoryRules>` de `.ancleto/working-context.md` se regenera tras cualquier
+escritura que pueda alterarlo, por el **mismo camino único de render**
+(`renderWorkingContextBlock` + `writeWorkingContext`):
+
+- **MCP** (`tools.js`): filtrado por `shouldRefreshWorkingContext({ node, superseded })`. Se
+  dispara si (a) el nodo entrante es `rule` + scope `project`, **o** (b) hubo supersesión de
+  cualquier `memory_key` (cross-type/cross-scope: el over-refresh intencional es aceptable
+  porque el único consumidor lee el archivo una vez por sesión).
+- **CLI** (`src/cli/index.js` → `memoryImport`): **`refreshWorkingContextOnWrite(engine,
+  projectRoot, scope)`** en `src/core/memory/working-context.js`. Es **compare-based**:
+  renderiza el bloque esperado y reescribe el archivo **solo si difiere** del contenido en
+  disco (con `normalizeBlock` que tolera CRLF, espacios finales por línea y salto final); no
+  crea un archivo vacío cuando no hay nada que inyectar. Reusa la conexión abierta (no abre un
+  segundo engine). Envuelto en `try/catch` aislado: si el refresh falla, el import igual se
+  reporta como exitoso y el fallo se avisa por stderr (mismo criterio de robustez que MCP).
+- **Puntos que NO disparan refresh**: `memory export`, `memory list`, `memory doctor` (read-only
+  el primero dos; el doctor purga WAL sin tocar reglas), `memory gc` (purga superseded sin
+  alterar el bloque de reglas activas), `memory context --out` (es el destino manual).
+
+Tabla de superficies tras el change (resumen):
+
+| Superficie | Refresca hoy | Tras el change |
+|---|---|---|
+| MCP `recordRule`/`recordDecision` (`tools.js`) | sí (filtrado) | sí (sin cambio) |
+| CLI `memory import` | **no** | **sí** (compare-based; best-effort) |
+| Lifecycle `init`/`install --project`/`upgrade` | sí | sí (sin cambio) |
+| CLI `memory context --out` | sí (manual) | sí (sin cambio) |
+| CLI `memory export`/`list`/`doctor`/`gc` | no | no (read-only o sin alterar el bloque) |
+
+## Chequeo de staleness del working-context (`memory-cli-writes-refresh-working-context`, abierto)
+
+- **`checkWorkingContextFreshness(engine, projectRoot, scope)`** en
+  `src/core/memory/working-context.js`: renderiza el bloque esperado con `renderWorkingContextBlock`
+  y lo compara (vía `normalizeBlock`, que tolera CRLF, espacios finales por línea y salto final)
+  contra el contenido actual de `.ancleto/working-context.md`. Devuelve uno de tres estados:
+  `ok` (coincide, o no hay nada que inyectar y el archivo está vacío/ausente),
+  `ausente` (hay bloque para inyectar pero el archivo no existe) o
+  `desactualizado` (existe y difiere).
+- **Read-only**: nunca escribe el archivo. Corregir el staleness es responsabilidad de
+  `ancleto memory context --out` (manual) o del refresh on-write (auto).
+- **Superficie**: expuesto como línea advisory `Working-context: <estado>` en `ancleto memory
+  doctor` (`memoryDoctorCmd` en `src/cli/index.js`). El exit code sigue midiendo la integridad
+  de la DB; el staleness es advisory y **no** lo altera. Cuando no está `ok`, sugiere
+  `ancleto memory context --out` para corregir.
+
+Evidencia: `src/core/memory/working-context.js`, `src/cli/index.js` (`memoryImport`,
+`memoryDoctorCmd`), `aspec/changes/memory-cli-writes-refresh-working-context/`,
+`aspec/specs/memory-engine/spec.md` (Requirements "Frescura del working-context tras
+escrituras de la CLI" y "Detección de staleness del working-context").
+
 ## Flujo
 
 1. `ancleto mcp` arranca `serveMemoryMcp`, que abre la DB y publica 3 tools al IDE.
@@ -113,19 +185,20 @@ tooling (MCP `ancleto-memory`). Evidencia: `agents/memory-keeper.md`, `agents/or
 3. `recordRule`/`recordDecision`: `recordNode` abre `BEGIN IMMEDIATE`, marca `superseded` el
    nodo activo con la misma `memory_key` e inserta el nuevo. El runtime completa
    `source`/`confidence`/`status`/`id`; el LLM nunca los provee.
-4. **Refresh del working-context**: `shouldRefreshWorkingContext(result)` decide si regenerar
-   —(a) el nodo entrante es `rule` + scope `project`, o (b) hubo supersesión (cualquier
-   `memory_key` pudo retirar del bloque una rule `project`). El over-refresh intencional es
-   aceptable porque el único consumidor lee el archivo una vez por sesión.
-   Las **escrituras del CLI** (`ancleto memory import`) refrescan por `refreshWorkingContextOnWrite`
-   (compare-based: reescribe solo si el bloque renderizado difiere del archivo), reusando la
-   conexión abierta; el refresh no es exclusivo de MCP.
+4. **Refresh del working-context** — dos caminos sobre el mismo render:
+   - (a) **MCP** (`tools.js`): `shouldRefreshWorkingContext(result)` — (i) el nodo entrante
+     es `rule` + scope `project`, **o** (ii) hubo supersesión (cualquier `memory_key` pudo
+     retirar del bloque una rule `project`). Si aplica, `writeWorkingContext(engine,
+     projectRoot)` dentro de `try/catch`.
+   - (b) **CLI** (`src/cli/index.js`): tras `engine.importNodes(json)`, `memoryImport` llama a
+     `refreshWorkingContextOnWrite(engine, projectDir)`, que re-renderiza y reescribe solo si
+     el bloque cambió (compare-based); reusa la conexión.
 5. `buildWorkingContext(scope, maxTokens)`: materializa `<ProjectMemoryRules>` (reglas activas,
    scope `project`) y `<ProjectTopology>`; trunca de forma segura con `<ContextOverflowWarning>`
    si excede el presupuesto.
 6. `ancleto memory doctor`: verifica integridad, reconstruye FTS5 y fusiona el WAL para dejar el
-   `.db` seguro de copiar. Además reporta de forma **advisory** (no afecta el exit code) la frescura
-   del working-context vía `checkWorkingContextFreshness` (`ok`/`ausente`/`desactualizado`).
+   `.db` seguro de copiar. Además emite, de forma **advisory** (no afecta el exit code), la línea
+   `Working-context: <ok|ausente|desactualizado>` usando `checkWorkingContextFreshness`.
 
 ## Reglas invariantes
 
@@ -140,8 +213,14 @@ tooling (MCP `ancleto-memory`). Evidencia: `agents/memory-keeper.md`, `agents/or
 - **Raíz del proyecto desde la DB, no desde el cwd**: `resolveMemoryProjectRoot` prioriza el
   primer ancestro con `.ancletorc`; si no, el candidato derivado de `dbPath` con layout
   `.ancleto/`. El refresh es best-effort.
-- Apertura read-only (`createReadonlyMemoryEngine`) para inspección sin migrar ni tocar el WAL.
+- Apertura read-only (`createReadonlyMemoryEngine`) para inspección sin migrar ni tocar el WAL
+  (la usa `memory list` y ahora también `memory doctor` para el chequeo advisory).
+- **Refresh on-write MCP y CLI comparten el mismo render y la misma firma**: cualquier
+  supersesión o contribución directa dispara la regeneración; en CLI, `import` no abre un
+  segundo engine.
 - **Export/import/gc no cambian el schema ni agregan dependencias**: solo `node:sqlite`.
+- **Staleness advisory es no bloqueante** (no altera el exit code); corregir requiere lifecycle
+  point, `memory context --out` o un `import`/`recordRule` posterior.
 
 ## Paths clave
 
@@ -149,13 +228,14 @@ tooling (MCP `ancleto-memory`). Evidencia: `agents/memory-keeper.md`, `agents/or
 |---|---|
 | `src/core/memory/database.js` | Conexión, PRAGMAs, migraciones, FTS5. |
 | `src/core/memory/engine.js` | `buildWorkingContext`, `searchMemory`, `recordNode`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `sanitizePaths`. |
-| `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext`, `resolveMemoryProjectRoot` (día-cero). |
-| `aspec/specs/memory-engine/spec.md` | Contrato de día-cero y coherencia documentado↔inyección. |
+| `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext` (MCP), `refreshWorkingContextOnWrite` (CLI, compare-based), `checkWorkingContextFreshness`, `normalizeBlock`, `readWorkingContextFile`, `resolveMemoryProjectRoot` (día-cero), `workingContextPath`. |
+| `src/core/memory/tools.js` | `createMemoryToolHandlers`, `createMemoryToolkit`, refresh on-write MCP filtrado. |
+| `src/core/memory/mcp-server.js` | Transporte MCP stdio. |
+| `src/cli/index.js` | `memoryExport`, `memoryImport` (con refresh on-write), `memoryGc`, `memoryContext`, `memoryListCmd`, `memoryDoctorCmd` (con advisory), `memoryCmd`. |
+| `aspec/specs/memory-engine/spec.md` | Contrato de día-cero, refresh on-write MCP/CLI y chequeo de staleness. |
+| `aspec/changes/memory-cli-writes-refresh-working-context/` | Change abierto con proposal/design/tasks y delta de spec. |
 | `aspec/changes/archive/2026-10-14-token-budget/` | Delta de día-cero del working-context. |
 | `aspec/changes/archive/2026-10-05-memory-actor-provenance/` | Contrato de procedencia `source` (auditoría vs enforcement). |
-| `src/core/memory/tools.js` | Contrato JSON Schema de las 3 tools. |
-| `src/core/memory/mcp-server.js` | Transporte MCP stdio. |
-| `src/cli/index.js` | `memoryExport`, `memoryImport`, `memoryGc`, `memoryCmd`. |
 | `aspec/specs/memory-ops/spec.md` | Contrato de las ops export/import/gc. |
 | `DESIGN-memory-engine-v0.2.0.md` | Diseño congelado del motor. |
-| `test/memory-engine.test.js`, `test/mcp.test.js`, `test/working-context.test.js` | Suite del motor, MCP, ops CLI y working-context. |
+| `test/memory-engine.test.js`, `test/mcp.test.js`, `test/working-context.test.js`, `test/cli.test.js` | Suite del motor, MCP, working-context (incluye casos de los nuevos helpers) y CLI (cubren refresh on-write y advisory). |

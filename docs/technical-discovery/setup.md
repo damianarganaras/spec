@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-10-15T17:14:12Z
-pluginVersion: 0.13.1
+generatedAt: 2026-10-17T04:04:04Z
+pluginVersion: 0.13.2
 skillVersion: '2.3'
 ---
 
@@ -34,9 +34,9 @@ ancleto affected [--cwd <dir>] [--json] <archivo...>   # affected-set read-only 
 ancleto mcp                       # servidor MCP stdio de memoria propia
 ancleto memory context [--scope X] [--out <archivo>]
 ancleto memory list [--type X] [--scope X] [--all] [--json]
-ancleto memory doctor [--rebuild]
+ancleto memory doctor [--rebuild]   # integridad + línea advisory de frescura del working-context
 ancleto memory export [--out <archivo>]   # nodos activos a JSON (stdout o archivo)
-ancleto memory import <archivo>           # upsert por memory_key, idempotente
+ancleto memory import <archivo>           # upsert por memory_key, idempotente; refresca el working-context (compare-based) si alteró el bloque
 ancleto memory gc [--dry-run] [--days N]  # purga superseded con antigüedad > N días (default 30)
 ancleto specs check [--change <name>] [--json]
 ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
@@ -44,12 +44,14 @@ ancleto projects list|scan <raiz>|prune|info|update [--all] [--json]
 ancleto check | doctor
 ```
 
-Evidencia: `src/cli/index.js`, `README.md`. `install` sin `--project`/`--global` opera sobre
-el proyecto actual si hay `.ancletorc`; `--global` fuerza el alcance global. `init` configura
-el MCP del host por defecto; `--no-mcp` lo evita. `--agent` acepta 8 hosts (`opencode`
-default, `claude`, `vscode`, `antigravity`, `cursor`, `roo`, `copilot`, `commandcode`).
-`ancleto affected` es **read-only**: reporta el `affected-set` por stdout, los inconclusos por
-stderr y omite la línea de externos cuando el conteo es 0 (`externalCount` sigue en `--json`).
+Evidencia: `src/cli/index.js`, `README.md`,
+`aspec/changes/memory-cli-writes-refresh-working-context/`. `install` sin `--project`/`--global`
+opera sobre el proyecto actual si hay `.ancletorc`; `--global` fuerza el alcance global. `init`
+configura el MCP del host por defecto; `--no-mcp` lo evita. `--agent` acepta 8 hosts
+(`opencode` default, `claude`, `vscode`, `antigravity`, `cursor`, `roo`, `copilot`,
+`commandcode`). `ancleto affected` es **read-only**: reporta el `affected-set` por stdout, los
+inconclusos por stderr y omite la línea de externos cuando el conteo es 0 (`externalCount`
+sigue en `--json`).
 
 ## Configuración persistida
 
@@ -82,6 +84,11 @@ stderr y omite la línea de externos cuando el conteo es 0 (`externalCount` sigu
   más `test-block`. Evidencia: `src/cli/index.js` (`mergeTemplateInto`, `mergeLocked`,
   `reconcileLegacyBlocks`), `templates/AGENTS.md`, `AGENTS.md`.
 - **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`); ignorado por git.
+- **Cambios abiertos de memoria**: el change `memory-cli-writes-refresh-working-context` añade
+  en `memory import` el refresh on-write compare-based (`refreshWorkingContextOnWrite`) y en
+  `memory doctor` la línea advisory `Working-context: <ok|ausente|desactualizado>` vía
+  `checkWorkingContextFreshness`. Ninguno altera el exit code ni el schema de la DB. Ver
+  `units/memory-engine.md` y `aspec/changes/memory-cli-writes-refresh-working-context/`.
 
 ## Tiers de costo
 
@@ -126,10 +133,12 @@ El contrato es **declarativo** (change archivado `2026-10-14-contrato-validacion
 - **Suite**: 11 archivos (`adapters-frontmatter`, **`affected-set`**, `cli`, `content-guards`,
   `discovery-tier`, `discovery-topology`, `linter-config`, `mcp`, `memory-engine`,
   `tier-models`, `working-context`); `content-guards` asierta **behavior** (keywords y
-  salvaguardas), no la redacción literal. La última cifra registrada por el change
-  `throughput-pipeline` fue **492 tests / 100 suites** (no se re-ejecutó en esta regeneración:
-  el tier `minimo` excluye `test/**` del pack). Evidencia: `test/`,
-  `aspec/specs/prompt-contracts/spec.md`.
+  salvaguardas), no la redacción literal. El change `memory-cli-writes-refresh-working-context`
+  amplió `test/cli.test.js` y `test/working-context.test.js` con casos del refresh on-write
+  CLI y del chequeo de staleness. La cifra en verde **no se re-ejecutó** en esta regeneración
+  (el tier `minimo` excluye `test/**` del pack y la validación del seed es state-only).
+  Evidencia: `test/`, `aspec/changes/memory-cli-writes-refresh-working-context/tasks.md`,
+  `aspec/specs/memory-engine/spec.md`.
 - **CI**: `.github/workflows/publish.yml` corre `npm ci` + `npm run lint` + `node --test
   test/*.test.js` y publica a npm al pushear un tag `v*` (o `workflow_dispatch`), con canary
   no bloqueante y creación del Release. El lint bloquea el publish. Evidencia:

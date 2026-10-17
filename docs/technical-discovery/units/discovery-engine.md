@@ -5,8 +5,8 @@ read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del
 covers: [topologia, empaquetado, tiers, tokens, affected-set]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js"]
 sourcesSha: 121b7ff04478f797f0c91ceb0f7831ce0e2e816ea7731a00fdec2bc97b4dc2df
-generatedAt: 2026-10-15T17:14:12Z
-pluginVersion: 0.13.1
+generatedAt: 2026-10-17T04:04:04Z
+pluginVersion: 0.13.2
 skillVersion: '2.3'
 ---
 

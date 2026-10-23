@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { formatTopologyBlock } from './engine.js'
 import { readTopologySummary } from '../discovery.js'
@@ -61,4 +61,51 @@ export function writeWorkingContext(engine, projectRoot, scope = 'project') {
   if (!projectRoot) return null
   const block = renderWorkingContextBlock(engine, projectRoot, scope)
   return writeWorkingContextBlock(projectRoot, block)
+}
+
+// Comparacion tolerante para decidir frescura/reescritura: normaliza CRLF, espacios
+// finales por linea y el salto final (o ausencia de contenido). No persigue diferencias
+// semanticas, solo variaciones triviales de render.
+function normalizeBlock(text) {
+  return (text === null ? '' : String(text))
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim()
+}
+
+function readWorkingContextFile(projectRoot) {
+  const out = workingContextPath(projectRoot)
+  return existsSync(out) ? readFileSync(out, 'utf8') : null
+}
+
+// Estado de frescura del artefacto derivado respecto de la memoria activa (read-only).
+// - `ausente`: hay un bloque que inyectar pero el archivo no existe.
+// - `desactualizado`: el archivo existe y difiere del bloque esperado.
+// - `ok`: coincide, o no hay nada que inyectar y el archivo esta vacio/ausente.
+export function checkWorkingContextFreshness(engine, projectRoot, scope = 'project') {
+  if (!projectRoot) return { state: 'ausente', expected: null, actual: null }
+  const expected = renderWorkingContextBlock(engine, projectRoot, scope)
+  const actual = readWorkingContextFile(projectRoot)
+  if (actual === null) {
+    return { state: expected === null ? 'ok' : 'ausente', expected, actual }
+  }
+  const canonical = expected === null ? '' : expected + '\n'
+  const state = normalizeBlock(actual) === normalizeBlock(canonical) ? 'ok' : 'desactualizado'
+  return { state, expected, actual }
+}
+
+// Refresh compare-based para superficies de escritura que ya tienen un engine abierto
+// (p. ej. `ancleto memory import`): reescribe el artefacto solo si el bloque renderizado
+// difiere del contenido en disco. Evita reescrituras (y la creacion de un archivo vacio)
+// cuando la escritura no altero el bloque. Devuelve el path escrito o null si no cambio.
+export function refreshWorkingContextOnWrite(engine, projectRoot, scope = 'project') {
+  if (!projectRoot) return null
+  const expected = renderWorkingContextBlock(engine, projectRoot, scope)
+  const actual = readWorkingContextFile(projectRoot)
+  const canonical = expected === null ? '' : expected + '\n'
+  if (actual === null && expected === null) return null
+  if (actual !== null && normalizeBlock(actual) === normalizeBlock(canonical)) return null
+  return writeWorkingContextBlock(projectRoot, expected)
 }

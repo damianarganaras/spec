@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-15T17:14:12Z
-pluginVersion: 0.13.1
+generatedAt: 2026-10-17T04:04:04Z
+pluginVersion: 0.13.2
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.13.1`. | `.github/workflows/publish.yml`, `package.json` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.13.2`. | `.github/workflows/publish.yml`, `package.json` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -56,18 +56,25 @@ resto en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp
 
 | MCP | Tipo | Rol | Default |
 |---|---|---|---|
-| `ancleto-memory` | local (stdio) | Memoria propia del repo: expone `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. | Habilitado |
+| `ancleto-memory` | local (stdio) | Memoria propia del repo: expone `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. | Habilitado |
 | `caveman` | local (binario) | Compresión de salida del agente (`caveman-mcp.exe`). Su **directiva de uso es host-scoped**: se materializa solo donde la config MCP del host incluye la tool (`opencode`/`antigravity`); revertible a opt-in por compuerta de medición. | Habilitado si está en `PATH` |
 | `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`), no se agrega por defecto por su costo (~4.900 tokens/request). | Deshabilitado |
 | `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Solo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
 
-Evidencia: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-routing/spec.md`.
+Adicionalmente, el CLI expone **chequeos de staleness advisory sobre el working-context** vía
+`ancleto memory doctor` (línea `Working-context: <ok|ausente|desactualizado>`,
+`checkWorkingContextFreshness`). Es read-only y **no** es un MCP: vive dentro del propio CLI y
+no agrega dependencias. Evidencia: `src/core/memory/working-context.js`, `src/cli/index.js`,
+`aspec/changes/memory-cli-writes-refresh-working-context/`.
+
+Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-routing/spec.md`.
 
 ## Observabilidad / telemetría
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
 | **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Solo opencode. Es la fuente de la compuerta de medición del default de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
+| **Working-context advisory** | `ancleto memory doctor` expone `Working-context: <estado>` tras la integridad de la DB. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
 
 ## Azure DevOps (opcional, apagado)
 

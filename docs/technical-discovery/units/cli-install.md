@@ -1,12 +1,22 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad y el subcomando read-only affected"
-covers: [instalación, AGENT_TARGETS, frontmatter, merge de templates, MCP, perfiles, export/import, affected]
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, subcomando read-only affected, refresh on-write en memory import y chequeo advisory en memory doctor"
+covers:
+  - instalación
+  - AGENT_TARGETS
+  - frontmatter
+  - merge de templates
+  - MCP
+  - perfiles
+  - export/import
+  - affected
+  - memory import refresh on-write
+  - memory doctor advisory staleness
 sources: ["src/cli/**", "src/core/adapters/**"]
-sourcesSha: d215b7400aee46e57ea26ff8e065e0f7654c582e9019e6ebce2c9d457eae7d31
-generatedAt: 2026-10-15T17:14:12Z
-pluginVersion: 0.13.1
+sourcesSha: 4ee7291f6e93af9767c2e7c114b1ea9de5bff0918a4d1fa03e06f19ac30499e2
+generatedAt: 2026-10-17T04:04:04Z
+pluginVersion: 0.13.2
 skillVersion: '2.3'
 ---
 
@@ -16,8 +26,9 @@ skillVersion: '2.3'
 
 `src/cli/index.js` es el **único entry point** (`bin.ancleto`/`bin.aspec`): parseo de
 comandos, instalación de assets por host, resolución de agente/IDE, gestión de tiers, MCP,
-discovery, memoria, registro de proyectos y diagnósticos. La adaptación de frontmatter es un
-módulo aparte (`src/core/adapters/frontmatter.js`), y `src/cli/ui.js` aporta el wizard.
+discovery, memoria (incluyendo el refresh on-write desde el CLI y el chequeo advisory de
+staleness), registro de proyectos y diagnósticos. La adaptación de frontmatter es un módulo
+aparte (`src/core/adapters/frontmatter.js`), y `src/cli/ui.js` aporta el wizard.
 Evidencia: `package.json`, `src/cli/index.js`.
 
 ## Superficie de comandos
@@ -30,6 +41,25 @@ Evidencia: `package.json`, `src/cli/index.js`.
 `--profile`, `--exclude`, `--no-mcp`, `--with-engram`, `--yes` (solo importación openspec).
 Evidencia: `src/cli/index.js`, `README.md`. `affected` delega en `computeAffectedSet`
 (`src/core/affected-set.js`); es **read-only** y no forma parte del flujo de instalación.
+
+**Escrituras de memoria del CLI**:
+
+- `memory import <archivo>` (`memoryImport` en `src/cli/index.js`) tras `engine.importNodes(json)`
+  invoca `refreshWorkingContextOnWrite(engine, projectRoot)` dentro de un `try/catch` aislado.
+  El refresh es **compare-based** y reusa la conexión abierta: reescribe
+  `.ancleto/working-context.md` solo si el bloque renderizado difiere del contenido en disco
+  (normalización CRLF/espacios/salto final). Si falla, el import igual se considera exitoso y
+  el fallo se reporta por stderr.
+- `memory doctor` (`memoryDoctorCmd`) ejecuta el chequeo de integridad habitual y, tras él,
+  agrega la línea **advisory** `Working-context: <ok|ausente|desactualizado>` usando
+  `checkWorkingContextFreshness(engine, projectRoot)` con `createReadonlyMemoryEngine`. El
+  exit code sigue midiendo la integridad de la DB (no lo altera). Cuando no está `ok` sugiere
+  `ancleto memory context --out` para corregir.
+
+Evidencia: `src/cli/index.js` (`memoryImport`, `memoryDoctorCmd`),
+`src/core/memory/working-context.js`,
+`aspec/changes/memory-cli-writes-refresh-working-context/`,
+`aspec/specs/memory-engine/spec.md`.
 
 ## Modelo único de destinos por host (`AGENT_TARGETS`)
 
@@ -256,6 +286,9 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 - **`--check` no empaqueta**: state-only sobre hashes.
 - **`ancleto affected` es read-only**: no escribe nada; delega el grafo de imports en
   `src/core/affected-set.js` y reporta `affected`/`unresolved`/`externalCount`.
+- **Refresh on-write CLI y staleness advisory son best-effort** (no rompen el flujo):
+  - `memoryImport` envuelve el refresh en `try/catch` y reporta el fallo por stderr sin abortar.
+  - `memoryDoctorCmd` emite el staleness como **línea advisory** sin alterar el exit code.
 - **Errores no bloqueantes**: binarios ausentes (MCP/git/gh/az), assets no soportados y
   divergencias de frontmatter se omiten con warning a stderr.
 - `ancleto --version` lee `package.json` en runtime (no hardcodeado).
@@ -264,10 +297,12 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `memoryExport`/`memoryImport`/`memoryGc`, `affectedCommand`. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `memoryImport` (con refresh on-write), `memoryDoctorCmd` (con advisory), `memoryExport`/`memoryGc`, `affectedCommand`. |
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`; dueño único de la transformación. |
+| `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext` (MCP), `refreshWorkingContextOnWrite` (CLI, compare-based), `checkWorkingContextFreshness`, `normalizeBlock`, `readWorkingContextFile`, `resolveMemoryProjectRoot` (día-cero). |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED (incl. `validation-commands`)/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable; en agents el frontmatter se adapta por host, en skills se copia. |
-| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js` | Guardas del CLI, del adaptador (incl. Command Code) y de contenido. |
-| `README.md`, `BACKLOG.md` | Contrato operativo y backlog. |
+| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js` | Guardas del CLI (incluye refresh on-write y advisory), del adaptador (incl. Command Code), de contenido y de los nuevos helpers del working-context. |
+| `README.md`, `BACKLOG.md`, `agents/orchestrator.md` | Contrato operativo, backlog y nota de refresh on-write CLI en `## Project Memory Rules`. |
+| `aspec/changes/memory-cli-writes-refresh-working-context/` | Change abierto con proposal, design, tasks y delta spec. |

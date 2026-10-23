@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
 import { adaptFrontmatter, parseFrontmatter } from '../core/adapters/frontmatter.js'
-import { writeWorkingContext, writeWorkingContextBlock, renderWorkingContextBlock } from '../core/memory/working-context.js'
+import { writeWorkingContext, writeWorkingContextBlock, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite } from '../core/memory/working-context.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
@@ -2218,6 +2218,19 @@ async function memoryDoctorCmd(flags) {
   for (const c of checks) {
     console.log(`  ${c.ok ? '✔' : '✖'} ${c.name}: ${c.detail}`)
   }
+  // Frescura del working-context: advisory, no afecta el exit code (que sigue midiendo
+  // la integridad de la DB). Read-only: no reescribe el artefacto.
+  const projectRoot = resolveMemoryProjectRoot(dbPath) || process.cwd()
+  const engine = createReadonlyMemoryEngine(dbPath)
+  let staleness
+  try {
+    staleness = checkWorkingContextFreshness(engine, projectRoot)
+  } finally {
+    engine.close()
+  }
+  const staleSymbol = staleness.state === 'ok' ? '✔' : '⚠'
+  const hint = staleness.state === 'ok' ? '' : ' (regenerá con `ancleto memory context --out .ancleto/working-context.md`)'
+  console.log(`  ${staleSymbol} Working-context: ${staleness.state}${hint}`)
   process.exit(healthy ? 0 : 1)
 }
 
@@ -2307,10 +2320,18 @@ async function memoryImport(flags) {
     process.exit(1)
   }
   const dbPath = defaultMemoryDbPath()
+  const projectDir = process.cwd()
   const engine = createMemoryEngine(dbPath)
   try {
     const summary = engine.importNodes(json)
     console.log(`ancleto: import OK -> insertados:${summary.inserted} actualizados:${summary.updated} omitidos:${summary.skipped}`)
+    if (summary.inserted + summary.updated > 0) {
+      try {
+        refreshWorkingContextOnWrite(engine, projectDir)
+      } catch (err) {
+        console.warn(`ancleto: no se pudo refrescar el working-context: ${err.message}`)
+      }
+    }
   } finally {
     engine.close()
   }

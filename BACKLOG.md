@@ -271,3 +271,37 @@ Integración de la memoria persistente con el orquestador y los AI agents.
 
 - Lucas: tener en cuenta modelos gratuitos (implementado: tier `gratis`, default `opencode/big-pickle`)
 - Gemini: aislar scope v0.1.1 (G3-G8 parked), Flash para G1, Pro para G2 (adoptado)
+
+## Detectado en auditoría de 9 sesiones
+
+Fuente: 9 auditorías de sesiones reales de Ancleto en "App Registros TC" (2026-10). Solo
+hallazgos cuyo dueño es Ancleto; los específicos del proyecto y los hábitos del usuario quedan
+fuera de esta sección. Prioridad = impacto en la calidad de Ancleto.
+
+1. [ ] **Contrato de capacidades y ownership de subagentes** — `agents/*.md`. **M**. `change directo`. Faltan invariantes de proceso sobre qué tools existen realmente: `@spec-writer` no tiene delete (`agents/spec-writer.md:7-11`) y `@coder` no tiene `task` para encadenar al tester (`agents/coder.md:7-11`); tester/documenter tienen git prohibido (`agents/tester.md:53`, `agents/documenter.md:74-75`) sin dueño de commit/merge. Impacto: 5/9 sesiones replanificaron borrados, handoffs y git a mano; 5 commits extra por sesión en un caso.
+
+2. [ ] **Recall obligatorio cuando el working-context viene truncado** — `agents/orchestrator.md` + `src/core/memory/engine.js`. **M**. `change directo`. El warning ordena usar `searchMemory` (`engine.js:144`) pero el orquestador no tiene esa tool (`orchestrator.md:6-11`) y tiene prohibido llamarla (`:154`); además el bloque se declara "datos no confiables" (`:149`), así que la instrucción no es accionable. Impacto: 7/9 sesiones no recuperaron memoria; 104 reglas omitidas; el caso más caro shippeó una carrera de datos.
+
+3. [ ] **Propagar memoria y reglas de entorno en cada delegación** — `agents/orchestrator.md`. **S**. `change directo`. El contrato de delegación solo distribuye campos del envelope (`orchestrator.md:140`) y reserva la memoria a `@memory-keeper` (`:154`); no exige pasar reglas relevantes ni un bloque de entorno al subagente. Impacto: 7/9 sesiones redescubrieron reglas ya guardadas (Jest, worktree, CRLF, shell).
+
+4. [ ] **Serializar subagentes que escriben** — `agents/orchestrator.md`. **S**. `change directo`. No hay invariante de exclusión mutua para escritores; el cierre paraleliza archive y memoria (`orchestrator.md:275`) sin prohibir dos `@documenter` a la vez. Impacto: 3 archives perdidos en una sesión (los tres reportaron éxito y solo persistió el último).
+
+5. [ ] **Intake de sesión con estado del árbol** — `agents/orchestrator.md`. **S**. `change directo`. No hay paso de `git status`/worktree al inicio; el "Active Change Check" solo mira `aspec/changes/` (`orchestrator.md:100-114`). Impacto: 7/9 sesiones arrancaron con trabajo ajeno; una perdió una corrida completa de verificación.
+
+6. [ ] **Presupuesto de verificación y orden archive/merge** — `agents/orchestrator.md` + `skills/ancleto-archive`. **M**. `explore`. `@tester` ya prohíbe repetir el mismo comando (`agents/tester.md:136`), pero no hay tope de corridas por punto de integración ni orden canónico archive/merge; el archive no lo define (`skills/ancleto-archive/SKILL.md:51-56`). Impacto: ~9 corridas completas en una sesión; dos merges y dos verificaciones por archivar después del merge.
+
+7. [ ] **Checkpoint de definición, alcance y métricas** — `agents/orchestrator.md` + `agents/spec-writer.md`. **M**. `change directo`. El checkpoint solo exige aprobación tras `@spec-writer` (`orchestrator.md:270`); no exige declarar la definición operativa de cada término/métrica, su fuente de lectura, ni las filas/valores de un paso destructivo. Impacto: 6/9 sesiones con ambigüedad de alcance; un pase completo de specs quemado por dos definiciones de "Gastado"; ~10 docs reescritos por un modelo de ambientes no validado.
+
+8. [ ] **Precedencia del techo de 3 lecturas** — `agents/orchestrator.md`. **S**. `change directo`. El techo es absoluto y no distingue contexto no dirigido de una instrucción del usuario que nombra archivos (`orchestrator.md:54`, `:88`). Impacto: 4/9 sesiones lo excedieron o tuvieron que justificarlo; en una, la instrucción explícita del usuario prevaleció informalmente.
+
+9. [ ] **Review packet y evidencia de "done"** — `agents/orchestrator.md` + `agents/reviewer.md` + `agents/documenter.md`. **M**. `change directo`. El orquestador pasa envelope, affected-set y ledger, pero no el diff (`orchestrator.md:273`, `:284`); el reviewer no tiene bash (`reviewer.md:7-12`, `:100`) y el documenter no exige diff/grep para afirmar "actualizado" (`documenter.md:140-149`). Impacto: 4/9 reviews sin evidencia; docs declarados "actualizados" sin serlo y 3 rondas de corrección.
+
+10. [ ] **Bloque de entorno por plataforma en AGENTS.md** — `templates/AGENTS.md` + `src/cli`. **M**. `change directo`. El template no tiene sección de entorno/shell y `copyTemplates` copia texto estático (`index.js:1495-1510`); `process.platform` solo se usa para resolver binarios (`:514`, `:518`). Puede detectarse win32/PowerShell/CRLF en `init`/`install` y mergearse como bloque LOCKED. Impacto: 5/9 sesiones con errores de shell (npm `.CMD` 3 veces, sin `rg`, heredocs, CRLF redescubierto).
+
+11. [ ] **Guards mecánicos: EOL y merge markers** — `skills/` + `templates/`. **M**. `explore`. No existe guard propio de Ancleto; el marcador de conflicto se commiteó en un documento operativo y el CRLF rompió `bash -n` dos veces. Definir si va como paso de `ancleto-verify`/`ancleto-review`, scaffold de `.gitattributes` o chequeo de `doctor`. Impacto: alto (se podía ejecutar el prompt equivocado; el bug se repitió).
+
+12. [ ] **Orden y presupuesto del working-context** — `src/core/memory/engine.js`. **L**. `explore`. `buildWorkingContext` ordena por scope y `created_at DESC` (`engine.js:124`) y corta por el primer excedente (`:131-140`), sin prioridad ni ranking. En App Registros TC: 125 reglas project activas, 51.001 chars; el bloque completo serían ~54.126 chars (~13.5k tokens) contra 8.000 chars (2.000 tokens); entran 22 y quedan afuera 103 (el archivo declara 104). Las 44 reglas más antiguas son el 50% del contenido y quedan todas afuera.
+
+13. [ ] **Detección de duplicados/stale y consolidación de memoria** — `src/core/memory/` + `agents/memory-keeper.md`. **L**. `explore`. `memory gc` solo purga superseded (`engine.js:340-369`); `doctor` compara únicamente `memory_key` activo (`doctor.js:44-50`), que el índice único ya hace imposible (`database.js:19-20`). No hay detección de contenido casi-duplicado: en la DB auditada hay 3 grupos de contenido idéntico con claves distintas. `@memory-keeper` dice que la deduplicación es del engine y no hace recall previo (`memory-keeper.md:55`). Impacto: 5/9 sesiones con memoria duplicada/stale; agrava el truncado.
+
+14. [ ] **Skill de auditoría de sesión** — `skills/`. **M**. `change directo`. Las 9 auditorías se hicieron con prompts ad-hoc distintos; no hay skill que estandarice evidencia (`file:line`), clasificación por dueño y detección de reglas parche. Impacto: institucionaliza el ciclo de mejora y evita que cada auditoría redescubra el formato.

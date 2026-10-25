@@ -67,6 +67,9 @@ Uso:
   ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
                                    Tokens por sesion de opencode (entrada/salida/razonamiento/cache),
                                    con rollup de subagentes y desglose por agente con --session
+  ancleto stats failures [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>]
+                         [--class <env|check|tool|unknown,...>] [--tool <t,...>] [--json]
+                                   Fallos de tool parts de opencode clasificados en env/check/tool/unknown
   ancleto projects [list] [--json] Lista los proyectos que usan ancleto (version, tier, origen, ruta)
   ancleto projects scan <raiz> [--dry-run] [--json]
                                    Descubre y registra proyectos ancleto bajo una raiz
@@ -2759,7 +2762,558 @@ function sessionInfo(s, totals) {
   }
 }
 
+// --- ancleto stats failures -------------------------------------------------
+// Reporte de fallos de tool parts. Todo es solo lectura sobre la base de opencode.
+// El set de herramientas de shell es unico para SQL y JS (portabilidad Windows/Linux).
+const SHELL_TOOLS = new Set(['bash', 'shell', 'powershell', 'pwsh', 'cmd'])
+const SHELL_TOOLS_SQL = [...SHELL_TOOLS].map((t) => `'${t}'`).join(', ')
+const FAILURE_CLASS_NAMES = ['env', 'check', 'tool', 'unknown']
+const FAILURE_CLASS_RANK = { env: 0, check: 1, tool: 2, unknown: 3 }
+
+function failuresUsage() {
+  return 'ancleto: uso: ancleto stats failures [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--class <c,...>] [--tool <t,...>] [--json]'
+}
+
+function failuresUsageError(message) {
+  console.error(`ancleto: ${message}`)
+  console.error(failuresUsage())
+  process.exit(1)
+}
+
+function parseFailuresArgs(args) {
+  const opts = { all: false, since: null, sinceRaw: null, limit: 10, sessionId: null, classes: null, tools: null, json: false }
+  const list = (value, flag) => {
+    const parts = String(value ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    if (parts.length === 0) failuresUsageError(`${flag} requiere al menos un valor`)
+    return [...new Set(parts)]
+  }
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--all') { opts.all = true; continue }
+    if (a === '--json') { opts.json = true; continue }
+    if (a === '--since') {
+      const v = args[++i]
+      if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) failuresUsageError('--since requiere formato YYYY-MM-DD')
+      const [y, m, d] = v.split('-').map(Number)
+      const t = Date.UTC(y, m - 1, d)
+      const dt = new Date(t)
+      if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) {
+        failuresUsageError(`--since requiere una fecha valida: ${v}`)
+      }
+      opts.sinceRaw = v
+      opts.since = t
+      continue
+    }
+    if (a === '--limit') {
+      const v = args[++i]
+      if (!/^\d+$/.test(String(v ?? ''))) failuresUsageError('--limit requiere un entero >= 1')
+      const n = Number(v)
+      if (n < 1) failuresUsageError('--limit requiere un entero >= 1')
+      opts.limit = n
+      continue
+    }
+    if (a === '--session') {
+      const v = args[++i]
+      if (!v || v.startsWith('--')) failuresUsageError('--session requiere un id')
+      opts.sessionId = v
+      continue
+    }
+    if (a === '--class') {
+      const classes = list(args[++i], '--class')
+      for (const c of classes) {
+        if (!FAILURE_CLASS_NAMES.includes(c)) failuresUsageError(`--class invalida: ${c} (validas: ${FAILURE_CLASS_NAMES.join(', ')})`)
+      }
+      opts.classes = classes
+      continue
+    }
+    if (a === '--tool') {
+      opts.tools = list(args[++i], '--tool')
+      continue
+    }
+    failuresUsageError(`opcion desconocida: ${a}`)
+  }
+  return opts
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Elimina ANSI/OSC y caracteres de control, preservando \t \n \r para poder
+// colapsarlos a un espacio (asi \r\n y \n caen en el mismo grupo).
+function stripControl(value) {
+  return String(value ?? '')
+    .replace(/\u001B\[[0-9;?]*[A-Za-z]/g, '')
+    .replace(/\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g, '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+}
+
+function truncate(value, max) {
+  const s = String(value ?? '')
+  if (s.length <= max) return s
+  return `${s.slice(0, Math.max(0, max - 1))}…`
+}
+
+// Orden: control -> home -> unidades -> raices POSIX -> secretos -> whitespace.
+function maskSensitive(value) {
+  let s = stripControl(value)
+  if (!s) return ''
+  const home = homedir()
+  if (home) {
+    const variants = new Set([home, home.replace(/\\/g, '/'), home.replace(/\//g, '\\')])
+    const flags = process.platform === 'win32' ? 'gi' : 'g'
+    for (const v of variants) {
+      if (v) s = s.replace(new RegExp(escapeRegExp(v), flags), '<home>')
+    }
+  }
+  // Unidad absoluta de Windows sin comerse el esquema de una URL (https://...).
+  s = s.replace(/(^|[^A-Za-z0-9])[A-Za-z]:[\\/][^\s"']*/g, '$1<path>')
+  s = s.replace(/\/home\/[^/\s"']+/g, '/home/<user>')
+  s = s.replace(/\/Users\/[^/\s"']+/g, '/Users/<user>')
+  s = s.replace(/\b((?:Proxy-)?Authorization\s*:\s*)(\S+)\s+\S+/gi, '$1$2 ***')
+  // Solo al inicio del comando/esqueleto: `deploy Basic configuration` es un
+  // comando normal y no debe enmascararse. La forma con `:` puede ir en
+  // cualquier posicion (`curl Bearer:<token>`).
+  s = s.replace(/^(Basic|Bearer)\s+\S+/gi, '$1 ***')
+  s = s.replace(/\b(Basic|Bearer):\S+/gi, '$1 ***')
+  // `Bearer`/`ApiKey` no son palabras normales de comando: se enmascaran en
+  // cualquier posicion. `Basic` solo con token que parezca credencial (digito),
+  // para no tocar `deploy Basic configuration`.
+  s = s.replace(/\b(Bearer)\s+\S+/gi, '$1 ***')
+  s = s.replace(/\b(ApiKey)\s+\S+/gi, '$1 ***')
+  s = s.replace(/\b(Basic)\s+(?=\S*\d)\S+/gi, '$1 ***')
+  s = s.replace(/\b(?:ghp_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]+|xox[baprs]-[A-Za-z0-9-]+)/g, '***')
+  s = s.replace(/(--(?:token|password|apikey|secret))(?:\s*=\s*|\s+)(?:"[^"]*"|'[^']*'|\S+)/gi, '$1=***')
+  s = s.replace(/([A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASSWD)[A-Z0-9_]*)\s*[=:]\s*(?:"[^"]*"|'[^']*'|[^\s&;|]+)/gi, '$1=***')
+  return s.replace(/\s+/g, ' ').trim()
+}
+
+function maskPath(value) {
+  const s = String(value ?? '').replace(/\\/g, '/')
+  if (!s) return ''
+  return truncate(maskSensitive(s), 60)
+}
+
+function stripWrapper(raw) {
+  const s = String(raw ?? '').trim()
+  const m = /^\s*&\s+['"]([^'"]+)['"]\s+shrink\s+--\s+([\s\S]+)$/.exec(s)
+  if (m) return { wrapped: true, inner: m[2].trim() }
+  return { wrapped: false, inner: s }
+}
+
+// Esqueleto estructural: wrapper -> prefijo de entorno -> basename del ejecutable
+// (sin ruta ni extension) + hasta 3 tokens estructurales. Se corta en el primer
+// token que no cumpla el patron (flags, `=`, `/`, `\`, `@`, `$`, comillas, `2>&1`).
+// El esqueleto es la garantia de privacidad; el masking por token es la segunda capa.
+const ENV_PREFIX_TOKEN = /^[A-Za-z_][A-Za-z0-9_]*=/
+const STRUCTURAL_TOKEN = /^[A-Za-z][A-Za-z0-9:_.-]*$/
+const EXE_EXTENSION = /\.(?:exe|cmd|bat|ps1|sh)$/i
+
+function skeletonCommand(raw) {
+  const { wrapped, inner } = stripWrapper(raw)
+  const tokens = String(inner ?? '').trim().split(/\s+/).filter(Boolean)
+  let envPrefix = false
+  while (tokens.length > 0 && ENV_PREFIX_TOKEN.test(tokens[0])) {
+    tokens.shift()
+    envPrefix = true
+  }
+  let skeleton = ''
+  if (tokens.length > 0) {
+    const exe = (tokens.shift().split(/[\\/]/).pop() || '').replace(EXE_EXTENSION, '')
+    if (exe) {
+      const parts = [maskSensitive(exe)]
+      let added = 0
+      for (const token of tokens) {
+        if (added >= 3 || !STRUCTURAL_TOKEN.test(token)) break
+        parts.push(maskSensitive(token))
+        added++
+      }
+      // Masking cross-token: reglas como `Basic|Bearer <token>` o
+      // `Authorization: <esquema> <token>` abarcan varios tokens, asi que el
+      // masking por token solo no las alcanza. Se aplica al string unido; el
+      // resultado se usa tanto como `command` como clave de grupo.
+      skeleton = maskSensitive(parts.join(' '))
+    }
+  }
+  const text = `${envPrefix ? '(env-prefix) ' : ''}${skeleton}`.trim()
+  return { wrapped, command: text ? truncate(text, 160) : null }
+}
+
+function failureBucketsQuery({ dirs, sessionIds, since, classes, tools }) {
+  const params = []
+  let scopePredicate = '1=1'
+  if (sessionIds && sessionIds.length > 0) {
+    scopePredicate = `p.session_id IN (${sessionIds.map(() => '?').join(',')})`
+    params.push(...sessionIds)
+  } else if (dirs) {
+    if (dirs.length === 0) {
+      scopePredicate = '1=0'
+    } else {
+      scopePredicate = `s.directory IN (${dirs.map(() => '?').join(',')})`
+      params.push(...dirs)
+    }
+  }
+  let sincePredicate = '1=1'
+  if (since !== null && since !== undefined) {
+    sincePredicate = 'p.time_created >= ?'
+    params.push(since)
+  }
+  let classMatch = '1=1'
+  if (classes && classes.length > 0) {
+    classMatch = `failure_class IN (${classes.map(() => '?').join(',')})`
+  }
+  let toolMatch = '1=1'
+  if (tools && tools.length > 0) {
+    toolMatch = `tool IN (${tools.map(() => '?').join(',')})`
+  }
+  // Los parametros de --class/--tool van despues de scope/since (una sola query,
+  // con el flag de match calculado en SQL para conservar universe vs matched).
+  if (classes && classes.length > 0) params.push(...classes)
+  if (tools && tools.length > 0) params.push(...tools)
+
+  // output/state.error solo aparecen dentro del CASE de clasificacion; nunca se proyectan.
+  const envText = "lower(coalesce(json_extract(p.data,'$.state.output'),'') || char(10) || coalesce(json_extract(p.data,'$.state.error'),''))"
+  const envSignals = [
+    'is not recognized',
+    'no se reconoce como nombre',
+    'command not found',
+    'missing script',
+    'cannot find module',
+    'parsererror',
+    'unexpected token',
+    'reservado para uso futuro',
+    'enoent'
+  ]
+  const envPredicate = envSignals.map((p) => `${envText} LIKE '%${p}%'`).join('\n          OR ')
+
+  const sql = `
+WITH fallos AS (
+  SELECT
+    s.directory AS project_dir,
+    s.id AS session_id,
+    p.time_created AS at,
+    json_extract(p.data,'$.tool') AS tool,
+    CASE
+      WHEN coalesce(json_extract(p.data,'$.tool'),'') NOT IN (${SHELL_TOOLS_SQL}) THEN 'tool'
+      WHEN CAST(json_extract(p.data,'$.state.metadata.exit') AS INTEGER) IN (127,9009) THEN 'env'
+      WHEN ${envPredicate}
+        THEN 'env'
+      WHEN json_extract(p.data,'$.state.metadata.exit') IS NOT NULL
+       AND CAST(json_extract(p.data,'$.state.metadata.exit') AS INTEGER) <> 0 THEN 'check'
+      ELSE 'unknown'
+    END AS failure_class,
+    CASE WHEN json_extract(p.data,'$.tool') IN (${SHELL_TOOLS_SQL})
+         THEN json_extract(p.data,'$.state.input.command') END AS cmd
+  FROM part p
+  JOIN session s ON s.id = p.session_id
+  WHERE json_extract(p.data,'$.type') = 'tool'
+    AND ( json_extract(p.data,'$.state.status') = 'error'
+       OR ( json_extract(p.data,'$.state.metadata.exit') IS NOT NULL
+        AND json_extract(p.data,'$.state.metadata.exit') <> 0 ) )
+    AND (${scopePredicate})
+    AND (${sincePredicate})
+)
+SELECT project_dir, session_id, tool, failure_class, cmd,
+       COUNT(*) AS parts,
+       MIN(at) AS first_seen,
+       MAX(at) AS last_seen,
+       CASE WHEN (${classMatch}) AND (${toolMatch}) THEN 1 ELSE 0 END AS matched
+FROM fallos
+GROUP BY project_dir, session_id, tool, failure_class, cmd`
+  return { sql, params }
+}
+
+function queryFailureBuckets(db, options) {
+  const { sql, params } = failureBucketsQuery(options)
+  return db.prepare(sql).all(...params)
+}
+
+function compareFailureGroups(a, b) {
+  return (FAILURE_CLASS_RANK[a.class] ?? 9) - (FAILURE_CLASS_RANK[b.class] ?? 9) ||
+    b.parts - a.parts ||
+    b.sessions - a.sessions ||
+    String(a.tool).localeCompare(String(b.tool)) ||
+    String(a.project).localeCompare(String(b.project)) ||
+    String(a.command ?? '').localeCompare(String(b.command ?? '')) ||
+    Number(a.wrapped) - Number(b.wrapped) ||
+    String(a.projectKey).localeCompare(String(b.projectKey))
+}
+
+function aggregateFailures(buckets) {
+  const groups = new Map()
+  for (const b of buckets) {
+    const toolRaw = b.tool ?? null
+    const isShell = toolRaw !== null && SHELL_TOOLS.has(toolRaw)
+    let wrapped = false
+    let command = null
+    if (isShell) {
+      const skeleton = skeletonCommand(b.cmd)
+      wrapped = skeleton.wrapped
+      command = skeleton.command
+    }
+    const key = `${normPath(b.project_dir)}\u0000${toolRaw ?? ''}\u0000${b.failure_class}\u0000${wrapped ? 'w' : 'r'}\u0000${command ?? ''}`
+    let g = groups.get(key)
+    if (!g) {
+      g = {
+        projectKey: normPath(b.project_dir),
+        project: maskPath(b.project_dir) || '(sin proyecto)',
+        tool: truncate(maskSensitive(toolRaw ?? '(desconocido)'), 40),
+        class: b.failure_class,
+        wrapped,
+        command,
+        matched: Boolean(b.matched),
+        parts: 0,
+        sessions: 0,
+        max_per_session: 0,
+        first_seen: null,
+        last_seen: null,
+        session_refs: [],
+        perSession: new Map()
+      }
+      groups.set(key, g)
+    }
+    const parts = Number(b.parts) || 0
+    g.parts += parts
+    const first = b.first_seen === null || b.first_seen === undefined ? null : Number(b.first_seen)
+    const last = b.last_seen === null || b.last_seen === undefined ? null : Number(b.last_seen)
+    if (first !== null && (g.first_seen === null || first < g.first_seen)) g.first_seen = first
+    if (last !== null && (g.last_seen === null || last > g.last_seen)) g.last_seen = last
+    const perSession = g.perSession.get(b.session_id) || { parts: 0 }
+    perSession.parts += parts
+    g.perSession.set(b.session_id, perSession)
+  }
+  const result = [...groups.values()]
+  for (const g of result) {
+    g.sessions = g.perSession.size
+    let max = 0
+    for (const v of g.perSession.values()) if (v.parts > max) max = v.parts
+    g.max_per_session = max
+    g.session_refs = [...g.perSession.entries()]
+      .map(([id, v]) => ({ id, parts: v.parts }))
+      .sort((a, b) => b.parts - a.parts || String(a.id).localeCompare(String(b.id)))
+      .map(({ id }) => ({ id }))
+    delete g.perSession
+  }
+  result.sort(compareFailureGroups)
+  return result
+}
+
+function summarizeFailureGroups(groups) {
+  const byClass = {}
+  const sessionSets = {}
+  for (const c of FAILURE_CLASS_NAMES) {
+    byClass[c] = { parts: 0, groups: 0, sessions: 0 }
+    sessionSets[c] = new Set()
+  }
+  const allSessions = new Set()
+  let parts = 0
+  for (const g of groups) {
+    parts += g.parts
+    const summary = byClass[g.class]
+    if (summary) {
+      summary.parts += g.parts
+      summary.groups += 1
+      for (const ref of g.session_refs) sessionSets[g.class].add(ref.id)
+    }
+    for (const ref of g.session_refs) allSessions.add(ref.id)
+  }
+  for (const c of FAILURE_CLASS_NAMES) byClass[c].sessions = sessionSets[c].size
+  return { parts, groups: groups.length, sessions: allSessions.size, by_class: byClass }
+}
+
+function summarizeFailureClass(groups) {
+  const ids = new Set()
+  let parts = 0
+  for (const g of groups) {
+    parts += g.parts
+    for (const ref of g.session_refs) ids.add(ref.id)
+  }
+  return { parts, groups: groups.length, sessions: ids.size }
+}
+
+function renderFailureClassTable(lines, cls, groups, limit) {
+  const summary = summarizeFailureClass(groups)
+  if (summary.groups === 0) {
+    lines.push(`${cls}: sin fallos`)
+    return
+  }
+  lines.push(`${cls} — ${summary.parts} fallos · ${summary.groups} grupos · ${summary.sessions} sesiones`)
+  lines.push('')
+  lines.push(`  ${'proyecto'.padEnd(32)} ${'tool'.padEnd(6)} ${'fallos'.padStart(6)} ${'ses'.padStart(4)} ${'max'.padStart(4)}  ${'primera'.padEnd(17)} ${'ultima'.padEnd(17)} comando`)
+  for (const g of groups.slice(0, limit)) {
+    const command = g.command ? `${g.wrapped ? '(wrapped) ' : ''}${g.command}` : '-'
+    lines.push(`  ${g.project.padEnd(32)} ${g.tool.padEnd(6)} ${String(g.parts).padStart(6)} ${String(g.sessions).padStart(4)} ${String(g.max_per_session).padStart(4)}  ${fmtDate(g.first_seen).padEnd(17)} ${fmtDate(g.last_seen).padEnd(17)} ${command}`)
+  }
+  if (groups.length > limit) lines.push(`  (${limit} de ${groups.length} grupos)`)
+}
+
+function renderFailuresText(report) {
+  const lines = []
+  const scopeLabel = report.scope === 'all'
+    ? 'todas las sesiones'
+    : report.scope === 'session'
+      ? `sesion ${report.session}`
+      : (report.project || '(sin proyecto)')
+  const sinceLabel = report.since ? ` — desde ${report.since}` : ''
+  lines.push(`ancleto: stats failures (opencode) — ${scopeLabel}${sinceLabel}`)
+  const u = report.universe
+  const by = u.by_class
+  lines.push(`universo: ${u.parts} fallos · ${u.groups} grupos · ${u.sessions} sesiones · env ${by.env.parts} · check ${by.check.parts} · tool ${by.tool.parts} · unknown ${by.unknown.parts}`)
+  if (u.groups === 0) {
+    lines.push('')
+    lines.push('ancleto: no hay fallos en el alcance consultado')
+    if (report.scope === 'directory') lines.push('ancleto: proba --all para ver todas las sesiones de la maquina')
+    return lines.join('\n')
+  }
+  if (report.requestedClasses && report.requestedClasses.length > 0) {
+    for (const cls of FAILURE_CLASS_NAMES) {
+      if (!report.requestedClasses.includes(cls)) continue
+      lines.push('')
+      renderFailureClassTable(lines, cls, report.allGroups.filter((g) => g.class === cls), report.limit)
+    }
+    return lines.join('\n')
+  }
+  lines.push('')
+  renderFailureClassTable(lines, 'env', report.allGroups.filter((g) => g.class === 'env'), report.limit)
+  lines.push('')
+  for (const cls of ['check', 'tool', 'unknown']) {
+    const summary = summarizeFailureClass(report.allGroups.filter((g) => g.class === cls))
+    lines.push(summary.groups === 0
+      ? `${cls}: sin fallos`
+      : `${cls}: ${summary.parts} fallos · ${summary.groups} grupos · ${summary.sessions} sesiones`)
+  }
+  return lines.join('\n')
+}
+
+function failuresReportJson(report) {
+  const iso = (ms) => (ms === null || ms === undefined ? null : new Date(ms).toISOString())
+  return {
+    ok: true,
+    scope: report.scope,
+    project: report.scope === 'all' ? null : report.project,
+    session: report.session,
+    since: report.since,
+    filters: report.filters,
+    universe: report.universe,
+    matched: report.matched,
+    shown: report.shown,
+    groups: report.groups.map((g) => ({
+      project: g.project,
+      tool: g.tool,
+      class: g.class,
+      wrapped: g.wrapped,
+      command: g.command,
+      parts: g.parts,
+      sessions: g.sessions,
+      max_per_session: g.max_per_session,
+      first_seen: iso(g.first_seen),
+      last_seen: iso(g.last_seen),
+      session_refs: g.session_refs.map((r) => ({ id: r.id }))
+    }))
+  }
+}
+
+async function statsFailuresCommand(args) {
+  const opts = parseFailuresArgs(args)
+  const dbPath = opencodeDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no se encontro la base de sesiones de opencode en ${dbPath}`)
+    console.error('ancleto: podes apuntar ANCLETO_OPENCODE_DB a la base o a una copia')
+    process.exitCode = 1
+    return
+  }
+  let db = null
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true })
+    db.exec('PRAGMA query_only = ON')
+  } catch (err) {
+    const message = String(err?.message || err)
+    console.error(`ancleto: no se pudo abrir la base de opencode en solo lectura: ${message}`)
+    if (/SQLITE_READONLY_RECOVERY|SQLITE_CANTOPEN|unable to open|readonly|read-only/i.test(message)) {
+      console.error('ancleto: si la base esta en WAL con recuperacion pendiente, abri opencode una vez o apunta ANCLETO_OPENCODE_DB a una copia')
+    }
+    try { db?.close() } catch { /* ignore */ }
+    process.exitCode = 1
+    return
+  }
+  let report = null
+  try {
+    const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((r) => r.name))
+    if (!tables.has('part') || !tables.has('session')) {
+      const missing = !tables.has('part') ? 'part' : 'session'
+      console.error(`ancleto: la base de opencode no tiene la tabla ${missing}; el reporte de fallos requiere la base de opencode con tool parts`)
+      process.exitCode = 1
+      return
+    }
+    const sessions = db.prepare('SELECT id, parent_id, directory FROM session').all()
+    const tree = buildSessionTree(sessions)
+
+    let scope
+    let dirs = null
+    let sessionIds = null
+    let project = null
+    if (opts.sessionId) {
+      const root = tree.byId.get(opts.sessionId)
+      if (!root) {
+        console.error(`ancleto: no existe la sesion "${opts.sessionId}"`)
+        process.exitCode = 1
+        return
+      }
+      scope = 'session'
+      sessionIds = tree.subtreeIds(opts.sessionId)
+      project = maskPath(root.directory)
+    } else if (opts.all) {
+      scope = 'all'
+    } else {
+      scope = 'directory'
+      const cwdN = normPath(process.cwd())
+      const included = new Set()
+      for (const s of sessions) {
+        if (!s.directory) continue
+        const dn = normPath(s.directory)
+        if (dn === '' || dn === cwdN || dn.startsWith(`${cwdN}/`) || cwdN.startsWith(`${dn}/`)) included.add(s.directory)
+      }
+      dirs = [...included]
+      project = maskPath(process.cwd())
+    }
+
+    const allGroups = aggregateFailures(queryFailureBuckets(db, { dirs, sessionIds, since: opts.since, classes: opts.classes, tools: opts.tools }))
+    const universe = summarizeFailureGroups(allGroups)
+    const matchedGroups = allGroups.filter((g) => g.matched)
+    const matched = { parts: matchedGroups.reduce((n, g) => n + g.parts, 0), groups: matchedGroups.length }
+    const shownGroups = matchedGroups.slice(0, opts.limit)
+
+    report = {
+      scope,
+      project,
+      session: opts.sessionId,
+      since: opts.sinceRaw,
+      filters: { class: opts.classes, tool: opts.tools },
+      universe,
+      matched,
+      shown: shownGroups.length,
+      groups: shownGroups,
+      allGroups: matchedGroups,
+      limit: opts.limit,
+      requestedClasses: opts.classes
+    }
+  } catch (err) {
+    console.error(`ancleto: no se pudo leer los fallos de la base de sesiones: ${err.message}`)
+    process.exitCode = 1
+    return
+  } finally {
+    // Cerrar antes de renderizar: el render usa solo datos en memoria.
+    try { db.close() } catch { /* ignore */ }
+  }
+  if (opts.json) console.log(JSON.stringify(failuresReportJson(report), null, 2))
+  else console.log(renderFailuresText(report))
+}
+
 async function statsCommand(args) {
+  if (args[0] === 'failures') {
+    await statsFailuresCommand(args.slice(1))
+    return
+  }
   const asJson = args.includes('--json')
   const all = args.includes('--all')
   const si = args.indexOf('--session')

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync, cpSync, copyFileSync, readdirSync, chmodSync, statSync, symlinkSync, utimesSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync, cpSync, copyFileSync, linkSync, readdirSync, chmodSync, statSync, symlinkSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, delimiter, isAbsolute } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -3680,6 +3680,23 @@ describe('CLI machine environment (machine-environment-block)', () => {
     return true
   }
 
+  // Herramienta invocable de verdad: en POSIX un script con shebang y en Windows un
+  // ejecutable nativo (enlace duro al binario de node, con copia como fallback).
+  function writeInvokableTool(dir, name) {
+    const file = join(dir, process.platform === 'win32' ? `${name}.exe` : name)
+    if (process.platform === 'win32') {
+      try {
+        linkSync(process.execPath, file)
+      } catch {
+        copyFileSync(process.execPath, file)
+      }
+    } else {
+      writeFileSync(file, '#!/bin/sh\nexit 0\n')
+      chmodSync(file, 0o755)
+    }
+    return file
+  }
+
   it('init sin git crea el artefacto, advierte y no escribe .gitignore', () => {
     withDir((dir) => {
       const r = run(['init', '--tier', 'gratis', '--no-mcp'], dir, regEnv(dir))
@@ -4091,7 +4108,26 @@ describe('CLI machine environment (machine-environment-block)', () => {
     })
   })
 
-  it('un rg falso agregado al PATH pasa a disponible tras upgrade', () => {
+  it('un rg invocable agregado al PATH pasa a disponible tras upgrade', () => {
+    withDir((dir) => {
+      const binDir = join(dir, 'bin')
+      mkdirSync(binDir)
+      const env = { ...regEnv(dir), [PATH_KEY]: binDir }
+
+      const installed = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, env)
+      assert.equal(installed.status, 0, installed.stderr)
+      assert.match(readArtifact(dir), /^- rg: no disponible — fallback: /m)
+
+      writeInvokableTool(binDir, 'rg')
+
+      const upgraded = run(['upgrade'], dir, env)
+      assert.equal(upgraded.status, 0, upgraded.stderr)
+      assert.match(upgraded.stdout, /machine-env\.md generado/)
+      assert.match(readArtifact(dir), /^- rg: disponible$/m)
+    })
+  })
+
+  it('un rg que resuelve pero no se puede invocar no pasa a disponible y expone el fallo', () => {
     withDir((dir) => {
       const binDir = join(dir, 'bin')
       mkdirSync(binDir)
@@ -4102,13 +4138,14 @@ describe('CLI machine environment (machine-environment-block)', () => {
       assert.match(readArtifact(dir), /^- rg: no disponible — fallback: /m)
 
       const rgFile = join(binDir, process.platform === 'win32' ? 'rg.exe' : 'rg')
-      writeFileSync(rgFile, '')
+      writeFileSync(rgFile, 'no es un ejecutable')
       if (process.platform !== 'win32') chmodSync(rgFile, 0o755)
 
       const upgraded = run(['upgrade'], dir, env)
       assert.equal(upgraded.status, 0, upgraded.stderr)
-      assert.match(upgraded.stdout, /machine-env\.md generado/)
-      assert.match(readArtifact(dir), /^- rg: disponible$/m)
+      const content = readArtifact(dir)
+      assert.match(content, /^- rg: no disponible — fallback: .* — bloqueado: /m)
+      assert.doesNotMatch(content, /^- rg: disponible$/m)
     })
   })
 

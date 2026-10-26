@@ -12,6 +12,19 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const ARTIFACT_REL = '.ancleto/machine-env.md'
 const TOOL_ORDER = ['rg', 'node', 'npm', 'git', 'python']
 const POSIX_SHELLS = new Set(['bash', 'zsh', 'sh', 'dash'])
+// Sonda de invocabilidad: bandera de version barata y timeout acotado para que
+// `init`/`upgrade` no se cuelguen. La version observada nunca se renderiza.
+const TOOL_PROBE_ARGS = ['--version']
+export const TOOL_PROBE_TIMEOUT_MS = 2000
+// Techo acumulado de sondas por corrida: un shim patologico (el alias de la Store de
+// Windows, por ejemplo) no puede estirar la deteccion mas alla de este presupuesto.
+const TOOL_PROBE_BUDGET_MS = 10000
+// Cada llamada a git tambien esta acotada: `detectEol` puede encadenar varias y una
+// bloqueada dejaria `init` colgado.
+const GIT_TIMEOUT_MS = 5000
+// Tope del texto de fallo observado: el artefacto es un archivo sin secretos y una
+// linea larga de stderr puede arrastrar rutas absolutas o tokens.
+const FAILURE_TEXT_MAX = 200
 
 export function machineEnvPath(projectRoot) {
   return join(projectRoot, '.ancleto', 'machine-env.md')
@@ -28,7 +41,11 @@ function readAncletoVersion() {
 
 function runGit(cwd, args) {
   try {
-    const res = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
+    const res = spawnSync('git', ['-C', cwd, ...args], {
+      encoding: 'utf8',
+      timeout: GIT_TIMEOUT_MS,
+      windowsHide: true
+    })
     return {
       ok: !res.error && res.status === 0,
       status: res.status,
@@ -100,21 +117,126 @@ function isExecutableFile(filePath, platform) {
   }
 }
 
-// Disponibilidad por busqueda en PATH (con PATHEXT en Windows): no se ejecutan binarios
-// ni se piden versiones. El valor de PATH nunca se renderiza.
-function findExecutable(name, { pathValue, pathext, platform }) {
-  if (!pathValue) return false
+// Candidatos resolubles en PATH (con PATHEXT en Windows). Gana el primer directorio de
+// PATH que provee la herramienta; dentro de el se prueban las extensiones de PATHEXT antes
+// que el nombre exacto, porque en Windows un archivo sin extension no es un ejecutable
+// nativo (suele ser un shim POSIX) y su fallo de invocacion enmascara al candidato real.
+// El valor de PATH nunca se renderiza.
+function findExecutables(name, { pathValue, pathext, platform }) {
+  if (!pathValue) return []
   const separator = platform === 'win32' ? ';' : ':'
   const dirs = pathValue.split(separator).map((dir) => dir.replace(/^"|"$/g, '')).filter(Boolean)
   const exts = platform === 'win32'
-    ? ['', ...(pathext || '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean).map((ext) => (ext.startsWith('.') ? ext : `.${ext}`))]
+    ? [
+      ...(pathext || '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean).map((ext) => (ext.startsWith('.') ? ext : `.${ext}`)),
+      ''
+    ]
     : ['']
   for (const dir of dirs) {
+    const candidates = []
     for (const ext of exts) {
-      if (isExecutableFile(join(dir, name + ext), platform)) return true
+      const candidate = join(dir, name + ext)
+      if (isExecutableFile(candidate, platform)) candidates.push(candidate)
+    }
+    if (candidates.length > 0) return candidates
+  }
+  return []
+}
+
+// Un `.cmd`/`.bat` no se puede lanzar directo desde Node >= 18.20 (CVE-2024-27980):
+// `spawnSync` sin shell devuelve EINVAL y ese error describe al runtime, no a la
+// herramienta. En win32 el shim se enruta por ComSpec para que el veredicto sea de la
+// tool y no de la limitacion del runtime.
+function isBatchShim(candidate) {
+  return /\.(cmd|bat)$/i.test(String(candidate))
+}
+
+// Comando para ComSpec: comillas dobles que encierran la ruta del shim y sus flags.
+// Con `/s` cmd quita la primera y la ultima comilla y ejecuta el resto literal, de modo
+// que un path con espacios queda protegido. `windowsVerbatimArguments` evita que Node
+// re-escape las comillas internas al construir la linea de comandos.
+function comspecCommand(candidate) {
+  return `""${candidate}" ${TOOL_PROBE_ARGS.join(' ')}"`
+}
+
+// Invocacion real del candidato. Los candidatos `.cmd`/`.bat` en win32 pasan por ComSpec;
+// el resto se lanza directo, sin shell.
+function spawnProbe(candidate, platform) {
+  const options = { encoding: 'utf8', timeout: TOOL_PROBE_TIMEOUT_MS, windowsHide: true }
+  try {
+    if (platform === 'win32' && isBatchShim(candidate)) {
+      const comspec = process.env.ComSpec || 'cmd.exe'
+      return spawnSync(comspec, ['/d', '/s', '/c', comspecCommand(candidate)], {
+        ...options,
+        windowsVerbatimArguments: true
+      })
+    }
+    return spawnSync(candidate, TOOL_PROBE_ARGS, options)
+  } catch (error) {
+    return { error, status: null, stdout: '', stderr: '' }
+  }
+}
+
+// Invocabilidad real: se ejecuta el candidato con una bandera de version barata y un
+// timeout acotado. Resolver en PATH no basta: un shim que no se puede lanzar es una
+// herramienta bloqueada, no una herramienta disponible.
+//
+// Veredicto en tres estados:
+//   ok           -> el candidato se ejecuto con exito
+//   blocked      -> fallo real: error de spawn, exit no cero o timeout
+//   inconclusive -> no hubo veredicto de la herramienta (guard de Node o presupuesto)
+function probeExecutable(candidate, platform) {
+  const res = spawnProbe(candidate, platform)
+  if (res.error) {
+    // EINVAL es la guarda de Node para shims de batch: habla del runtime, no de la
+    // herramienta, asi que no habilita el veredicto `bloqueado`.
+    if (res.error.code === 'EINVAL') {
+      return {
+        ok: false,
+        blocked: false,
+        inconclusive: true,
+        reason: `no se pudo determinar la invocabilidad de ${candidateName(candidate)} (EINVAL)`
+      }
+    }
+    return { ok: false, blocked: true, inconclusive: false, reason: executionFailure(candidate, res.error) }
+  }
+  if (res.status !== 0) {
+    return {
+      ok: false,
+      blocked: true,
+      inconclusive: false,
+      reason: firstLine(res.stderr) || `no se pudo ejecutar ${candidateName(candidate)} (codigo ${res.status})`
     }
   }
-  return false
+  return { ok: true, blocked: false, inconclusive: false, reason: null }
+}
+
+// Fallo observado de la invocacion: primera linea de stderr si la hubo, si no el error
+// de spawn (codigo + nombre del candidato, sin filtrar el path absoluto).
+function executionFailure(candidate, error) {
+  const code = error && error.code ? error.code : 'UNKNOWN'
+  return `no se pudo ejecutar ${candidateName(candidate)} (${code})`
+}
+
+function candidateName(candidate) {
+  const parts = String(candidate).split(/[\\/]/)
+  return parts[parts.length - 1] || String(candidate)
+}
+
+// Primera linea de stderr acotada: sin secuencias ANSI, sin caracteres de control y con
+// un tope de longitud. El artefacto es un archivo que no debe llevar secretos, y una
+// linea larga de un shim puede arrastrar rutas absolutas o tokens.
+function firstLine(text) {
+  const raw = String(text || '').split(/\r?\n/).find((entry) => entry.trim().length > 0)
+  if (!raw) return ''
+  const clean = raw
+    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (clean.length <= FAILURE_TEXT_MAX) return clean
+  return `${clean.slice(0, FAILURE_TEXT_MAX - 1)}…`
 }
 
 function fallbackFor(name, platform) {
@@ -134,8 +256,9 @@ function fallbackFor(name, platform) {
   }
 }
 
-// `overrides` es solo una costura de test (snapshot de plataforma, entorno y PATH); en
-// produccion se omite y se lee el proceso. No es configuracion publica ni se expone en CLI.
+// `overrides` es solo una costura de test (snapshot de plataforma, entorno, PATH y
+// presupuesto de sondas); en produccion se omite y se lee el proceso. No es configuracion
+// publica ni se expone en CLI.
 export function detectMachineFacts(overrides = {}) {
   const platform = overrides.platform || process.platform
   const env = overrides.env || process.env
@@ -146,9 +269,40 @@ export function detectMachineFacts(overrides = {}) {
   const pathext = overrides.pathext ?? env.PATHEXT ?? ''
   const shell = detectShell({ platform, env })
   const eol = detectEol({ platform, cwd })
+  // Presupuesto acumulado de sondas: agotado, los candidatos restantes quedan sin
+  // sondear y la herramienta queda inconclusa (nunca `disponible` por omision).
+  const probeDeadline = Date.now() + (overrides.probeBudgetMs ?? TOOL_PROBE_BUDGET_MS)
   const tools = TOOL_ORDER.map((name) => {
-    const available = findExecutable(name, { pathValue, pathext, platform })
-    return { name, available, fallback: available ? null : fallbackFor(name, platform) }
+    const candidates = findExecutables(name, { pathValue, pathext, platform })
+    if (candidates.length === 0) {
+      return { name, available: false, fallback: fallbackFor(name, platform), blocked: false, inconclusive: false, reason: null }
+    }
+    let reason = null
+    let inconclusiveReason = null
+    for (const candidate of candidates) {
+      if (Date.now() >= probeDeadline) {
+        inconclusiveReason = `no se pudo sondear ${name} (presupuesto de sondas agotado)`
+        break
+      }
+      const probe = probeExecutable(candidate, platform)
+      if (probe.ok) return { name, available: true, fallback: null, blocked: false, inconclusive: false, reason: null }
+      if (probe.blocked) {
+        if (reason === null) reason = probe.reason
+      } else if (inconclusiveReason === null) {
+        inconclusiveReason = probe.reason
+      }
+    }
+    // Resuelve en PATH pero no se puede invocar: bloqueado, con el fallo observado.
+    // Sin fallo real observado (solo veredictos inconclusos) no se declara bloqueado.
+    const blocked = reason !== null
+    return {
+      name,
+      available: false,
+      fallback: fallbackFor(name, platform),
+      blocked,
+      inconclusive: !blocked && inconclusiveReason !== null,
+      reason: blocked ? reason : inconclusiveReason
+    }
   })
   return {
     platform,
@@ -199,7 +353,8 @@ export function renderMachineEnv(facts, { generatedAt } = {}) {
     if (tool.available) {
       lines.push(`- ${tool.name}: disponible`)
     } else {
-      lines.push(`- ${tool.name}: no disponible — fallback: ${tool.fallback || 'ninguno (reportar)'}`)
+      const blocked = tool.blocked && tool.reason ? ` — bloqueado: ${tool.reason}` : ''
+      lines.push(`- ${tool.name}: no disponible — fallback: ${tool.fallback || 'ninguno (reportar)'}${blocked}`)
     }
   }
   lines.push(

@@ -196,15 +196,24 @@ conservar el artefacto generado.
    `unknown` cuando no se pueda determinar;
 3. fin de línea esperado (CRLF o LF) y la fuente usada para determinarlo (`gitattributes`,
    `core.eol`, `core.autocrlf` o `platform-default`);
-4. la lista fija de herramientas `rg`, `node`, `npm`, `git` y `python`, cada una con disponibilidad sí/no y sin versión;
-5. para cada herramienta ausente, su fallback en una línea;
+4. la lista fija de herramientas `rg`, `node`, `npm`, `git` y `python`, cada una con disponibilidad
+   sí/no —entendida como resoluble e invocable, nunca solo por presencia en `PATH`— y sin versión;
+5. para cada herramienta no disponible, su fallback en una línea, seguido de
+   `— bloqueado: <fallo saneado>` cuando el intento de invocación observó un fallo real; el sufijo
+   SHALL ser aditivo y NO SHALL alterar el prefijo, los campos ni su orden;
 6. fecha de generación y versión de ancleto;
 7. una nota que declare el bloque como pista de entorno y qué reportar si un comando falla por entorno.
 
-Cuando un campo no pueda determinarse, el bloque SHALL declararlo como desconocido en lugar de
-inventar un valor. El bloque NO SHALL contener secretos, credenciales, tokens ni el valor de
-`PATH`, y NO SHALL incluir versiones de herramientas. Tampoco SHALL declarar reglas de heredoc,
-quoting, `PATHEXT`, codepage ni otras variables de entorno.
+Cuando un campo no pueda determinarse, salvo la disponibilidad de herramientas, el bloque SHALL
+declararlo como desconocido en lugar de inventar un valor. El bloque NO SHALL contener secretos,
+credenciales, tokens ni el valor de `PATH`, y NO SHALL incluir versiones de herramientas. Tampoco
+SHALL declarar reglas de heredoc, quoting, `PATHEXT`, codepage ni otras variables de entorno.
+
+El `<fallo saneado>` del sufijo `— bloqueado:` SHALL derivarse de la primera línea no vacía de
+`stderr` del intento —o, si no la hubo, del error de arranque con su código— y SHALL estar libre de
+secuencias ANSI/OSC y de caracteres de control, con los espacios colapsados y un máximo de 200
+caracteres, de modo que el artefacto no incorpore texto de error sin acotar. La sonda NO SHALL
+volcar la salida estándar del candidato en el bloque.
 
 #### Scenario: Windows PowerShell 5.1
 
@@ -258,6 +267,82 @@ quoting, `PATHEXT`, codepage ni otras variables de entorno.
 - **WHEN** el entorno del proceso contiene variables con credenciales o tokens
 - **THEN** el bloque generado no contiene esos valores
 - **AND** tampoco contiene el valor completo de `PATH`
+
+#### Scenario: Fallo de invocación acotado y saneado
+
+- **WHEN** el `stderr` observado de un candidato contiene secuencias ANSI, caracteres de control o
+  una línea de más de 200 caracteres
+- **THEN** el fallo incluido tras `— bloqueado:` contiene como máximo 200 caracteres de una sola
+  línea
+- **AND** no contiene secuencias ANSI ni caracteres de control
+- **AND** no incluye la salida estándar del candidato
+
+### Requirement: Sonda de invocabilidad de herramientas
+
+La disponibilidad de cada herramienta de la lista fija SHALL determinarse invocando el candidato
+resuelto en `PATH`, no solo por su presencia. Una herramienta SHALL declararse `disponible` solo
+cuando un candidato invocado con una bandera de versión termina con éxito; un candidato que
+resuelve pero no se puede invocar SHALL dejarla como no disponible aunque el archivo exista.
+
+Cada intento de invocación SHALL estar acotado a 2 s y el conjunto de intentos de una corrida
+SHALL estar acotado por un presupuesto acumulado de 10 s, de modo que una herramienta colgada no
+bloquee `ancleto init`, `ancleto install --project` ni `ancleto upgrade`. Cada invocación de `git`
+usada para determinar el fin de línea SHALL estar acotada a 5 s.
+
+Cuando una herramienta resuelve en más de un archivo candidato (por ejemplo, por las extensiones
+de `PATHEXT` en `win32`), el sistema SHALL sondearlos hasta obtener un veredicto y, si ninguno se
+puede invocar, SHALL reportar el primer fallo real observado.
+
+En `win32`, los candidatos `.cmd` y `.bat` SHALL sondearse a través del procesador de comandos
+(`process.env.ComSpec`, o `cmd.exe` si no está definido) con `windowsVerbatimArguments`
+habilitado; los candidatos que no son de batch SHALL lanzarse directamente, sin shell.
+
+Un intento SHALL producir un veredicto interno de disponible, bloqueado —error de arranque, salida
+distinta de cero o timeout— o no concluyente —error que describe al runtime y no a la herramienta,
+como la guarda `EINVAL` de Node para shims de batch, o presupuesto agotado antes de sondear—. Un
+veredicto no concluyente NO SHALL considerarse disponible: SHALL resolverse como `no disponible`,
+sin agregar el sufijo `— bloqueado:`, de modo que el render siga siendo binario.
+
+La sonda NO SHALL renderizar la versión observada ni su salida; la bandera de versión SHALL usarse
+solo como criterio de invocabilidad.
+
+#### Scenario: Resoluble pero no invocable
+
+- **WHEN** una herramienta tiene un candidato en `PATH` cuyo intento de invocación falla con error
+  de arranque, salida distinta de cero o timeout, y ningún otro candidato se invoca con éxito
+- **THEN** el bloque la declara `no disponible` con su fallback
+- **AND** agrega el sufijo `— bloqueado: <fallo saneado>`
+- **AND** no la declara `disponible`
+
+#### Scenario: Sonda de invocación acotada por timeout
+
+- **WHEN** un candidato de una herramienta no termina dentro de los 2 s
+- **THEN** el intento se abandona y la generación del artefacto continúa
+- **AND** ese candidato no se declara `disponible`
+
+#### Scenario: Sonda sin veredicto
+
+- **WHEN** ningún candidato de una herramienta permite concluir su invocabilidad —el intento
+  devuelve la guarda `EINVAL` de Node para shims de batch o el presupuesto acumulado de 10 s se
+  agota antes de sondearlo—
+- **THEN** la herramienta se declara `no disponible` con su fallback
+- **AND** el bloque no agrega el sufijo `— bloqueado:`
+- **AND** no se declara `disponible`
+
+#### Scenario: Shim de batch en `win32`
+
+- **WHEN** el único candidato resoluble de una herramienta en `win32` es un `.cmd` o `.bat` que
+  responde con éxito a la bandera de versión
+- **THEN** el candidato se invoca a través del procesador de comandos
+- **AND** la herramienta se declara `disponible`
+- **AND** el bloque no emite la versión observada
+
+#### Scenario: Sondeo de fin de línea con `git` bloqueado
+
+- **WHEN** una invocación de `git` usada para determinar el fin de línea no responde
+- **THEN** la invocación se corta a los 5 s
+- **AND** la detección continúa con la siguiente fuente o con `platform-default`
+- **AND** la generación del artefacto no se bloquea
 
 ### Requirement: Origen y declaración del shell
 

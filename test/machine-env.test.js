@@ -1,13 +1,14 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   detectMachineFacts,
   machineEnvPath,
   renderMachineEnv,
+  TOOL_PROBE_TIMEOUT_MS,
   writeMachineEnv
 } from '../src/core/machine-env.js'
 
@@ -29,9 +30,28 @@ function withDir(fn) {
   }
 }
 
-function writeExecutable(dir, name) {
-  const file = join(dir, name)
-  writeFileSync(file, '')
+// Herramienta realmente invocable: en POSIX un script con shebang y en Windows un
+// ejecutable nativo (enlace duro al binario de node, con copia como fallback). Resolver
+// en PATH no alcanza: la sonda exige que el binario se pueda ejecutar.
+function writeInvokableTool(dir, name) {
+  const file = join(dir, process.platform === 'win32' ? `${name}.exe` : name)
+  if (process.platform === 'win32') {
+    try {
+      linkSync(process.execPath, file)
+    } catch {
+      copyFileSync(process.execPath, file)
+    }
+  } else {
+    writeFileSync(file, '#!/bin/sh\nexit 0\n')
+    chmodSync(file, 0o755)
+  }
+  return file
+}
+
+// Resuelve en PATH pero no se puede invocar: el archivo existe y no es un binario valido.
+function writeUninvokableTool(dir, name) {
+  const file = join(dir, process.platform === 'win32' ? `${name}.exe` : name)
+  writeFileSync(file, 'no es un ejecutable')
   if (process.platform !== 'win32') chmodSync(file, 0o755)
   return file
 }
@@ -118,6 +138,26 @@ describe('machine-env - render', () => {
     assert.equal(toolLines[3], '- git: no disponible — fallback: ninguno (reportar)')
     assert.ok(toolLines[1].includes('disponible') && !toolLines[1].includes('fallback'))
     assert.ok(toolLines[4].includes('disponible') && !toolLines[4].includes('fallback'))
+  })
+
+  it('distingue una herramienta bloqueada de una ausente y expone el fallo observado', () => {
+    const facts = fixedFacts({
+      tools: [
+        { name: 'rg', available: false, fallback: 'grep -R', blocked: true, reason: 'no se pudo ejecutar rg (ENOEXEC)' },
+        { name: 'node', available: true, fallback: null, blocked: false, reason: null },
+        { name: 'npm', available: false, fallback: 'pnpm o yarn si existen', blocked: false, reason: null },
+        { name: 'git', available: true, fallback: null, blocked: false, reason: null },
+        { name: 'python', available: false, fallback: 'python3', blocked: false, reason: null }
+      ]
+    })
+    const out = renderMachineEnv(facts, { generatedAt: GENERATED_AT })
+    const toolLines = out.split('\n').filter((line) => /^- (rg|node|npm|git|python):/.test(line))
+
+    assert.equal(
+      toolLines[0],
+      '- rg: no disponible — fallback: grep -R — bloqueado: no se pudo ejecutar rg (ENOEXEC)'
+    )
+    assert.equal(toolLines[2], '- npm: no disponible — fallback: pnpm o yarn si existen')
   })
 
   it('no emite versiones de herramientas ni heredoc/quoting/PATHEXT', () => {
@@ -296,12 +336,12 @@ describe('machine-env - deteccion de herramientas', () => {
     })
   })
 
-  it('reporta disponible solo lo que existe en el PATH dado', () => {
+  it('reporta disponible solo lo que se puede invocar', () => {
     withDir((dir) => {
       const binDir = join(dir, 'bin')
       mkdirSync(binDir)
-      writeExecutable(binDir, 'rg')
-      writeExecutable(binDir, 'node')
+      writeInvokableTool(binDir, 'rg')
+      writeInvokableTool(binDir, 'node')
 
       const facts = detectMachineFacts({
         platform: process.platform,
@@ -320,6 +360,207 @@ describe('machine-env - deteccion de herramientas', () => {
       assert.equal(byName.git.available, false)
       assert.equal(byName.python.available, false)
       assert.deepEqual(facts.tools.map((tool) => tool.name), TOOL_ORDER)
+    })
+  })
+
+  it('una herramienta que resuelve pero falla al invocarse no se reporta como disponible y expone el fallo', () => {
+    withDir((dir) => {
+      const binDir = join(dir, 'bin')
+      mkdirSync(binDir)
+      writeUninvokableTool(binDir, 'rg')
+
+      const facts = detectMachineFacts({
+        platform: process.platform,
+        env: {},
+        cwd: nonRepoDir(dir),
+        osRelease: 'test-release',
+        arch: 'x64',
+        path: binDir,
+        pathext: ''
+      })
+
+      const rg = facts.tools.find((tool) => tool.name === 'rg')
+      assert.equal(rg.available, false, 'no es una herramienta disponible')
+      assert.equal(rg.blocked, true, 'resuelve pero no se puede invocar')
+      assert.ok(rg.reason && rg.reason.length > 0, 'expone el fallo observado')
+      assert.match(rg.reason, /rg/)
+
+      const out = renderMachineEnv(facts, { generatedAt: GENERATED_AT })
+      const line = out.split('\n').find((entry) => entry.startsWith('- rg:'))
+      assert.match(line, /^- rg: no disponible — fallback: /)
+      assert.match(line, /— bloqueado: /)
+      assert.ok(line.includes(rg.reason), 'la linea incluye el fallo observado')
+      assert.doesNotMatch(line, /^- rg: disponible$/)
+    })
+  })
+
+  it('distingue un exit no cero de un fallo de spawn y expone la causa observada', (t) => {
+    if (process.platform === 'win32') {
+      t.skip('un script POSIX con exit no cero no es invocable como ejecutable nativo en win32')
+      return
+    }
+    withDir((dir) => {
+      const binDir = join(dir, 'bin')
+      mkdirSync(binDir)
+
+      // Corre pero falla: la primera linea de stderr es la causa.
+      const withStderr = join(dir, 'con-stderr')
+      mkdirSync(withStderr)
+      writeFileSync(join(withStderr, 'rg'), '#!/bin/sh\necho "probe fallo" >&2\nexit 3\n')
+      chmodSync(join(withStderr, 'rg'), 0o755)
+
+      // Corre pero falla en silencio: se reporta el codigo de salida.
+      const silent = join(dir, 'silencioso')
+      mkdirSync(silent)
+      writeFileSync(join(silent, 'rg'), '#!/bin/sh\nexit 4\n')
+      chmodSync(join(silent, 'rg'), 0o755)
+
+      const probe = (path) => detectMachineFacts({
+        platform: 'linux',
+        env: {},
+        cwd: nonRepoDir(dir),
+        osRelease: 'test-release',
+        arch: 'x64',
+        path,
+        pathext: ''
+      }).tools.find((tool) => tool.name === 'rg')
+
+      const stderrTool = probe(withStderr)
+      assert.equal(stderrTool.available, false)
+      assert.equal(stderrTool.blocked, true)
+      assert.equal(stderrTool.reason, 'probe fallo')
+
+      const silentTool = probe(silent)
+      assert.equal(silentTool.available, false)
+      assert.equal(silentTool.blocked, true)
+      assert.match(silentTool.reason, /no se pudo ejecutar rg \(codigo 4\)/)
+    })
+  })
+
+  it('una herramienta que nunca termina queda acotada por el timeout de la sonda', (t) => {
+    if (process.platform === 'win32') {
+      t.skip('win32 no permite crear un ejecutable nativo que se cuelgue')
+      return
+    }
+    withDir((dir) => {
+      const binDir = join(dir, 'bin')
+      mkdirSync(binDir)
+      const hanging = join(binDir, 'rg')
+      writeFileSync(hanging, '#!/bin/sh\nsleep 30\n')
+      chmodSync(hanging, 0o755)
+
+      const startedAt = Date.now()
+      const rg = detectMachineFacts({
+        platform: 'linux',
+        env: {},
+        cwd: nonRepoDir(dir),
+        osRelease: 'test-release',
+        arch: 'x64',
+        path: binDir,
+        pathext: ''
+      }).tools.find((tool) => tool.name === 'rg')
+      const elapsed = Date.now() - startedAt
+
+      assert.equal(rg.available, false)
+      assert.equal(rg.blocked, true)
+      assert.ok(rg.reason && rg.reason.length > 0, 'expone el fallo observado')
+      assert.ok(
+        elapsed < TOOL_PROBE_TIMEOUT_MS * 2,
+        `la sonda debe cortar por timeout (tardo ${elapsed} ms, timeout ${TOOL_PROBE_TIMEOUT_MS} ms)`
+      )
+    })
+  })
+
+  it('un shim .cmd invocable en win32 se reporta como disponible', (t) => {
+    if (process.platform !== 'win32') {
+      t.skip('un shim .cmd solo es invocable por ComSpec en win32')
+      return
+    }
+    withDir((dir) => {
+      const binDir = join(dir, 'bin')
+      mkdirSync(binDir)
+      // Shim de batch: en Node >= 18.20 no se puede lanzar sin shell (EINVAL), asi que
+      // la sonda lo enruta por ComSpec.
+      writeFileSync(join(binDir, 'rg.cmd'), '@echo off\r\necho rg 14.0.0\r\n')
+
+      const facts = detectMachineFacts({
+        platform: 'win32',
+        env: {},
+        cwd: nonRepoDir(dir),
+        osRelease: 'test-release',
+        arch: 'x64',
+        path: binDir,
+        pathext: '.EXE;.CMD;.BAT;.COM'
+      })
+
+      const rg = facts.tools.find((tool) => tool.name === 'rg')
+      assert.equal(rg.available, true, 'el shim se pudo ejecutar por ComSpec')
+      assert.equal(rg.blocked, false, 'un shim funcional no esta bloqueado')
+      assert.equal(rg.inconclusive, false, 'el veredicto es concluyente')
+    })
+  })
+
+  it('el motivo de un fallo se acota y no arrastra secuencias ANSI ni de control', () => {
+    withDir((dir) => {
+      const binDir = join(dir, 'bin')
+      mkdirSync(binDir)
+      const payload = `a\u001b[31m${'x'.repeat(600)}\u001b[0m`
+      if (process.platform === 'win32') {
+        writeFileSync(join(binDir, 'rg.cmd'), `@echo off\r\necho ${payload} 1>&2\r\nexit /b 3\r\n`)
+      } else {
+        const file = join(binDir, 'rg')
+        writeFileSync(file, `#!/bin/sh\nprintf '%s\\n' '${payload}' >&2\nexit 3\n`)
+        chmodSync(file, 0o755)
+      }
+
+      const facts = detectMachineFacts({
+        platform: process.platform,
+        env: {},
+        cwd: nonRepoDir(dir),
+        osRelease: 'test-release',
+        arch: 'x64',
+        path: binDir,
+        pathext: '.EXE;.CMD;.BAT;.COM'
+      })
+
+      const rg = facts.tools.find((tool) => tool.name === 'rg')
+      assert.equal(rg.available, false)
+      assert.equal(rg.blocked, true)
+      assert.ok(rg.reason.length <= 200, `el motivo se acota (${rg.reason.length} chars)`)
+      assert.doesNotMatch(rg.reason, /[\u0000-\u001f\u007f]/, 'sin secuencias ANSI ni de control')
+
+      const out = renderMachineEnv(facts, { generatedAt: GENERATED_AT })
+      const line = out.split('\n').find((entry) => entry.startsWith('- rg:'))
+      assert.ok(line.length < 320, `la linea del artefacto se acota (${line.length} chars)`)
+    })
+  })
+
+  it('un candidato abandonado por el presupuesto queda inconcluso y no disponible', () => {
+    withDir((dir) => {
+      const binDir = join(dir, 'bin')
+      mkdirSync(binDir)
+      writeInvokableTool(binDir, 'rg')
+
+      const facts = detectMachineFacts({
+        platform: process.platform,
+        env: {},
+        cwd: nonRepoDir(dir),
+        osRelease: 'test-release',
+        arch: 'x64',
+        path: binDir,
+        pathext: '',
+        probeBudgetMs: 0
+      })
+
+      const rg = facts.tools.find((tool) => tool.name === 'rg')
+      assert.equal(rg.available, false, 'sin sondear no se puede afirmar que sea disponible')
+      assert.equal(rg.blocked, false, 'sin fallo real no hay veredicto bloqueado')
+      assert.equal(rg.inconclusive, true, 'el candidato abandonado queda inconcluso')
+
+      const out = renderMachineEnv(facts, { generatedAt: GENERATED_AT })
+      const line = out.split('\n').find((entry) => entry.startsWith('- rg:'))
+      assert.match(line, /^- rg: no disponible — fallback: /)
+      assert.doesNotMatch(line, /— bloqueado: /, 'un veredicto inconcluso no se reporta como bloqueado')
     })
   })
 
@@ -360,8 +601,7 @@ describe('machine-env - deteccion de herramientas', () => {
     withDir((dir) => {
       const binDir = join(dir, 'bin')
       mkdirSync(binDir)
-      const file = join(binDir, 'rg')
-      writeFileSync(file, '')
+      const file = writeInvokableTool(binDir, 'rg')
       chmodSync(file, 0o644)
 
       const asLinux = detectMachineFacts({
@@ -383,8 +623,11 @@ describe('machine-env - deteccion de herramientas', () => {
         pathext: ''
       })
 
-      assert.equal(asLinux.tools.find((tool) => tool.name === 'rg').available, false, 'X_OK falla en linux')
-      assert.equal(asWindows.tools.find((tool) => tool.name === 'rg').available, true, 'win32 no exige X_OK')
+      const asLinuxRg = asLinux.tools.find((tool) => tool.name === 'rg')
+      const asWindowsRg = asWindows.tools.find((tool) => tool.name === 'rg')
+      assert.equal(asLinuxRg.available, false, 'X_OK falla en linux')
+      assert.equal(asLinuxRg.blocked, false, 'en linux no hay candidato: la herramienta esta ausente')
+      assert.equal(asWindowsRg.blocked, true, 'win32 no exige X_OK: el candidato resuelve y queda bloqueado')
     })
   })
 })

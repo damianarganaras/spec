@@ -7,6 +7,7 @@ color: '#8b5cf6'
 tools:
   read: true
   bash: true
+  task: false
 permission:
   bash:
     '*': deny

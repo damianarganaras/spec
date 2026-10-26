@@ -12,6 +12,7 @@ tools:
   grep: true
   glob: true
   skill: false
+  task: false
 permission:
   bash:
     '*': deny

@@ -1,5 +1,8 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   adaptFrontmatter,
   parseFrontmatter,
@@ -290,6 +293,44 @@ describe('adaptFrontmatter — commandcode (transformación)', () => {
       recordRule: 'mcp__ancleto-memory__recordRule',
       recordDecision: 'mcp__ancleto-memory__recordDecision'
     })
+  })
+})
+
+describe('adaptFrontmatter — task real de agents/*.md (agent-delegation-contract)', () => {
+  const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
+  const agent = (name) => readFileSync(join(REPO, 'agents', `${name}.md`), 'utf8')
+  const line = (text) => new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm')
+
+  it('orchestrator: task: true se descarta con aviso visible en Antigravity y Command Code', () => {
+    const cases = [
+      ['antigravity', 'Antigravity', 'tools: [view_file]'],
+      ['commandcode', 'Command Code', 'tools: [read_file]']
+    ]
+    for (const [host, label, expectedTools] of cases) {
+      stderrLines.length = 0
+      const out = adaptFrontmatter(agent('orchestrator'), host, 'agents', 'orchestrator')
+      assert.match(out, line(expectedTools), `${host}: la lista de tools esperada se conserva`)
+      assert.ok(
+        stderrLines.some((l) => l === `skip tool 'task': no verified ${label} id for agent 'orchestrator'`),
+        `${host}: la declaración habilitada se descarta con aviso visible`
+      )
+    }
+  })
+
+  it('subagentes: task: false no cambia las listas adaptadas ni emite aviso', () => {
+    const cases = [
+      ['antigravity', 'tools: [view_file, replace_file_content, run_command]'],
+      ['commandcode', 'tools: [read_file, write_file, edit_file, shell_command]']
+    ]
+    for (const [host, expectedTools] of cases) {
+      stderrLines.length = 0
+      const out = adaptFrontmatter(agent('coder'), host, 'agents', 'coder')
+      assert.match(out, line(expectedTools), `${host}: la lista del coder no cambia`)
+      assert.ok(
+        !stderrLines.some((l) => l.includes("'task'")),
+        `${host}: una restricción task: false no necesita aviso`
+      )
+    }
   })
 })
 

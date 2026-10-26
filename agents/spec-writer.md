@@ -9,6 +9,7 @@ tools:
   write: true
   skill: true
   bash: false
+  task: false
 ---
 
 # aspec Writer Agent

@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-17T04:04:04Z
-pluginVersion: 0.13.2
+generatedAt: 2026-10-26T11:50:00Z
+pluginVersion: 0.15.0
 skillVersion: '2.3'
 ---
 
@@ -38,42 +38,39 @@ skillVersion: '2.3'
    `mergeLocked` ejecuta `reconcileLegacyBlocks`: elimina las listas planas legadas cuya firma
    coincide **exactamente** (match por líneas completas, tolerando CRLF/espaciado) y avisa sin
    tocar si el bloque fue personalizado/extendido. Seguro (nunca borra fuera del bloque
-   identificado), idempotente (tras eliminar, re-ejecutar es no-op) y sin pasos manuales.
-   `mergeLocked` re-aplica el interior de los bloques `<!-- LOCKED: name -->`, preserva lo
-   EXTENSIBLE, inserta bloques nuevos en el ancla correcta y **no toca** archivos con tags
-   malformados (avisa). No debe existir una ruta que mergee `TEMPLATES` sin reconciliar.
-   Evidencia: `src/cli/index.js`, `templates/AGENTS.md`, `aspec/specs/prompt-contracts/spec.md`.
+   identificado), idempotente y sin pasos manuales. `mergeLocked` re-aplica el interior de los
+   bloques `<!-- LOCKED: name -->`, preserva lo EXTENSIBLE, inserta bloques nuevos en el ancla
+   correcta y **no toca** archivos con tags malformados (avisa). No debe existir una ruta que
+   mergee `TEMPLATES` sin reconciliar. Evidencia: `src/cli/index.js`, `templates/AGENTS.md`,
+   `aspec/specs/prompt-contracts/spec.md`.
 7. **Contrato de validaciones declarativo.** El proyecto declara sus comandos en `PRODUCT.md` →
    `## Project Commands`; esa es la **fuente única**. Las validaciones corren **solo** esos
    comandos: si falta una validación, se saltea y se registra la omisión; **nunca** se inventa
    runner/linter/formatter/typechecker. El **format check** corre solo si hay formatter
-   declarado; si no, se reporta `not-configured` (no es fallo). Los **tests** se corren por el
-   comando declarado (p. ej. `npm test`) o con **rutas explícitas**; nunca `node --test` pelado.
-   La política vive en un bloque `LOCKED: validation-commands` de `templates/AGENTS.md` (host-neutral)
-   para que `install`/`upgrade` la re-apliquen; las skills que emiten pasos de verificación la
-   referencian sin fijar comandos. Evidencia: `AGENTS.md`, `templates/AGENTS.md`,
+   declarado; si no, se reporta `not-configured`. Los **tests** se corren por el comando
+   declarado o con **rutas explícitas**; nunca `node --test` pelado. La política vive en
+   `LOCKED: validation-commands`. Evidencia: `AGENTS.md`, `templates/AGENTS.md`,
    `PRODUCT.md`, `aspec/specs/prompt-contracts/spec.md`.
 8. **Instalación de assets por host, dueño único `AGENT_TARGETS` + `installAgentAssets`.**
-   `AGENT_TARGETS` es la **fuente única de rutas** (skills/agents/commands con su `dir` y su
-   `ext`; `null` = asset no soportado). `installAgentAssets` materializa el destino nativo y
-   devuelve las rutas escritas; `unionInstalledPaths` las acumula en `installedPaths`.
-   Antigravity no tiene dir de commands: sus `/cleto-*` se empaquetan como
-   `.agents/skills/<n>/SKILL.md` (`package: 'skill-dir'`) y **no** se registran en
-   `installedPaths.commands`. Cursor y Roo solo tienen skills. Un asset no soportado no se
-   escribe y avisa por stderr. Evidencia: `src/cli/index.js`, `units/cli-install.md`.
+   `AGENT_TARGETS` es la **fuente única de rutas** (skills/agents/commands con `dir` y `ext`;
+   `null` = asset no soportado). `installAgentAssets` materializa el destino nativo y devuelve
+   las rutas escritas; `unionInstalledPaths` las acumula en `installedPaths`. Antigravity no
+   tiene dir de commands: sus `/cleto-*` se empaquetan como `.agents/skills/<n>/SKILL.md`
+   (`package: 'skill-dir'`) y **no** se registran en `installedPaths.commands`. Cursor y Roo solo
+   tienen skills. Un asset no soportado no se escribe y avisa por stderr. Evidencia:
+   `src/cli/index.js`, `units/cli-install.md`.
 9. **Adaptación de frontmatter: dueño único y módulo puro.** Toda transformación de frontmatter
    vive en `src/core/adapters/frontmatter.js` (`adaptFrontmatter(content, host, assetKind,
    name) → string`): función pura, sin E/S ni estado global. `src/cli/index.js` la importa y
    **no** define adaptadores locales. Dispatch: `opencode` y toda skill → identidad;
    `claude`/`vscode`/`copilot` + agents → dropean `AGENT_ADAPTER_DROP` (`mode`, `color`,
    `temperature`, `permission`, `model`, `tools`); `antigravity` + agents → transformación
-   propia; `commandcode` + agents → transformación propia; `cursor`/`roo` → identidad + aviso a
-   stderr; host desconocido → identidad + aviso. Evidencia:
+   propia; `commandcode` + agents → transformación propia; `cursor`/`roo` → identidad + aviso;
+   host desconocido → identidad + aviso. Evidencia:
    `src/core/adapters/frontmatter.js`, `aspec/specs/skill-frontmatter-adapters/spec.md`.
 10. **Antigravity: transformación determinista y conjunto cerrado de tools.** Orden de emisión:
-    `name` (del archivo), `description`, `tools` (siempre lista, aun `[]`), `mainAgent`,
-    `subagent`, `model: inherit`, `commandExecutionPolicy: sandbox`, `mcpServers`, `skills`,
-    extras. Las claves gestionadas se filtran y re-emiten una sola vez. `mode` → flags:
+    `name`, `description`, `tools` (siempre lista), `mainAgent`, `subagent`, `model: inherit`,
+    `commandExecutionPolicy: sandbox`, `mcpServers`, `skills`, extras. `mode` → flags:
     `primary`→(`true`,`false`), `subagent`→(`false`,`true`), sin `mode`→(`true`,`true`). Solo se
     emiten los 5 ids verificados: `read→view_file`, `edit→replace_file_content`,
     `grep→grep_search`, `bash→run_command`, `todowrite→manage_task`. Toda otra clave se omite
@@ -88,10 +85,10 @@ skillVersion: '2.3'
     sale como **lista** de ids verificados (`COMMANDCODE_TOOL_MAP`); las tools de memoria se
     emiten con la convención MCP del host (`COMMANDCODE_MCP_TOOL_MAP` →
     `mcp__ancleto-memory__<tool>`). Clave sin id verificado → omisión con aviso. **Inversión de
-    default**: en Command Code `tools` omitido significa "ninguna tool" (en opencode significa
-    "todas"), por eso un origen sin `tools` emite `tools: "*"`. El MCP de proyecto vive en
-    `.mcp.json`. Evidencia: `src/core/adapters/frontmatter.js`, `README.md`, `CHANGELOG.md`
-    (`0.12.1`), `aspec/specs/commandcode-support/spec.md`.
+    default**: en Command Code `tools` omitido significa "ninguna tool" (en opencode, "todas"),
+    por eso un origen sin `tools` emite `tools: "*"`. El MCP de proyecto vive en `.mcp.json`.
+    Evidencia: `src/core/adapters/frontmatter.js`, `README.md`, `CHANGELOG.md` (`0.12.1`),
+    `aspec/specs/commandcode-support/spec.md`.
 12. **`ancleto check` valida el frontmatter real contra el adaptador.** Por cada `.md` de un
     directorio de agents instalado, compara el instalado contra
     `adaptFrontmatter(origen, host, 'agents', name)` (con la simulación del `model:` del tier
@@ -99,16 +96,16 @@ skillVersion: '2.3'
     no bloqueante**: solo los archivos faltantes cambian el exit code. Siguiendo el manifiesto
     multi-host (`installedHostsFromPaths`), aplica el adaptador de cada host. Evidencia:
     `src/cli/index.js` (`checkAgentsFrontmatter`), `test/adapters-frontmatter.test.js`.
-13. **Export/import/gc de memoria (change `memory-ops-export-import-gc`).** `exportActive()`
-    devuelve solo nodos activos con `{memory_key, type, content, justification, scope,
-    createdAt}` y **sanitiza paths absolutos** a `<redacted>`; los superseded no se exportan.
-    `importNodes(json)` valida el schema antes de procesar y **aborta el batch entero** si una
-    entrada es inválida; upsert por `memory_key`: inserta si no existe, supersede solo si el
-    `createdAt` del JSON es más reciente, y **no reactiva** nodos superseded. `gcSuperseded({days,
-    dryRun})` purga superseded con antigüedad mayor al umbral (default 30 días, medido con
-    `created_at` como proxy porque no existe `superseded_at`); tras el DELETE hace `VACUUM`+`REINDEX`
-    best-effort post-commit. Expuesto como `ancleto memory export|import|gc`. Evidencia:
-    `src/core/memory/engine.js`, `src/cli/index.js`, `aspec/specs/memory-ops/spec.md`.
+13. **Export/import/gc de memoria (`memory-ops-export-import-gc`).** `exportActive()` devuelve
+    solo nodos activos con `{memory_key, type, content, justification, scope, createdAt}` y
+    **sanitiza paths absolutos** a `<redacted>`; los superseded no se exportan. `importNodes(json)`
+    valida el schema antes de procesar y **aborta el batch entero** si una entrada es inválida;
+    upsert por `memory_key`: inserta si no existe, supersede solo si el `createdAt` del JSON es
+    más reciente, y **no reactiva** nodos superseded. `gcSuperseded({days, dryRun})` purga
+    superseded con antigüedad mayor al umbral (default 30 días, medido con `created_at` como
+    proxy porque no existe `superseded_at`); tras el DELETE hace `VACUUM`+`REINDEX` best-effort.
+    Evidencia: `src/core/memory/engine.js`, `src/cli/index.js`,
+    `aspec/specs/memory-ops/spec.md`.
 14. **Migración/importación `openspec/` → `aspec/` no destructiva.** `migrateLegacyOpenspec`
     copia recursiva con `force: false`, escribe el marcador `.migrated-from-openspec` y conserva
     `openspec/` como backup; si `aspec/` ya tiene contenido real avisa y no migra.
@@ -116,14 +113,13 @@ skillVersion: '2.3'
     (default No, `--yes` para script) e importa sin pisar el `AGENTS.md` local. Punto único
     `maybeImportOpenspec`, invocado por `init`, `install --project` y `upgrade`. Evidencia:
     `src/cli/index.js`, `aspec/specs/aspec-bootstrap/spec.md`.
-15. **MCP de host, dueño único `setupHostMcp`.** Hay **dos excepciones de host-MCP**: antigravity
-    mergea `.agents/mcp_config.json` (`{ "mcpServers": { "<n>": { command, args, env } } }`) y
-    commandcode mergea `.mcp.json` (`{ mcpServers: { <n>: { transport: 'stdio', command, args, env? } } }`),
-    ambos de forma **no destructiva** (preservan `mcpServers` y claves top-level, no pisan
-    homónimos; un JSON inválido avisa sin escribir). Copilot mergea `copilot-mcp.json`
-    (`refreshCopilotMcp` regenera rotas en `upgrade` sin tocar `copilot-instructions.md`). El
-    resto conserva `mergeMcp` sobre `opencode.json`. `init` e `install` configuran MCP igual;
-    `--no-mcp` es el escape. Evidencia: `src/cli/index.js`, `README.md`.
+15. **MCP de host, dueño único `setupHostMcp`.** Excepciones de host-MCP: antigravity mergea
+    `.agents/mcp_config.json` (`{ "mcpServers": { "<n>": { command, args, env } } }`),
+    commandcode mergea `.mcp.json` (`{ mcpServers: { <n>: { transport: 'stdio', command, args,
+    env? } } }`) y copilot mergea `copilot-mcp.json`; los tres de forma **no destructiva**
+    (preservan `mcpServers` y claves top-level, no pisan homónimos; un JSON inválido avisa sin
+    escribir). El resto conserva `mergeMcp` sobre `opencode.json`. `init` e `install`
+    configuran MCP igual; `--no-mcp` es el escape. Evidencia: `src/cli/index.js`, `README.md`.
 16. **Perfil `test`: overlay, no fork.** `installProfileOverlay` reinstala
     `profiles/test/agents` + `commands` sobre los destinos nativos del host (misma ext y
     adapter que la base) y `copyTemplates` lee `profiles/test/templates/`; el paquete base queda
@@ -138,40 +134,40 @@ skillVersion: '2.3'
 18. **Linter mínimo: 4 reglas, sin estilo.** `eslint.config.js` es flat config (array) con
     `ecmaVersion: latest`, `sourceType: module`, globals de Node y exactamente `no-undef`,
     `no-unused-vars` (con `argsIgnorePattern`/`caughtErrorsIgnorePattern` `^_`), `eqeqeq`
-    (`always`) y `no-dupe-keys`. Sin Prettier, sin plugins. Ventaja: consistencia, no
-    correctness de negocio. Evidencia: `eslint.config.js`, `test/linter-config.test.js`,
-    `aspec/specs/linter-standard/spec.md`.
+    (`always`) y `no-dupe-keys`. Sin Prettier, sin plugins. Evidencia: `eslint.config.js`,
+    `test/linter-config.test.js`, `aspec/specs/linter-standard/spec.md`.
 19. **Patrón "CLI materializa + agente lee".** `ancleto memory context` escribe
     `.ancleto/working-context.md`; el orquestador lo lee como datos no confiables sin `bash`.
-    Evidencia: `BACKLOG.md`, `agents/orchestrator.md`, `src/core/memory/working-context.js`.
-20. **Compresión (caveman) host-scoped, con compuerta de medición** (change archivado
-    `token-budget`). El CLI configura el MCP de compresión por defecto cuando el binario está
-    disponible, como **configuración del host** (solo `opencode`/`antigravity`). La
-    **directiva de uso** se materializa únicamente en superficies de un host cuya config MCP
-    incluye la tool (`hostSupportsCompression`/`hostConfigHasCompression`, `CAVEMAN_USAGE_NOTE`),
-    **nunca** en texto compartido: "donde no hay tool, no hay instrucción". El default es
-    **reversible a opt-in** si `ancleto stats` no muestra un descenso neto. Evidencia:
-    `src/cli/index.js`, `aspec/specs/prompt-contracts/spec.md`.
-21. **Día-cero del working-context** (change archivado `token-budget`). El CLI **no** omite
-    materializar `.ancleto/working-context.md` por ausencia de `.ancleto/memory.db`: si existe
+    El mismo patrón rige `.ancleto/machine-env.md`: el CLI detecta y escribe, los agentes leen.
+    Evidencia: `BACKLOG.md`, `agents/orchestrator.md`,
+    `src/core/memory/working-context.js`, `src/core/machine-env.js`.
+20. **Compresión (caveman) host-scoped, con compuerta de medición** (`token-budget`). El CLI
+    configura el MCP de compresión por defecto cuando el binario está disponible, como
+    **configuración del host** (solo `opencode`/`antigravity`). La **directiva de uso** se
+    materializa únicamente en superficies de un host cuya config MCP incluye la tool
+    (`hostSupportsCompression`/`hostConfigHasCompression`, `CAVEMAN_USAGE_NOTE`), **nunca** en
+    texto compartido: "donde no hay tool, no hay instrucción". El default es **reversible a
+    opt-in** si `ancleto stats` no muestra un descenso neto. Evidencia: `src/cli/index.js`,
+    `aspec/specs/prompt-contracts/spec.md`.
+21. **Día-cero del working-context** (`token-budget`). El CLI **no** omite materializar
+    `.ancleto/working-context.md` por ausencia de `.ancleto/memory.db`: si existe
     `.discovery-map.json`, escribe el bloque `<ProjectTopology>` (creando `.ancleto/` si falta)
     **sin abrir el motor**. Render único (`renderWorkingContextBlock`) compartido por el refresh
     de lifecycle y `memory context`; `buildWorkingContext` conserva firma, default `cwd` y
     resultado `null` sin topología ni reglas. Evidencia: `src/cli/index.js`,
     `src/core/memory/working-context.js`, `aspec/specs/memory-engine/spec.md`.
-22. **Procedencia `source` runtime-owned** (change archivado `memory-actor-provenance`).
-    `source` se resuelve exclusivamente desde `context.source` (nunca desde args del caller) con
-    vocabulario estable: `mcp:ancleto-memory`, `cli:import`, `runtime` y `agent:<rol>` (solo si
-    un runtime confiable lo provee). Se expone en `listNodes`/`memory list --json` pero **no**
-    en `searchMemory` ni en los JSON Schema MCP. La procedencia es **descriptiva**; el motor
-    **no** autoriza ni deniega escrituras con ella. Evidencia: `src/core/memory/engine.js`,
+22. **Procedencia `source` runtime-owned** (`memory-actor-provenance`). `source` se resuelve
+    exclusivamente desde `context.source` (nunca desde args del caller) con vocabulario estable:
+    `mcp:ancleto-memory`, `cli:import`, `runtime` y `agent:<rol>` (solo si un runtime confiable
+    lo provee). Se expone en `listNodes`/`memory list --json` pero **no** en `searchMemory` ni en
+    los JSON Schema MCP. La procedencia es **descriptiva**; el motor **no** autoriza ni deniega
+    escrituras con ella. Evidencia: `src/core/memory/engine.js`,
     `aspec/specs/memory-engine/spec.md`, `aspec/changes/archive/2026-10-05-memory-actor-provenance/`.
-23. **Fuente única de reglas compartidas + guards por comportamiento** (change archivado
-    `token-budget`). Toda regla que se declaraba en skill y agente pasa a tener **un único
-    hogar canónico**: las transversales viven en `AGENTS.md` (bloques `LOCKED`) y las demás
-    superficies **referencian** sin repetir texto. `test/content-guards.test.js` asierta
-    **keywords de comportamiento** y presencia de salvaguardas, no redacción literal. Ningún
-    recorte puede eliminar salvaguardas protegidas. Evidencia: `AGENTS.md`,
+23. **Fuente única de reglas compartidas + guards por comportamiento** (`token-budget`). Toda
+    regla que se declaraba en skill y agente pasa a tener **un único hogar canónico**: las
+    transversales viven en `AGENTS.md` (bloques `LOCKED`) y las demás superficies **referencian**
+    sin repetir texto. `test/content-guards.test.js` asierta **keywords de comportamiento** y
+    presencia de salvaguardas, no redacción literal. Evidencia: `AGENTS.md`,
     `templates/AGENTS.md`, `aspec/specs/prompt-contracts/spec.md`.
 24. **Actualización de artifacts de un change (`ancleto-update`, `0.12.0`).** La skill
     `ancleto-update` (`/cleto-update`) actualiza los artifacts de un change existente ante
@@ -180,11 +176,10 @@ skillVersion: '2.3'
     principales y pregunta el modo de escritura (in-place vs `rev2`). Evidencia:
     `skills/ancleto-update/SKILL.md`, `commands/cleto-update.md`,
     `aspec/specs/artifact-update/spec.md`.
-25. **Affected-set determinístico por grafo de imports (`throughput-pipeline`, archivado 2026-10-15).**
-    El conjunto afectado es la **clausura transitiva de dependientes** sobre el grafo de imports
-    del proyecto, sembrada por los `task-owned files` e incluyendo siempre los archivos tocados;
-    es **determinístico** (mismo estado + misma semilla → mismo conjunto), **objetivo de
-    verificación** de `@tester` y **scope de review** de `@reviewer`. Vive en
+25. **Affected-set determinístico por grafo de imports (`throughput-pipeline`).** El conjunto
+    afectado es la **clausura transitiva de dependientes** sobre el grafo de imports, sembrada
+    por los `task-owned files` e incluyendo siempre los archivos tocados; es **determinístico**,
+    **objetivo de verificación** de `@tester` y **scope de review** de `@reviewer`. Vive en
     `src/core/affected-set.js` (zero-dep) y se expone **read-only** por
     `ancleto affected [--cwd <dir>] [--json] <archivo...>`. Cobertura: formas estáticas `import`,
     `import … from`, `export … from`, `require(...)` e `import(...)` con literal puro, sobre
@@ -192,12 +187,11 @@ skillVersion: '2.3'
     categorías)**: (1) relativo resoluble → arista; (2) no relativo (paquete/builtin/**alias**)
     → `externalCount`, sin arista ni `unresolved`; (3) llamada `import(...)`/`require(...)` con
     **argumento no literal** → `unresolved`; (4) relativo irresoluble → `unresolved`. El
-    **clasificador es conservador por argumento** (no por contenido): solo un literal puro
-    seguido de `)` es estático; ante la duda reporta `unresolved`, nunca en silencio.
-    `externalCount` es **dato informativo** (conteo de ocurrencias, no de specifiers distintos),
-    no warning ni error. Si el proyecto declara su propio mecanismo de afectados en `PRODUCT.md`
-    → `## Project Commands`, ese tiene prioridad (los **alias** quedan delegados a ese mecanismo).
-    Evidencia: `src/core/affected-set.js`, `src/cli/index.js` (`affectedCommand`),
+    **clasificador es conservador por argumento**: solo un literal puro seguido de `)` es
+    estático; ante la duda reporta `unresolved`, nunca en silencio. `externalCount` es **dato
+    informativo**. Si el proyecto declara su propio mecanismo en `PRODUCT.md` → `## Project
+    Commands`, ese tiene prioridad (los **alias** quedan delegados). Evidencia:
+    `src/core/affected-set.js`, `src/cli/index.js` (`affectedCommand`),
     `aspec/specs/prompt-contracts/spec.md`, `test/affected-set.test.js`.
 26. **Pipeline de mayor throughput (`throughput-pipeline`).** Cuatro contratos de prompt reducen
     round-trips sin degradar salvaguardas: (a) **cierre en paralelo**: tras la aprobación de
@@ -208,73 +202,108 @@ skillVersion: '2.3'
     `@orchestrator` lo arma/verifica antes de delegar; `@reviewer` lo consume sin reconstruirlo
     ni pedir re-verificación dentro del scope cubierto (`bash:false` y bloqueo por `CRITICAL`
     preservados). (c) **affected-set** como scope (regla 25). (d) **memoria en un solo paso**:
-    como máximo **una** llamada, solo con candidato real; sin candidato no hay Optional Draft ni
-    aprobación; User-Approved Record queda a pedido explícito. Evidencia:
+    como máximo **una** llamada, solo con candidato real. Evidencia:
     `agents/{orchestrator,tester,reviewer,memory-keeper}.md`,
     `aspec/specs/prompt-contracts/spec.md`, `aspec/specs/review/spec.md`,
     `aspec/changes/archive/2026-10-15-throughput-pipeline/`.
-27. **Refresh on-write del working-context en **ambas** superficies** (change abierto
-    `memory-cli-writes-refresh-working-context`, archivo al cierre del seed). El bloque
-    `<ProjectMemoryRules>` de `.ancleto/working-context.md` se regenera tras cualquier
-    escritura que pueda alterarlo: (a) **MCP** — filtrado por
-    `shouldRefreshWorkingContext(result)` (regla directa `rule` + scope `project`, o cualquier
-    supersesión de `memory_key`); (b) **CLI** — `refreshWorkingContextOnWrite(engine,
-    projectRoot, scope)` en `src/core/memory/working-context.js`, **compare-based**: reescribe
-    el archivo **solo si** el bloque renderizado difiere del contenido en disco (con
-    normalización CRLF/espacios/salto final), no crea un archivo vacío y **reusa la conexión
-    abierta** (no abre un segundo engine). `memory import` lo invoca dentro de un `try/catch`
-    aislado: si el refresh falla, la importación se considera exitosa y el fallo se reporta
-    por stderr (mismo criterio de robustez que el refresh MCP). La regeneración usa el **mismo
-    camino único de render** (`renderWorkingContextBlock`) que el refresh de lifecycle y
-    `memory context`. Evidencia: `src/cli/index.js` (`memoryImport`),
-    `src/core/memory/working-context.js`,
-    `aspec/changes/memory-cli-writes-refresh-working-context/`,
-    `aspec/specs/memory-engine/spec.md` (Requirement "Frescura del working-context tras
-    escrituras de la CLI").
-28. **Detección de staleness del working-context (advisory, no altera el exit code)** (change
-    abierto `memory-cli-writes-refresh-working-context`). `checkWorkingContextFreshness(engine,
-    projectRoot, scope)` en `src/core/memory/working-context.js` renderiza el bloque esperado
-    con `renderWorkingContextBlock` y lo compara (CRLF, espacios finales por línea, salto
-    final) contra `.ancleto/working-context.md`, devolviendo `ok` / `ausente` /
-    `desactualizado`. **Read-only**: nunca reescribe el archivo. Expuesto como línea
-    `Working-context: <estado>` en `ancleto memory doctor` (`memoryDoctorCmd` en
-    `src/cli/index.js`); el exit code sigue midiendo la integridad de la DB (el staleness es
-    advisory). Cuando no está `ok`, `memory doctor` sugiere `ancleto memory context --out`
-    para corregir. Evidencia: `src/core/memory/working-context.js`,
-    `src/cli/index.js` (`memoryDoctorCmd`),
-    `aspec/changes/memory-cli-writes-refresh-working-context/`,
-    `aspec/specs/memory-engine/spec.md` (Requirement "Detección de staleness del
-    working-context").
+27. **Refresh on-write del working-context en **ambas** superficies**
+    (`2026-10-17-memory-cli-writes-refresh-working-context`, archivado). El bloque
+    `<ProjectMemoryRules>` de `.ancleto/working-context.md` se regenera tras cualquier escritura
+    que pueda alterarlo: (a) **MCP** — filtrado por `shouldRefreshWorkingContext(result)`
+    (regla directa `rule` + scope `project`, o cualquier supersesión de `memory_key`);
+    (b) **CLI** — `refreshWorkingContextOnWrite(engine, projectRoot, scope)`,
+    **compare-based**: reescribe el archivo **solo si** el bloque renderizado difiere del
+    contenido en disco, no crea un archivo vacío y **reusa la conexión abierta**. `memory
+    import` lo invoca dentro de un `try/catch` aislado: si el refresh falla, la importación se
+    considera exitosa y el fallo se reporta por stderr. La regeneración usa el **mismo camino
+    único de render** (`renderWorkingContextBlock`). Evidencia: `src/cli/index.js`
+    (`memoryImport`), `src/core/memory/working-context.js`,
+    `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/`,
+    `aspec/specs/memory-engine/spec.md`.
+28. **Detección de staleness del working-context (advisory, no altera el exit code).**
+    `checkWorkingContextFreshness(engine, projectRoot, scope)` renderiza el bloque esperado y lo
+    compara (CRLF, espacios finales por línea, salto final) contra
+    `.ancleto/working-context.md`, devolviendo `ok` / `ausente` / `desactualizado`. Es
+    **read-only**: nunca reescribe el archivo. Se expone como línea `Working-context: <estado>`
+    en `ancleto memory doctor`; el exit code sigue midiendo la integridad de la DB. Cuando no
+    está `ok`, sugiere `ancleto memory context --out`. Evidencia:
+    `src/core/memory/working-context.js`, `src/cli/index.js` (`memoryDoctorCmd`),
+    `aspec/specs/memory-engine/spec.md`.
+29. **Entorno de máquina: artefacto local, dueño único y exclusión sin `.gitignore`**
+    (`2026-10-25-machine-environment-block`, archivado). `src/core/machine-env.js` es el
+    **único dueño** de detectar, renderizar, escribir y excluir `.ancleto/machine-env.md`; ni el
+    ciclo de vida ni `check` reimplementan formato, comparación o resolución de rutas. El
+    artefacto **no** forma parte de `working-context.md` ni de `AGENTS.md` y `templates/AGENTS.md`
+    no contiene valores de máquina. La escritura es idempotente y **no reescribe** si solo cambió
+    `generated_at`; la comparación ignora esa línea. La exclusión usa
+    `git rev-parse --show-toplevel` + `--show-prefix` para componer
+    `<prefix>.ancleto/machine-env.md` (normalizando `/`, sin `path.relative`), consulta
+    `check-ignore --no-index` antes y después, y agrega **una** entrada a
+    `git rev-parse --git-path info/exclude`, preservando el contenido previo byte a byte. Nunca
+    toca `.gitignore`. Si no hay repo/git o el prefijo es inválido (absoluto, `..`, CR/LF),
+    emite warning no bloqueante y no escribe regla. `ancleto check` advierte si `git ls-files`
+    muestra el artefacto trackeado, sin cambiar el exit code. Evidencia:
+    `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
+30. **Entrega del entorno a todos los subagentes y precedencia.** Toda definición de agente
+    instalada (10) contiene la instrucción canónica de leer `.ancleto/machine-env.md` antes de
+    ejecutar comandos; si no existe, continúa con la guía genérica y reporta la ausencia. Si un
+    comando falla por entorno, reporta el shell declarado y el comando textual en lugar de
+    reintentar a ciegas. `agents/orchestrator.md` agrega `## Machine Environment`, incluye el
+    bloque **verbatim** en cada delegación a un subagente con `bash: true` (`@coder`, `@tester`,
+    `@documenter`, `@context-resolver`, `@technical-discovery`, `@technical-seed-writer`) y
+    **no** lo incluye para `@spec-writer`, `@reviewer` ni `@memory-keeper` (sin `bash`). La
+    lectura proactiva de `machine-env.md` **no consume** el techo de 3 archivos del orquestador.
+    El bloque prevalece sobre indicaciones genéricas de shell de `AGENTS.md`/`PRODUCT.md`/prompt
+    del agente, pero **nunca** sobre seguridad, autorización, validación, permisos o instrucciones
+    explícitas del usuario. Evidencia: `agents/*.md`, `src/core/machine-env.js` (`## Hint`),
+    `aspec/specs/machine-environment/spec.md`.
+31. **Reporte de fallos de herramientas (`session-failure-report`, archivado 2026-10-25).**
+    `ancleto stats failures` lee **solo lectura** la tabla `part` de la base de opencode y
+    considera fallo a `state.status='error'` o a `metadata.exit` presente y distinto de 0.
+    Clasifica con precedencia: `tool` (herramienta no-shell), `env` (shell con exit 127/9009 o
+    señales de entorno/tooling), `check` (shell con exit ≥ 1 legítimo) y `unknown` (shell con
+    error sin causa determinable). Agrupa por proyecto, herramienta, clase y esqueleto
+    estructural del comando; **nunca** imprime `title`, `output`, `state.error` ni el `input` de
+    herramientas no-shell, y enmascara secretos, rutas y wrappers. Es la superficie de medición
+    de la mejora de `machine-environment`. Evidencia: `src/cli/index.js`
+    (`statsFailuresCommand`, `failureBucketsQuery`), `aspec/specs/session-failure-report/spec.md`,
+    `test/stats-failures.test.js`.
 
 ## Seed incremental (contrato del discovery)
 
 - `ancleto discovery --check` devuelve `state` + `impact`:
-- `none` → sin cambios; `minor` → cambios no materiales (el agente trabaja y lo anota, no
-    ofrece regenerar); `material` → cambió un config de runtime, entry point o apareció/desapareció
-    un directorio raíz nuevo (o un archivo material como `package.json`; ej. esta regeneración:
-    `package.json` `0.13.1`→`0.13.2` + areas `agents`/`aspec`/`src`/`test` por
-    `memory-cli-writes-refresh-working-context`).
+  - `none` → sin cambios.
+  - `minor` → cambios no materiales (el agente trabaja y lo anota, no ofrece regenerar).
+  - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
+    raíz nuevo (o un archivo material como `package.json`). Ejemplo de esta corrida:
+    `package.json` `0.13.2`→`0.15.0`, áreas `src`/`agents`/`aspec`/`test` por
+    `machine-environment-block` y `session-failure-report`.
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **solo** esos
-    documentos. El mapeo vive en `seed-map.json` (lo mantiene la skill); sin ese archivo la
-    regeneración es completa.
+  documentos. El mapeo vive en `seed-map.json`; sin ese archivo la regeneración es completa.
 - **`affectedDocs` (seed) ≠ `affected-set` (change).** `ancleto discovery --check` devuelve
-    `affectedDocs` (documentos del seed a reescribir); `ancleto affected` computa el
-    `affected-set` (clausura de dependientes por grafo de imports). Son homónimos con semántica
-    distinta: no confundir el scope de regeneración del seed con el scope de review del change.
+  `affectedDocs` (documentos del seed a reescribir); `ancleto affected` computa el
+  `affected-set` (clausura de dependientes por grafo de imports). Son homónimos con semántica
+  distinta.
 - Al archivar un change, el seed puede quedar `STALE`; `AGENTS.md` (`LOCKED: seed-freshness`)
   define el procedimiento (verificar, avisar, regenerar solo con aprobación).
+- **Falsos positivos del check en esta corrida**: `package-lock.json` figura como "área raíz
+  eliminada" porque está en `config.exclude` (no se hashea), pero **el archivo existe**;
+  `audit logs/` (untracked) y `documentation/` (gitignored) aparecen como áreas nuevas porque
+  `computeSources` recorre el disco con `DEFAULT_IGNORES` + `exclude` y **no** aplica
+  `.gitignore`. No son áreas materiales del seed.
 - `EXPECTED_DOCS` del CLI = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`,
   `integrations`, `decisions`, `unknowns`, `units/_map`).
 - Evidencia: `README.md`, `BACKLOG.md`, `src/cli/index.js`, `AGENTS.md`.
 
 ## Riesgos, deuda y acoplamiento
 
-- **Pack comprimido y sesgado a código.** El tier resuelto (`minimo`) ignora `test/**`,
-  `docs/**` y `**/*.md`; `.gitignore` excluye `.opencode/`, `.ancletorc`, `.ancleto/` y
-  `/documentation`. Resultado: `agents/`, `commands/`, `skills/`, `templates/`, `docs/` y
-  `documentation/` **no entran** en el pack. El seed los describe por listados, `README.md`,
-  `BACKLOG.md` y los specs de `aspec/`; una regeneración futura puede no detectar cambios en
-  ellos (ver `unknowns.md`).
+- **Pack comprimido y sesgado a código.** El tier resuelto (`gratis`) ignora `test/**`,
+  `docs/**` y `**/*.md`; Repomix además respeta `.gitignore` (`.opencode/`, `.ancletorc`,
+  `.ancleto/`, `/documentation`). Por eso `agents/`, `commands/`, `skills/`, `templates/`,
+  `docs/` y `documentation/` **no aparecen** en el pack. `audit logs/*.txt` sí entra (está
+  untracked y no está excluido), pero es ruido de auditorías y no evidencia del producto.
+  Una regeneración futura puede no detectar cambios en las superficies markdown (ver
+  `unknowns.md`).
 - **`agents/`, `commands/`, `skills/`, `templates/` son la superficie de producto instalable.**
   Cambiarlos altera lo que reciben todos los proyectos usuarios. `installAgentAssets()` es el
   punto único de materialización y `src/core/adapters/frontmatter.js` define qué claves
@@ -287,6 +316,18 @@ skillVersion: '2.3'
   (p. ej. de compresión) se cuele en `AGENTS.md` o en assets copiados verbatim, volviéndose
   falsa para hosts sin esa tool. Mitigación: contrato "donde no hay tool, no hay instrucción" +
   assert de comportamiento en `content-guards`.
+- **`machine-env.md` puede quedar trackeado.** La exclusión es local al clon (`info/exclude`);
+  si alguien lo agrega con `git add -f`, `ancleto check` avisa pero no lo destrackea. El
+  artefacto es derivado y no debe versionarse. Evidencia: `src/core/machine-env.js`
+  (`checkMachineEnvTracked`), `aspec/specs/machine-environment/spec.md`.
+- **Detección de shell best-effort.** El shell se infiere del entorno del proceso que ejecuta
+  `init` (no del shell de la tool del runtime); ante señales contradictorias se declara
+  `unknown`. `ComSpec` no se usa. Un `unknown` no rompe nada, pero obliga al agente a reportar
+  el comando textual en vez de adivinar. Evidencia: `src/core/machine-env.js`.
+- **Exclusión local no portátil entre clones.** `info/exclude` no se versiona: cada clon debe
+  ejecutar un lifecycle para garantizar su propia exclusión. En un worktree vinculado la regla
+  va al `info/exclude` que resuelve `git rev-parse --git-path`. Evidencia:
+  `src/core/machine-env.js`.
 - **Sanitización de paths best-effort.** `sanitizePaths` cubre `C:\...`, `/home/...` y
   `/Users/...`, pero puede no atrapar paths sin barra inicial o con `~`; el usuario debe revisar
   el JSON antes de compartirlo. Evidencia: `src/core/memory/engine.js`.
@@ -297,11 +338,16 @@ skillVersion: '2.3'
 - **Procedencia ≠ autorización.** La columna `source` es auditable pero no enforceable: no hay
   canal de identidad autenticado (MCP stdio), así que el ownership de escritura sigue siendo una
   convención. No debe prometerse enforcement.
-- **`ancleto stats` acoplado a opencode**: lee la base de sesiones de opencode; no funciona con
-  otros IDEs. Evidencia: `README.md`, `src/cli/index.js` (`opencodeDbPath`).
+- **`ancleto stats` y `stats failures` acoplados a opencode**: leen la base de sesiones de
+  opencode; no funcionan con otros IDEs. Evidencia: `README.md`, `src/cli/index.js`
+  (`opencodeDbPath`).
+- **Privacidad del reporte de fallos.** `stats failures` enmascara secretos/rutas y no imprime
+  texto libre, pero la clasificación depende de señales textuales (`is not recognized`,
+  `command not found`, etc.) y puede caer en `unknown` ante mensajes nuevos. Evidencia:
+  `src/cli/index.js`, `aspec/specs/session-failure-report/spec.md`.
 - **MCP = costo fijo por request.** La lista de tools viaja en cada request (`ancleto-memory`
   ~500, caveman ~830, engram ~4.900 tokens). Engram quedó opcional (`--with-engram`) por eso; el
-  default de caveman está bajo la compuerta de medición del (ya archivado) `token-budget`.
+  default de caveman está bajo compuerta de medición.
 - **Promesa "optimizador de tokens" no especificada.** `optimizacion-de-tokens.md` documenta que
   la capacidad de ahorro existe como *mecanismos dispersos* pero **no** como garantía con
   Requirements/tests; deja una decisión abierta (capacidad nueva `token-economy` vs atributo
@@ -309,39 +355,37 @@ skillVersion: '2.3'
 - **Branch protection honor-based.** `AGENTS.md`/`BACKLOG.md` declaran `main` protegida, pero
   el remoto no aplica protection real (B3). Evidencia: `BACKLOG.md`.
 - **Cobertura del affected-set acotada por diseño.** El grafo cubre solo formas estáticas de
-  `import`/`require` con literal puro; los imports dinámicos no escaneados (`require?.(…)`,
-  `(require)(…)`, acceso computed `obj['require'](…)`) y los **alias de paths** quedan
-  **delegados** al mecanismo declarado por el proyecto en `PRODUCT.md` → `## Project Commands`;
-  los no relativos se cuentan como `externalCount`. El helper no lee config de alias y **no
-  promete universalidad**: no debe asumirse cobertura total. Es acotación por diseño, no un
-  hueco. Evidencia: `src/core/affected-set.js`, `aspec/specs/prompt-contracts/spec.md`.
-- **Prompts del pipeline fuera del pack.** Los contratos del pipeline de throughput viven en
-  `agents/{orchestrator,tester,reviewer,memory-keeper}.md`, que el tier `minimo` ignora
-  (`**/*.md`); el seed los describe por las specs fuente y lectura puntual, no por el pack.
-  `test/content-guards.test.js` los ancla por keywords de comportamiento.
+  `import`/`require` con literal puro; los imports dinámicos no escaneados y los **alias de
+  paths** quedan **delegados** al mecanismo declarado por el proyecto; los no relativos se
+  cuentan como `externalCount`. No debe asumirse cobertura total. Evidencia:
+  `src/core/affected-set.js`, `aspec/specs/prompt-contracts/spec.md`.
+- **Prompts del pipeline fuera del pack.** Los contratos viven en
+  `agents/{orchestrator,tester,reviewer,memory-keeper}.md`, que el tier ignora (`**/*.md`); el
+  seed los describe por las specs fuente y lectura puntual. `test/content-guards.test.js` los
+  ancla por keywords de comportamiento.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, `mcp_config.json`,
-  `.mcp.json`, CI o Azure. Las variables se nombran y su valor se omite.
+  `.mcp.json`, CI o Azure. Las variables se nombran y su valor se omite. `machine-env.md`
+  tampoco renderiza `PATH` ni versiones.
 - **Refresh on-write CLI compare-based es robusto pero best-effort.** Un fallo del refresh en
-  `memory import` **no** invalida la importación (la DB queda consistente); el fallo se reporta
-  por stderr y `memory doctor` lo expone como `Working-context: ausente` o
-  `desactualizado`. El operador puede corregir con `ancleto memory context --out`. Evidencia:
-  `src/cli/index.js` (`memoryImport`), `aspec/specs/memory-engine/spec.md`.
-- **Staleness advisory puede dar falsos positivos/negativos triviales.** La normalización del
-  bloque es acotada (CRLF, espacios finales, salto final); cambios cosméticos mayores (orden
-  de items, comillas, indentación) podrían disparar `desactualizado` aunque el contenido sea
-  semánticamente equivalente. Riesgo aceptable por diseño (se prefiere reportar a silenciar).
-  Evidencia: `src/core/memory/working-context.js` (`normalizeBlock`).
-- **Deuda resuelta en 0.13.x**: (a) el contrato de validaciones dejó de hardcodear
-  `typecheck`/`lint`/`test` y pasó a ser declarativo (`contrato-validaciones`); (b) la dedupe de
-  reglas y el día-cero del working-context (`token-budget`); (c) `PRODUCT.md` ya declara
-  `## Project Commands` y alinea sus guardrails (ya no afirma que no hay scripts npm);
-  (d) el pipeline de cierre redujo round-trips (`throughput-pipeline`: paralelización, ledger
-  prearmado, affected-set determinístico, memoria en un paso) sin cambiar el schema de memoria;
-  (e) `0.13.2` (cambio abierto `memory-cli-writes-refresh-working-context`) extiende el refresh
-  on-write al CLI y agrega el chequeo advisory de staleness, sin nuevos deps ni cambios de
-  schema. Evidencia: `CHANGELOG.md`, `aspec/changes/archive/2026-10-14-*`,
-  `aspec/changes/archive/2026-10-15-throughput-pipeline/`,
-  `aspec/changes/memory-cli-writes-refresh-working-context/`, `PRODUCT.md`.
+  `memory import` **no** invalida la importación; el fallo se reporta por stderr y `memory
+  doctor` lo expone como `Working-context: ausente` o `desactualizado`.
+- **Staleness advisory puede dar falsos positivos triviales.** La normalización es acotada
+  (CRLF, espacios finales, salto final); cambios cosméticos mayores podrían disparar
+  `desactualizado` aunque el contenido sea equivalente. Riesgo aceptado: se prefiere reportar.
+- **`CHANGELOG.md` atrasado.** La última entrada es `0.12.1`; `package.json` y el tag están en
+  `0.15.0`. Los cambios `0.13.x`–`0.15.0` se infieren de specs, código y changes archivados.
+  Evidencia: `CHANGELOG.md`, `package.json`, `git describe --tags`.
+- **Docs de producto desalineados.** `PRODUCT.md` declara 12 commands y 18 skills (hoy 16 y 21)
+  y no menciona `machine-env` ni `stats failures`; `README.md` tampoco documenta el entorno de
+  máquina. El seed refleja el estado observado, no esas cifras. Evidencia: `PRODUCT.md`,
+  `README.md`, `commands/`, `skills/`, `src/core/machine-env.js`.
+- **Deuda resuelta hasta 0.15.0**: (a) contrato de validaciones declarativo (`contrato-validaciones`);
+  (b) dedupe de reglas y día-cero del working-context (`token-budget`); (c) `PRODUCT.md` declara
+  `## Project Commands`; (d) pipeline de cierre (`throughput-pipeline`); (e) refresh on-write CLI
+  y staleness advisory (`memory-cli-writes-refresh-working-context`, 2026-10-17);
+  (f) entorno de máquina (`machine-environment-block`, 2026-10-25); (g) reporte de fallos
+  (`session-failure-report`, 2026-10-25). Sin nuevos deps ni cambios de schema de memoria.
+  Evidencia: `CHANGELOG.md`, `aspec/changes/archive/`, `package.json`, `git tag`.
 
 ## Decisiones registradas en memoria del repo
 
@@ -350,5 +394,5 @@ skillVersion: '2.3'
 - `fix-init-tier-huerfano-0.6.36` y `fix-init-tier-guardado-0.6.37`: `init` debe aplicar el tier
   guardado a los agentes locales (paridad con `install`), incluido re-init sin flags.
 - `cli.host-mcp-config-out-of-scope`: el MCP de host queda fuera de alcance salvo las
-  excepciones de `opencode`/`antigravity` (y ahora `commandcode`).
+  excepciones de `opencode`/`antigravity` (y ahora `commandcode`/`copilot`).
 - Evidencia: `.ancleto/memory.db` vía `ancleto memory list`.

@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, subcomando read-only affected, refresh on-write en memory import y chequeo advisory en memory doctor"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, entorno de máquina, stats failures, affected y refresh on-write en memory import"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -11,12 +11,13 @@ covers:
   - perfiles
   - export/import
   - affected
+  - machine-env
+  - stats failures
   - memory import refresh on-write
   - memory doctor advisory staleness
-sources: ["src/cli/**", "src/core/adapters/**"]
-sourcesSha: 4ee7291f6e93af9767c2e7c114b1ea9de5bff0918a4d1fa03e06f19ac30499e2
-generatedAt: 2026-10-17T04:04:04Z
-pluginVersion: 0.13.2
+sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js"]
+generatedAt: 2026-10-26T11:50:00Z
+pluginVersion: 0.15.0
 skillVersion: '2.3'
 ---
 
@@ -27,20 +28,24 @@ skillVersion: '2.3'
 `src/cli/index.js` es el **único entry point** (`bin.ancleto`/`bin.aspec`): parseo de
 comandos, instalación de assets por host, resolución de agente/IDE, gestión de tiers, MCP,
 discovery, memoria (incluyendo el refresh on-write desde el CLI y el chequeo advisory de
-staleness), registro de proyectos y diagnósticos. La adaptación de frontmatter es un módulo
-aparte (`src/core/adapters/frontmatter.js`), y `src/cli/ui.js` aporta el wizard.
-Evidencia: `package.json`, `src/cli/index.js`.
+staleness), entorno de máquina, reporte de fallos, registro de proyectos y diagnósticos. La
+adaptación de frontmatter es un módulo aparte (`src/core/adapters/frontmatter.js`),
+`src/core/machine-env.js` posee el entorno local y `src/cli/ui.js` aporta el wizard. Evidencia:
+`package.json`, `src/cli/index.js`.
 
 ## Superficie de comandos
 
 `install`, `update`, `upgrade`, `init`, `export` (`--tar`), `import` (`<bundle>`/`--repair`),
 `discovery` (`--check` / pack), `affected` (read-only: `[--cwd <dir>] [--json] <archivo...>`),
 `mcp`, `memory (context|list|doctor|export|import|gc)`,
-`specs check`, `stats`, `projects (list|scan|prune|info|update)`, `list --projects`, `check`,
-`doctor`, `--help`, `--version`. Flags transversales: `--agent`, `--tier`, `--lang`,
-`--profile`, `--exclude`, `--no-mcp`, `--with-engram`, `--yes` (solo importación openspec).
-Evidencia: `src/cli/index.js`, `README.md`. `affected` delega en `computeAffectedSet`
-(`src/core/affected-set.js`); es **read-only** y no forma parte del flujo de instalación.
+`specs check`, `stats`, **`stats failures`** (`[--all] [--limit N] [--since YYYY-MM-DD]
+[--session <id>] [--class <env|check|tool|unknown,...>] [--tool <t,...>] [--json]`),
+`projects (list|scan|prune|info|update)`, `list --projects`, `check`, `doctor`, `--help`,
+`--version`. Flags transversales: `--agent`, `--tier`, `--lang`, `--profile`, `--exclude`,
+`--no-mcp`, `--with-engram`, `--yes` (solo importación openspec). Evidencia:
+`src/cli/index.js`, `README.md`. `affected` delega en `computeAffectedSet`
+(`src/core/affected-set.js`); es **read-only**. `stats failures` delega en
+`statsFailuresCommand` y también es **read-only**.
 
 **Escrituras de memoria del CLI**:
 
@@ -53,13 +58,11 @@ Evidencia: `src/cli/index.js`, `README.md`. `affected` delega en `computeAffecte
 - `memory doctor` (`memoryDoctorCmd`) ejecuta el chequeo de integridad habitual y, tras él,
   agrega la línea **advisory** `Working-context: <ok|ausente|desactualizado>` usando
   `checkWorkingContextFreshness(engine, projectRoot)` con `createReadonlyMemoryEngine`. El
-  exit code sigue midiendo la integridad de la DB (no lo altera). Cuando no está `ok` sugiere
+  exit code sigue midiendo la integridad de la DB. Cuando no está `ok` sugiere
   `ancleto memory context --out` para corregir.
 
 Evidencia: `src/cli/index.js` (`memoryImport`, `memoryDoctorCmd`),
-`src/core/memory/working-context.js`,
-`aspec/changes/memory-cli-writes-refresh-working-context/`,
-`aspec/specs/memory-engine/spec.md`.
+`src/core/memory/working-context.js`, `aspec/specs/memory-engine/spec.md`.
 
 ## Modelo único de destinos por host (`AGENT_TARGETS`)
 
@@ -126,24 +129,21 @@ flags: `primary` → (`mainAgent:true`, `subagent:false`); `subagent` → (`fals
 
 Mapeo de tools (conjunto cerrado, `ANTIGRAVITY_TOOL_MAP`): `read`→`view_file`,
 `edit`→`replace_file_content`, `grep`→`grep_search`, `bash`→`run_command`,
-`todowrite`→`manage_task`. Cualquier otra clave del mapa `tools` (ids solo-SDK, de comunidad o
-de delegación, y también `write`/`glob`/`task`/`webfetch`/`websearch`) **no se emite** y produce
+`todowrite`→`manage_task`. Cualquier otra clave del mapa `tools` **no se emite** y produce
 aviso a stderr no bloqueante: `skip tool '<k>': no verified Antigravity id for agent '<n>'`. Un
-id inexistente cuelga el subagent (Known Issue). El tool `skill` se saltea en silencio (se cubre
-por el campo `skills`). `call_mcp_tool` está **prohibido**; el uso de MCP se expresa por
-`mcpServers` / `.agents/mcp_config.json`.
+id inexistente cuelga el subagent (Known Issue). El tool `skill` se saltea en silencio. El uso
+de MCP se expresa por `mcpServers` / `.agents/mcp_config.json`; `call_mcp_tool` está prohibido.
 
 ### Command Code (`adaptCommandCodeFrontmatter`)
 
-Adapta el frontmatter de opencode al de Command Code: `name` inyectado (el host lo requiere,
-default filename), `description` preservado, `mode`/`color`/`temperature`/`permission`
-**eliminados** y `model` **omitido** (el host hereda el modelo de sesión; nunca se mapea un id
-`opencode-go/*`). `tools` sale como **lista** de ids verificados (`COMMANDCODE_TOOL_MAP`:
-`read`→`read_file`, `write`→`write_file`, `edit`→`edit_file`, `bash`→`shell_command`,
-`grep`→`grep`, `glob`→`glob`, `webfetch`→`web_fetch`, `websearch`→`web_search`,
-`todowrite`→`todo_write`). Las tools de memoria se emiten con la convención MCP del host
-(`COMMANDCODE_MCP_TOOL_MAP` → `mcp__ancleto-memory__<tool>`). Clave sin id verificado → aviso
-`skip tool '<k>': no verified Command Code id for agent '<n>'`. **Inversión de default**:
+Adapta el frontmatter de opencode al de Command Code: `name` inyectado, `description`
+preservado, `mode`/`color`/`temperature`/`permission` **eliminados** y `model` **omitido** (el
+host hereda el modelo de sesión; nunca se mapea un id `opencode-go/*`). `tools` sale como
+**lista** de ids verificados (`COMMANDCODE_TOOL_MAP`: `read`→`read_file`, `write`→`write_file`,
+`edit`→`edit_file`, `bash`→`shell_command`, `grep`→`grep`, `glob`→`glob`,
+`webfetch`→`web_fetch`, `websearch`→`web_search`, `todowrite`→`todo_write`). Las tools de
+memoria se emiten con la convención MCP del host (`COMMANDCODE_MCP_TOOL_MAP` →
+`mcp__ancleto-memory__<tool>`). Clave sin id verificado → aviso. **Inversión de default**:
 `tools` omitido en Command Code significa "ninguna tool" (en opencode, "todas"), por eso un
 origen sin `tools` emite `tools: "*"`. Evidencia: `src/core/adapters/frontmatter.js`,
 `README.md`, `CHANGELOG.md` (`0.12.1`).
@@ -155,20 +155,17 @@ raíz (`AGENTS.md`/`PRODUCT.md`, const `TEMPLATES`); lo invocan `install`/`updat
 (vía `copyTemplates`) **y** `import` (`importCmd`).
 
 1. **Reconciliación previa** — `reconcileLegacyBlocks(content, filename)` elimina las firmas
-   planas legadas registradas (p. ej. la lista plana vieja de validaciones en `AGENTS.md`). Solo
-   elimina con **coincidencia exacta** de las líneas firmadas (match por líneas completas,
-   tolerando CRLF/espaciado); si la firma fue personalizada/extendida (heading presente pero
-   líneas distintas, u otro item de lista a continuación) **avisa y no toca**. La firma acota el
-   `filename` correcto; un archivo sin firma registrada (p. ej. `PRODUCT.md`, EXTENSIBLE) es
-   no-op. Idempotente.
+   planas legadas registradas. Solo elimina con **coincidencia exacta** de las líneas firmadas
+   (match por líneas completas, tolerando CRLF/espaciado); si la firma fue
+   personalizada/extendida **avisa y no toca**. La firma acota el `filename` correcto; un
+   archivo sin firma registrada es no-op. Idempotente.
 2. **Merge LOCKED** — `mergeLocked(source, local, filename)` reemplaza el interior de cada
    bloque `<!-- LOCKED: name -->` con el del paquete, preserva el resto (EXTENSIBLE), inserta
    bloques nuevos en el ancla correcta (`findInsertAnchor`) y **no toca** el archivo si los tags
-   faltan o están mal formados (avisa). Helper: `extractLockedBlocks`, `replaceLockedBlock`.
+   faltan o están mal formados (avisa). Helpers: `extractLockedBlocks`, `replaceLockedBlock`.
 
 Contrato (spec `prompt-contracts`): **NO SHALL existir una ruta que mergee `TEMPLATES` sin
-reconciliar**. Las superficies mergeadas por bloque se reconcilian; los assets de skill
-(copiados enteros) se regeneran. Evidencia: `src/cli/index.js`, `templates/AGENTS.md`,
+reconciliar**. Evidencia: `src/cli/index.js`, `templates/AGENTS.md`,
 `aspec/specs/prompt-contracts/spec.md`.
 
 ## Validación de frontmatter en `ancleto check`
@@ -203,7 +200,7 @@ el asset vive dentro del layout de skills. Evidencia: `src/cli/index.js`.
   Defaults: `ancleto-memory` (stdio) y `caveman` si está en `PATH`; `engram` solo con
   `--with-engram`; `azure-devops` si `azure.enabled: true`. Evidencia: `src/cli/index.js`.
 
-## Compresión host-scoped (caveman) — change archivado `token-budget`
+## Compresión host-scoped (caveman) — `token-budget`
 
 - `buildDefaultMcp` da de alta el MCP de compresión (caveman) por defecto cuando su binario está
   disponible, como **configuración del host** (solo `opencode`/`antigravity`) vía `setupHostMcp`.
@@ -211,9 +208,64 @@ el asset vive dentro del layout de skills. Evidencia: `src/cli/index.js`.
   `hostConfigHasCompression` leen la config MCP del host y deciden si materializar
   `CAVEMAN_USAGE_NOTE`; esa pista se escribe **solo** en superficies de un host que tiene la
   tool y **nunca** en texto compartido. Contrato: *donde no hay tool, no hay instrucción*.
-  `installAssetFiles(..., compression)` propaga la decisión al escribir.
 - El default es **reversible a opt-in** mediante compuerta de medición con `ancleto stats`.
   Evidencia: `src/cli/index.js`, `aspec/specs/prompt-contracts/spec.md`.
+
+## Entorno de máquina (`src/core/machine-env.js`)
+
+Invariante: **entorno de la máquina → `.ancleto/machine-env.md`**. El módulo es el **único
+dueño** de detección, render, escritura y exclusión; ni el ciclo de vida ni `check`
+reimplementan formato, comparación o resolución de rutas git.
+
+- **Ciclo de vida**: `init`, `install --project` y `upgrade` llaman a `refreshMachineEnv`, que
+  envuelve `materializeMachineEnv` (nunca lanza; devuelve warnings no bloqueantes). `init` e
+  `install` son silenciosos en el camino feliz; `upgrade` imprime `machine-env.md generado` /
+  `sin cambios` y el estado de la exclusión.
+- **Detección** (`detectMachineFacts`): plataforma, `osRelease`, `arch`, shell + `shell_source`,
+  EOL + `eol_source`, disponibilidad de `rg`/`node`/`npm`/`git`/`python` (sin ejecutar binarios
+  ni pedir versiones) y versión de ancleo. No renderiza `PATH`, secretos ni versiones.
+- **Shell**: en Windows prioriza MSYS/Cygwin (`MSYSTEM`/`CYGWIN`) → `bash`; `PSModulePath` con
+  PowerShell 7 → `PowerShell 7`; `PROMPT` → `cmd`; `SHELL` POSIX + legacy → `unknown`; `SHELL`
+  POSIX; solo legacy → `Windows PowerShell 5.1`; si no, `unknown`. `ComSpec` **no** se usa. En
+  POSIX: `WSL_DISTRO_NAME`/`WSL_INTEROP` → `bash/WSL`, luego `SHELL` POSIX, luego `unknown`.
+- **EOL**: primero `git check-attr eol` del path del artefacto; después `core.eol`,
+  `core.autocrlf` (`true`→crlf, `input`/`false`→lf); sin repo/configuración, convención de
+  plataforma (`win32`→crlf, resto→lf). La fuente queda declarada.
+- **Escritura** (`writeMachineEnv`): compara ignorando `generated_at`; si no cambió, no
+  reescribe ni toca el mtime. El archivo es derivado y se reemplaza completo.
+- **Exclusión** (`ensureMachineEnvExclusion`): resuelve la raíz con
+  `git rev-parse --show-toplevel`, el prefijo repo-root-relative con `--show-prefix` y compone
+  `<prefix>.ancleto/machine-env.md` (normaliza `\`→`/`, sin `path.relative`). Consulta
+  `check-ignore --no-index`; si no está ignorado, localiza `info/exclude` con
+  `rev-parse --git-path`, preserva el contenido previo y agrega **una** línea; re-verifica con
+  `check-ignore --no-index` y deriva `ignored`/`updated` de esa verificación. Nunca toca
+  `.gitignore`. Si no hay repo/git, el prefijo es inválido (absoluto, `..`, CR/LF) o falla
+  `check-ignore`, emite warning y no reporta la exclusión como garantizada.
+- **`ancleto check`**: `checkMachineEnvTracked` usa `git ls-files --error-unmatch`; si el
+  artefacto quedó trackeado, agrega un warning (sin cambiar el exit code) que sugiere
+  `git rm --cached .ancleto/machine-env.md`.
+- **Agentes**: los 10 `agents/*.md` contienen la instrucción canónica de leer el archivo antes
+  de ejecutar comandos; `agents/orchestrator.md` agrega `## Machine Environment`, lo incluye
+  verbatim en delegaciones con `bash: true` y exime esa lectura del techo de 3 archivos.
+
+Evidencia: `src/core/machine-env.js`, `src/cli/index.js` (`refreshMachineEnv`,
+`checkCommand`), `agents/*.md`, `aspec/specs/machine-environment/spec.md`.
+
+## Reporte de fallos (`ancleto stats failures`)
+
+- Lee en **solo lectura** la tabla `part` de la base de sesiones de opencode; considera fallo
+  `state.status='error'` o `metadata.exit` presente y distinto de 0.
+- Clasifica con precedencia `tool` (herramienta no-shell), `env` (shell con exit 127/9009 o
+  señales de entorno/tooling), `check` (shell con exit ≥ 1 legítimo) y `unknown`.
+- Agrupa por proyecto, herramienta, clase y **esqueleto estructural** del comando; orden
+  determinístico; salida texto o `--json`.
+- **Privacidad**: no imprime `title`, `output`, `state.error` ni `input` de herramientas no
+  shell; enmascara secretos, rutas y wrappers (`stripWrapper`, `maskSensitive`, `maskPath`).
+- Flags: `--all`, `--limit`, `--since`, `--session`, `--class`, `--tool`, `--json`.
+- Es la superficie de medición de la mejora de `machine-env` (fallos `env`).
+
+Evidencia: `src/cli/index.js` (`statsFailuresCommand`, `queryFailureBuckets`),
+`aspec/specs/session-failure-report/spec.md`, `test/stats-failures.test.js`.
 
 ## Perfil `test` (overlay, `installProfileOverlay`)
 
@@ -241,8 +293,8 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 - **`localAgentDirs(rc, agent)`**: unión de `installedPaths.agents` ∪ destino del host.
 - **`installedHostsFromPaths(ip)`**: deriva los hosts realmente instalados de `installedPaths`.
 - **`check`**: el `expected` de un directorio de skills incluye los command-skills cuando algún
-  host instalado empaqueta commands como skill (`package:'skill-dir'` y mismo `dir`), y valida
-  el frontmatter de agents contra el adaptador.
+  host instalado empaqueta commands como skill (`package:'skill-dir'` y mismo `dir`), valida el
+  frontmatter de agents contra el adaptador y advierte si `machine-env.md` está trackeado.
 - **`installedExtFor`**: deriva la convención de nombre del host del mismo modelo de destino.
   Evidencia: `src/cli/index.js`.
 
@@ -264,6 +316,8 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 8. `writeManifest` actualiza `.ancletorc` y `registerProject` anota el repo en
    `~/.config/ancleto/projects.json` (override: `ANCLETO_PROJECTS_FILE`).
 9. `refreshWorkingContext` regenera `.ancleto/working-context.md` desde la memoria (o día-cero).
+10. `refreshMachineEnv` genera/actualiza `.ancleto/machine-env.md` y garantiza su exclusión local
+    (`info/exclude`), sin tocar `.gitignore`.
 
 ## Migración/importación `openspec/` → `aspec/`
 
@@ -282,27 +336,34 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 - **Idempotencia y no destrucción**: `init`/`install` no pisan config ni documentos del usuario;
   los bloques LOCKED se re-aplican, las superficies legadas se reconcilian y el resto se
   preserva. `installedPaths` es la unión de destinos escritos; no se borran rutas previas.
+  `machine-env.md` se reemplaza completo solo si cambiaron los hechos.
 - **Paridad `init`/`install`** en flags y tier guardado, incluido re-init sin flags.
 - **`--check` no empaqueta**: state-only sobre hashes.
 - **`ancleto affected` es read-only**: no escribe nada; delega el grafo de imports en
   `src/core/affected-set.js` y reporta `affected`/`unresolved`/`externalCount`.
+- **`ancleto stats failures` es read-only**: no escribe la base de opencode; solo consulta.
 - **Refresh on-write CLI y staleness advisory son best-effort** (no rompen el flujo):
   - `memoryImport` envuelve el refresh en `try/catch` y reporta el fallo por stderr sin abortar.
   - `memoryDoctorCmd` emite el staleness como **línea advisory** sin alterar el exit code.
-- **Errores no bloqueantes**: binarios ausentes (MCP/git/gh/az), assets no soportados y
-  divergencias de frontmatter se omiten con warning a stderr.
+- **`machine-env` es best-effort**: un fallo de generación o de exclusión se reporta como
+  warning y no aborta el lifecycle; el artefacto ya escrito se conserva.
+- **Errores no bloqueantes**: binarios ausentes (MCP/git/gh/az), assets no soportados,
+  divergencias de frontmatter y exclusiones no garantizadas se omiten con warning a stderr.
 - `ancleto --version` lee `package.json` en runtime (no hardcodeado).
 
 ## Paths clave
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `memoryImport` (con refresh on-write), `memoryDoctorCmd` (con advisory), `memoryExport`/`memoryGc`, `affectedCommand`. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `refreshMachineEnv`, `memoryImport` (con refresh on-write), `memoryDoctorCmd` (con advisory), `memoryExport`/`memoryGc`, `affectedCommand`, `statsFailuresCommand`. |
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`; dueño único de la transformación. |
+| `src/core/machine-env.js` | `machineEnvPath`, `detectMachineFacts`, `renderMachineEnv`, `writeMachineEnv`, `ensureMachineEnvExclusion`, `materializeMachineEnv`, `checkMachineEnvTracked`; dueño único del entorno local. |
 | `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext` (MCP), `refreshWorkingContextOnWrite` (CLI, compare-based), `checkWorkingContextFreshness`, `normalizeBlock`, `readWorkingContextFile`, `resolveMemoryProjectRoot` (día-cero). |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED (incl. `validation-commands`)/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable; en agents el frontmatter se adapta por host, en skills se copia. |
-| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js` | Guardas del CLI (incluye refresh on-write y advisory), del adaptador (incl. Command Code), de contenido y de los nuevos helpers del working-context. |
-| `README.md`, `BACKLOG.md`, `agents/orchestrator.md` | Contrato operativo, backlog y nota de refresh on-write CLI en `## Project Memory Rules`. |
-| `aspec/changes/memory-cli-writes-refresh-working-context/` | Change abierto con proposal, design, tasks y delta spec. |
+| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js` | Guardas del CLI, del adaptador, de contenido, del working-context, del entorno de máquina y del reporte de fallos. |
+| `README.md`, `BACKLOG.md`, `agents/orchestrator.md` | Contrato operativo, backlog y sección de entorno de máquina. |
+| `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/` | Change archivado con proposal, design, tasks y delta spec. |
+| `aspec/changes/archive/2026-10-25-machine-environment-block/` | Change archivado del entorno de máquina. |
+| `aspec/changes/archive/2026-10-25-session-failure-report/` | Change archivado del reporte de fallos. |

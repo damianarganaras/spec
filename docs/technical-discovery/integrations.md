@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-17T04:04:04Z
-pluginVersion: 0.13.2
+generatedAt: 2026-10-26T11:50:00Z
+pluginVersion: 0.15.0
 skillVersion: '2.3'
 ---
 
@@ -19,10 +19,11 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.13.2`. | `.github/workflows/publish.yml`, `package.json` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.15.0` (tag `v0.15.0`). | `.github/workflows/publish.yml`, `package.json`, `git describe --tags` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
+| **Git** | Necesario para `machine-env` (`rev-parse`, `check-ignore`, `info/exclude`), para el ciclo SDD y para el publish. Si falta, el CLI degrada con warning no bloqueante. | `src/core/machine-env.js`, `.gitattributes`, `AGENTS.md` |
 
 ## IDEs / agentes consumidores (contrato de instalación)
 
@@ -46,11 +47,26 @@ Con perfil `test`, el overlay (`profiles/test/`) se materializa en los mismos de
 host. `ancleto check` valida que el frontmatter instalado coincida con la salida del adaptador
 (warning no bloqueante). Detalle: `units/cli-install.md`.
 
+## Entorno de máquina (integración local con git)
+
+`.ancleto/machine-env.md` no es un servicio externo: es un artefacto derivado y local por
+máquina. Su única integración externa es **git**, usada de forma read-only/best-effort:
+
+- `git rev-parse --is-inside-work-tree` y `--show-toplevel` para saber si hay repo y su raíz.
+- `git rev-parse --show-prefix` para el path repo-root-relative del proyecto (subdirectorios,
+  worktrees y symlinks).
+- `git check-ignore --no-index` para decidir si ya está ignorado y para verificar la exclusión.
+- `git rev-parse --git-path info/exclude` para localizar la exclusión local del clon.
+- `git ls-files` (solo en `ancleto check`) para advertir si el artefacto quedó trackeado.
+
+Nunca modifica `.gitignore` ni archivos del repo. Si git no está disponible o falla, el
+artefacto se escribe igual y la exclusión se reporta como warning no bloqueante. Evidencia:
+`src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
+
 ## MCP (Model Context Protocol)
 
-Configurados por `setupHostMcp` (dueño único) con **dos excepciones de host-MCP**: antigravity
-en `.agents/mcp_config.json` y commandcode en `.mcp.json`; copilot en `copilot-mcp.json`
-(merge en install, regeneración de rotas en upgrade sin tocar `copilot-instructions.md`); el
+Configurados por `setupHostMcp` (dueño único) con **excepciones de host-MCP**: antigravity
+en `.agents/mcp_config.json`, commandcode en `.mcp.json` y copilot en `copilot-mcp.json`; el
 resto en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp` lo evita.
 `import` regenera entradas rotas con rutas locales.
 
@@ -61,11 +77,11 @@ resto en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp
 | `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`), no se agrega por defecto por su costo (~4.900 tokens/request). | Deshabilitado |
 | `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Solo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
 
-Adicionalmente, el CLI expone **chequeos de staleness advisory sobre el working-context** vía
-`ancleto memory doctor` (línea `Working-context: <ok|ausente|desactualizado>`,
+Adicionalmente, `ancleto memory doctor` emite un **chequeo de staleness advisory** sobre el
+working-context (línea `Working-context: <ok|ausente|desactualizado>`,
 `checkWorkingContextFreshness`). Es read-only y **no** es un MCP: vive dentro del propio CLI y
 no agrega dependencias. Evidencia: `src/core/memory/working-context.js`, `src/cli/index.js`,
-`aspec/changes/memory-cli-writes-refresh-working-context/`.
+`aspec/specs/memory-engine/spec.md`.
 
 Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-routing/spec.md`.
 
@@ -74,6 +90,7 @@ Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-ro
 | Sistema | Uso | Evidencia |
 |---|---|---|
 | **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Solo opencode. Es la fuente de la compuerta de medición del default de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
+| **`ancleto stats failures`** | Reporte **read-only** de tool parts fallidos de opencode: clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y enmascara secretos/rutas. No imprime `output` ni `state.error`. Es la medición de la mejora de `machine-env`. | `src/cli/index.js` (`statsFailuresCommand`), `aspec/specs/session-failure-report/spec.md` |
 | **Working-context advisory** | `ancleto memory doctor` expone `Working-context: <estado>` tras la integridad de la DB. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
 
 ## Azure DevOps (opcional, apagado)
@@ -88,10 +105,13 @@ Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-ro
 ## Dependencias internas y de runtime
 
 - Módulos nativos: `node:sqlite` (motor de memoria), `node:test` (suite), `node:fs`,
-  `node:crypto`, `node:child_process` (spawn de Repomix). Evidencia: pack `src/**`.
+  `node:crypto`, `node:child_process` (spawn de Repomix y git), `node:os`, `node:path`,
+  `node:url`. Evidencia: pack `src/**`.
 - Dependencias de desarrollo: `eslint` y `globals` (lint). Los lockfiles
-  (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) existen en el checkout pero están
-  **excluidos de las fuentes del discovery y del pack**. No son dependencias del paquete
-  publicado. Evidencia: `package.json`, `ancleto discovery --check` (`config.exclude`).
+  (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) están **excluidos de las fuentes del
+  discovery y del pack**; `package-lock.json` existe en el checkout. No son dependencias del
+  paquete publicado. Evidencia: `package.json`, `ancleto discovery --check`
+  (`config.exclude`), `.discovery-map.json` (`root_files`).
 - `documentation/lnx-cli/` es material legado de otro CLI (`lnx`) usado como fuente de
-  relevamiento; no es dependencia de runtime. Evidencia: `BACKLOG.md`, listado del directorio.
+  relevamiento; no es dependencia de runtime y está gitignored. Evidencia: `BACKLOG.md`,
+  `.gitignore`, listado del directorio.

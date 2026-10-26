@@ -2,11 +2,10 @@
 node: units/discovery-engine
 kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y el presupuesto por tier"
-covers: [topologia, empaquetado, tiers, tokens, affected-set]
+covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js"]
-sourcesSha: 121b7ff04478f797f0c91ceb0f7831ce0e2e816ea7731a00fdec2bc97b4dc2df
-generatedAt: 2026-10-17T04:04:04Z
-pluginVersion: 0.13.2
+generatedAt: 2026-10-26T11:50:00Z
+pluginVersion: 0.15.0
 skillVersion: '2.3'
 ---
 
@@ -17,7 +16,8 @@ skillVersion: '2.3'
 Relevar el repositorio, empaquetar contexto con costo controlado y computar el scope afectado por
 grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier→Repomix
 (`repomix-tier.js`), selección de modelos por tier (`tier-models.js`) y affected-set
-(`affected-set.js`). Evidencia: `README.md`, firmas del pack, `aspec/specs/prompt-contracts/spec.md`.
+(`affected-set.js`). Evidencia: `README.md`, firmas del pack,
+`aspec/specs/prompt-contracts/spec.md`.
 
 ## Recorrido relevante
 
@@ -34,16 +34,17 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
   `total_files`, `tree_summary` (conteo por directorio de primer nivel) y `root_files`.
 - `writeDiscoveryMap(rootDir)`: escribe `.discovery-map.json` en la raíz del repo.
 - `readTopologySummary(cwd)`: valida y lee el resumen para inyectarlo en el working context.
-- El mapa se regenera al correr `ancleto discovery` (no en `--check`).
+- El mapa se regenera al correr `ancleto discovery` (no en `--check`). En esta corrida:
+  `total_files: 683`; `tree_summary` incluye `documentation` 340 y `audit logs` 9 porque el
+  mapa recorre el disco y no aplica `.gitignore`.
 
 ## Empaquetado — `src/core/repomix-tier.js`
 
 - `TIER_PACK_CONFIG`: `normal` (sin ignores extra, sin compresión, sin budget), `minimo`
   (+`test/**`, `docs/**`, `**/*.md`; `--compress`), `gratis` (igual que `minimo` + budget 50000).
 - `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
-  En este checkout existe `.opencode/.ancleto-tier` con valor `minimo`, por lo que el tier
-  resuelto es `minimo` por archivo. `normal` no comprime; `minimo` y `gratis` comparten los
-  ignores (tests/docs/markdown), y solo `gratis` fija budget (50k).
+  En este checkout existe `.opencode/.ancleto-tier` con valor **`gratis`**, por lo que el tier
+  resuelto es `gratis` y el pack de esta corrida quedó en ~38.239 tokens (bajo el budget 50k).
 - `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
   + `--ignore` del usuario, y agrega `--compress` si el tier o el flag lo piden. No permite
   reemplazar los ignores por un `--ignore` vacío.
@@ -60,8 +61,8 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
 
 ## Affected-set por grafo de imports — `src/core/affected-set.js`
 
-Módulo **zero-dep** y **determinista** (change archivado `throughput-pipeline`). Define el scope
-de review y el objetivo de verificación del tester.
+Módulo **zero-dep** y **determinista** (`throughput-pipeline`). Define el scope de review y el
+objetivo de verificación del tester.
 
 - `buildImportGraph(rootDir, ignored)`: recorre los archivos fuente (`.js/.mjs/.cjs/.ts/.tsx`,
   `collectSourceFiles` con los mismos ignores del discovery map), extrae especificadores
@@ -115,6 +116,10 @@ de review y el objetivo de verificación del tester.
 - `--check` no empaqueta: es state-only sobre hashes.
 - El pack comprimido solo expone firmas (no cuerpos), lo que limita la evidencia de `src/**`.
 - El tier decide también qué markdown/test queda fuera del pack; el seed debe anotarlo.
+- **`computeSources` no aplica `.gitignore`**: solo `DEFAULT_IGNORES` + `config.exclude`. Por eso
+  `documentation/` (gitignored) y `audit logs/` (untracked) pueden aparecer como áreas nuevas y
+  `package-lock.json` puede figurar como "área eliminada" cuando en realidad está excluido por
+  `config.exclude`. Son falsos positivos del check, no cambios del producto.
 - **El affected-set es acotado por diseño**: los imports dinámicos no escaneados y los alias
   quedan delegados al mecanismo declarado por el proyecto; el helper no promete universalidad.
 - `optimizacion-de-tokens.md` señala que `impact` se deriva por **archivo/área**, no por
@@ -128,6 +133,6 @@ de review y el objetivo de verificación del tester.
 | `src/core/affected-set.js` | Grafo de imports y `computeAffectedSet` (`buildImportGraph`, `extractSpecifiers`, `collectSourceFiles`). |
 | `src/core/repomix-tier.js` | Args de Repomix y budget por tier. |
 | `src/core/tier-models.js` | Modelos por tier y resolución gratis. |
-| `src/cli/index.js` | `checkDiscovery`, `runRepomix`, `packDiscovery`, `affectedCommand`. |
+| `src/cli/index.js` | `checkDiscovery`, `runRepomix`, `packDiscovery`, `affectedCommand`, `computeSources`, `computeImpact`, `readSeedMap`. |
 | `aspec/specs/prompt-contracts/spec.md` | Contrato del affected-set y taxonomía de 4 categorías. |
 | `test/discovery-topology.test.js`, `test/discovery-tier.test.js`, `test/tier-models.test.js`, `test/affected-set.test.js` | Guardas de topología, tiers, modelos y affected-set (incl. superficie CLI read-only). |

@@ -31,7 +31,7 @@ Implementa `design.md` tal cual. Cada tarea es verificable por sí sola; sin vol
 
 ## 5. Mirrors generados
 
-- [ ] **T5.1** Regenerar `.opencode/agents/orchestrator.md` y `.opencode/agents/technical-discovery.md` con el mecanismo existente (`ancleto upgrade` o `ancleto install`), sin edición manual. Listo cuando ambos mirrors reflejan los cambios y el mirror del orquestador conserva `## Compresión de contexto (tool del host)`.
+- [x] **T5.1** Regenerar `.opencode/agents/orchestrator.md` y `.opencode/agents/technical-discovery.md` con el mecanismo existente (`ancleto upgrade` o `ancleto install`), sin edición manual. Listo cuando ambos mirrors reflejan los cambios y el mirror del orquestador conserva `## Compresión de contexto (tool del host)`.
 - [x] **T5.2** Confirmar que `.ancleto/working-context.md:36` sólo cambia por regeneración (`ancleto upgrade` o `ancleto memory context --out`), nunca a mano. Listo cuando el texto viejo persiste hasta la regeneración y el archivo no aparece en un diff manual.
 
 ## 6. Verificación
@@ -43,6 +43,6 @@ Implementa `design.md` tal cual. Cada tarea es verificable por sí sola; sin vol
 
 ## 7. Cierre
 
-- [ ] **T7.1** Dogfood gate: `ancleto upgrade`, reiniciar sesión y volver a correr `ancleto memory context` para ver el texto nuevo del aviso. Listo cuando el aviso mostrado nombra `@memory-keeper` y no `searchMemory`.
-- [ ] **T7.2** Mirror-sync check: `.opencode/agents/orchestrator.md` coincide con la fuente salvo la sección de compresión del host. Listo cuando la única diferencia es esa sección.
-- [ ] **T7.3** Handoff git: commits y merge a `development` los hace un agente con git; sin push sin autorización explícita del usuario. Listo cuando el commit usa Conventional Commits y no se ejecutó push.
+- [ ] **T7.1** Dogfood gate: `ancleto upgrade`, reiniciar sesión y volver a correr `ancleto memory context` para ver el texto nuevo del aviso. Listo cuando el aviso mostrado nombra `@memory-keeper` y no `searchMemory`. Pendiente: reiniciar la sesión y volver a correr `ancleto memory context` para el dogfooding; `ancleto upgrade` ya se ejecutó.
+- [x] **T7.2** Mirror-sync check: `.opencode/agents/orchestrator.md` coincide con la fuente salvo la sección de compresión del host. Listo cuando la única diferencia es esa sección.
+- [x] **T7.3** Handoff git: commits y merge a `development` los hace un agente con git; sin push sin autorización explícita del usuario. Listo cuando el commit usa Conventional Commits y no se ejecutó push.

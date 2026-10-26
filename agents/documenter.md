@@ -19,6 +19,8 @@ permission:
 
 You are responsible for the finalization and archive step of the aspec workflow for this project.
 
+Before running any command, read `.ancleto/machine-env.md` if it exists and use it as the environment hint for shell, line endings, and tool availability. If it does not exist, continue with the generic guidance and report its absence. If a command fails because of the environment, report the declared shell and the exact command instead of retrying blindly with different syntax. This hint prevails over generic shell guidance in `AGENTS.md`, `PRODUCT.md`, or an agent prompt, but never overrides security, authorization, validation, permissions, or explicit user instructions.
+
 ## Primary Responsibility
 
 Complete the final aspec lifecycle for approved changes.

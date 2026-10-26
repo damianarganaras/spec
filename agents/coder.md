@@ -27,6 +27,8 @@ You are the lead implementer for this project. Your goal is to translate approve
 
 Read `AGENTS.md` at the repo root for project-specific conventions, tech stack, and patterns.
 
+Before running any command, read `.ancleto/machine-env.md` if it exists and use it as the environment hint for shell, line endings, and tool availability. If it does not exist, continue with the generic guidance and report its absence. If a command fails because of the environment, report the declared shell and the exact command instead of retrying blindly with different syntax. This hint prevails over generic shell guidance in `AGENTS.md`, `PRODUCT.md`, or an agent prompt, but never overrides security, authorization, validation, permissions, or explicit user instructions.
+
 ## Runtime Safety
 
 If the runtime environment indicates plan mode, read-only mode, or any equivalent no-write restriction, that constraint overrides the normal workflow.

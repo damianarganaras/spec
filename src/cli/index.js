@@ -11,6 +11,7 @@ import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
 import { adaptFrontmatter, parseFrontmatter } from '../core/adapters/frontmatter.js'
 import { writeWorkingContext, writeWorkingContextBlock, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite } from '../core/memory/working-context.js'
+import { materializeMachineEnv, checkMachineEnvTracked } from '../core/machine-env.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
@@ -1605,6 +1606,7 @@ async function install(args) {
     await scaffoldAspec(projectDir)
     if (profile === 'test') await scaffoldTestspec(projectDir)
     await refreshWorkingContext(projectDir)
+    await refreshMachineEnv(projectDir)
     const written = await installAgentAssets(projectDir, agent, {
       compression: hostSupportsCompression(agent) && Boolean(mcpMap.caveman)
     })
@@ -1685,6 +1687,7 @@ async function upgradeCmd(args) {
   })
   if (profile === 'test') await installProfileOverlay(projectDir, agent)
   const wentContext = await refreshWorkingContext(projectDir)
+  const machineEnv = await refreshMachineEnv(projectDir)
   const manifest = await writeManifest(projectDir, {
     agent,
     profile,
@@ -1712,6 +1715,9 @@ async function upgradeCmd(args) {
     console.log(`  ✔ skills actualizadas en ${skillsDir} (${ANCLETO_SKILLS.length} skills)`)
   }
   console.log(wentContext ? '  ✔ working-context.md regenerado' : '  ✔ working-context.md sin reglas activas (vacio)')
+  console.log(machineEnv.written ? '  ✔ machine-env.md generado' : '  ✔ machine-env.md sin cambios')
+  if (machineEnv.updated) console.log('  ✔ exclusión local actualizada')
+  else if (machineEnv.ignored) console.log('  ✔ exclusión local verificada')
   console.log('  ✔ manifiesto .ancletorc actualizado')
 }
 
@@ -1825,6 +1831,7 @@ async function initProject(args) {
   }
   await scaffoldAspec(projectDir)
   await refreshWorkingContext(projectDir)
+  await refreshMachineEnv(projectDir)
   await registerProject(projectDir, { agent, tier: tier || null })
   // D7: init configura el MCP del host igual que install (mismo dueno, sin rama
   // especial por host); --no-mcp conserva el escape.
@@ -2179,6 +2186,20 @@ async function refreshWorkingContext(projectDir, scope = 'project') {
   }
 }
 
+// Refresh best-effort del entorno de la maquina, analogo a `refreshWorkingContext`:
+// `materializeMachineEnv` nunca lanza y devuelve warnings no bloqueantes. `init` e
+// `install` son silenciosos en el camino feliz; `upgrade` imprime sus propias lineas.
+async function refreshMachineEnv(projectDir) {
+  let result
+  try {
+    result = materializeMachineEnv(projectDir)
+  } catch (error) {
+    result = { written: false, ignored: false, updated: false, warnings: [`no se pudo generar .ancleto/machine-env.md: ${error.message}`] }
+  }
+  for (const warning of result.warnings) console.warn(`ancleto: ${warning}`)
+  return { written: result.written, ignored: result.ignored, updated: result.updated, warnings: result.warnings }
+}
+
 async function memoryContext(flags) {
   const scope = flagValue(flags, '--scope') || 'project'
   const out = flagValue(flags, '--out')
@@ -2478,6 +2499,9 @@ async function checkCommand() {
   }
 
   const warnings = await checkTierOrphan(cwd)
+  if (checkMachineEnvTracked(cwd)) {
+    warnings.push('.ancleto/machine-env.md (trackeado en git; deberia ser un artefacto local — corre `git rm --cached .ancleto/machine-env.md`)')
+  }
 
   console.log(`ancleto: check -> ${missing} faltantes, ${orphans} huerfanos`)
   for (const w of warnings) console.log(`  ⚠ ${w}`)

@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync, cpSync, copyFileSync, readdirSync, chmodSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync, cpSync, copyFileSync, readdirSync, chmodSync, statSync, symlinkSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname, delimiter } from 'node:path'
+import { join, dirname, delimiter, isAbsolute } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { createHash } from 'node:crypto'
@@ -3651,6 +3651,500 @@ describe('CLI commandcode support (add-commandcode-support)', () => {
       assert.match(r.stdout, /✔ \.commandcode\/skills/)
       assert.doesNotMatch(r.stdout, /frontmatter diverge/)
       assert.doesNotMatch(r.stdout, /tier .* sin agentes locales/)
+    })
+  })
+})
+
+describe('CLI machine environment (machine-environment-block)', () => {
+  const GIT_PROBE = spawnSync('git', ['--version'], { encoding: 'utf8' })
+  const GIT_READY = !GIT_PROBE.error && GIT_PROBE.status === 0
+  const PATH_KEY = Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH') || 'PATH'
+  const regEnv = (dir) => ({ ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
+  const artifactPath = (dir) => join(dir, '.ancleto', 'machine-env.md')
+  const readArtifact = (dir) => readFileSync(artifactPath(dir), 'utf8')
+  const git = (args, cwd) => spawnSync('git', args, { cwd, encoding: 'utf8' })
+
+  function excludePath(dir) {
+    const raw = git(['rev-parse', '--git-path', 'info/exclude'], dir).stdout.trim()
+    return isAbsolute(raw) ? raw : join(dir, raw)
+  }
+
+  function readExclude(dir) {
+    const file = excludePath(dir)
+    return existsSync(file) ? readFileSync(file, 'utf8') : ''
+  }
+
+  function skipWithoutGit(t) {
+    if (GIT_READY) return false
+    t.skip('git no disponible')
+    return true
+  }
+
+  it('init sin git crea el artefacto, advierte y no escribe .gitignore', () => {
+    withDir((dir) => {
+      const r = run(['init', '--tier', 'gratis', '--no-mcp'], dir, regEnv(dir))
+      assert.equal(r.status, 0, r.stderr)
+
+      const artifact = artifactPath(dir)
+      assert.ok(existsSync(artifact), 'el artefacto existe')
+      const content = readFileSync(artifact, 'utf8')
+      for (const section of ['## Platform', '## Shell', '## Line endings', '## Tools', '## Hint']) {
+        assert.ok(content.includes(section), `falta la seccion ${section}`)
+      }
+      assert.match(content, /^- rg: /m)
+
+      assert.match(r.stderr, /no se pudo garantizar la exclusion de \.ancleto\/machine-env\.md/)
+      assert.equal(existsSync(join(dir, '.gitignore')), false, 'no se crea .gitignore')
+    })
+  })
+
+  it('en un repo git que no ignora .ancleto/ usa la exclusion local sin tocar .gitignore', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      assert.equal(git(['init', '-q'], dir).status, 0)
+      const gitignore = join(dir, '.gitignore')
+      writeFileSync(gitignore, '# proyecto\nnode_modules/\n')
+      const ignoreBefore = readFileSync(gitignore, 'utf8')
+      const excludeBefore = readExclude(dir)
+
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, regEnv(dir))
+      assert.equal(r.status, 0, r.stderr)
+
+      assert.ok(existsSync(artifactPath(dir)), 'el artefacto existe')
+      assert.equal(git(['check-ignore', '-q', '--', '.ancleto/machine-env.md'], dir).status, 0, 'git lo ignora')
+      assert.equal(readFileSync(gitignore, 'utf8'), ignoreBefore, '.gitignore byte a byte sin cambios')
+      assert.equal(git(['ls-files'], dir).stdout.includes('.ancleto/machine-env.md'), false, 'no queda trackeado')
+
+      const excludeAfter = readExclude(dir)
+      assert.ok(excludeAfter.startsWith(excludeBefore), 'preserva el contenido previo de info/exclude')
+      assert.equal(
+        excludeAfter.split(/\r?\n/).filter((line) => line.trim() === '.ancleto/machine-env.md').length,
+        1
+      )
+    })
+  })
+
+  it('en un repo que ya ignora .ancleto/ no modifica ninguna regla', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      assert.equal(git(['init', '-q'], dir).status, 0)
+      const gitignore = join(dir, '.gitignore')
+      writeFileSync(gitignore, '.ancleto/\n')
+      const ignoreBefore = readFileSync(gitignore, 'utf8')
+      const excludeBefore = readExclude(dir)
+
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, regEnv(dir))
+      assert.equal(r.status, 0, r.stderr)
+
+      assert.ok(existsSync(artifactPath(dir)), 'el artefacto existe')
+      assert.equal(git(['check-ignore', '-q', '--', '.ancleto/machine-env.md'], dir).status, 0)
+      assert.equal(readFileSync(gitignore, 'utf8'), ignoreBefore, '.gitignore intacto')
+      assert.equal(readExclude(dir), excludeBefore, 'info/exclude intacto')
+    })
+  })
+
+  it('install --project <subdir> escribe el patron repo-root-relative y git add -A no incorpora el artefacto', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      const repo = join(dir, 'repo')
+      const app = join(repo, 'packages', 'app')
+      mkdirSync(app, { recursive: true })
+      assert.equal(git(['init', '-q'], repo).status, 0)
+      const gitignore = join(repo, '.gitignore')
+      writeFileSync(gitignore, 'node_modules/\n')
+      const ignoreBefore = readFileSync(gitignore, 'utf8')
+      const pattern = 'packages/app/.ancleto/machine-env.md'
+
+      const r = run(['install', '--project', 'packages/app', '--no-mcp', '--tier', 'gratis'], repo, regEnv(repo))
+      assert.equal(r.status, 0, r.stderr)
+
+      assert.ok(existsSync(join(app, '.ancleto', 'machine-env.md')), 'el artefacto existe en el subdir')
+      assert.ok(
+        readExclude(repo).split(/\r?\n/).includes(pattern),
+        'info/exclude contiene el patron repo-root-relative exacto'
+      )
+      assert.equal(git(['check-ignore', '--no-index', '-q', '--', pattern], repo).status, 0, 'check-ignore desde la raiz')
+      assert.equal(readFileSync(gitignore, 'utf8'), ignoreBefore, '.gitignore byte a byte sin cambios')
+
+      assert.equal(git(['add', '-A'], repo).status, 0)
+      assert.equal(git(['ls-files'], repo).stdout.includes(pattern), false, 'git add -A no incorpora el artefacto')
+      assert.equal(git(['status', '--porcelain'], repo).stdout.includes('machine-env.md'), false, 'no queda como cambio')
+    })
+  })
+
+  it('install --project <symlink a subdir>: usa el prefijo fisico, sin .. ni patron absoluto', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      const repo = join(dir, 'repo')
+      const app = join(repo, 'packages', 'app')
+      mkdirSync(app, { recursive: true })
+      assert.equal(git(['init', '-q'], repo).status, 0)
+      const gitignore = join(repo, '.gitignore')
+      writeFileSync(gitignore, 'node_modules/\n')
+      const ignoreBefore = readFileSync(gitignore, 'utf8')
+
+      // El symlink vive fuera del repo: es el layout donde `path.relative(repoRoot, artifactPath)`
+      // (implementacion anterior) producia `..\link\...` y por eso el patron lexical quedaba fuera
+      // de la raiz. Dentro del repo, Windows trata el junction como directorio y `git add -A`
+      // recorreria el alias duplicando el contenido.
+      const link = join(dir, 'link')
+      let mode = 'dir'
+      try {
+        symlinkSync(app, link, mode)
+      } catch {
+        try {
+          mode = 'junction'
+          symlinkSync(app, link, mode)
+        } catch (error) {
+          t.skip(`el host no permite crear symlinks de directorio: ${error.code}`)
+          return
+        }
+      }
+      assert.equal(
+        git(['-C', link, 'rev-parse', '--show-prefix'], dir).stdout.trim(),
+        'packages/app/',
+        `git resuelve el destino fisico del symlink (${mode})`
+      )
+
+      const pattern = 'packages/app/.ancleto/machine-env.md'
+      const first = run(['install', '--project', link, '--no-mcp', '--tier', 'gratis'], repo, regEnv(repo))
+      assert.equal(first.status, 0, first.stderr)
+
+      assert.ok(existsSync(join(app, '.ancleto', 'machine-env.md')), 'el artefacto queda en el destino fisico')
+      assert.match(readArtifact(app), /^# Machine Environment$/m)
+      assert.doesNotMatch(first.stdout + first.stderr, /fuera del repositorio/)
+
+      const machineLines = readExclude(repo).split(/\r?\n/).filter((line) => line.includes('machine-env.md'))
+      assert.deepEqual(machineLines, [pattern], 'info/exclude contiene solo el patron repo-root-relative')
+      assert.equal(readFileSync(gitignore, 'utf8'), ignoreBefore, '.gitignore byte a byte sin cambios')
+      assert.equal(git(['check-ignore', '--no-index', '-q', '--', pattern], repo).status, 0, 'check-ignore desde la raiz')
+
+      assert.equal(git(['add', '-A'], repo).status, 0)
+      assert.equal(
+        git(['ls-files'], repo).stdout.split(/\r?\n/).some((line) => line.endsWith('.ancleto/machine-env.md')),
+        false,
+        'git add -A no incorpora el artefacto'
+      )
+
+      const excludeBefore = readExclude(repo)
+      const second = run(['install', '--project', link, '--no-mcp', '--tier', 'gratis'], repo, regEnv(repo))
+      assert.equal(second.status, 0, second.stderr)
+      assert.equal(readExclude(repo), excludeBefore, 'segunda corrida: append idempotente')
+      assert.equal(
+        readExclude(repo).split(/\r?\n/).filter((line) => line.trim() === pattern).length,
+        1,
+        'una sola linea del patron tras dos corridas'
+      )
+    })
+  })
+
+  it('install --project <dir con espacio inicial>: el patron conserva el espacio y no hay actualizacion falsa', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      const repo = join(dir, 'repo')
+      // El espacio va en el primer componente del prefijo: `trim()` lo eliminaba y el
+      // patron escrito dejaba de cubrir el artefacto real.
+      const app = join(repo, ' app')
+      mkdirSync(app, { recursive: true })
+      assert.equal(git(['init', '-q'], repo).status, 0)
+      const gitignore = join(repo, '.gitignore')
+      writeFileSync(gitignore, 'node_modules/\n')
+      const ignoreBefore = readFileSync(gitignore, 'utf8')
+
+      assert.equal(
+        git(['rev-parse', '--show-prefix'], app).stdout.replace(/\r?\n$/, ''),
+        ' app/',
+        'git conserva el espacio inicial en --show-prefix'
+      )
+      const pattern = ' app/.ancleto/machine-env.md'
+
+      const first = run(['install', '--project', ' app', '--no-mcp', '--tier', 'gratis'], repo, regEnv(repo))
+      assert.equal(first.status, 0, first.stderr)
+      assert.ok(existsSync(join(app, '.ancleto', 'machine-env.md')), 'el artefacto existe en el dir con espacio')
+
+      assert.deepEqual(
+        readExclude(repo).split(/\r?\n/).filter((line) => line.includes('machine-env.md')),
+        [pattern],
+        'info/exclude contiene el patron exacto con el espacio inicial'
+      )
+      assert.equal(readFileSync(gitignore, 'utf8'), ignoreBefore, '.gitignore byte a byte sin cambios')
+      assert.equal(git(['check-ignore', '--no-index', '-q', '--', pattern], repo).status, 0, 'check-ignore desde la raiz')
+
+      assert.equal(git(['add', '-A'], repo).status, 0)
+      assert.equal(
+        git(['ls-files'], repo).stdout.split(/\r?\n/).includes(pattern),
+        false,
+        'git add -A no incorpora el artefacto'
+      )
+
+      const upgraded = run(['upgrade'], app, regEnv(repo))
+      assert.equal(upgraded.status, 0, upgraded.stderr)
+      assert.doesNotMatch(upgraded.stdout, /exclusión local actualizada/)
+      assert.match(upgraded.stdout, /exclusión local verificada/)
+      assert.equal(
+        readExclude(repo).split(/\r?\n/).filter((line) => line.includes('machine-env.md')).length,
+        1,
+        'una sola entrada tras la segunda corrida'
+      )
+    })
+  })
+
+  it('project root con salto de linea en el nombre: advierte y no escribe regla', (t) => {
+    if (skipWithoutGit(t)) return
+    if (process.platform === 'win32') {
+      t.skip('win32 no permite "\\n" en un nombre de directorio: gap declarado en tasks.md 12.6')
+      return
+    }
+    withDir((dir) => {
+      const repo = join(dir, 'repo')
+      mkdirSync(repo, { recursive: true })
+      assert.equal(git(['init', '-q'], repo).status, 0)
+      const app = join(repo, 'a\nb')
+      mkdirSync(app, { recursive: true })
+      const excludeBefore = readExclude(repo)
+
+      const r = run(['install', '--project', 'a\nb', '--no-mcp', '--tier', 'gratis'], repo, regEnv(repo))
+      assert.equal(r.status, 0, r.stderr)
+      assert.ok(existsSync(join(app, '.ancleto', 'machine-env.md')), 'el artefacto se genera igual')
+      assert.match(r.stderr, /prefijo con caracteres de control/)
+      assert.equal(readExclude(repo), excludeBefore, 'no se escribe ninguna regla de exclusion')
+    })
+  })
+
+  it('project root fuera de cualquier repo: advierte y no escribe exclusiones', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      const first = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, regEnv(dir))
+      assert.equal(first.status, 0, first.stderr)
+      assert.match(
+        first.stderr,
+        /no se pudo garantizar la exclusion de \.ancleto\/machine-env\.md: el directorio no es un repositorio git/
+      )
+      const artifact = readArtifact(dir)
+
+      const second = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, regEnv(dir))
+      assert.equal(second.status, 0, second.stderr)
+
+      assert.equal(readArtifact(dir), artifact, 'el artefacto se conserva')
+      assert.equal(existsSync(join(dir, '.git')), false, 'la guarda no crea metadatos de git')
+      assert.doesNotMatch(first.stdout + first.stderr + second.stdout + second.stderr, /fuera del repositorio/)
+    })
+  })
+
+  it('artefacto trackeado con git add -f y regla existente: no toca la exclusion y check advierte', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      assert.equal(git(['init', '-q'], dir).status, 0)
+      const gitignore = join(dir, '.gitignore')
+      writeFileSync(gitignore, '.ancleto/\n')
+      const ignoreBefore = readFileSync(gitignore, 'utf8')
+
+      const installed = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, regEnv(dir))
+      assert.equal(installed.status, 0, installed.stderr)
+
+      const excludeBefore = readExclude(dir)
+      assert.equal(
+        excludeBefore.split(/\r?\n/).filter((line) => line.trim() === '.ancleto/machine-env.md').length,
+        0,
+        'no escribe la exclusion local: la regla existente ya cubre el path'
+      )
+      assert.equal(readFileSync(gitignore, 'utf8'), ignoreBefore, '.gitignore intacto')
+      assert.equal(git(['add', '-f', '--', '.ancleto/machine-env.md'], dir).status, 0)
+      assert.equal(git(['check-ignore', '--no-index', '-q', '--', '.ancleto/machine-env.md'], dir).status, 0)
+
+      const upgraded = run(['upgrade'], dir, regEnv(dir))
+      assert.equal(upgraded.status, 0, upgraded.stderr)
+      assert.equal(readExclude(dir), excludeBefore, 'el ciclo no agrega ni actualiza la exclusion')
+      assert.match(upgraded.stdout, /exclusión local verificada/)
+
+      const checked = run(['check'], dir, regEnv(dir))
+      assert.equal(checked.status, 0, 'el warning no cambia el exit code')
+      assert.match(checked.stdout, /⚠ \.ancleto\/machine-env\.md \(trackeado en git/)
+    })
+  })
+
+  it('upgrade distingue la exclusion local actualizada de la ya verificada', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      assert.equal(git(['init', '-q'], dir).status, 0)
+      writeFileSync(join(dir, '.gitignore'), 'node_modules/\n')
+      const installed = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, regEnv(dir))
+      assert.equal(installed.status, 0, installed.stderr)
+
+      const exclude = excludePath(dir)
+      const remaining = readExclude(dir)
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== '.ancleto/machine-env.md')
+      writeFileSync(exclude, remaining.join('\n'))
+      assert.equal(
+        git(['check-ignore', '-q', '--', '.ancleto/machine-env.md'], dir).status,
+        1,
+        'sin la linea, git no ignora el artefacto'
+      )
+
+      const added = run(['upgrade'], dir, regEnv(dir))
+      assert.equal(added.status, 0, added.stderr)
+      assert.match(added.stdout, /exclusión local actualizada/)
+
+      const verified = run(['upgrade'], dir, regEnv(dir))
+      assert.equal(verified.status, 0, verified.stderr)
+      assert.match(verified.stdout, /exclusión local verificada/)
+    })
+  })
+
+  it('dos corridas seguidas no reescriben el artefacto ni duplican la exclusion', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      assert.equal(git(['init', '-q'], dir).status, 0)
+      writeFileSync(join(dir, '.gitignore'), 'node_modules/\n')
+
+      const first = run(['init', '--tier', 'gratis', '--no-mcp'], dir, regEnv(dir))
+      assert.equal(first.status, 0, first.stderr)
+
+      const artifact = artifactPath(dir)
+      const contentBefore = readFileSync(artifact, 'utf8')
+      const excludeBefore = readExclude(dir)
+      const old = new Date('2020-01-01T00:00:00.000Z')
+      utimesSync(artifact, old, old)
+
+      const second = run(['init', '--tier', 'gratis', '--no-mcp'], dir, regEnv(dir))
+      assert.equal(second.status, 0, second.stderr)
+
+      assert.equal(readFileSync(artifact, 'utf8'), contentBefore, 'contenido identico')
+      assert.equal(new Date(statSync(artifact).mtimeMs).getUTCFullYear(), 2020, 'no se reescribio')
+      assert.equal(readExclude(dir), excludeBefore, 'exclusion idempotente')
+      assert.equal(
+        readExclude(dir).split(/\r?\n/).filter((line) => line.trim() === '.ancleto/machine-env.md').length,
+        1
+      )
+    })
+  })
+
+  it('worktree vinculado: escribe la exclusion en la ruta de rev-parse --git-path info/exclude', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      const repo = join(dir, 'repo')
+      const worktree = join(dir, 'worktree')
+      mkdirSync(repo)
+      assert.equal(git(['init', '-q'], repo).status, 0)
+      assert.equal(git(['-c', 'user.email=tester@example.com', '-c', 'user.name=Tester', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-q', '-m', 'init'], repo).status, 0)
+      const added = git(['worktree', 'add', '-q', worktree, '-b', 'machine-env-wt'], repo)
+      assert.equal(added.status, 0, added.stderr)
+
+      const r = run(['install', '--project', worktree, '--no-mcp', '--tier', 'gratis'], worktree, regEnv(worktree))
+      assert.equal(r.status, 0, r.stderr)
+
+      assert.ok(existsSync(artifactPath(worktree)), 'el artefacto existe en el worktree')
+      assert.equal(git(['check-ignore', '-q', '--', '.ancleto/machine-env.md'], worktree).status, 0, 'check-ignore OK en el worktree')
+
+      const exclude = excludePath(worktree)
+      assert.ok(existsSync(exclude), 'existe la ruta resuelta de info/exclude')
+      assert.ok(
+        readFileSync(exclude, 'utf8').split(/\r?\n/).includes('.ancleto/machine-env.md'),
+        'la linea exacta esta en la ruta resuelta'
+      )
+      assert.equal(git(['ls-files'], worktree).stdout.includes('.ancleto/machine-env.md'), false, 'no queda trackeado')
+    })
+  })
+
+  it('PATH sin git: advierte y conserva el artefacto', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      assert.equal(git(['init', '-q'], dir).status, 0)
+      const installed = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, regEnv(dir))
+      assert.equal(installed.status, 0, installed.stderr)
+      assert.ok(existsSync(artifactPath(dir)))
+
+      const binDir = join(dir, 'sin-git-bin')
+      mkdirSync(binDir)
+      const r = run(['upgrade'], dir, { ...regEnv(dir), [PATH_KEY]: binDir })
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stderr, /no se pudo garantizar la exclusion de \.ancleto\/machine-env\.md/)
+
+      assert.ok(existsSync(artifactPath(dir)), 'el artefacto se conserva')
+      assert.match(readArtifact(dir), /^- git: no disponible — fallback: ninguno \(reportar\)$/m)
+    })
+  })
+
+  it('check advierte si el artefacto esta trackeado sin cambiar el exit code', (t) => {
+    if (skipWithoutGit(t)) return
+    withDir((dir) => {
+      assert.equal(git(['init', '-q'], dir).status, 0)
+      const installed = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, regEnv(dir))
+      assert.equal(installed.status, 0, installed.stderr)
+      assert.equal(git(['add', '-f', '--', '.ancleto/machine-env.md'], dir).status, 0)
+
+      const r = run(['check'], dir, regEnv(dir))
+      assert.equal(r.status, 0, 'el warning no cambia el exit code')
+      assert.match(r.stdout, /⚠ \.ancleto\/machine-env\.md \(trackeado en git/)
+    })
+  })
+
+  it('un artefacto que es directorio produce un warning no bloqueante', () => {
+    withDir((dir) => {
+      mkdirSync(artifactPath(dir), { recursive: true })
+
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, regEnv(dir))
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stderr, /no se pudo generar \.ancleto\/machine-env\.md/)
+      assert.equal(statSync(artifactPath(dir)).isDirectory(), true, 'el directorio colisionante queda intacto')
+    })
+  })
+
+  it('un rg falso agregado al PATH pasa a disponible tras upgrade', () => {
+    withDir((dir) => {
+      const binDir = join(dir, 'bin')
+      mkdirSync(binDir)
+      const env = { ...regEnv(dir), [PATH_KEY]: binDir }
+
+      const installed = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, env)
+      assert.equal(installed.status, 0, installed.stderr)
+      assert.match(readArtifact(dir), /^- rg: no disponible — fallback: /m)
+
+      const rgFile = join(binDir, process.platform === 'win32' ? 'rg.exe' : 'rg')
+      writeFileSync(rgFile, '')
+      if (process.platform !== 'win32') chmodSync(rgFile, 0o755)
+
+      const upgraded = run(['upgrade'], dir, env)
+      assert.equal(upgraded.status, 0, upgraded.stderr)
+      assert.match(upgraded.stdout, /machine-env\.md generado/)
+      assert.match(readArtifact(dir), /^- rg: disponible$/m)
+    })
+  })
+
+  it('sin senales de shell declara unknown y no filtra variables senuelo ni PATH', () => {
+    withDir((dir) => {
+      const pathSentinel = 'ancleto-path-sentinel-value'
+      const binDir = join(dir, pathSentinel)
+      mkdirSync(binDir)
+      const decoys = {
+        TOKEN: 'token-sentinel-value',
+        GITHUB_TOKEN: 'ghp-sentinel-value',
+        AWS_SECRET_ACCESS_KEY: 'aws-sentinel-value'
+      }
+      const env = {
+        ...regEnv(dir),
+        ...decoys,
+        [PATH_KEY]: `${binDir}${delimiter}${process.env[PATH_KEY] || ''}`,
+        PSModulePath: '',
+        ComSpec: '',
+        SHELL: '',
+        PROMPT: '',
+        MSYSTEM: '',
+        CYGWIN: '',
+        WSL_DISTRO_NAME: '',
+        WSL_INTEROP: ''
+      }
+
+      const r = run(['init', '--tier', 'gratis', '--no-mcp'], dir, env)
+      assert.equal(r.status, 0, r.stderr)
+
+      const content = readArtifact(dir)
+      assert.match(content, /^- shell: unknown$/m)
+      assert.match(content, /^- shell_source: unknown$/m)
+      for (const value of [pathSentinel, ...Object.values(decoys)]) {
+        assert.ok(!content.includes(value), `el artefacto no debe incluir ${value}`)
+      }
     })
   })
 })

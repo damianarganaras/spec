@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { renderMachineEnv } from '../src/core/machine-env.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -646,5 +647,113 @@ describe('content guards - throughput-pipeline', () => {
     assert.match(t, /in parallel/)
     assert.match(t, /never need the archive's output/)
     assert.match(t, /Called only when the user explicitly requests an optional draft/)
+  })
+})
+
+describe('content guards - machine environment block', () => {
+  const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
+  const AGENT_DEFS = readdirSync(join(ROOT, 'agents'), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) => entry.name.slice(0, -'.md'.length))
+    .sort()
+  const BASH_AGENTS = ['coder', 'tester', 'documenter', 'context-resolver', 'technical-discovery', 'technical-seed-writer']
+  const NO_BASH_AGENTS = ['reviewer', 'spec-writer', 'memory-keeper']
+  const DELEGATABLE_AGENTS = AGENT_DEFS.filter((name) => name !== 'orchestrator')
+  const CANONICAL = 'Before running any command, read `.ancleto/machine-env.md` if it exists and use it as the environment hint for shell, line endings, and tool availability.'
+  const normalize = (text) => text.replace(/\s+/g, ' ')
+
+  function machineSection() {
+    const text = readAgent('orchestrator')
+    // El heading real, no la mencion inline en `## Repository Reading Limit`.
+    const start = text.indexOf('\n## Machine Environment')
+    assert.ok(start >= 0, 'falta ## Machine Environment como heading')
+    const end = text.indexOf('\n## ', start + 1)
+    return text.slice(start + 1, end === -1 ? undefined : end)
+  }
+
+  const PRECEDENCE = /This hint prevails over generic shell guidance in `AGENTS\.md`, `PRODUCT\.md`, or an agent prompt, but never overrides security, authorization, validation, permissions, or explicit user instructions/
+
+  it('las 10 definiciones de agente referencian el artefacto y su conducta ante ausencia', () => {
+    assert.ok(AGENT_DEFS.length >= 10, 'se esperan al menos las 10 definiciones instalables')
+    for (const name of AGENT_DEFS) {
+      const text = normalize(readAgent(name))
+      assert.ok(text.includes('.ancleto/machine-env.md'), `${name} no referencia el artefacto`)
+      assert.ok(text.includes(CANONICAL), `${name} no declara la instruccion canonica`)
+      assert.match(text, PRECEDENCE, `${name} no declara la precedencia generica`)
+      assert.match(text, /If it does not exist, continue with the generic guidance and report its absence/, `${name} no declara la conducta ante ausencia`)
+      assert.match(text, /report the declared shell and the exact command/, `${name} no declara el reporte por fallo de entorno`)
+    }
+  })
+
+  it('la seccion Hint del bloque declara la misma precedencia sin valores de maquina', () => {
+    const hint = renderMachineEnv({}).split('## Hint')[1]
+    const text = normalize(hint)
+    assert.match(text, /prevalece sobre indicaciones genericas de shell/)
+    assert.match(text, /nunca sobre seguridad, autorizacion, validacion, permisos ni instrucciones explicitas del usuario/)
+    assert.doesNotMatch(hint, /\bwin32\b|\bcrlf\b/i)
+    assert.doesNotMatch(hint, /\bWindows PowerShell 5\.1\b|\bbash\/WSL\b|\b(?:x64|arm64)\b/)
+  })
+
+  it('ninguna definicion de agente contiene valores de la maquina', () => {
+    for (const name of AGENT_DEFS) {
+      const text = readAgent(name)
+      assert.doesNotMatch(text, /\bwin32\b/, `${name} contiene la plataforma`)
+      assert.doesNotMatch(text, /\bcrlf\b/i, `${name} contiene el EOL`)
+      assert.doesNotMatch(text, /\bWindows PowerShell 5\.1\b/, `${name} contiene la variante de shell`)
+      assert.doesNotMatch(text, /\bbash\/WSL\b/, `${name} contiene la variante WSL`)
+      assert.doesNotMatch(text, /\b(?:x64|arm64)\b/, `${name} contiene la arquitectura`)
+      assert.doesNotMatch(text, /\bno disponible — fallback:/, `${name} contiene la disponibilidad detectada`)
+    }
+  })
+
+  it('el orquestador declara la seccion, la exencion del techo y la lista real de agentes con bash', () => {
+    const section = machineSection()
+    assert.match(section, /does not count against the three-repository-file reading ceiling/)
+    for (const name of BASH_AGENTS) {
+      assert.ok(section.includes(`@${name}`), `el orquestador no lista a @${name}`)
+    }
+    for (const name of NO_BASH_AGENTS) {
+      assert.ok(section.includes(`@${name}`), `el orquestador no excluye a @${name}`)
+    }
+    assert.match(section, /verbatim/)
+    assert.match(section, /read at runtime/)
+  })
+
+  it('el techo de lecturas exime Project Memory Rules y Machine Environment en ambas declaraciones', () => {
+    const text = readAgent('orchestrator')
+    const limitStart = text.indexOf('## Repository Reading Limit')
+    assert.ok(limitStart >= 0, 'falta ## Repository Reading Limit')
+    const limitEnd = text.indexOf('\n## ', limitStart + 1)
+    const limit = text.slice(limitStart, limitEnd === -1 ? undefined : limitEnd)
+    assert.match(limit, /`## Project Memory Rules`/)
+    assert.match(limit, /`## Machine Environment`/)
+    assert.match(limit, /do NOT consume this ceiling/)
+
+    const neverStart = text.indexOf('### PROHIBITED ACTIONS')
+    assert.ok(neverStart >= 0, 'falta ### PROHIBITED ACTIONS')
+    const neverEnd = text.indexOf('\n### ', neverStart + 1)
+    const never = text.slice(neverStart, neverEnd === -1 ? undefined : neverEnd)
+    assert.match(never, /`## Project Memory Rules`/)
+    assert.match(never, /`## Machine Environment`/)
+    assert.match(never, /do not consume the ceiling/)
+  })
+
+  it('la lista de agentes con bash del orquestador coincide con las definiciones', () => {
+    const enabled = DELEGATABLE_AGENTS.filter((name) => /^tools:\n(?:.*\n)*?  bash: true$/m.test(readAgent(name)))
+    assert.deepEqual(enabled, [...BASH_AGENTS].sort())
+    assert.deepEqual([...enabled, ...NO_BASH_AGENTS].sort(), DELEGATABLE_AGENTS)
+    assert.match(readAgent('orchestrator'), /^tools:\n(?:.*\n)*?  bash: false$/m, 'el orquestador no ejecuta bash')
+  })
+
+  it('ninguna definicion de agente ordena escribir .gitignore', () => {
+    for (const name of AGENT_DEFS) {
+      assert.doesNotMatch(readAgent(name), /\.gitignore/, `${name} menciona .gitignore`)
+    }
+  })
+
+  it('templates/AGENTS.md no incorpora el bloque de entorno', () => {
+    const t = readFileSync(join(ROOT, 'templates', 'AGENTS.md'), 'utf8')
+    assert.doesNotMatch(t, /machine-env\.md/)
+    assert.doesNotMatch(t, /## Machine Environment/)
   })
 })

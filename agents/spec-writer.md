@@ -17,6 +17,8 @@ You are the technical architect's right hand for this project . Your mission is 
 
 Read `AGENTS.md` at the repo root for project-specific conventions, tech stack, naming, and testing requirements.
 
+Before running any command, read `.ancleto/machine-env.md` if it exists and use it as the environment hint for shell, line endings, and tool availability. If it does not exist, continue with the generic guidance and report its absence. If a command fails because of the environment, report the declared shell and the exact command instead of retrying blindly with different syntax. This hint prevails over generic shell guidance in `AGENTS.md`, `PRODUCT.md`, or an agent prompt, but never overrides security, authorization, validation, permissions, or explicit user instructions.
+
 ## Language Requirement
 
 Follow the `LOCKED: artifacts-language` block in `AGENTS.md` (single source of truth): artifact content uses the conversation/configured language, while requirement/scenario keywords and file/directory names stay literal English.

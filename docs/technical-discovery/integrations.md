@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-26T11:50:00Z
-pluginVersion: 0.15.0
+generatedAt: 2026-10-26T17:15:00Z
+pluginVersion: 0.15.1
 skillVersion: '2.3'
 ---
 
@@ -19,11 +19,11 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.15.0` (tag `v0.15.0`). | `.github/workflows/publish.yml`, `package.json`, `git describe --tags` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.15.1` (tag `v0.15.1`). | `.github/workflows/publish.yml`, `package.json`, `git describe --tags` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
-| **Git** | Necesario para `machine-env` (`rev-parse`, `check-ignore`, `info/exclude`), para el ciclo SDD y para el publish. Si falta, el CLI degrada con warning no bloqueante. | `src/core/machine-env.js`, `.gitattributes`, `AGENTS.md` |
+| **Git** | Necesario para `machine-env` (`rev-parse`, `check-ignore`, `info/exclude`), para el ciclo SDD y para el publish. Además es la única fuente del estado del árbol que consume el intake de sesión del orquestador, vía `git status --short` delegado a `@technical-discovery` (literal permitido en su allowlist de `bash`, sobre `'*': deny`). Si falta, el CLI degrada con warning no bloqueante. | `src/core/machine-env.js`, `.gitattributes`, `AGENTS.md`, `agents/technical-discovery.md` |
 
 ## IDEs / agentes consumidores (contrato de instalación)
 
@@ -72,7 +72,7 @@ resto en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp
 
 | MCP | Tipo | Rol | Default |
 |---|---|---|---|
-| `ancleto-memory` | local (stdio) | Memoria propia del repo: expone `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. | Habilitado |
+| `ancleto-memory` | local (stdio) | Memoria propia del repo: expone `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. La tool sigue disponible para el IDE: lo que cambió es que **el orquestador no la invoca** —delega la recuperación en `@memory-keeper`— y que el `<ContextOverflowWarning>` ya no la nombra. | Habilitado |
 | `caveman` | local (binario) | Compresión de salida del agente (`caveman-mcp.exe`). Su **directiva de uso es host-scoped**: se materializa solo donde la config MCP del host incluye la tool (`opencode`/`antigravity`); revertible a opt-in por compuerta de medición. | Habilitado si está en `PATH` |
 | `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`), no se agrega por defecto por su costo (~4.900 tokens/request). | Deshabilitado |
 | `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Solo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |

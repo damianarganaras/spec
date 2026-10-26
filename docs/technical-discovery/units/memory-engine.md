@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el working-context (día-cero), el refresh on-write (MCP y CLI), la procedencia source, las ops export/import/gc y el chequeo advisory de staleness"
-covers: [motor de memoria, tools, working-context, día-cero, procedencia source, export/import/gc, refresh on-write CLI, staleness advisory]
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el working-context (día-cero), el refresh on-write (MCP y CLI), la procedencia source, las ops export/import/gc, el aviso de overflow y su consumo por el orquestador"
+covers: [motor de memoria, tools, working-context, día-cero, procedencia source, export/import/gc, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
 sources: ["src/core/memory/**"]
-generatedAt: 2026-10-26T11:50:00Z
-pluginVersion: 0.15.0
+generatedAt: 2026-10-26T17:15:00Z
+pluginVersion: 0.15.1
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,8 @@ tools MCP del LLM, subcomandos CLI (incluidas las ops export/import/gc y el cheq
 el working-context inyectado al system prompt y el doctor. Evidencia: `README.md`,
 `DESIGN-memory-engine-v0.2.0.md`, `aspec/specs/memory-ops/spec.md`,
 `aspec/specs/memory-engine/spec.md`,
-`aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/`.
+`aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/`,
+`aspec/changes/archive/2026-10-26-orchestrator-session-start/`.
 
 ## Recorrido relevante
 
@@ -29,14 +30,15 @@ el working-context inyectado al system prompt y el doctor. Evidencia: `README.md
 3. `ancleto memory export|import|gc|context|list|doctor` mueven/inspeccionan/purgan/regeneran
    nodos; `memory import` refresca el working-context compare-based;
    `memory doctor` agrega una línea advisory de frescura del working-context.
-4. `buildWorkingContext` materializa `<ProjectMemoryRules>`/`<ProjectTopology>` para el prompt.
+4. `buildWorkingContext` materializa `<ProjectMemoryRules>`/`<ProjectTopology>` para el prompt;
+   si trunca, agrega `<ContextOverflowWarning>` (ver "Aviso de overflow").
 
 ## Componentes
 
 | Archivo | Rol |
 |---|---|
 | `src/core/memory/database.js` | Abre la DB (`openDatabase`), PRAGMAs (`WAL`, `foreign_keys`, `busy_timeout=5000`), migraciones idempotentes, FTS5 external-content, triggers, `checkpointDatabase` (merge del WAL). |
-| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext`, `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode` (procedencia `source`), `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `sanitizePaths`, `checkpoint`, `close`. |
+| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext`, `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode` (procedencia `source`), `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `sanitizePaths`, `checkpoint`, `close`. Constantes de presupuesto: `CHARS_PER_TOKEN = 4`, `MAX_TOKENS = 2000` (`engine.js:8-9`), luego `maxChars = maxTokens * CHARS_PER_TOKEN` (`engine.js:131`). |
 | `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de las 3 tools) y `createMemoryToolkit`; tras `recordNode`, evalúa `shouldRefreshWorkingContext(result)` y, si aplica, llama `writeWorkingContext(engine, projectRoot)` dentro de un `try/catch`. |
 | `src/core/memory/mcp-server.js` | `createMemoryServer`/`serveMemoryMcp`: servidor MCP stdio sin dependencias; maneja JSON-RPC, `handle`, `respond`, `fail`. |
 | `src/core/memory/doctor.js` | `memoryDoctor`: integridad, detección de inconsistencias FTS5 y rebuild de índice / duplicados de activas. |
@@ -102,7 +104,8 @@ Expuestas como subcomandos del grupo `memory`:
   `context.source || 'runtime'` y **nunca** desde `input` (un `source` forjado en los args se
   ignora, igual que `id`/`status`/`confidence`). Vocabulario estable por superficie de escritura:
   `mcp:ancleto-memory` (tools MCP), `cli:import` (import del CLI), `runtime` (default
-  programático) y `agent:<rol>` (solo si un runtime confiable lo provee).
+  programático), `tool:recordRule`/`tool:recordDecision` (default del toolkit in-process) y
+  `agent:<rol>` (solo si un runtime confiable lo provee).
 - **Exposición**: se muestra en la lectura de operador (`listNodes`, `ancleto memory list
   --json`), pero **no** en `searchMemory` ni en las firmas JSON Schema de las tools MCP.
 - **Frontera auditoría vs enforcement**: la procedencia es **descriptiva**; el motor **no**
@@ -110,6 +113,45 @@ Expuestas como subcomandos del grupo `memory`:
   No hay cambio de schema. Evidencia: `src/core/memory/engine.js` (`recordNode`),
   `src/core/memory/mcp-server.js`, `src/core/memory/tools.js`,
   `aspec/changes/archive/2026-10-05-memory-actor-provenance/`.
+
+## Aviso de overflow accionable (`memory-engine`, archivado 2026-10-26)
+
+`buildWorkingContext` trunca el bloque `<ProjectMemoryRules>` contra
+`maxChars = MAX_TOKENS * CHARS_PER_TOKEN` (2.000 tokens × 4 = **8.000 caracteres**) y, cuando
+omite reglas, anexa **incondicionalmente** el aviso:
+
+```text
+<ContextOverflowWarning>Context truncated due to size limits. N rules omitted. Delegate one
+Recall to @memory-keeper with the task topic before delegating any other stage.</ContextOverflowWarning>
+```
+
+- **El aviso nombra sólo capacidades que el orquestador tiene.** El texto anterior pedía usar
+  la tool `searchMemory`, que el orquestador no expone y tiene prohibido llamar; la versión
+  vigente **no la menciona**. Evidencia: `src/core/memory/engine.js:144` (literal del aviso),
+  `aspec/specs/memory-engine/spec.md` (requirement "Aviso de overflow accionable para el
+  orquestador").
+- **Consumidor del aviso: `@orchestrator`.** La sección "Team Memory" de `agents/orchestrator.md`
+  declara el `<ContextOverflowWarning>` como trigger inmediato: delegar **exactamente un**
+  Recall a `@memory-keeper` con el topic de la tarea **antes** de delegar cualquier otra etapa,
+  y no repetirlo para el mismo warning. El orquestador **nunca** llama `searchMemory` ni
+  delega esa búsqueda a otro agente.
+- **Lo que no cambió**: la tool `searchMemory` sigue expuesta por el MCP `ancleto-memory` al
+  IDE (3 tools, sin cambios de schema); el cambio es del **consumidor**, no del motor. El
+  conteo de reglas omitidas, el registro por consola (`engine.js:145`) y el presupuesto de
+  caracteres se conservan.
+- **Guardas**: `test/memory-engine.test.js` aserta que el bloque menciona `@memory-keeper` y
+  `Recall` y que **no** contiene `searchMemory`; `test/content-guards.test.js` fija el trigger
+  y la unicidad del Recall en el contrato del orquestador.
+- **Deuda abierta**: cuatro superficies mergeadas (`AGENTS.md`, `PRODUCT.md`,
+  `templates/AGENTS.md`, `templates/PRODUCT.md`) siguen dando el consejo viejo de invocar
+  `searchMemory` ante el warning. No es un hecho vigente del runtime, pero es lo que los agentes
+  del repo reciben hoy: está registrado como **`BACKLOG.md` ítem 17** (abierto). Des-hardcodear
+  ese contrato exige un bloque `LOCKED` y reconciliar el texto plano legacy en toda ruta que
+  mergea `TEMPLATES` (`mergeTemplateInto` → `reconcileLegacyBlocks`, `src/cli/index.js`).
+  Evidencia: `BACKLOG.md:319`,
+  `aspec/changes/archive/2026-10-26-orchestrator-session-start/proposal.md`,
+  `aspec/specs/prompt-contracts/spec.md` (requirement "Recall delegado ante
+  `<ContextOverflowWarning>`").
 
 ## Cierre del pipeline: memoria en un paso (`throughput-pipeline`, archivado)
 
@@ -191,15 +233,16 @@ Evidencia: `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
    `source`/`confidence`/`status`/`id`; el LLM nunca los provee.
 4. **Refresh del working-context** — dos caminos sobre el mismo render:
    - (a) **MCP** (`tools.js`): `shouldRefreshWorkingContext(result)` — (i) el nodo entrante
-     es `rule` + scope `project`, **o** (ii) hubo supersesión (cualquier `memory_key` pudo
-     retirar del bloque una rule `project`). Si aplica, `writeWorkingContext(engine,
-     projectRoot)` dentro de `try/catch`.
+      es `rule` + scope `project`, **o** (ii) hubo supersesión (cualquier `memory_key` pudo
+      retirar del bloque una rule `project`). Si aplica, `writeWorkingContext(engine,
+      projectRoot)` dentro de `try/catch`.
    - (b) **CLI** (`src/cli/index.js`): tras `engine.importNodes(json)`, `memoryImport` llama a
-     `refreshWorkingContextOnWrite(engine, projectDir)`, que re-renderiza y reescribe solo si
-     el bloque cambió (compare-based); reusa la conexión.
+      `refreshWorkingContextOnWrite(engine, projectDir)`, que re-renderiza y reescribe solo si
+      el bloque cambió (compare-based); reusa la conexión.
 5. `buildWorkingContext(scope, maxTokens)`: materializa `<ProjectMemoryRules>` (reglas activas,
    scope `project`) y `<ProjectTopology>`; trunca de forma segura con `<ContextOverflowWarning>`
-   si excede el presupuesto.
+   si excede el presupuesto, y ese aviso **delega un Recall a `@memory-keeper`** (no nombra
+   `searchMemory`).
 6. `ancleto memory doctor`: verifica integridad, reconstruye FTS5 y fusiona el WAL para dejar el
    `.db` seguro de copiar. Además emite, de forma **advisory** (no afecta el exit code), la línea
    `Working-context: <ok|ausente|desactualizado>`.
@@ -213,7 +256,8 @@ Evidencia: `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
   `unicode61 remove_diacritics 1` (sin Porter Stemmer) y triggers INSERT/UPDATE/DELETE.
 - **Scopes jerárquicos** `project < feature < task`; default `project`.
 - **Solo reglas activas con scope `project`** se inyectan en `<ProjectMemoryRules>`; las
-  decisiones `project` se recuperan reactivamente con `searchMemory`.
+  decisiones `project` se recuperan reactivamente con `searchMemory` — pero **el orquestador no
+  la invoca**: delega el Recall en `@memory-keeper` (ver "Aviso de overflow").
 - **Raíz del proyecto desde la DB, no desde el cwd**: `resolveMemoryProjectRoot` prioriza el
   primer ancestro con `.ancletorc`; si no, el candidato derivado de `dbPath` con layout
   `.ancleto/`. El refresh es best-effort.
@@ -223,6 +267,8 @@ Evidencia: `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
   supersesión o contribución directa dispara la regeneración; en CLI, `import` no abre un
   segundo engine.
 - **Export/import/gc no cambian el schema ni agregan dependencias**: solo `node:sqlite`.
+- **El aviso de overflow nombra sólo capacidades existentes**: delega un Recall a
+  `@memory-keeper` y no menciona `searchMemory`.
 - **Staleness advisory es no bloqueante** (no altera el exit code); corregir requiere lifecycle
   point, `memory context --out` o un `import`/`recordRule` posterior.
 - **`machine-env` es ortogonal**: no se persiste en la DB ni se inyecta en `<ProjectMemoryRules>`.
@@ -232,15 +278,17 @@ Evidencia: `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
 | Path | Rol |
 |---|---|
 | `src/core/memory/database.js` | Conexión, PRAGMAs, migraciones, FTS5. |
-| `src/core/memory/engine.js` | `buildWorkingContext`, `searchMemory`, `recordNode`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `sanitizePaths`. |
+| `src/core/memory/engine.js` | `buildWorkingContext` (incluye el literal del `<ContextOverflowWarning>` en `:144`), `searchMemory`, `recordNode`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `sanitizePaths`. |
 | `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext` (MCP), `refreshWorkingContextOnWrite` (CLI, compare-based), `checkWorkingContextFreshness`, `normalizeBlock`, `readWorkingContextFile`, `resolveMemoryProjectRoot` (día-cero), `workingContextPath`. |
 | `src/core/memory/tools.js` | `createMemoryToolHandlers`, `createMemoryToolkit`, refresh on-write MCP filtrado. |
 | `src/core/memory/mcp-server.js` | Transporte MCP stdio. |
 | `src/cli/index.js` | `memoryExport`, `memoryImport` (con refresh on-write), `memoryGc`, `memoryContext`, `memoryListCmd`, `memoryDoctorCmd` (con advisory), `memoryCmd`. |
-| `aspec/specs/memory-engine/spec.md` | Contrato de día-cero, refresh on-write MCP/CLI y chequeo de staleness. |
+| `aspec/specs/memory-engine/spec.md` | Contrato de día-cero, refresh on-write MCP/CLI, staleness advisory y **aviso de overflow accionable**. |
+| `aspec/changes/archive/2026-10-26-orchestrator-session-start/` | Change archivado del aviso de overflow (delta de `memory-engine` y `prompt-contracts`). |
 | `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/` | Change archivado con proposal/design/tasks y delta de spec. |
 | `aspec/changes/archive/2026-10-14-token-budget/` | Delta de día-cero del working-context. |
 | `aspec/changes/archive/2026-10-05-memory-actor-provenance/` | Contrato de procedencia `source` (auditoría vs enforcement). |
 | `aspec/specs/memory-ops/spec.md` | Contrato de las ops export/import/gc. |
 | `DESIGN-memory-engine-v0.2.0.md` | Diseño congelado del motor. |
-| `test/memory-engine.test.js`, `test/mcp.test.js`, `test/working-context.test.js`, `test/cli.test.js` | Suite del motor, MCP, working-context y CLI. |
+| `agents/orchestrator.md` | Consumidor del `<ContextOverflowWarning>`: delega un único Recall en `@memory-keeper`. |
+| `test/memory-engine.test.js`, `test/mcp.test.js`, `test/working-context.test.js`, `test/cli.test.js` | Suite del motor, MCP, working-context y CLI (incluye el assert del aviso de overflow). |

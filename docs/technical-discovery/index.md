@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-10-26T11:50:00Z
-pluginVersion: 0.15.0
+generatedAt: 2026-10-26T17:15:00Z
+pluginVersion: 0.15.1
 skillVersion: '2.3'
 ---
 
@@ -11,9 +11,9 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto` / alias `aspec`).
 No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base: pack Repomix
-(`--compress`, tier resuelto `gratis`, 670 archivos, ~38.239 tokens), `package.json`
-(`0.15.0`), tag `v0.15.0` sobre `fc52b84` (`development`), `.discovery-map.json`
-(`total_files: 683`) y lectura puntual de los archivos citados en cada documento.
+(`--compress`, tier resuelto `gratis`, 676 archivos, ~14.318 tokens), `package.json`
+(`0.15.1`), tag `v0.15.1` (HEAD `7da9a97`, 4 commits por delante del tag), `.discovery-map.json`
+(`total_files: 688`) y lectura puntual de los archivos citados en cada documento.
 
 ## Ruteo por pregunta
 
@@ -26,12 +26,14 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 | Catálogo de unidades (módulos, agents, skills, commands) con propósito y entry point | `units/_map.md` |
 | **Entorno de máquina**: `.ancleto/machine-env.md`, shell/EOL/tooling, exclusión local sin tocar `.gitignore`, entrega a subagentes | `setup.md`, `decisions.md`, `units/cli-install.md` |
 | **Rutas por host (`AGENT_TARGETS`), adaptación de frontmatter (incl. Command Code), commands como skills, MCP de host, merge de templates y bloques LOCKED, portabilidad** | `units/cli-install.md` |
-| Motor de memoria persistente (SQLite + FTS5, tools del LLM, working-context, procedencia `source`), **export/import/gc**, **refresh on-write CLI y staleness advisory** | `units/memory-engine.md` |
+| Motor de memoria persistente (SQLite + FTS5, tools del LLM, working-context, procedencia `source`), **export/import/gc**, **refresh on-write CLI y staleness advisory**, **aviso de overflow y su Recall delegado** | `units/memory-engine.md` |
 | Discovery, empaquetado Repomix, impacto del seed, **affected-set determinístico (grafo de imports, `ancleto affected`)** y tiers de tokens | `units/discovery-engine.md` |
 | CLI: `init`/`install`/`update`/`upgrade`, wizard TTY, migración legacy, MCP, `stats failures` | `units/cli-install.md` |
 | **Reporte de fallos de herramientas** (`ancleto stats failures`: clases `env`/`check`/`tool`/`unknown`, privacidad) | `integrations.md`, `decisions.md`, `units/cli-install.md` |
 | Pipeline de throughput del ciclo SDD (paralelización `@documenter` ∥ `@memory-keeper`, Validation Ledger, memoria en un paso) | `decisions.md`, `units/cli-install.md` |
 | Working-context día-cero, refresh on-write (MCP/CLI) y staleness advisory | `units/memory-engine.md`, `overview.md` |
+| **Arranque de sesión del orquestador**: intake de sesión (changes activos + `git status --short` delegado), techo de lecturas (3 archivos + exenciones), allowlist de `bash` de `@technical-discovery` | `decisions.md`, `overview.md`, `units/_map.md` |
+| **`<ContextOverflowWarning>`**: qué emite, quién lo consume y qué guide residual queda abierto (`BACKLOG.md` ítem 17) | `units/memory-engine.md`, `decisions.md` |
 | Análisis de costo de tokens y decisión pendiente de "token-economy" | `optimizacion-de-tokens.md` (raíz) |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -43,8 +45,8 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local,
   entorno de máquina derivado y control de costo por tier. **8 hosts**: opencode (default),
   claude, vscode, antigravity, cursor, roo, copilot y commandcode.
-- **Versión observada**: `0.15.0` (`package.json`), release `v0.15.0` (tag sobre `fc52b84`).
-  `CHANGELOG.md` sigue cubriendo solo hasta `0.12.1`; los cambios `0.13.x`–`0.15.0` se infieren
+- **Versión observada**: `0.15.1` (`package.json`), tag `v0.15.1` (HEAD `7da9a97`).
+  `CHANGELOG.md` sigue cubriendo solo hasta `0.12.1`; los cambios `0.13.x`–`0.15.1` se infieren
   de specs, código, tags y changes archivados, no de una entrada de release.
 - **Tier resuelto**: `gratis` vía `.opencode/.ancleto-tier`; decide modelos de los agents y el
   pack (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, budget 50k).
@@ -59,7 +61,8 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 - **Memoria**: 3 tools del LLM (`searchMemory`, `recordRule`, `recordDecision`) + operaciones
   `memory export|import|gc|context|list|doctor` sobre `.ancleto/memory.db`; `source` es
   procedencia runtime-owned. El refresh on-write cubre **MCP y CLI**; `memory doctor` expone un
-  chequeo de staleness advisory. Detalle: `units/memory-engine.md`.
+  chequeo de staleness advisory. El `<ContextOverflowWarning>` **delega un Recall a
+  `@memory-keeper`** y **no nombra `searchMemory`**. Detalle: `units/memory-engine.md`.
 - **Entorno de máquina**: `src/core/machine-env.js` es el **dueño único** de detectar, renderizar,
   escribir y excluir `.ancleto/machine-env.md` (plataforma, shell, EOL, tools). Se regenera en
   `init`, `install --project` y `upgrade`; la exclusión usa `info/exclude` y **nunca** toca
@@ -69,6 +72,12 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
   `mergeLocked`; punto único de `install`/`update`/`upgrade` (vía `copyTemplates`) e `import`.
 - **Instalación por host**: `AGENT_TARGETS` es la fuente única de rutas (skills/agents/commands)
   por IDE; el frontmatter de agents se adapta por host. Detalle: `units/cli-install.md`.
+- **Contratos de prompt del orquestador** (`agents/orchestrator.md`): **intake de sesión**
+  (changes activos excluyendo `archive/`; un único `git status --short` delegado a
+  `@technical-discovery` sólo cuando el pedido toca el estado del repo; silencio si no hay nada
+  que reportar), **techo de lecturas** (3 archivos no dirigidos; exentos el working-context y el
+  machine-env, más hasta 5 archivos nombrados explícitamente por el usuario **por mensaje**; el
+  sexto se delega) y **Recall único** ante `<ContextOverflowWarning>`. Detalle: `decisions.md`.
 - **Affected-set determinístico** (`throughput-pipeline`, archivado 2026-10-15):
   `src/core/affected-set.js` computa la clausura transitiva de **dependientes** sobre el grafo de
   imports (zero-dep, determinista) y `ancleto affected [--cwd <dir>] [--json] <archivo...>` la
@@ -79,9 +88,9 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 - **`AGENTS.md`**: **cuatro** bloques `LOCKED` de reglas compartidas (`validation-commands`,
   `memory-boundary`, `artifacts-language`, `seed-freshness`) + `test-block`.
 - **Ciclo SDD**: 16 comandos `/cleto-*` y 21 skills nativas; `aspec/` tiene **19 specs fuente**,
-  **1 change activo** (`ancleto-vscode-extension`) y **26 archivados**.
+  **1 change activo** (`ancleto-vscode-extension`) y **27 archivados**.
 - **Este checkout**: `.ancletorc` y `.opencode/` existen (gitignored, no versionados).
-  Persiste `.ancleto/memory.db`; **no** existe `.ancleto/machine-env.md` en este checkout.
+  Persiste `.ancleto/memory.db` y **`.ancleto/machine-env.md`** (generado el 2026-10-26).
 - **Rama de trabajo**: `development`; `main` protegida de forma honor-based (`BACKLOG.md` B3).
 - **Doc de análisis raíz**: `optimizacion-de-tokens.md` (no es runtime; mide costo de tokens y
   deja una decisión abierta sobre la promesa "optimizador de tokens").

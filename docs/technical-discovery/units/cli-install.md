@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, entorno de máquina, stats failures, affected y refresh on-write en memory import"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, entorno de máquina, superficie de shell por agente, stats failures, affected y refresh on-write en memory import"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -15,9 +15,10 @@ covers:
   - stats failures
   - memory import refresh on-write
   - memory doctor advisory staleness
+  - permisos de shell por agente
 sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js"]
-generatedAt: 2026-10-26T11:50:00Z
-pluginVersion: 0.15.0
+generatedAt: 2026-10-26T17:15:00Z
+pluginVersion: 0.15.1
 skillVersion: '2.3'
 ---
 
@@ -251,6 +252,29 @@ reimplementan formato, comparación o resolución de rutas git.
 Evidencia: `src/core/machine-env.js`, `src/cli/index.js` (`refreshMachineEnv`,
 `checkCommand`), `agents/*.md`, `aspec/specs/machine-environment/spec.md`.
 
+## Superficie de shell de los agentes
+
+El CLI no ejecuta comandos por sí mismo en nombre de los agentes: esa frontera vive en el
+frontmatter de cada definición (`tools.bash` y `permission.bash`), que el CLI **copia verbatim**
+al destino nativo del host (sólo adapta claves, no valores de permisos).
+
+| Agente | Shell |
+|---|---|
+| `@orchestrator`, `@reviewer`, `@spec-writer`, `@memory-keeper` | `bash: false`. |
+| `@coder`, `@tester`, `@documenter`, `@context-resolver`, `@technical-discovery`, `@technical-seed-writer` | `bash: true`. |
+| `@technical-discovery` | `permission.bash` con `'*': deny` y **dos literales permitidos**: `'ancleto discovery --check'` y `'git status --short'`. |
+
+El literal `git status --short` existe porque el **intake de sesión** del orquestador necesita el
+estado del árbol y el orquestador no tiene shell: lo **delega** a `@technical-discovery` y usa su
+salida tal cual, sólo cuando el pedido toca el estado del repositorio. Sumar ese literal a un rol
+con `'*': deny` otorga estrictamente menos privilegio que enrutar el mismo comando a un agente con
+`'*': allow`, y no amplía la superficie de escritura. El orquestador **nunca** ejecuta
+`ancleto discovery --check`: delega ese chequeo de estado a `@technical-discovery`.
+
+Evidencia: `agents/technical-discovery.md`, `agents/orchestrator.md` ("## Session Intake",
+"Repository Reading Limit"), `aspec/specs/prompt-contracts/spec.md`,
+`aspec/changes/archive/2026-10-26-orchestrator-session-start/proposal.md`.
+
 ## Reporte de fallos (`ancleto stats failures`)
 
 - Lee en **solo lectura** la tabla `part` de la base de sesiones de opencode; considera fallo
@@ -367,3 +391,5 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 | `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/` | Change archivado con proposal, design, tasks y delta spec. |
 | `aspec/changes/archive/2026-10-25-machine-environment-block/` | Change archivado del entorno de máquina. |
 | `aspec/changes/archive/2026-10-25-session-failure-report/` | Change archivado del reporte de fallos. |
+| `aspec/changes/archive/2026-10-26-orchestrator-session-start/` | Change archivado del intake de sesión, el techo de lecturas acotado y el aviso de overflow accionable. |
+| `agents/technical-discovery.md` | Allowlist de `bash` de dos literales (`ancleto discovery --check`, `git status --short`) sobre `'*': deny`. |

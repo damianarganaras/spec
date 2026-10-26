@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y el presupuesto por tier"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js"]
-generatedAt: 2026-10-26T11:50:00Z
-pluginVersion: 0.15.0
+generatedAt: 2026-10-26T17:15:00Z
+pluginVersion: 0.15.1
 skillVersion: '2.3'
 ---
 
@@ -35,8 +35,10 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
 - `writeDiscoveryMap(rootDir)`: escribe `.discovery-map.json` en la raíz del repo.
 - `readTopologySummary(cwd)`: valida y lee el resumen para inyectarlo en el working context.
 - El mapa se regenera al correr `ancleto discovery` (no en `--check`). En esta corrida:
-  `total_files: 683`; `tree_summary` incluye `documentation` 340 y `audit logs` 9 porque el
-  mapa recorre el disco y no aplica `.gitignore`.
+  `total_files: 688` (`last_updated: 2026-10-26T17:13:16.273Z`); `tree_summary` incluye
+  `documentation` 340 y `audit logs` 9 porque el mapa recorre el disco y no aplica `.gitignore`.
+  El `total_files` **no** coincide con el número de archivos del pack: el mapa cuenta el disco
+  y el pack aplica los ignores del tier y `.gitignore`.
 
 ## Empaquetado — `src/core/repomix-tier.js`
 
@@ -44,7 +46,9 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
   (+`test/**`, `docs/**`, `**/*.md`; `--compress`), `gratis` (igual que `minimo` + budget 50000).
 - `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
   En este checkout existe `.opencode/.ancleto-tier` con valor **`gratis`**, por lo que el tier
-  resuelto es `gratis` y el pack de esta corrida quedó en ~38.239 tokens (bajo el budget 50k).
+  resuelto es `gratis` y el pack de esta corrida quedó en 676 archivos / ~14.318 tokens (bajo
+  el budget 50k). El conteo de tokens depende de la compresión efectiva de Repomix y **no es
+  comparable entre corridas**.
 - `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
   + `--ignore` del usuario, y agrega `--compress` si el tier o el flag lo piden. No permite
   reemplazar los ignores por un `--ignore` vacío.
@@ -104,7 +108,11 @@ objetivo de verificación del tester.
 3. Si hay estado previo, `computeImpact` compara por archivo y por área (primer nivel) y
    clasifica `impact`: `material` si cambió un archivo material (`package.json`, configs de
    runtime, `index.html`, `src/main|index.*`), apareció/desapareció un área raíz o un archivo
-   material; si no, `minor`; si no hay cambios atribuibles, `none`.
+   material; si no, `minor`; si no hay cambios atribuibles, `none`. **La detección es por
+   lista de archivos, no por contrato**: en la corrida que originó esta regeneración,
+   `package.json` `0.15.0`→`0.15.1` bastó para marcar `material` y listar 11 `affectedDocs`,
+   aunque el cambio de comportamiento real estuviera en `agents/`, `src/core/memory/engine.js` y
+   `aspec/specs/`.
 4. `readSeedMap` + `affectedDocsFor` cruzan áreas cambiadas con `seed-map.json` para acotar la
    regeneración a `affectedDocs` (documentos del **seed**; no confundir con el `affected-set`
    del change).

@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-10-26T11:50:00Z
-pluginVersion: 0.15.0
+generatedAt: 2026-10-26T17:15:00Z
+pluginVersion: 0.15.1
 skillVersion: '2.3'
 ---
 
@@ -15,7 +15,7 @@ skillVersion: '2.3'
 |---|---|---|
 | Node.js ≥ 24.0.0 | Obligatorio: el motor de memoria usa el módulo nativo `node:sqlite`. | `package.json` (`engines.node`), `README.md` |
 | Repomix | Opcional: se resuelve por `PATH` o vía `npx -y repomix@1.18.0`. | `src/cli/index.js`, pack |
-| Git | Necesario para el ciclo de changes, el workflow de publish y la exclusión local de `.ancleto/machine-env.md`. Si falta, el CLI degrada con warning. | `BACKLOG.md`, `.github/workflows/publish.yml`, `src/core/machine-env.js` |
+| Git | Necesario para el ciclo de changes, el workflow de publish, la exclusión local de `.ancleto/machine-env.md` y el `git status --short` que el intake del orquestador delega a `@technical-discovery`. Si falta, el CLI degrada con warning. | `BACKLOG.md`, `.github/workflows/publish.yml`, `src/core/machine-env.js`, `agents/orchestrator.md` |
 
 ## Instalación y CLI
 
@@ -69,8 +69,8 @@ solo funciona con la base de sesiones de opencode.
   bloque LOCKED de convenciones Playwright; instalable con cualquier host.
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
   En este checkout `.opencode/.ancleto-tier` contiene **`gratis`**, por lo que el tier resuelto
-  es `gratis` (budget 50k; el pack real quedó en ~38.239 tokens). El tier decide modelos de los
-  agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
+  es `gratis` (budget 50k; el pack real de esta corrida quedó en ~14.318 tokens). El tier decide
+  modelos de los agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
   `.opencode/.ancleto-tier`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`,
@@ -119,6 +119,25 @@ lo incluye verbatim en delegaciones con `bash: true` y exime esa lectura del tec
 archivos. Evidencia: `src/core/machine-env.js`, `agents/*.md`,
 `aspec/specs/machine-environment/spec.md`.
 
+**Estado en este checkout**: el artefacto **existe** (generado el 2026-10-26 por
+`ancleto upgrade`): `win32` / `10.0.26200` / `x64`, shell `Windows PowerShell 5.1`
+(`shell_source: PSModulePath`), EOL `lf` (`eol_source: gitattributes`), `rg` **no disponible**
+(fallback: `Select-String`), `node`/`npm`/`git`/`python` disponibles. La exclusión local está
+escrita en `info/exclude`. Evidencia: `.ancleto/machine-env.md`,
+`BACKLOG.md` (ítem 10, "Activación: 2026-10-26").
+
+## Permisos de shell por agente
+
+El bloque `tools`/`permission` de cada definición de agente es la frontera de privilegio:
+
+| Agente | Shell |
+|---|---|
+| `@orchestrator`, `@reviewer`, `@spec-writer`, `@memory-keeper` | `bash: false` — no ejecutan comandos. |
+| `@coder`, `@tester`, `@documenter`, `@context-resolver`, `@technical-discovery`, `@technical-seed-writer` | `bash: true`. |
+| `@technical-discovery` | `permission.bash` con `'*': deny` y **exactamente dos literales permitidos**: `'ancleto discovery --check'` y `'git status --short'`. El segundo existe para que el intake de sesión del orquestador obtenga el estado del árbol sin que el orquestador tenga shell. |
+
+Evidencia: `agents/*.md`, `agents/technical-discovery.md`, `aspec/specs/prompt-contracts/spec.md`.
+
 ## Tiers de costo
 
 | Tier | Modelos y empaquetado |
@@ -158,16 +177,18 @@ El contrato es **declarativo** (change archivado `2026-10-14-contrato-validacion
 - **Este repo declara**: **Lint** `npm run lint` (`eslint src/ test/`) y **Tests** `npm test`
   (`node --test "test/*.test.js"`). Evidencia: `package.json`.
 - **Format check**: `not-configured` — el repo no declara formatter (no es un fallo).
-- **Typecheck**: no aplica — paquete JavaScript sin `tsconfig.json` (pese a que `AGENTS.md`
+- **Typecheck**: no aplica — paquete JavaScript sin `tsconfig.json` (pesa que `AGENTS.md`
   mantiene la regla genérica de template "TypeScript strict" en "Guardrails & Conventions").
 - **Tests acotados**: para validar un subconjunto, pasar **rutas explícitas** al archivo
   relevante; **nunca** `node --test` sin acotar (descubre archivos fuera de la suite declarada).
 - **Suite**: 13 archivos (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`,
   `discovery-tier`, `discovery-topology`, `linter-config`, **`machine-env`**, `mcp`,
   `memory-engine`, **`stats-failures`**, `tier-models`, `working-context`). `content-guards`
-  asierta **behavior** (keywords y salvaguardas), no la redacción literal. La cifra en verde
-  **no se re-ejecutó** en esta regeneración (la validación del seed es state-only).
-  Evidencia: `test/`, `aspec/specs/machine-environment/spec.md`,
+  asierta **behavior** (keywords y salvaguardas), no la redacción literal; incluye el bloque
+  "intake de sesion, techo de lecturas y recall accionable" y el assert del aviso de overflow
+  en `memory-engine`. La cifra en verde **no se re-ejecutó** en esta regeneración (la
+  validación del seed es state-only). Evidencia: `test/`,
+  `aspec/specs/machine-environment/spec.md`,
   `aspec/specs/session-failure-report/spec.md`.
 - **CI**: `.github/workflows/publish.yml` corre `npm ci` + `npm run lint` + `node --test
   test/*.test.js` y publica a npm al pushear un tag `v*` (o `workflow_dispatch`), con canary
@@ -184,3 +205,6 @@ El contrato es **declarativo** (change archivado `2026-10-14-contrato-validacion
   archivo siempre en inglés literal (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`).
   Única fuente canónica del texto: `LOCKED: artifacts-language` en `AGENTS.md`; las skills y
   agentes la referencian. Evidencia: `AGENTS.md`, `templates/AGENTS.md`.
+- Los mirrors `.opencode/agents/*.md` y `.opencode/commands/*.md` se **regeneran** con
+  `ancleto upgrade`; nunca se editan a mano. Evidencia: `agents/orchestrator.md`,
+  `aspec/changes/archive/2026-10-26-orchestrator-session-start/proposal.md`.

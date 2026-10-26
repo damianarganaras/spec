@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el working-context (día-cero), el refresh on-write (MCP y CLI), la procedencia source, las ops export/import/gc, el aviso de overflow y su consumo por el orquestador"
 covers: [motor de memoria, tools, working-context, día-cero, procedencia source, export/import/gc, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
 sources: ["src/core/memory/**"]
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
@@ -220,7 +220,10 @@ Evidencia: `src/core/memory/working-context.js`, `src/cli/index.js` (`memoryImpo
 `.ancleto/machine-env.md` es un artefacto **separado** del working-context: no se mezcla con
 `<ProjectMemoryRules>` ni con `AGENTS.md`, no se genera desde la DB y no dispara refreshes de
 memoria. `src/core/machine-env.js` es su dueño exclusivo; la memoria no lo lee ni lo escribe.
-Evidencia: `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
+La sonda de invocabilidad de herramientas (`--version`, acotada) y las llamadas acotadas a
+`git` que usa para detectar el EOL viven en ese mismo módulo: son ortogonales al motor de
+memoria y no tocan la DB. Evidencia: `src/core/machine-env.js`,
+`aspec/specs/machine-environment/spec.md`.
 
 ## Flujo
 

@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, entorno de máquina, superficie de shell por agente, stats failures, affected y refresh on-write en memory import"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, entorno de máquina, sonda de invocabilidad de herramientas, superficie de shell por agente, stats failures, affected y refresh on-write en memory import"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -12,13 +12,14 @@ covers:
   - export/import
   - affected
   - machine-env
+  - sonda de invocabilidad
   - stats failures
   - memory import refresh on-write
   - memory doctor advisory staleness
   - permisos de shell por agente
 sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js"]
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
@@ -223,8 +224,25 @@ reimplementan formato, comparación o resolución de rutas git.
   `install` son silenciosos en el camino feliz; `upgrade` imprime `machine-env.md generado` /
   `sin cambios` y el estado de la exclusión.
 - **Detección** (`detectMachineFacts`): plataforma, `osRelease`, `arch`, shell + `shell_source`,
-  EOL + `eol_source`, disponibilidad de `rg`/`node`/`npm`/`git`/`python` (sin ejecutar binarios
-  ni pedir versiones) y versión de ancleo. No renderiza `PATH`, secretos ni versiones.
+  EOL + `eol_source`, disponibilidad de `rg`/`node`/`npm`/`git`/`python` y versión de ancleo. La
+  disponibilidad de una herramienta exige ser **resoluble en `PATH` Y invocable** (no basta la
+  presencia en `PATH`); la sonda usa una bandera de versión barata y **nunca** renderiza la
+  versión observada ni su salida. No renderiza `PATH` ni secretos.
+- **Sonda de invocabilidad**: `findExecutables` resuelve el candidato en `PATH` (en `win32`,
+  extensiones de `PATHEXT` antes que el nombre exacto); `spawnProbe` lo **ejecuta** con
+  `--version` y `probeExecutable` emite el veredicto. Presupuestos: `TOOL_PROBE_TIMEOUT_MS = 2000`
+  por invocación y `TOOL_PROBE_BUDGET_MS = 10000` acumulados por corrida; `GIT_TIMEOUT_MS = 5000`
+  para cada llamada a `git`. En `win32`, los shims `.cmd`/`.bat` se enrutan por
+  `process.env.ComSpec` (`/d /s /c` + `windowsVerbatimArguments`) porque `spawnSync` directo
+  devuelve `EINVAL` (guarda de Node, CVE-2024-27980); esa guarda es **inconclusa**, no
+  `bloqueado`, y tampoco lo es un candidato que se abandona por presupuesto agotado. El
+  veredicto `blocked` (error de arranque, salida ≠ 0 o timeout) publica el fallo saneado como
+  sufijo aditivo `- <tool>: no disponible — fallback: <X> — bloqueado: <fallo saneado>`; el
+  texto viene de la primera línea de `stderr` o del error de arranque, sin ANSI/OSC ni
+  caracteres de control, con espacios colapsados y tope de 200 caracteres (`FAILURE_TEXT_MAX`).
+  Un veredicto inconcluso no lleva sufijo. La versión observada nunca se renderiza.
+  Evidencia: `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`,
+  `test/machine-env.test.js`.
 - **Shell**: en Windows prioriza MSYS/Cygwin (`MSYSTEM`/`CYGWIN`) → `bash`; `PSModulePath` con
   PowerShell 7 → `PowerShell 7`; `PROMPT` → `cmd`; `SHELL` POSIX + legacy → `unknown`; `SHELL`
   POSIX; solo legacy → `Windows PowerShell 5.1`; si no, `unknown`. `ComSpec` **no** se usa. En
@@ -371,6 +389,9 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
   - `memoryDoctorCmd` emite el staleness como **línea advisory** sin alterar el exit code.
 - **`machine-env` es best-effort**: un fallo de generación o de exclusión se reporta como
   warning y no aborta el lifecycle; el artefacto ya escrito se conserva.
+- **La sonda de invocabilidad está acotada** (2 s por intento, 10 s acumulados) y nunca declara
+  `disponible` a un candidato inconcluso; los shims `.cmd`/`.bat` de `win32` se enrutan por
+  `ComSpec` para que el veredicto sea de la herramienta y no del runtime.
 - **Errores no bloqueantes**: binarios ausentes (MCP/git/gh/az), assets no soportados,
   divergencias de frontmatter y exclusiones no garantizadas se omiten con warning a stderr.
 - `ancleto --version` lee `package.json` en runtime (no hardcodeado).
@@ -381,7 +402,7 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 |---|---|
 | `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `refreshMachineEnv`, `memoryImport` (con refresh on-write), `memoryDoctorCmd` (con advisory), `memoryExport`/`memoryGc`, `affectedCommand`, `statsFailuresCommand`. |
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`; dueño único de la transformación. |
-| `src/core/machine-env.js` | `machineEnvPath`, `detectMachineFacts`, `renderMachineEnv`, `writeMachineEnv`, `ensureMachineEnvExclusion`, `materializeMachineEnv`, `checkMachineEnvTracked`; dueño único del entorno local. |
+| `src/core/machine-env.js` | Exporta `machineEnvPath`, `detectMachineFacts`, `renderMachineEnv`, `writeMachineEnv`, `ensureMachineEnvExclusion`, `materializeMachineEnv`, `checkMachineEnvTracked` y la constante `TOOL_PROBE_TIMEOUT_MS`; la sonda de invocabilidad es **interna** (`findExecutables`, `spawnProbe`, `probeExecutable`, `isBatchShim`, `comspecCommand`, `firstLine`, `fallbackFor`). Dueño único del entorno local. |
 | `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext` (MCP), `refreshWorkingContextOnWrite` (CLI, compare-based), `checkWorkingContextFreshness`, `normalizeBlock`, `readWorkingContextFile`, `resolveMemoryProjectRoot` (día-cero). |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED (incl. `validation-commands`)/EXTENSIBLE. |

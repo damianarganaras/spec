@@ -2,21 +2,22 @@
 node: unknowns
 kind: unknowns
 read_when: "límites de evidencia: qué no se pudo verificar en este seed"
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
 # Límites de evidencia
 
 - **Pack comprimido (tree-sitter).** El pack usado contiene firmas de funciones, no cuerpos ni
-  valores de constantes (676 fuentes, ~14.318 tokens, tier `gratis`). Las descripciones de flujo
+  valores de constantes (676 fuentes, ~15.149 tokens, tier `gratis`). Las descripciones de flujo
   de `src/**` provienen de firmas + `README.md` + `BACKLOG.md` + `CHANGELOG.md` + specs de
   `aspec/`, más lectura puntual de los archivos citados (en particular
-  `src/core/memory/engine.js`, `src/cli/index.js`, `src/core/memory/**` y `agents/*.md`).
-  Confirmar cualquier detalle fino en el archivo citado.
-- **El pack de esta corrida es más chico que el anterior** (676 archivos / ~14.318 tokens frente
-  a 670 / ~38.239) con los mismos ignores declarados: la diferencia no está en el alcance
+  `src/core/memory/engine.js`, `src/core/machine-env.js`, `src/cli/index.js`,
+  `src/core/memory/**` y `agents/*.md`). Confirmar cualquier detalle fino en el archivo citado.
+- **El pack de esta corrida es más chico que el anterior** (676 archivos / ~15.149 tokens frente
+  a 676 / ~14.318, y 670 / ~38.239 dos corridas antes) con los mismos ignores declarados: la
+  diferencia no está en el alcance
   excluido sino en la compresión efectiva que aplica Repomix. Los conteos de tokens por
   corrida no son comparables entre sí; los conteos de archivos del mapa tampoco (el pack
   aplica los ignores del tier y `.gitignore`, el mapa recorre el disco).
@@ -41,20 +42,26 @@ skillVersion: '2.3'
   (`config.outputDir`, `config.tier`, `config.exclude`). El **tier resuelto `gratis`** proviene
   del reporte, no de leer el archivo.
 - **Versión del CLI global vs. versión del paquete.** El `ancleto` instalado en `PATH` reporta
-  `0.14.0`, mientras que el repositorio está en `0.15.1` (`package.json`) y
-  `.ancleto/machine-env.md` registra `ancleto: 0.15.1` (valor leído del `package.json` del
-  proyecto por `readAncletoVersion`). El seed reporta **0.15.1** (versión del paquete que
+  `0.15.1`, mientras que el repositorio está en `0.15.2` (`package.json`) y
+  `.ancleto/machine-env.md` registra `ancleto: 0.15.2` (valor leído del `package.json` del
+  proyecto por `readAncletoVersion`). El seed reporta **0.15.2** (versión del paquete que
   describe el repo); la discrepancia con el binario global no se investigó.
-- **`CHANGELOG.md` limitado a `0.12.1`.** `package.json` marca `0.15.1` y el tag `v0.15.1`
-  apunta a un commit anterior al HEAD (`7da9a97`, 4 commits por delante); el changelog no tiene
-  entradas para `0.13.x`–`0.15.1`. Los cambios de ese rango se infieren de specs, código,
-  changes archivados y tags, no de una entrada de release.
+- **`CHANGELOG.md` al día, tag atrasado.** El changelog tiene entradas para `0.13.0`–`0.15.2`;
+  `package.json` marca `0.15.2` y el último tag es `v0.15.1` (HEAD `0fe4482`, 11 commits por
+  delante del tag), así que la versión `0.15.2` todavía no está taggeada.
+- **La sonda de invocabilidad no tiene entrada de release.** El fix
+  (`fix(machine-env): probe tool invocability instead of PATH presence`) es posterior al commit
+  que escribió la entrada `0.15.2` del `CHANGELOG.md`, así que esa entrada **no** describe el
+  cambio de comportamiento; el contrato vive en `aspec/specs/machine-environment/spec.md`
+  (requirement "Sonda de invocabilidad de herramientas") y en `src/core/machine-env.js`.
 - **`machine-env.md` existe en este checkout.** Se pudo inspeccionar el artefacto real
   (generado el 2026-10-26): `win32`/`10.0.26200`/`x64`, shell `Windows PowerShell 5.1`
   (`shell_source: PSModulePath`), EOL `lf` (`eol_source: gitattributes`), `rg` no disponible
-  (fallback `Select-String`), `node`/`npm`/`git`/`python` disponibles, `ancleto: 0.15.1`. Su
-  formato y comportamiento se verificaron además en `src/core/machine-env.js` (lectura directa)
-  y `aspec/specs/machine-environment/spec.md` (7 requirements / 47 scenarios).
+  (fallback `Select-String`), `node`/`npm`/`git`/`python` disponibles, `ancleto: 0.15.2`. En el
+  artefacto "disponible" significa **resoluble e invocable** según la sonda (no presencia en
+  `PATH`); no se renderizan versiones. Su formato y comportamiento se verificaron además en
+  `src/core/machine-env.js` (lectura directa) y `aspec/specs/machine-environment/spec.md`
+  (**8 requirements / 53 scenarios**).
 - **Entrega a subagentes verificada por lectura, no por ejecución.** Los 10 `agents/*.md`
   contienen la instrucción canónica; `agents/orchestrator.md` tiene `## Machine Environment`,
   `## Session Intake`, el techo de lecturas reconciliado y el trigger de Recall; no se probó una
@@ -93,8 +100,9 @@ skillVersion: '2.3'
 - **Constantes de instalación confirmadas por lectura directa, no por el pack.** Valores como
   `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `TIERS`, `ANTIGRAVITY_TOOL_MAP`,
   `COMMANDCODE_TOOL_MAP`, `AGENT_ADAPTER_DROP`, `CAVEMAN_USAGE_NOTE` y las constantes de
-  `machine-env` (`TOOL_ORDER`, `POSIX_SHELLS`) aparecen en el código; el pack comprimido solo
-  muestra firmas. Pueden quedar desactualizados si cambian sin alterar firmas.
+  `machine-env` (`TOOL_ORDER`, `POSIX_SHELLS`, `TOOL_PROBE_TIMEOUT_MS`,
+  `TOOL_PROBE_BUDGET_MS`, `GIT_TIMEOUT_MS`, `FAILURE_TEXT_MAX`) aparecen en el código; el pack
+  comprimido solo muestra firmas. Pueden quedar desactualizados si cambian sin alterar firmas.
 - **Mapas de tools (Antigravity/Command Code)**: los ids y la política de omisión están
   cubiertos por `test/adapters-frontmatter.test.js`; no se validaron contra hosts reales.
 - **Adaptación de frontmatter por host**: la lógica y el dispatch están verificados por tests,
@@ -124,3 +132,12 @@ skillVersion: '2.3'
 - **Validación final del seed**: `ancleto discovery --check` es state-only. Si el estado queda
   `READY`, confirma que los documentos requeridos existen y que las fuentes no cambiaron desde
   el pack; no valida la exactitud semántica de cada afirmación.
+- **El `--check` posterior a esta regeneración devolvió `READY`/`none`, no `STALE`/`material`.**
+  El único pack global de la corrida reescribió `docs/technical-discovery/.discovery-state.json`
+  con los hashes **actuales** de las fuentes, así que el bump `0.15.1`→`0.15.2` ya no cuenta
+  como deriva (el estado previo quedó re-baselined); el heuristic de `BACKLOG.md` ítem 18 solo
+  dispara cuando el estado guardado es anterior al bump. Además, `seedMapPresent: false` en un
+  reporte `READY` es un artefacto del CLI: el campo solo se calcula en la rama `STALE`, aunque
+  `seed-map.json` existe y es válido. Consecuencia: el check **no** puede validar que los
+  literales de versión del seed estén al día; esa coherencia se verificó por lectura directa
+  contra `package.json` y `git describe --tags`.

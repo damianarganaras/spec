@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
@@ -318,6 +318,25 @@ skillVersion: '2.3'
      `aspec/specs/prompt-contracts/spec.md` ("Intake de sesión con estado del árbol y changes
      activos"), `test/content-guards.test.js` (guards (c) y de la allowlist).
 
+35. **Disponibilidad de herramientas = resoluble **Y** invocable** (spec `machine-environment`).
+     `detectMachineFacts` resuelve el candidato en `PATH` (en `win32`, con las extensiones de
+     `PATHEXT` antes que el nombre exacto) y **lo ejecuta** con la bandera barata `--version`:
+     solo un candidato que termina con éxito habilita `disponible`; resolver en `PATH` no basta.
+     Los intentos están acotados por `TOOL_PROBE_TIMEOUT_MS = 2000` (por invocación) y
+     `TOOL_PROBE_BUDGET_MS = 10000` (acumulado por corrida); las invocaciones de `git` usadas
+     para el EOL están acotadas por `GIT_TIMEOUT_MS = 5000`. En `win32`, los shims `.cmd`/`.bat`
+     se sondean por `process.env.ComSpec` (`/d /s /c` + `windowsVerbatimArguments`) porque
+     `spawnSync` directo devuelve `EINVAL` (guarda de Node, CVE-2024-27980); el resto de los
+     candidatos se lanza directo, sin shell. El veredicto es de **tres estados**: `ok`,
+     `blocked` (error de arranque, salida distinta de cero o timeout) e `inconclusive` (guarda
+     `EINVAL` o presupuesto agotado). Un veredicto inconcluso **nunca** habilita `disponible` y
+     **no** agrega el sufijo `— bloqueado:`; un fallo real se publica como sufijo aditivo
+     `- <tool>: no disponible — fallback: <X> — bloqueado: <fallo saneado>`, con el texto saneado
+     (sin ANSI/OSC ni caracteres de control, espacios colapsados, tope de 200 caracteres) y sin
+     la versión observada ni su salida. Evidencia: `src/core/machine-env.js`
+     (`findExecutables`, `spawnProbe`, `probeExecutable`, `firstLine`),
+     `aspec/specs/machine-environment/spec.md`, `test/machine-env.test.js`.
+
 ## Seed incremental (contrato del discovery)
 
 - `ancleto discovery --check` devuelve `state` + `impact`:
@@ -325,8 +344,10 @@ skillVersion: '2.3'
   - `minor` → cambios no materiales (el agente trabaja y lo anota, no ofrece regenerar).
   - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
     raíz nuevo (o un archivo material como `package.json`). Ejemplo de esta corrida:
-    `package.json` `0.15.0`→`0.15.1`, áreas `agents`, `src`, `aspec`, `test` y `BACKLOG.md` por
-    `orchestrator-session-start`.
+    `package.json` `0.15.1`→`0.15.2` (bump de versión) con áreas `.ancleto`, `.ancletorc`,
+    `BACKLOG.md`, `CHANGELOG.md`, `aspec`, `package.json`, `src` y `test`; la única razón
+    material reportada fue `archivo material modificado: package.json` (deuda `BACKLOG.md`
+    ítem 18: el bump de versión marca el seed `STALE`/`material` de forma sistemática).
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **solo** esos
   documentos. El mapeo vive en `seed-map.json`; sin ese archivo la regeneración es completa.
 - **`affectedDocs` (seed) ≠ `affected-set` (change).** `ancleto discovery --check` devuelve
@@ -441,15 +462,16 @@ skillVersion: '2.3'
 - **Staleness advisory puede dar falsos positivos triviales.** La normalización es acotada
   (CRLF, espacios finales, salto final); cambios cosméticos mayores podrían disparar
   `desactualizado` aunque el contenido sea equivalente. Riesgo aceptado: se prefiere reportar.
-- **`CHANGELOG.md` atrasado.** La última entrada es `0.12.1`; `package.json` y el tag están en
-  `0.15.1`. Los cambios `0.13.x`–`0.15.1` se infieren de specs, código y changes archivados.
-  Evidencia: `CHANGELOG.md`, `package.json`, `git describe --tags`.
+- **`CHANGELOG.md` al día, pero sin tag de la versión actual.** La última entrada es `0.15.2` y
+  cubre `0.13.0`–`0.15.2`; `package.json` está en `0.15.2` mientras el último tag es `v0.15.1`
+  (11 commits por detrás de HEAD). Evidencia: `CHANGELOG.md`, `package.json`,
+  `git describe --tags`.
 - **Docs de producto desalineados.** `PRODUCT.md` declara 12 commands y 18 skills (hoy 16 y 21),
   no menciona `machine-env` ni `stats failures` y conserva la guía residual de `searchMemory`;
   `README.md` tampoco documenta el entorno de máquina. El seed refleja el estado observado, no
   esas cifras. Evidencia: `PRODUCT.md`, `README.md`, `commands/`, `skills/`,
   `src/core/machine-env.js`, `BACKLOG.md` (ítem 17).
-- **Deuda resuelta hasta 0.15.1**: (a) contrato de validaciones declarativo
+- **Deuda resuelta hasta 0.15.2**: (a) contrato de validaciones declarativo
   (`contrato-validaciones`); (b) dedupe de reglas y día-cero del working-context
   (`token-budget`); (c) `PRODUCT.md` declara `## Project Commands`; (d) pipeline de cierre
   (`throughput-pipeline`); (e) refresh on-write CLI y staleness advisory
@@ -458,6 +480,10 @@ skillVersion: '2.3'
   2026-10-25); (h) intake de sesión, techo de lecturas acotado y aviso de overflow accionable
   (`orchestrator-session-start`, 2026-10-26). Sin nuevos deps ni cambios de schema de memoria.
   Evidencia: `CHANGELOG.md`, `aspec/changes/archive/`, `package.json`, `git tag`.
+- **Encima de `0.15.2`, el árbol de trabajo incorpora la sonda de invocabilidad** (regla 35):
+  es el único cambio de comportamiento de esta regeneración y **aún no tiene entrada de
+  release** (la entrada `0.15.2` del `CHANGELOG.md` no la describe; la spec
+  `aspec/specs/machine-environment/spec.md` ya la refleja).
 
 ## Decisiones registradas en memoria del repo
 

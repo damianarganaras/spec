@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
@@ -23,7 +23,7 @@ skillVersion: '2.3'
 | Portabilidad entre máquinas | `export` (bundle + manifiesto sin rutas), `import` (regenera MCP + `doctor`), `import --repair`. | `src/cli/index.js` | `units/cli-install.md` |
 | Commands como skills | `installCommandSkills`/`commandToSkill` empaquetan `commands/*.md` en `.agents/skills/<n>/SKILL.md` (antigravity). | `src/cli/index.js` | `units/cli-install.md` |
 | MCP de host | `setupHostMcp` (dueño único): `.agents/mcp_config.json` (antigravity), `.mcp.json` (commandcode), `copilot-mcp.json` u `opencode.json`; merge no destructivo. | `src/cli/index.js` | `units/cli-install.md` |
-| **Entorno de máquina** | **Dueño único** de detectar plataforma/shell/EOL/tooling, renderizar y escribir `.ancleto/machine-env.md`, y excluirlo localmente vía `info/exclude` sin tocar `.gitignore`; `checkMachineEnvTracked` para `ancleto check`. Se regenera en `init`, `install --project` y `upgrade`. | `src/core/machine-env.js` | `units/cli-install.md` |
+| **Entorno de máquina** | **Dueño único** de detectar plataforma/shell/EOL/tooling (la disponibilidad de una herramienta exige ser **resoluble e invocable**: sonda `--version` acotada a 2 s por intento y 10 s acumulados), renderizar y escribir `.ancleto/machine-env.md`, y excluirlo localmente vía `info/exclude` sin tocar `.gitignore`; `checkMachineEnvTracked` para `ancleto check`. Se regenera en `init`, `install --project` y `upgrade`. | `src/core/machine-env.js` | `units/cli-install.md` |
 | **Intake de sesión y techo de lecturas** | Contrato normativo del arranque: changes activos excluyendo `archive/`, un único `git status --short` delegado a `@technical-discovery` cuando el pedido toca el estado del repo, silencio si no hay nada que reportar; techo de 3 archivos no dirigidos con exención de las lecturas proactivas y de hasta 5 archivos nombrados por el usuario **por mensaje** (el sexto se delega). | `agents/orchestrator.md` | — |
 | **Trigger de Recall ante overflow** | `<ContextOverflowWarning>` ⇒ delegar **exactamente un** Recall a `@memory-keeper` antes de cualquier otra etapa; el orquestador nunca llama `searchMemory`. Allowlist de `bash` de `@technical-discovery`: dos literales sobre `'*': deny`. | `agents/orchestrator.md`, `agents/technical-discovery.md`, `src/core/memory/engine.js` | `units/memory-engine.md` |
 | Discovery / topología | Genera `.discovery-map.json` (árbol, totales, root files). | `src/core/discovery.js` | `units/discovery-engine.md` |
@@ -43,7 +43,7 @@ skillVersion: '2.3'
 | Skills (21 dirs) | Ciclo de vida, discovery, commit/pr, review/security, update, upgrade y `triage-clarifier`; se instalan en el directorio del host. | `skills/*/SKILL.md` | `units/cli-install.md` |
 | Templates (2) | `AGENTS.md` (bloques `LOCKED` canónicos, incl. `validation-commands`) y `PRODUCT.md` base para proyectos nuevos; sin valores de máquina. Aún contienen la guía residual de `searchMemory` ante `<ContextOverflowWarning>` (deuda `BACKLOG.md` ítem 17). | `templates/` | `units/cli-install.md` |
 | Linter | Flat config ESLint con 4 reglas sobre `src/` y `test/`. | `eslint.config.js` | — |
-| Specs del repo | Configuración aspec, **19 specs fuente** y changes (**1 activo** + 27 archivados), incl. `machine-environment`, `session-failure-report` y el aviso de overflow en `memory-engine`. | `aspec/config.yaml`, `aspec/specs/**`, `aspec/changes/**` | — |
+| Specs del repo | Configuración aspec, **19 specs fuente** y changes (**1 activo** + 27 archivados), incl. `machine-environment` (8 requirements / 53 scenarios), `session-failure-report` y el aviso de overflow en `memory-engine`. | `aspec/config.yaml`, `aspec/specs/**`, `aspec/changes/**` | — |
 | Tests | Suite `node --test` (13 archivos; incluye `machine-env`, `stats-failures` y el assert del aviso de overflow en `memory-engine`). | `test/*.test.js` | — |
 | Análisis de tokens | Barrido de costo de tokens y matriz de decisión de "token-economy"; no runtime. | `optimizacion-de-tokens.md` | — |
 

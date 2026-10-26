@@ -2,15 +2,15 @@
 node: inventory
 kind: inventory
 read_when: "cobertura del repositorio por directorios y globs, y qué queda fuera"
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
 # Inventario (orientación)
 
 Cobertura por directorio/glob, no auditoría archivo por archivo. Conteos de
-`.discovery-map.json` (`total_files: 688`, `last_updated: 2026-10-26T17:13:16.273Z`; `tree_summary`
+`.discovery-map.json` (`total_files: 688`, `last_updated: 2026-10-26T19:42:24.202Z`; `tree_summary`
 por directorio de primer nivel).
 
 | Área | Contenido | Archivos |
@@ -30,7 +30,7 @@ por directorio de primer nivel).
 | `.opencode/**` | Instalación local del host (incluye `.ancleto-tier` = `gratis` y los mirrors `.opencode/agents/*.md`, que se regeneran); gitignored. | 66 |
 | `.github/workflows/**` | `publish.yml` (publicación a npm + Release + gate de lint). | 1 |
 | `eslint.config.js` | Flat config del linter (4 reglas sobre `src/` y `test/`). | 1 |
-| Raíz | `package.json` (`0.15.1`), `README.md`, `CHANGELOG.md` (hasta `0.12.1`), `BACKLOG.md`, `DESIGN-memory-engine-v0.2.0.md`, `optimizacion-de-tokens.md` (análisis, no runtime), `LICENSE` (MIT), `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `package-lock.json`, `.ancletorc` (gitignored). | 15 |
+| Raíz | `package.json` (`0.15.2`), `README.md`, `CHANGELOG.md` (hasta `0.15.2`), `BACKLOG.md`, `DESIGN-memory-engine-v0.2.0.md`, `optimizacion-de-tokens.md` (análisis, no runtime), `LICENSE` (MIT), `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `package-lock.json`, `.ancletorc` (gitignored). | 15 |
 
 ## Fuera del árbol versionado (gitignored, puede no existir)
 
@@ -54,7 +54,7 @@ es untracked y se excluye solo del commit por no agregarse.
 (tier) + `**/*.test.*`, `**/*.spec.*`, `**/__tests__/**`, imágenes (`png/jpg/svg/ico`),
 `public`, lockfiles (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`). Además, Repomix
 respeta `.gitignore` (`.opencode/`, `.ancletorc`, `.ancleto/`, `/documentation`). El tier
-`gratis` fija token budget 50k (el pack de esta corrida: **676 archivos, ~14.318 tokens**).
+`gratis` fija token budget 50k (el pack de esta corrida: **676 archivos, ~15.149 tokens**).
 `audit logs/` no está excluido y por eso aparece en el pack; no se usa como evidencia. El
 conteo del pack difiere del `total_files` del mapa (688) porque el mapa recorre el disco y el
 pack aplica los ignores del tier y `.gitignore`.

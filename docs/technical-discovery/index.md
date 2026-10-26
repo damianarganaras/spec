@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
@@ -11,9 +11,10 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto` / alias `aspec`).
 No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base: pack Repomix
-(`--compress`, tier resuelto `gratis`, 676 archivos, ~14.318 tokens), `package.json`
-(`0.15.1`), tag `v0.15.1` (HEAD `7da9a97`, 4 commits por delante del tag), `.discovery-map.json`
-(`total_files: 688`) y lectura puntual de los archivos citados en cada documento.
+(`--compress`, tier resuelto `gratis`, 676 archivos, ~15.149 tokens), `package.json`
+(`0.15.2`), tag `v0.15.1` (HEAD `0fe4482`, 11 commits por delante del tag; aún no existe tag
+`v0.15.2`), `.discovery-map.json` (`total_files: 688`) y lectura puntual de los archivos citados en
+cada documento.
 
 ## Ruteo por pregunta
 
@@ -24,7 +25,7 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 | Reglas de negocio, contratos, riesgos, deuda, acoplamiento e impacto de cambios | `decisions.md` |
 | Sistemas externos y dependencias privadas observables (npm, GitHub, Repomix, MCP, git) | `integrations.md` |
 | Catálogo de unidades (módulos, agents, skills, commands) con propósito y entry point | `units/_map.md` |
-| **Entorno de máquina**: `.ancleto/machine-env.md`, shell/EOL/tooling, exclusión local sin tocar `.gitignore`, entrega a subagentes | `setup.md`, `decisions.md`, `units/cli-install.md` |
+| **Entorno de máquina**: `.ancleto/machine-env.md`, shell/EOL/tooling, **sonda de invocabilidad** (disponibilidad = resoluble e invocable), exclusión local sin tocar `.gitignore`, entrega a subagentes | `setup.md`, `decisions.md`, `units/cli-install.md` |
 | **Rutas por host (`AGENT_TARGETS`), adaptación de frontmatter (incl. Command Code), commands como skills, MCP de host, merge de templates y bloques LOCKED, portabilidad** | `units/cli-install.md` |
 | Motor de memoria persistente (SQLite + FTS5, tools del LLM, working-context, procedencia `source`), **export/import/gc**, **refresh on-write CLI y staleness advisory**, **aviso de overflow y su Recall delegado** | `units/memory-engine.md` |
 | Discovery, empaquetado Repomix, impacto del seed, **affected-set determinístico (grafo de imports, `ancleto affected`)** y tiers de tokens | `units/discovery-engine.md` |
@@ -45,9 +46,8 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local,
   entorno de máquina derivado y control de costo por tier. **8 hosts**: opencode (default),
   claude, vscode, antigravity, cursor, roo, copilot y commandcode.
-- **Versión observada**: `0.15.1` (`package.json`), tag `v0.15.1` (HEAD `7da9a97`).
-  `CHANGELOG.md` sigue cubriendo solo hasta `0.12.1`; los cambios `0.13.x`–`0.15.1` se infieren
-  de specs, código, tags y changes archivados, no de una entrada de release.
+- **Versión observada**: `0.15.2` (`package.json`), último tag `v0.15.1` (HEAD `0fe4482`, 11
+  commits por delante; todavía no hay tag `v0.15.2`). `CHANGELOG.md` ya cubre `0.13.0`–`0.15.2`.
 - **Tier resuelto**: `gratis` vía `.opencode/.ancleto-tier`; decide modelos de los agents y el
   pack (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, budget 50k).
 - **Linter**: ESLint 10 como **devDependency** (flat config `eslint.config.js`, 4 reglas);
@@ -64,10 +64,12 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
   chequeo de staleness advisory. El `<ContextOverflowWarning>` **delega un Recall a
   `@memory-keeper`** y **no nombra `searchMemory`**. Detalle: `units/memory-engine.md`.
 - **Entorno de máquina**: `src/core/machine-env.js` es el **dueño único** de detectar, renderizar,
-  escribir y excluir `.ancleto/machine-env.md` (plataforma, shell, EOL, tools). Se regenera en
-  `init`, `install --project` y `upgrade`; la exclusión usa `info/exclude` y **nunca** toca
-  `.gitignore`. Los 10 agents leen el artefacto antes de ejecutar comandos y el orquestador lo
-  incluye en cada delegación con `bash: true`. Detalle: `units/cli-install.md`.
+  escribir y excluir `.ancleto/machine-env.md` (plataforma, shell, EOL, tools). La disponibilidad
+  de una herramienta exige ser **resoluble e invocable** (sonda `--version` acotada: 2 s por
+  intento, 10 s acumulados), no solo estar en `PATH`. Se regenera en `init`, `install --project`
+  y `upgrade`; la exclusión usa `info/exclude` y **nunca** toca `.gitignore`. Los 10 agents leen
+  el artefacto antes de ejecutar comandos y el orquestador lo incluye en cada delegación con
+  `bash: true`. Detalle: `units/cli-install.md`.
 - **Merge de templates**: `mergeTemplateInto` reconcilia bloques planos legados **antes** de
   `mergeLocked`; punto único de `install`/`update`/`upgrade` (vía `copyTemplates`) e `import`.
 - **Instalación por host**: `AGENT_TARGETS` es la fuente única de rutas (skills/agents/commands)

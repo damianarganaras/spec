@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
@@ -36,7 +36,7 @@ CLI monolítica en ESM, sin framework externo. Capas:
 | Affected-set | `src/core/affected-set.js` | Grafo de imports zero-dep; clausura transitiva de **dependientes** (determinista) para el scope de review y la verificación. |
 | Empaquetado y tiers | `src/core/repomix-tier.js` | Args de Repomix, ignores por tier, `--compress`, token budget. |
 | Selección de modelos | `src/core/tier-models.js` | Modelos por tier, resolución de tier gratis (Muse Spark/probe/env). |
-| Entorno de máquina | `src/core/machine-env.js` | **Dueño único** de detectar plataforma/shell/EOL/tooling, renderizar y escribir `.ancleto/machine-env.md`, y garantizar su exclusión local vía `info/exclude`; `checkMachineEnvTracked` para `check`. |
+| Entorno de máquina | `src/core/machine-env.js` | **Dueño único** de detectar plataforma/shell/EOL/tooling (disponibilidad = **resoluble e invocable**, con sonda `--version` acotada), renderizar y escribir `.ancleto/machine-env.md`, y garantizar su exclusión local vía `info/exclude`; `checkMachineEnvTracked` para `check`. |
 | Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (search/record/export/import/gc, `formatTopologyBlock`, procedencia `source`, aviso de overflow), `tools`, `mcp-server`, `doctor`, `working-context` (render compartido; refresh on-write CLI compare-based y staleness advisory). |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 16 commands, 21 skills, 2 templates + perfil `test`). |
 | Contratos de prompt | `agents/*.md` | Normativa del pipeline: intake de sesión, techo de lecturas, trigger de Recall, contrato de validación, destilado entre tramos. Los mirrors `.opencode/agents/*.md` se regeneran, no se editan a mano. |
@@ -66,7 +66,11 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   `src/core/memory/working-context.js`, `aspec/specs/memory-engine/spec.md`.
 - **Entorno de máquina**: `detectMachineFacts` deriva plataforma, release, arquitectura, shell
   (con `shell_source`), EOL (con `eol_source`) y disponibilidad de `rg`, `node`, `npm`, `git`
-  y `python` (sin versiones ni `PATH`). `renderMachineEnv` compone un bloque determinista;
+  y `python` (sin versiones ni `PATH`). La disponibilidad exige ser **resoluble e invocable**:
+  el candidato resuelto en `PATH` se ejecuta con `--version` bajo un timeout de 2 s por intento
+  y un presupuesto acumulado de 10 s; en `win32` los shims `.cmd`/`.bat` se enrutan por
+  `process.env.ComSpec` y la guarda `EINVAL` de Node queda **inconclusa**, nunca `bloqueado`.
+  `renderMachineEnv` compone un bloque determinista;
   `writeMachineEnv` **no reescribe** si solo cambió `generated_at`; `ensureMachineEnvExclusion`
   agrega el path repo-root-relative exacto (`<prefix>.ancleto/machine-env.md`) a `info/exclude`
   y lo verifica con `check-ignore --no-index`; `materializeMachineEnv` es best-effort y nunca
@@ -186,9 +190,8 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 
 ## Estado del repositorio
 
-Versión `0.15.1` en rama `development`; tag `v0.15.1` (HEAD `7da9a97`, 4 commits por delante
-del tag). `CHANGELOG.md` cubre hasta `0.12.1`, así que `0.13.x`–`0.15.1` se infieren de specs y
-código. Dogfooding histórico: el framework fue inicializado sobre este repo; este checkout **sí
+Versión `0.15.2` en rama `development`; último tag `v0.15.1` (HEAD `0fe4482`, 11 commits por
+delante del tag; sin tag `v0.15.2` todavía). `CHANGELOG.md` ya cubre `0.13.0`–`0.15.2`. Dogfooding histórico: el framework fue inicializado sobre este repo; este checkout **sí
 materializa `.ancletorc` y `.opencode/`** (ambos gitignored, no versionados) y persiste
 `AGENTS.md`, `PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier resuelto es **`gratis`** vía
 `.opencode/.ancleto-tier`. **`.ancleto/machine-env.md` ya existe** en este checkout (generado

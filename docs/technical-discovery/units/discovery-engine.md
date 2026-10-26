@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y el presupuesto por tier"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js"]
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
@@ -35,7 +35,7 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
 - `writeDiscoveryMap(rootDir)`: escribe `.discovery-map.json` en la raíz del repo.
 - `readTopologySummary(cwd)`: valida y lee el resumen para inyectarlo en el working context.
 - El mapa se regenera al correr `ancleto discovery` (no en `--check`). En esta corrida:
-  `total_files: 688` (`last_updated: 2026-10-26T17:13:16.273Z`); `tree_summary` incluye
+  `total_files: 688` (`last_updated: 2026-10-26T19:42:24.202Z`); `tree_summary` incluye
   `documentation` 340 y `audit logs` 9 porque el mapa recorre el disco y no aplica `.gitignore`.
   El `total_files` **no** coincide con el número de archivos del pack: el mapa cuenta el disco
   y el pack aplica los ignores del tier y `.gitignore`.
@@ -46,7 +46,7 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
   (+`test/**`, `docs/**`, `**/*.md`; `--compress`), `gratis` (igual que `minimo` + budget 50000).
 - `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
   En este checkout existe `.opencode/.ancleto-tier` con valor **`gratis`**, por lo que el tier
-  resuelto es `gratis` y el pack de esta corrida quedó en 676 archivos / ~14.318 tokens (bajo
+  resuelto es `gratis` y el pack de esta corrida quedó en 676 archivos / ~15.149 tokens (bajo
   el budget 50k). El conteo de tokens depende de la compresión efectiva de Repomix y **no es
   comparable entre corridas**.
 - `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
@@ -110,9 +110,10 @@ objetivo de verificación del tester.
    runtime, `index.html`, `src/main|index.*`), apareció/desapareció un área raíz o un archivo
    material; si no, `minor`; si no hay cambios atribuibles, `none`. **La detección es por
    lista de archivos, no por contrato**: en la corrida que originó esta regeneración,
-   `package.json` `0.15.0`→`0.15.1` bastó para marcar `material` y listar 11 `affectedDocs`,
-   aunque el cambio de comportamiento real estuviera en `agents/`, `src/core/memory/engine.js` y
-   `aspec/specs/`.
+   `package.json` `0.15.1`→`0.15.2` bastó para marcar `material` y listar 11 `affectedDocs`
+   (`materialReasons: ["archivo material modificado: package.json"]`), aunque el cambio de
+   comportamiento real estuviera en `src/core/machine-env.js` y `aspec/specs/`. La deuda está
+   registrada en `BACKLOG.md` ítem 18.
 4. `readSeedMap` + `affectedDocsFor` cruzan áreas cambiadas con `seed-map.json` para acotar la
    regeneración a `affectedDocs` (documentos del **seed**; no confundir con el `affected-set`
    del change).

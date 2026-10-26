@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-26T17:15:00Z",
+  "generatedAt": "2026-10-26T19:42:38Z",
   "docs": {
     "decisions.md": ["src", "agents", "aspec", "package.json", "README.md", "BACKLOG.md", "AGENTS.md", "templates", "commands", "skills", "CHANGELOG.md", "optimizacion-de-tokens.md", "DESIGN-memory-engine-v0.2.0.md", "eslint.config.js", ".gitattributes", ".gitignore"],
     "index.md": ["package.json", "src", "agents", "aspec", "commands", "skills", "BACKLOG.md", "AGENTS.md", "profiles", "README.md", "CHANGELOG.md", ".ancletorc", ".opencode", "optimizacion-de-tokens.md", ".discovery-map.json", ".gitattributes"],

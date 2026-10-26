@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.15.1` (tag `v0.15.1`). | `.github/workflows/publish.yml`, `package.json`, `git describe --tags` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.15.2` (`package.json`); el último tag es `v0.15.1` (HEAD `0fe4482`, 11 commits por delante) y aún no hay tag `v0.15.2`. | `.github/workflows/publish.yml`, `package.json`, `git describe --tags` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -59,9 +59,16 @@ máquina. Su única integración externa es **git**, usada de forma read-only/be
 - `git rev-parse --git-path info/exclude` para localizar la exclusión local del clon.
 - `git ls-files` (solo en `ancleto check`) para advertir si el artefacto quedó trackeado.
 
-Nunca modifica `.gitignore` ni archivos del repo. Si git no está disponible o falla, el
-artefacto se escribe igual y la exclusión se reporta como warning no bloqueante. Evidencia:
-`src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
+Todas esas invocaciones están **acotadas a 5 s** (`GIT_TIMEOUT_MS`): una llamada a `git`
+bloqueada no puede colgar `init`/`install`/`upgrade`. Nunca modifica `.gitignore` ni archivos
+del repo. Si git no está disponible o falla, el artefacto se escribe igual y la exclusión se
+reporta como warning no bloqueante.
+
+La misma dependencia de procesos externos cubre la **sonda de invocabilidad**: el módulo lanza
+los candidatos de `rg`/`node`/`npm`/`git`/`python` con `node:child_process` para comprobar que
+son invocables (2 s por intento, 10 s acumulados por corrida). La dependencia es del **runtime
+local**, no de un servicio externo. Evidencia: `src/core/machine-env.js`,
+`aspec/specs/machine-environment/spec.md`.
 
 ## MCP (Model Context Protocol)
 
@@ -105,8 +112,8 @@ Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-ro
 ## Dependencias internas y de runtime
 
 - Módulos nativos: `node:sqlite` (motor de memoria), `node:test` (suite), `node:fs`,
-  `node:crypto`, `node:child_process` (spawn de Repomix y git), `node:os`, `node:path`,
-  `node:url`. Evidencia: pack `src/**`.
+  `node:crypto`, `node:child_process` (spawn de Repomix, de `git` y de las sondas de
+  invocabilidad de herramientas), `node:os`, `node:path`, `node:url`. Evidencia: pack `src/**`.
 - Dependencias de desarrollo: `eslint` y `globals` (lint). Los lockfiles
   (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) están **excluidos de las fuentes del
   discovery y del pack**; `package-lock.json` existe en el checkout. No son dependencias del

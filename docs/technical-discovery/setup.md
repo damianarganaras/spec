@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-10-26T17:15:00Z
-pluginVersion: 0.15.1
+generatedAt: 2026-10-26T19:42:38Z
+pluginVersion: 0.15.2
 skillVersion: '2.3'
 ---
 
@@ -69,7 +69,7 @@ solo funciona con la base de sesiones de opencode.
   bloque LOCKED de convenciones Playwright; instalable con cualquier host.
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
   En este checkout `.opencode/.ancleto-tier` contiene **`gratis`**, por lo que el tier resuelto
-  es `gratis` (budget 50k; el pack real de esta corrida quedó en ~14.318 tokens). El tier decide
+  es `gratis` (budget 50k; el pack real de esta corrida quedó en ~15.149 tokens). El tier decide
   modelos de los agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
   `.opencode/.ancleto-tier`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
@@ -98,15 +98,15 @@ solo funciona con la base de sesiones de opencode.
 
 ## Entorno de máquina (`.ancleto/machine-env.md`)
 
-Contenido mínimo (spec `machine-environment`, 7 requirements / 47 scenarios):
+Contenido mínimo (spec `machine-environment`, 8 requirements / 53 scenarios):
 
 - plataforma (`win32`/`linux`/`darwin`/otra), release y arquitectura;
 - shell detectado y `shell_source` (`MSYSTEM`, `CYGWIN`, `PSModulePath`, `PROMPT`, `SHELL`,
   `WSL_DISTRO_NAME`, `WSL_INTEROP` o `unknown`), sin ejecutar ningún shell para probarlo;
 - EOL esperado (`lf`/`crlf`) y `eol_source` (`gitattributes`, `core.eol`, `core.autocrlf` o
   `platform-default`);
-- disponibilidad de `rg`, `node`, `npm`, `git` y `python` (sin versiones) y fallback por
-  herramienta ausente;
+- disponibilidad de `rg`, `node`, `npm`, `git` y `python` —**resoluble e invocable**, no solo
+  presente en `PATH`— (sin versiones) y fallback por herramienta ausente;
 - fecha de generación, versión de ancleo y un `## Hint` con la regla de precedencia.
 
 Precedencia del shell en Windows: MSYS/Cygwin → `bash`; `PSModulePath` con marcador de
@@ -119,11 +119,25 @@ lo incluye verbatim en delegaciones con `bash: true` y exime esa lectura del tec
 archivos. Evidencia: `src/core/machine-env.js`, `agents/*.md`,
 `aspec/specs/machine-environment/spec.md`.
 
+**Sonda de invocabilidad**: una herramienta se declara `disponible` solo si el candidato
+resuelto en `PATH` **se ejecuta con éxito** con la bandera `--version`; estar en `PATH` no
+basta. Cada intento está acotado a **2 s** (`TOOL_PROBE_TIMEOUT_MS`) y la corrida a un
+presupuesto acumulado de **10 s** (`TOOL_PROBE_BUDGET_MS`); las invocaciones de `git` usadas
+para el EOL están acotadas a **5 s** (`GIT_TIMEOUT_MS`). En `win32` los shims `.cmd`/`.bat` se
+sondean por `process.env.ComSpec` (`/d /s /c` + `windowsVerbatimArguments`); la guarda `EINVAL`
+de Node (CVE-2024-27980) es **inconclusa**, nunca `bloqueado`, y un candidato que se abandona
+por presupuesto agotado también. Un fallo real se publica como sufijo aditivo
+`- <tool>: no disponible — fallback: <X> — bloqueado: <fallo saneado>`, con el texto saneado
+(sin ANSI/OSC ni caracteres de control, espacios colapsados, tope de 200 caracteres); un veredicto
+inconcluso no lleva sufijo. La versión observada nunca se renderiza. Evidencia:
+`src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
+
 **Estado en este checkout**: el artefacto **existe** (generado el 2026-10-26 por
 `ancleto upgrade`): `win32` / `10.0.26200` / `x64`, shell `Windows PowerShell 5.1`
 (`shell_source: PSModulePath`), EOL `lf` (`eol_source: gitattributes`), `rg` **no disponible**
-(fallback: `Select-String`), `node`/`npm`/`git`/`python` disponibles. La exclusión local está
-escrita en `info/exclude`. Evidencia: `.ancleto/machine-env.md`,
+(fallback: `Select-String`), `node`/`npm`/`git`/`python` **disponibles** —resolubles **e
+invocables** según la sonda; el artefacto declara disponibilidad, no versión—. La exclusión
+local está escrita en `info/exclude`. Evidencia: `.ancleto/machine-env.md`,
 `BACKLOG.md` (ítem 10, "Activación: 2026-10-26").
 
 ## Permisos de shell por agente

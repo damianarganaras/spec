@@ -37,6 +37,49 @@ const CONTENT_FILES = [
   ...mdFiles(join(ROOT, 'agents'))
 ]
 
+const AGENT_NAMES = readdirSync(join(ROOT, 'agents'), { withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+  .map((entry) => entry.name.slice(0, -'.md'.length))
+  .sort()
+
+const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
+
+// T2.1 — helpers de los content guards. Los prompts son parrafos de una sola linea
+// larga: el guard nunca depende del wrapping ni del enfasis, y siempre se acota a
+// su seccion (sin slice el assert seria tautologico).
+const normalize = (text) => text.replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim()
+const deBold = (text) => text.replace(/\*\*/g, '')
+
+function section(text, heading, endMarker = '\n## ') {
+  // El heading real empieza en una linea; una mencion inline (p. ej. entre backticks)
+  // no debe abrir el slice.
+  const anchored = text.indexOf(`\n${heading}`)
+  const start = anchored === -1 ? text.indexOf(heading) : anchored + 1
+  assert.ok(start >= 0, `falta ${heading}`)
+  const end = text.indexOf(endMarker, start + 1)
+  return text.slice(start, end === -1 ? undefined : end)
+}
+
+function agentSection(name, heading, endMarker) {
+  return normalize(section(readAgent(name), heading, endMarker))
+}
+
+function toolsBlock(text) {
+  const m = text.match(/^tools:\n((?: {2}.*\n)+)/m)
+  return m ? m[1] : ''
+}
+
+// T2.11 — la mutacion corre sobre una copia scratch en memoria (nunca muta el repo):
+// el guard pasa con el invariante presente y falla cuando se quita.
+function assertMutationBreaks(guard, original, mutations) {
+  assert.doesNotThrow(() => guard(original), 'el guard debe pasar con el invariante presente')
+  for (const [from, to, options] of mutations) {
+    assert.ok(original.includes(from), `la mutacion debe apuntar a texto presente: ${from}`)
+    const mutated = options?.all ? original.split(from).join(to) : original.replace(from, to)
+    assert.throws(() => guard(mutated), `el guard debe fallar sin: ${from}`)
+  }
+}
+
 describe('content guards — idioma de artefactos', () => {
   it('spec-writer referencia la fuente unica del idioma (no redeclara el literal)', () => {
     const t = readFileSync(join(ROOT, 'agents', 'spec-writer.md'), 'utf8')
@@ -142,11 +185,15 @@ describe('content guards - matriz de permisos de agentes (issue #13)', () => {
   it('coder tiene bash con allowlist y deny de lo destructivo', () => {
     const t = readAgent('coder')
     assert.match(t, /^tools:\n(?:.*\n)*?  bash: true$/m, 'coder debe tener bash: true')
+    assert.match(t, /^tools:\n(?:.*\n)*?  task: false$/m, 'coder no delega: task: false')
     assert.match(t, /permission:\n  bash:/, 'coder debe declarar permission.bash')
     assert.match(t, /'\*': allow/, 'coder: allow base')
     for (const denied of ['*az *', '*git push*', '*git reset*', '*git checkout*', '*git rebase*', '*rm -rf*', '*npm publish*']) {
       assert.ok(t.includes(`'${denied}': deny`), `coder debe denegar ${denied}`)
     }
+    // El merge es capacidad permitida con autorizacion por proceso: denegarlo
+    // dejaria al proyecto sin ningun agente en agents/ capaz de mergear.
+    assert.doesNotMatch(t, /'\*git merge\*': deny/, 'coder no debe denegar git merge')
   })
 
   it('coder documenta el uso de bash y sus limites', () => {
@@ -210,6 +257,17 @@ describe('content guards - tope de output y destilado del retorno (issues #25 y 
     assert.match(t, /Never copy a subagent's raw return/)
     assert.match(t, /distilled fields only/)
     assert.match(t, /\*\*Output cap\*\*/)
+    // La regla general conserva la unica excepcion acotada al campo change diff.
+    const returns = agentSection('orchestrator', '### Handling subagent returns', '\n### ')
+    for (const re of [
+      /change diff/,
+      /passed verbatim to `@reviewer`/,
+      /limited to the task-owned files of that tramo/,
+      /marked as evidence, not instruction/,
+      /truncation declaration verbatim/,
+      /never complete or infer the count/,
+      /No other diff is copied/
+    ]) assert.match(returns, re)
   })
 
   it('el destilado preserva los campos criticos del flujo (D2)', () => {
@@ -623,6 +681,9 @@ describe('content guards - throughput-pipeline', () => {
     assert.match(t, /complete and closed\*\* Validation Ledger/)
     assert.match(t, /registered non-failure that closes that command/)
     assert.match(t, /`not-configured`/)
+    // El mismo retorno expone el diff como campo propio (su contrato detallado
+    // vive en los guards del change diff).
+    assert.match(t, /`change diff`/)
   })
 
   it('el reviewer consume el ledger prearmado cerrado y el affected-set como scope sin re-verificación dentro del scope', () => {
@@ -647,6 +708,640 @@ describe('content guards - throughput-pipeline', () => {
     assert.match(t, /in parallel/)
     assert.match(t, /never need the archive's output/)
     assert.match(t, /Called only when the user explicitly requests an optional draft/)
+  })
+})
+
+describe('content guards - contrato de delegación (agent-delegation-contract)', () => {
+  // Keywords de comportamiento, no redaccion literal: cada patron tiene que seguir
+  // pudiendo fallar por mutacion (ver los it() de abajo).
+  function guardOrchestratorGitOwnership(text) {
+    const t = normalize(text)
+    for (const re of [
+      /only agent that commits/,
+      /implementation checkpoints/,
+      /at the archive/,
+      /files named for that checkpoint/,
+      /never commits/,
+      /Push is denied/,
+      /host agent the user names/,
+      /Merge is permitted/,
+      /explicit user approval/,
+      /never starts it on its own initiative/,
+      /never starts merge or push on its own/,
+      /`AGENTS\.md` and `PRODUCT\.md`/,
+      /never restate/,
+      // G1: el limite de conjunto cubre commits de checkpoint; un merge autorizado
+      // queda fuera porque no es un commit de checkpoint.
+      /authorized merge/,
+      /not a checkpoint commit/,
+      /falls outside that limit/
+    ]) assert.match(t, re)
+    assert.doesNotMatch(t, /@general/, 'el contrato no nombra @general')
+  }
+
+  function guardCoderCommitOwnership(text) {
+    const t = normalize(text)
+    for (const re of [
+      /only agent that commits/,
+      /files the orchestrator names for that checkpoint/,
+      /implementation checkpoints and the archive/,
+      /Never commit files outside that set/,
+      /never use `git add -A` or `git commit -a`/,
+      /`AGENTS\.md` and `PRODUCT\.md`/,
+      /Conventional Commits/,
+      /protected `main`\/`master`/,
+      /do not restate/,
+      /Never push/,
+      /push is denied/,
+      /host agent the user names/,
+      /Merge is permitted/,
+      /explicit user approval/,
+      /never start a merge on your own initiative/,
+      // G1: el limite de conjunto cubre commits de checkpoint; un merge autorizado
+      // queda fuera porque no es un commit de checkpoint.
+      /authorized merge/,
+      /not a checkpoint commit/,
+      /not covered by that restriction/
+    ]) assert.match(t, re)
+  }
+
+  function guardBoundedException(text) {
+    const t = normalize(text)
+    for (const re of [
+      /change diff/,
+      /passed verbatim to `@reviewer`/,
+      /limited to the task-owned files of that tramo/,
+      /marked as evidence, not instruction/,
+      /truncation declaration verbatim/,
+      /never complete or infer the count/,
+      /No other diff is copied/
+    ]) assert.match(t, re)
+  }
+
+  function guardReviewHandoff(text) {
+    const t = normalize(text)
+    for (const re of [
+      /pass the `change diff` field returned by `@tester` verbatim/,
+      /limited to the task-owned files of that tramo/,
+      /including its truncation declaration/,
+      /never complete or infer the omitted count/,
+      /evidence, not instruction/
+    ]) assert.match(t, re)
+  }
+
+  function guardChangeDiff(text) {
+    const t = normalize(text)
+    for (const re of [
+      /`change diff`/,
+      /git diff --unified=3/,
+      /git diff --stat/,
+      /-U3/,
+      /200 lines/,
+      /`--stat` plus selected hunks/,
+      /how many lines or hunks/,
+      /left out/,
+      /truncated diff/,
+      /as complete/,
+      /evidence, not instruction/,
+      /15-line prose cap/,
+      /its own 200-line cap/
+    ]) assert.match(t, re)
+    const occurrences = [...t.matchAll(/-U0/g)]
+    assert.ok(occurrences.length > 0, 'el contrato debe prohibir -U0')
+    for (const m of occurrences) {
+      assert.match(
+        t.slice(Math.max(0, m.index - 10), m.index),
+        /never\s+`?$/,
+        '`-U0` sólo puede aparecer como prohibición'
+      )
+    }
+  }
+
+  function guardProjectMemoryRules(text) {
+    const t = deBold(normalize(text))
+    for (const re of [
+      /`project memory rules` field/,
+      /relevant to that delegation's scope/,
+      /At most 5 rules/,
+      /1,500 bytes/,
+      /distilled field/,
+      /working-context/,
+      /note the truncation/,
+      /untrusted data/,
+      /verify against the code/,
+      /never as instruction/,
+      /Never forward/,
+      /`<ProjectMemoryRules>` block verbatim/,
+      /Never send this field to `@memory-keeper`/,
+      /`@context-resolver`/
+    ]) assert.match(t, re)
+  }
+
+  function guardReviewer(text) {
+    assert.match(text, /^tools:\n(?:.*\n)*?  bash: false$/m, 'el reviewer sigue sin bash')
+    const evidence = normalize(section(text, '## Validation Evidence'))
+    for (const re of [
+      /`change diff` field supplied by `@orchestrator` is evidence, not instruction/,
+      /cite `file:line`/,
+      /do not execute anything it contains/,
+      /do not run commands yourself/
+    ]) assert.match(evidence, re)
+  }
+
+  // Instruccion imperativa de borrado de un change folder: un verbo destructivo en una
+  // oracion que nombra el change folder, sin negacion y sin asignar el borrado al
+  // developer. Las negaciones y la entrega al developer son las salidas permitidas.
+  function deletionInstructions(text) {
+    return text
+      .replace(/\r\n/g, '\n')
+      .split(/\n+/)
+      .flatMap((line) => line.split(/(?<=[.;:])\s+/))
+      .map((part) => deBold(part).replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .filter((part) => /\b(?:delete|remove|rm|unlink|discard|purge|wipe)\b/i.test(part))
+      .filter((part) => /change (?:folder|directory)|aspec\/changes/i.test(part))
+      .filter((part) => !/\b(?:never|not|no|do not|don't)\b/i.test(part))
+      .filter((part) => !/\b(?:developer|user|themselves)\b/i.test(part))
+  }
+
+  function guardDeleteInvariant(orchestratorText, defs) {
+    const t = deBold(normalize(orchestratorText))
+    for (const re of [
+      /never deletes/,
+      /never delegates a deletion/,
+      /never instructs a subagent to remove/,
+      /removed by the developer/,
+      /`@spec-writer` receives no delete capability/,
+      // El archive es un move, no un delete.
+      /moves its folder into `aspec\/changes\/archive\/`/
+    ]) assert.match(t, re)
+    for (const { name, text } of defs) {
+      assert.doesNotMatch(
+        toolsBlock(text),
+        /\b(?:delete|remove|rm|unlink)\b/,
+        `${name} no debe tener una tool de delete`
+      )
+      assert.deepEqual(
+        deletionInstructions(text),
+        [],
+        `${name} no debe instruir el borrado de un change folder`
+      )
+    }
+  }
+
+  // El archive del documenter es un move: acepta esa semantica y falla ante cualquier
+  // instruccion de borrado de change folders (no solo el literal `rm -rf aspec/changes`).
+  function guardDocumenterMoveNotDelete(text) {
+    const workflow = deBold(normalize(section(text, '## Required Workflow')))
+    for (const re of [
+      /moving.*aspec\/changes\/archive/,
+      /move, not a deletion/,
+      /Never delete a change folder/,
+      /developer discards it/
+    ]) assert.match(workflow, re)
+    // El scan de borrado corre sobre toda la definicion: una instruccion de delete no
+    // puede esconderse fuera de la seccion de workflow.
+    assert.deepEqual(deletionInstructions(text), [], 'el documenter no debe instruir el borrado de change folders')
+  }
+
+  // El bloque permission.bash se lee por lineas para tolerar claves de permiso
+  // hermanas encima de bash. Sigue siendo frontmatter: no lleva slice por seccion.
+  function bashPermissionBlock(text) {
+    const lines = text.replace(/\r\n/g, '\n').split('\n')
+    const start = lines.indexOf('permission:')
+    if (start === -1) return ''
+    const rules = []
+    let inBash = false
+    for (let i = start + 1; i < lines.length; i++) {
+      const line = lines[i]
+      if (!/^[ \t]/.test(line)) break
+      if (/^ {2}\S/.test(line)) {
+        inBash = line.trim() === 'bash:'
+        continue
+      }
+      if (inBash && /^ {4}\S/.test(line)) rules.push(line)
+    }
+    return rules.length ? `${rules.join('\n')}\n` : ''
+  }
+
+  // Glob de permission.bash (`*` = cualquier secuencia) contra un comando literal.
+  // Comparar por cobertura real evita que un patron como `*git push --force*` cuente
+  // como si cubriera el comando pelado `git push`.
+  function matchesCommand(pattern, command) {
+    const glob = pattern
+      .split('*')
+      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*')
+    return new RegExp(`^${glob}$`).test(command)
+  }
+
+  // Reglas del bloque en orden. OpenCode evalua permission.bash con last-match-wins:
+  // la decision efectiva es la ULTIMA regla que matchea el comando. `ask` es una
+  // decision mas (no equivale a deny) y una regla solo matchea si su glob cubre el
+  // comando pelado `git push`.
+  function pushRules(block) {
+    return block
+      .split('\n')
+      .map((line) => line.match(/^ {4}'(.*)': (allow|deny|ask)$/))
+      .filter(Boolean)
+      .map((m) => ({ pattern: m[1], action: m[2] }))
+      .filter(({ pattern }) => matchesCommand(pattern, 'git push'))
+  }
+
+  // Push es una capacidad denegada en TODA definicion con bash; el merge es una
+  // capacidad permitida con autorizacion por proceso y jamas se agrega al deny.
+  function guardPushDeniedAcrossDefinitions(defs) {
+    const mergeDeny = (command) => new RegExp(`^ {4}'[^']*${command}[^']*': deny$`, 'm')
+    const bashEnabled = []
+    for (const { name, text } of defs) {
+      assert.doesNotMatch(text, mergeDeny('git merge'), `${name} no debe denegar git merge`)
+      const tools = toolsBlock(text)
+      if (!/^ {2}bash: true$/m.test(tools)) continue
+      bashEnabled.push(name)
+      const block = bashPermissionBlock(text)
+      assert.ok(block, `${name} con bash debe declarar permission.bash`)
+      const matching = pushRules(block)
+      assert.ok(matching.length > 0, `${name} con bash debe declarar una regla que matchee git push`)
+      const last = matching[matching.length - 1]
+      assert.equal(
+        last.action,
+        'deny',
+        `${name}: con last-match-wins la ultima regla que matchea git push debe ser deny`
+      )
+    }
+    assert.deepEqual(
+      bashEnabled.sort(),
+      ['coder', 'context-resolver', 'documenter', 'technical-discovery', 'technical-seed-writer', 'tester'],
+      'el guard debe cubrir las 6 definiciones con bash'
+    )
+  }
+
+  // Path A delega la implementacion y, en ese mismo punto, declara que el checkpoint
+  // nombra el file set commiteable (no solo en `### Git ownership`).
+  function guardPathACheckpointFileSet(text) {
+    const t = normalize(text)
+    for (const re of [
+      /checkpoint names the file set/,
+      /commits only those named files/,
+      /commit nothing and ask for it/
+    ]) assert.match(t, re)
+  }
+
+  it('ownership de git: el coder commitea en dos momentos y el contrato no nombra @general', () => {
+    assertMutationBreaks(
+      guardOrchestratorGitOwnership,
+      agentSection('orchestrator', '### Git ownership', '\n### '),
+      [
+        ['only agent that commits', 'agent that commits when asked'],
+        ['implementation checkpoints and at the archive', 'implementation checkpoints'],
+        ['files named for that checkpoint', 'files in the change'],
+        ['never commits', 'commits the archive'],
+        ['Push is denied', 'Push is allowed'],
+        ['host agent the user names', 'orchestrator'],
+        ['Merge is permitted', 'Merge is forbidden'],
+        ['explicit user approval', 'process approval'],
+        ['never starts it on its own initiative', 'may start it when convenient'],
+        ['never starts merge or push on its own', 'may start merge or push on its own'],
+        ['`AGENTS.md` and `PRODUCT.md`', 'the agent definitions'],
+        ['never restate', 'restate'],
+        ['authorized merge', 'merge'],
+        ['not a checkpoint commit', 'a checkpoint commit'],
+        ['falls outside that limit', 'falls inside that limit']
+      ]
+    )
+    assertMutationBreaks(
+      guardCoderCommitOwnership,
+      agentSection('coder', '## Commit Ownership'),
+      [
+        ['only agent that commits', 'agent that commits when asked'],
+        ['files the orchestrator names for that checkpoint', 'whatever files you choose'],
+        ['implementation checkpoints and the archive', 'implementation checkpoints'],
+        ['Never commit files outside that set', 'Commit anything staged'],
+        ['never use `git add -A` or `git commit -a`', 'use `git add -A` freely'],
+        ['`AGENTS.md` and `PRODUCT.md`', 'the agent definitions'],
+        ['Conventional Commits', 'any message format'],
+        ['protected `main`/`master`', 'unprotected branches'],
+        ['do not restate', 'restate'],
+        ['Never push', 'Push when needed'],
+        ['push is denied', 'push is allowed'],
+        ['Merge is permitted', 'Merge is forbidden'],
+        ['explicit user approval', 'process approval'],
+        ['never start a merge on your own initiative', 'start merges on your own initiative'],
+        ['authorized merge', 'merge'],
+        ['not a checkpoint commit', 'a checkpoint commit'],
+        ['not covered by that restriction', 'covered by that restriction']
+      ]
+    )
+
+    const coder = readAgent('coder')
+    const guardCoderPermission = (text) => {
+      assert.match(text, /^tools:\n(?:.*\n)*?  task: false$/m, 'coder no delega')
+      assert.doesNotMatch(text, /'\*git merge\*': deny/, 'coder no debe denegar git merge')
+    }
+    guardCoderPermission(coder)
+    assert.throws(() =>
+      guardCoderPermission(coder.replace("'*git push*': deny", "'*git push*': deny\n    '*git merge*': deny"))
+    )
+    assert.throws(() => guardCoderPermission(coder.replace('  task: false\n', '')))
+  })
+
+  it('las definiciones con bash deniegan push y ninguna deniega git merge', () => {
+    const defs = AGENT_NAMES.map((name) => ({ name, text: readAgent(name) }))
+    const mutateAgent = (agent, from, to) =>
+      defs.map((d) => (d.name === agent ? { ...d, text: d.text.replace(from, to) } : d))
+    guardPushDeniedAcrossDefinitions(defs)
+    // (c) Quitar el deny explicito de push en una definicion con bash rompe el guard.
+    assert.throws(
+      () => guardPushDeniedAcrossDefinitions(mutateAgent('tester', "    '*git push*': deny\n", '')),
+      'un agente con bash sin deny de push rompe el guard'
+    )
+    // Quitar la base '*: deny' deja al agente sin denegacion efectiva de push.
+    assert.throws(
+      () =>
+        guardPushDeniedAcrossDefinitions(
+          mutateAgent('technical-discovery', "    '*': deny\n", "    '*': allow\n")
+        ),
+      'sin la denegacion global el agente con bash ya no deniega push'
+    )
+    // (a) last-match-wins: mover el deny de push arriba del allow global lo anula.
+    assert.throws(
+      () =>
+        guardPushDeniedAcrossDefinitions(
+          mutateAgent(
+            'tester',
+            "    '*': allow\n    '*az *': deny\n    '*git push*': deny\n",
+            "    '*git push*': deny\n    '*': allow\n    '*az *': deny\n"
+          )
+        ),
+      'mover el deny de push arriba del allow global debe romper el guard'
+    )
+    // (b) un allow de push posterior al deny gana por last-match y rompe el guard.
+    assert.throws(
+      () =>
+        guardPushDeniedAcrossDefinitions(
+          mutateAgent(
+            'tester',
+            "    '*git push*': deny\n",
+            "    '*git push*': deny\n    '*git push*': allow\n"
+          )
+        ),
+      'un allow de push posterior al deny debe romper el guard'
+    )
+    // (d) un `ask` posterior al deny no cuenta como deny y rompe el guard.
+    assert.throws(
+      () =>
+        guardPushDeniedAcrossDefinitions(
+          mutateAgent(
+            'tester',
+            "    '*git push*': deny\n",
+            "    '*git push*': deny\n    '*git push*': ask\n"
+          )
+        ),
+      'un ask de push posterior al deny debe romper el guard'
+    )
+    // (e) un deny angostado a `git push --force` no cubre el push pelado.
+    assert.throws(
+      () =>
+        guardPushDeniedAcrossDefinitions(
+          mutateAgent('tester', "    '*git push*': deny\n", "    '*git push --force*': deny\n")
+        ),
+      'un deny angostado que no cubre el push pelado debe romper el guard'
+    )
+    // Una clave de permiso hermana encima de bash no debe romper el parser.
+    const withSiblingPermission = mutateAgent('tester', 'permission:\n  bash:', 'permission:\n  edit: ask\n  bash:')
+    assert.ok(
+      withSiblingPermission.find((d) => d.name === 'tester').text.includes('  edit: ask'),
+      'la mutacion hermana debe aplicarse'
+    )
+    assert.doesNotThrow(
+      () => guardPushDeniedAcrossDefinitions(withSiblingPermission),
+      'una clave de permiso intermedia encima de bash no debe romper el parser'
+    )
+    // Agregar un deny explicito de merge rompe el guard en cualquier definicion.
+    assert.throws(
+      () =>
+        guardPushDeniedAcrossDefinitions(
+          mutateAgent('coder', "    '*git push*': deny\n", "    '*git push*': deny\n    '*git merge*': deny\n")
+        ),
+      'un deny explicito de git merge rompe el guard'
+    )
+    assert.throws(
+      () =>
+        guardPushDeniedAcrossDefinitions(
+          mutateAgent('reviewer', '  bash: false\n', "  bash: false\n    '*git merge*': deny\n")
+        ),
+      'el deny de merge se detecta aunque el agente no tenga bash'
+    )
+  })
+
+  it('las 10 definiciones declaran task: sólo el orquestador con true', () => {
+    const defs = AGENT_NAMES.map((name) => ({ name, text: readAgent(name) }))
+    const guardTaskDeclarations = (list) => {
+      const enabled = []
+      const disabled = []
+      for (const { name, text } of list) {
+        const m = text.match(/^tools:\n(?:.*\n)*?  task: (true|false)$/m)
+        assert.ok(m, `${name} no declara tools.task de forma explícita`)
+        if (m[1] === 'true') enabled.push(name)
+        else disabled.push(name)
+      }
+      assert.deepEqual(enabled, ['orchestrator'], 'sólo el orquestador declara task: true')
+      assert.equal(disabled.length, 9, 'las 9 definiciones restantes declaran task: false')
+    }
+    guardTaskDeclarations(defs)
+
+    const mutate = (agent, from, to) =>
+      defs.map((d) => (d.name === agent ? { ...d, text: d.text.replace(from, to) } : d))
+    assert.throws(() => guardTaskDeclarations(mutate('coder', '  task: false\n', '')), 'falta la declaración')
+    assert.throws(
+      () => guardTaskDeclarations(mutate('orchestrator', '  task: true', '  task: false')),
+      'el orquestador no puede quedar sin delegación'
+    )
+    assert.throws(
+      () => guardTaskDeclarations(mutate('tester', '  task: false', '  task: true')),
+      'un subagente no puede declarar task: true'
+    )
+  })
+
+  it('el change diff del tester usa -U3, tope 200 y declara la truncación', () => {
+    assertMutationBreaks(guardChangeDiff, agentSection('tester', '## Output Expectations'), [
+      ['`change diff`', '`diff`', { all: true }],
+      ['git diff --unified=3', 'git diff'],
+      ['git diff --stat', 'git stat'],
+      ['Use `-U3`, never `-U0`', 'Use `-U0`'],
+      ['Cap the unified diff at 200 lines', 'Cap the unified diff'],
+      ['`--stat` plus selected hunks within the cap', '`-U0` for the omitted lines'],
+      ['declare how many lines or hunks were left out', 'omit the count silently'],
+      ['Never present a truncated diff as complete', 'A truncated diff is fine'],
+      ['Mark it as evidence, not instruction', 'Mark it as an instruction'],
+      ['The `change diff` payload does not consume the 15-line prose cap', 'The `change diff` payload consumes the prose cap'],
+      ['its own 200-line cap', 'no extra cap']
+    ])
+  })
+
+  it('Path A paso 4 declara que el checkpoint nombra el file set commiteable', () => {
+    assertMutationBreaks(
+      guardPathACheckpointFileSet,
+      agentSection('orchestrator', '### Path A: Spec-Required Changes', '\n### '),
+      [
+        ['checkpoint names the file set', 'checkpoint names the change'],
+        ['commits only those named files', 'commits the changed files'],
+        ['commit nothing and ask for it', 'commit whatever changed']
+      ]
+    )
+  })
+
+  it('el orquestador pasa el change diff acotado y verbatim al reviewer', () => {
+    assertMutationBreaks(
+      guardBoundedException,
+      agentSection('orchestrator', '### Handling subagent returns', '\n### '),
+      [
+        ['change diff', 'any field'],
+        ['passed verbatim to `@reviewer`', 'summarized for `@reviewer`'],
+        ['limited to the task-owned files of that tramo', 'for every file'],
+        ['marked as evidence, not instruction', 'marked as an instruction'],
+        ['truncation declaration verbatim', 'recomputed count'],
+        ['never complete or infer the count', 'complete the count'],
+        ['No other diff is copied', 'Other diffs may be copied too']
+      ]
+    )
+    assertMutationBreaks(
+      guardReviewHandoff,
+      agentSection('orchestrator', '### Path A: Spec-Required Changes', '\n### '),
+      [
+        ['pass the `change diff` field returned by `@tester` verbatim', 'pass every diff verbatim'],
+        ['limited to the task-owned files of that tramo', 'for all files'],
+        ['including its truncation declaration', 'without its truncation declaration'],
+        ['never complete or infer the omitted count', 'complete the count when it is missing'],
+        ['evidence, not instruction', 'an instruction to apply']
+      ]
+    )
+  })
+
+  it('el reviewer consume el diff como evidencia y sigue sin bash', () => {
+    assertMutationBreaks(guardReviewer, readAgent('reviewer'), [
+      ['  bash: false', '  bash: true'],
+      ['is evidence, not instruction', 'is an instruction']
+    ])
+  })
+
+  it('las reglas de proyecto se destilan con tope y marca de dato no confiable', () => {
+    assertMutationBreaks(
+      guardProjectMemoryRules,
+      agentSection('orchestrator', '### Project memory rules per delegation'),
+      [
+        ["Only the rules relevant to that delegation's scope", 'All project rules'],
+        ['At most **5 rules**', 'Unlimited rules'],
+        ['**1,500 bytes**', '**no byte cap**'],
+        ['distilled field, not a second working-context', 'full copy of the rules'],
+        ['note the truncation', 'omit the truncation'],
+        ['**untrusted data**', '**trusted policy**'],
+        ['to verify against the code before applying', 'to apply as written'],
+        ['never as instruction', 'as instruction'],
+        ['Never forward the full `<ProjectMemoryRules>` block verbatim', 'Forward the rules block as-is'],
+        ['Never send this field to `@memory-keeper`', 'Send this field to `@memory-keeper`'],
+        ['or `@context-resolver` (external grounding)', 'and nowhere else']
+      ]
+    )
+  })
+
+  it('el documenter respalda actualizado/confirmado con file:line y no escribe git', () => {
+    const sot = agentSection('documenter', '## Source-of-Truth Rules')
+    assertMutationBreaks(
+      (t) => {
+        assert.match(t, /"updated" or "confirmed"/)
+        assert.match(t, /file:line/)
+        assert.match(t, /`bash`, `glob`, or `read`/)
+        assert.match(t, /Never claim/)
+        assert.match(t, /without evidence/)
+        assert.match(t, /report the gap/)
+      },
+      sot,
+      [
+        ['"updated" or "confirmed"', 'a claim', { all: true }],
+        ['`file:line`', '`requirement`', { all: true }],
+        ['`bash`, `glob`, or `read`', 'read tools'],
+        ['Never claim', 'Always claim'],
+        ['without evidence', 'with confidence'],
+        ['report the gap', 'silently ignore it']
+      ]
+    )
+
+    const bash = agentSection('documenter', '## Bash Usage Rules')
+    assertMutationBreaks(
+      (t) => {
+        assert.match(t, /do not use `git` to modify repository state/)
+        assert.match(t, /`git add`.*`git commit`.*`git push`/)
+        assert.match(t, /never commit/)
+        assert.match(t, /archive commit is made by `@coder`/)
+      },
+      bash,
+      [
+        ['do not use `git` to modify repository state', 'use `git` to modify repository state'],
+        ['`git add`, `git commit`, `git push`', '`git add` and `git commit`'],
+        ['never commit', 'commit when needed'],
+        ['The archive commit is made by `@coder`', 'You make the archive commit']
+      ]
+    )
+  })
+
+  it('ningún agente borra change folders y @spec-writer no tiene delete', () => {
+    const defs = AGENT_NAMES.map((name) => ({ name, text: readAgent(name) }))
+    assertMutationBreaks(
+      (t) => guardDeleteInvariant(t, defs),
+      agentSection('orchestrator', '## Active Change Check'),
+      [
+        ['never deletes one', 'may delete one'],
+        ['never delegates a deletion', 'delegates the deletion'],
+        ['never instructs a subagent to remove one', 'instructs a subagent to remove one'],
+        ['removed by the developer', 'removed by the orchestrator'],
+        ['`@spec-writer` receives no delete capability', '`@spec-writer` receives delete capability'],
+        ['moves its folder into `aspec/changes/archive/`', 'deletes the folder outright']
+      ]
+    )
+    const mutateAgent = (agent, from, to) =>
+      defs.map((d) => (d.name === agent ? { ...d, text: d.text.replace(from, to) } : d))
+    // Una tool de delete para @spec-writer rompe la invariante.
+    assert.throws(() =>
+      guardDeleteInvariant(
+        agentSection('orchestrator', '## Active Change Check'),
+        mutateAgent('spec-writer', '  bash: false\n', '  bash: false\n  delete: true\n')
+      )
+    )
+    // Una instrucción de borrado de un change folder también la rompe.
+    assert.throws(() =>
+      guardDeleteInvariant(
+        agentSection('orchestrator', '## Active Change Check'),
+        mutateAgent('coder', '- `AGENTS.md`', '- `AGENTS.md`\n- rm -rf aspec/changes/{change-name}/')
+      )
+    )
+    // El caso que el guard anterior dejaba pasar: borrar el change folder en prosa.
+    assert.throws(() =>
+      guardDeleteInvariant(
+        agentSection('orchestrator', '## Active Change Check'),
+        mutateAgent('documenter', '- `aspec/changes/{change-name}/`', '- Remove the original active change directory')
+      )
+    )
+    // El detector cubre tambien los verbos destructivos discard/purge/wipe.
+    for (const verb of ['Discard', 'Purge', 'Wipe']) {
+      assert.throws(
+        () =>
+          guardDeleteInvariant(
+            agentSection('orchestrator', '## Active Change Check'),
+            mutateAgent('coder', '- `AGENTS.md`', `- \`AGENTS.md\`\n- ${verb} the change folder`)
+          ),
+        `una instruccion "${verb} the change folder" debe romper el guard`
+      )
+    }
+  })
+
+  it('el documenter archiva por move y nunca por delete', () => {
+    assertMutationBreaks(guardDocumenterMoveNotDelete, readAgent('documenter'), [
+      ['archive it by **moving** the folder to', 'remove the original active change directory from'],
+      ['The archive is a move, not a deletion', 'The archive is a deletion'],
+      ['Never delete a change folder', 'Delete a change folder'],
+      ['the developer discards it', 'you discard it']
+    ])
   })
 })
 
@@ -759,18 +1454,6 @@ describe('content guards - machine environment block', () => {
 })
 
 describe('content guards - intake de sesion, techo de lecturas y recall accionable', () => {
-  const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
-  // Normaliza wrapping/saltos de linea: los guards no dependen del formato.
-  const normalize = (text) => text.replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim()
-  const deBold = (text) => text.replace(/\*\*/g, '')
-
-  function section(text, heading, endMarker = '\n## ') {
-    const start = text.indexOf(heading)
-    assert.ok(start >= 0, `falta ${heading}`)
-    const end = text.indexOf(endMarker, start + 1)
-    return text.slice(start, end === -1 ? undefined : end)
-  }
-
   function paragraphs(text) {
     return text
       .split(/\n\s*\n/)

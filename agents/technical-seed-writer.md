@@ -10,6 +10,10 @@ tools:
   edit: true
   bash: true
   skill: true
+  task: false
+permission:
+  bash:
+    '*git push*': deny
 ---
 
 # Technical Seed Writer Agent
@@ -34,8 +38,9 @@ Before running any command, read `.ancleto/machine-env.md` if it exists and use 
   `@orchestrator` (normally `docs/technical-discovery/`). Do not modify application code,
   aspec artifacts, configuration, or files outside that directory.
 - Never create an empty directory or empty document.
-- Do not create commits, stage files, install dependencies, call network services, or invoke
-  subagents.
+- Do not create commits, stage files, run `git push`, install dependencies, call network services, or
+  invoke subagents. `git push` is denied as a capability: the user, or the host agent the user names
+  for that case, executes it.
 
 ## Required workflow
 

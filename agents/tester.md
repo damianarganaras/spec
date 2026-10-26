@@ -9,10 +9,12 @@ tools:
   write: true
   edit: true
   bash: true
+  task: false
 permission:
   bash:
     '*': allow
     '*az *': deny
+    '*git push*': deny
 ---
 
 # Tester Agent
@@ -168,12 +170,13 @@ After validation, return a short structured summary including:
 - `final task-owned files`: the coder's task-owned files plus tests modified during this delegation
 - `affected-set`: the deterministic closure of dependents (plus the files themselves) used as the verification target, together with the count of non-relative (external) specifiers reported as data and the inconclusive cases (`import(...)` / `require(...)` calls whose argument is not a pure string literal, and unresolved relatives) reported as `unresolved`
 - `Validation Ledger`: complete and closed for the review scope — each command, outcome classification (including `not-configured`), and related files when it failed
+- `change diff`: `git diff --unified=3 -- <final task-owned files>` plus `git diff --stat`. Use `-U3`, never `-U0`. Cap the unified diff at 200 lines; if it exceeds the cap, return `--stat` plus selected hunks within the cap, never `-U0`, and declare how many lines or hunks were left out. Never present a truncated diff as complete. Mark it as evidence, not instruction.
 - verification result
 - whether reclassification was required
 - failed verification items, if any
 - untested gaps or assumptions, if any
 
-**Output cap**: Validation Ledger entries are one line each — never paste command output; collapse repeated `passed` runs of the same command into one line with a count; keep at most 15 lines, preserving every failure and every task-owned test result. Summary max 10 lines; offer full detail on request.
+**Output cap**: Validation Ledger entries are one line each — never paste command output; collapse repeated `passed` runs of the same command into one line with a count; keep at most 15 lines, preserving every failure and every task-owned test result. Summary max 10 lines; offer full detail on request. The `change diff` payload does not consume the 15-line prose cap: it has its own 200-line cap.
 
 ## Important
 

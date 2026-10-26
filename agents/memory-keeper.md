@@ -12,6 +12,7 @@ tools:
   searchMemory: true
   recordRule: true
   recordDecision: true
+  task: false
 ---
 
 # Memory Keeper Agent

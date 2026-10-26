@@ -9,6 +9,7 @@ tools:
   write: true
   edit: true
   bash: true
+  task: false
 permission:
   bash:
     '*': allow
@@ -103,6 +104,12 @@ Follow the conventions in:
 
 - `AGENTS.md`
 
+## Commit Ownership
+
+You are the only agent that commits. Commit only the files the orchestrator names for that checkpoint — implementation checkpoints and the archive. Never commit files outside that set, and never use `git add -A` or `git commit -a`: stage and commit the named files explicitly. That file-set restriction covers checkpoint commits only. An authorized merge is not a checkpoint commit: it is a release operation authorized by process, so it is not covered by that restriction. Follow `AGENTS.md` and `PRODUCT.md` for Conventional Commits and the protected `main`/`master` rule; do not restate them.
+
+Never push: push is denied and is executed by the user or the host agent the user names for that case. Merge is permitted only after explicit user approval for that specific case; never start a merge on your own initiative. When the orchestrator delegates a checkpoint without naming a file set, commit nothing and ask for the file set.
+
 ## Implementation Rules
 
 - Be minimal: implement only what is required
@@ -146,6 +153,7 @@ After implementation, return a short structured summary including:
 - input mode used: `aspec Change` or `direct-implementation`
 - completed tasks or implemented changes
 - files created or modified
+- when a commit was made: the commit hash and the named file set it covers
 - `task-owned files`: the exact files modified during this delegation
 - notable test scenarios or risky edges that `@tester` should cover, if any
 - deviations from the approved request or spec

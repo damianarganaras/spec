@@ -401,6 +401,14 @@ describe('CLI antigravity full support (add-antigravity-full-support)', () => {
       assert.doesNotMatch(out, /^temperature:/m)
       assert.doesNotMatch(out, /^permission:/m)
       assert.doesNotMatch(out, /opencode-go/)
+      // task: false no viaja: no hay aviso y la lista no cambia.
+      assert.doesNotMatch(r.stderr, /skip tool 'task': no verified Antigravity id for agent 'coder'/)
+
+      // El task: true real del orquestador no es portable: se descarta con aviso
+      // visible y la salida conserva la lista de tools esperada para el host.
+      const orch = readFileSync(join(dir, '.agents', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orch, /^tools: \[view_file\]$/m)
+      assert.match(r.stderr, /skip tool 'task': no verified Antigravity id for agent 'orchestrator'/)
     })
   })
 
@@ -3547,6 +3555,8 @@ describe('CLI commandcode support (add-commandcode-support)', () => {
       assert.doesNotMatch(out, /^permission:/m)
       assert.doesNotMatch(out, /^model:/m)
       assert.doesNotMatch(out, /opencode-go/)
+      // task: false no amplía capacidades ni genera aviso.
+      assert.doesNotMatch(r.stderr, /skip tool 'task': no verified Command Code id for agent 'coder'/)
     })
   })
 
@@ -3560,7 +3570,7 @@ describe('CLI commandcode support (add-commandcode-support)', () => {
     })
   })
 
-  it('skill: true se omite con aviso y el orchestrator lleva la nota de modelo', () => {
+  it('skill: true y task: true se omiten con aviso y el orchestrator lleva la nota de modelo', () => {
     withDir((dir) => {
       const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'commandcode'], dir, regEnv(dir))
       assert.equal(r.status, 0)
@@ -3568,6 +3578,7 @@ describe('CLI commandcode support (add-commandcode-support)', () => {
       assert.match(orch, /^tools: \[read_file\]$/m)
       assert.match(orch, /Nota de modelo \(solo Command Code\)/)
       assert.match(r.stderr, /skip tool 'skill': no verified Command Code id for agent 'orchestrator'/)
+      assert.match(r.stderr, /skip tool 'task': no verified Command Code id for agent 'orchestrator'/)
     })
   })
 

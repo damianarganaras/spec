@@ -2,6 +2,58 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.15.2] - 2026-10-26
+
+### Added
+- **Intake de sesión en el orquestador** (`agents/orchestrator.md`, sección `## Session Intake`): detecta changes activos en `aspec/changes/` excluyendo `archive/` y los reporta sólo si difieren del solicitado; delega un único `git status --short` a `@technical-discovery` cuando el pedido toca el estado del repo y no emite salida cuando no hay nada que reportar. `agents/technical-discovery.md` recibe `'git status --short': allow`.
+
+### Changed
+- Techo de lecturas del orquestador: los archivos nombrados explícitamente por el usuario quedan exentos hasta 5 por mensaje, con delegación por encima del tope.
+- `<ContextOverflowWarning>` (`src/core/memory/engine.js`) pasa a ser incondicional y delega un Recall a `@memory-keeper` en lugar de nombrar `searchMemory`.
+- Specs sincronizadas (`prompt-contracts` +3 requirements, `memory-engine` +1); semilla de `docs/technical-discovery` regenerada (`READY`) y `BACKLOG.md` ítem 17 registra la guía `searchMemory` residual como follow-up diferido.
+
+## [0.15.1] - 2026-10-26
+
+### Changed
+- Semilla de `docs/technical-discovery` regenerada tras `0.15.0`.
+- Cierre de bookkeeping de la línea `0.15.x`: registro de activación en `BACKLOG.md` y exclusión local de auditoría en `.gitignore`.
+
+## [0.15.0] - 2026-10-26
+
+### Added
+- **Bloque de entorno de máquina** (`.ancleto/machine-env.md`): artefacto local derivado y no versionado, regenerado en `init`, `install --project` y `upgrade` con plataforma, shell y su fuente, fin de línea y disponibilidad de cinco herramientas con fallback; exclusión local del clon vía `git check-ignore --no-index` + `info/exclude` (sin gestionar `.gitignore`), entrega a los subagentes con `bash` habilitado y precedencia declarada. Spec nueva en `aspec/specs/machine-environment/spec.md`.
+- **Subcomando `ancleto stats failures`**: clasificación de fallos por `env`/`check`/`tool`/`unknown` desde la tabla `part` de la base de opencode, con esqueleto estructural del comando y sesiones afectadas; apertura read-only sobre WAL, agregación en SQL y privacidad (sin `output` ni texto libre). Spec nueva en `aspec/specs/session-failure-report/spec.md`.
+
+### Changed
+- `BACKLOG.md`: registro de la activación del bloque de entorno y de los hallazgos de la auditoría de 9 sesiones.
+
+## [0.14.0] - 2026-10-17
+
+### Added
+- **Frescura del working-context en las escrituras de la CLI**: `ancleto memory import` regenera `.ancleto/working-context.md` por el mismo camino de render (`refreshWorkingContext`) y el CLI reporta staleness o ausencia del artefacto, en `src/cli/index.js` y `src/core/memory/working-context.js`; spec `memory-engine` actualizada.
+
+### Changed
+- `README.md` y `agents/orchestrator.md`: puntos de regeneración del working-context alineados con la nueva superficie.
+
+## [0.13.2] - 2026-10-15
+
+### Added
+- **Pipeline de mayor throughput**: cierre en paralelo de `@documenter` y `@memory-keeper`, Validation Ledger prearmado para el reviewer, `affected-set` determinístico por grafo de imports (`src/core/affected-set.js`) y memoria en un solo paso.
+
+### Changed
+- `agents/orchestrator.md`, `tester.md`, `reviewer.md` y `memory-keeper.md`; specs `prompt-contracts` y `review` sincronizadas, con tests del `affected-set` en `test/affected-set.test.js`.
+
+## [0.13.1] - 2026-10-15
+
+### Changed
+- Semilla de `docs/technical-discovery` regenerada. Reconstrucción parcial: es el único cambio de contenido del tramo además del bump de versión, sin otras entradas trazables.
+
+## [0.13.0] - 2026-10-15
+
+### Added
+- **Contrato de validaciones declarativo**: las validaciones dejan de estar hardcodeadas en los prompts y pasan a declararse en `PRODUCT.md` sección `## Project Commands` (correr sólo lo declarado, saltear y registrar lo ausente, nunca inventar); `coder` y `tester` dejan de fijar Prettier/ESLint, el format check es `not-configured` sin formatter declarado, y `mergeTemplateInto` reconcilia el bloque plano legado en `install`/`update`/`upgrade` e `import`. Spec en `aspec/specs/prompt-contracts/spec.md`.
+- **Presupuesto de tokens de los prompts**: dedupe del orquestador (hogar único de Runtime Safety y contrato de salida en cada agente), envelope por tramo en vez de verbatim, reglas compartidas con hogar único en `AGENTS.md`, content guards a nivel de comportamiento y materialización del working-context desde el día cero sin `memory.db`.
+
 ## [0.12.1] - 2026-10-07
 
 ### Added

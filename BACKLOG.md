@@ -304,8 +304,10 @@ fuera de esta sección. Prioridad = impacto en la calidad de Ancleto.
 
 13. [ ] **Detección de duplicados/stale y consolidación de memoria** — `src/core/memory/` + `agents/memory-keeper.md`. **L**. `explore`. `memory gc` solo purga superseded (`engine.js:340-369`); `doctor` compara únicamente `memory_key` activo (`doctor.js:44-50`), que el índice único ya hace imposible (`database.js:19-20`). No hay detección de contenido casi-duplicado: en la DB auditada hay 3 grupos de contenido idéntico con claves distintas. `@memory-keeper` dice que la deduplicación es del engine y no hace recall previo (`memory-keeper.md:55`). Impacto: 5/9 sesiones con memoria duplicada/stale; agrava el truncado.
   **Evidencia (`machine-environment-block`):** una regla de entorno stale (shell/tooling de la máquina) no la detectaba ni refrescaba ningún mecanismo; el change la materializa como artefacto local derivado, la refresca en el ciclo de vida y la entrega a los subagentes.
-  **Activación:** 2026-10-25 (día del `ancleto upgrade` + reinicio de sesión; las definiciones de agentes se cachean al inicio).
-  **Re-medición:** `ancleto stats failures --class env --since 2026-10-25` (mismo alcance `session.directory` del repo; comparar con la línea base `env` 68/105 sesiones; éxito ≤32/100 con ≥10 sesiones y sin reaparición de `rg`/`node`; <10 sesiones = inconcluso).
+  **Activación:** 2026-10-26 — `node src/cli/index.js upgrade` (CLI 0.15.0) generó `.ancleto/machine-env.md` (no versionado) + reinicio de sesión; las definiciones de agentes se cachean al inicio, así que la ventana empieza en el reinicio, no en el upgrade.
+  **Línea base local (pre-activación, `--since 2026-10-25`):** `env` 7 parts / 3 grupos / 6 de 14 sesiones (50 por 100 sesiones); `rg` presente (4 parts / 3 sesiones); `unknown` 0.
+  **Re-medición:** `ancleto stats failures --class env --since 2026-10-26` (mismo alcance `session.directory`; comparar con 68/105 del proyecto auditado y 50/100 local; éxito ≤32/100 con ≥10 sesiones nuevas y sin reaparición de `rg`/`node`; <10 sesiones = inconcluso).
+  **Estado al 2026-10-26:** inconcluso — 0 sesiones post-activación.
 
 14. [ ] **Skill de auditoría de sesión** — `skills/`. **M**. `change directo`. Las 9 auditorías se hicieron con prompts ad-hoc distintos; no hay skill que estandarice evidencia (`file:line`), clasificación por dueño y detección de reglas parche. Impacto: institucionaliza el ciclo de mejora y evita que cada auditoría redescubra el formato.
 

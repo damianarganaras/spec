@@ -757,3 +757,123 @@ describe('content guards - machine environment block', () => {
     assert.doesNotMatch(t, /## Machine Environment/)
   })
 })
+
+describe('content guards - intake de sesion, techo de lecturas y recall accionable', () => {
+  const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
+  // Normaliza wrapping/saltos de linea: los guards no dependen del formato.
+  const normalize = (text) => text.replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim()
+  const deBold = (text) => text.replace(/\*\*/g, '')
+
+  function section(text, heading, endMarker = '\n## ') {
+    const start = text.indexOf(heading)
+    assert.ok(start >= 0, `falta ${heading}`)
+    const end = text.indexOf(endMarker, start + 1)
+    return text.slice(start, end === -1 ? undefined : end)
+  }
+
+  function paragraphs(text) {
+    return text
+      .split(/\n\s*\n/)
+      .map(normalize)
+      .filter(Boolean)
+  }
+
+  it('(a) el techo reconciliado no deja texto absoluto que contradiga la exencion', () => {
+    const t = readAgent('orchestrator')
+
+    const limit = normalize(section(t, '## Repository Reading Limit'))
+    assert.match(limit, /Files the user names explicitly in a message are exempt from this ceiling/)
+    assert.match(limit, /five named files per user message/)
+    assert.match(limit, /delegate the remaining reads to `@technical-discovery`/)
+    assert.match(limit, /a file merely mentioned in passing is not named/)
+    // el techo de tres debe estar cualificado por el alcance que el usuario no nombro:
+    // sin el calificador, un absoluto "read more than three repository files" vuelve a colarse.
+    assert.match(
+      deBold(limit),
+      /MUST NEVER read more than three repository files to answer a user question or establish repository context that the user did not name/
+    )
+
+    const never = deBold(normalize(section(t, '### PROHIBITED ACTIONS', '\n### ')))
+    assert.match(never, /un-directed/)
+    assert.doesNotMatch(
+      never,
+      /NEVER read a fourth repository file to answer a repository-context question/,
+      'no debe quedar el absoluto previo a la exencion'
+    )
+  })
+
+  it('(b) el tope de cinco por mensaje se declara en el mismo parrafo que la exencion', () => {
+    const t = readAgent('orchestrator')
+    const limit = section(t, '## Repository Reading Limit')
+    const sameParagraph = paragraphs(limit).some(
+      (p) =>
+        p.includes('Files the user names explicitly in a message are exempt') &&
+        p.includes('five named files per user message') &&
+        p.includes('delegate the remaining reads to `@technical-discovery`') &&
+        p.includes('read the first five in the order named')
+    )
+    assert.ok(sameParagraph, 'el tope de cinco debe declararse en el mismo parrafo que la exencion')
+    // anti-acumulacion: el tope es por mensaje de usuario, se reinicia y no exige contar mas alla
+    const limitNormalized = normalize(limit)
+    assert.match(limitNormalized, /the cap counts only the files named in that message and resets on the next one/)
+    assert.match(limitNormalized, /no counting is required past the cap/)
+    // no-testeable-por-construccion: el conteo real de archivos leidos por mensaje no es
+    // ejecutable desde un guard de contenido; la garantia (b) queda anclada por este parrafo.
+  })
+
+  it('(c) el intake de sesion precede al Active Change Check y delega el estado del arbol', () => {
+    const t = readAgent('orchestrator')
+    const intakeAt = t.indexOf('## Session Intake')
+    assert.ok(intakeAt >= 0, 'falta ## Session Intake')
+    const checkAt = t.indexOf('## Active Change Check')
+    assert.ok(checkAt > intakeAt, '## Session Intake debe preceder a ## Active Change Check')
+
+    const intake = normalize(section(t, '## Session Intake'))
+    assert.match(intake, /`aspec\/changes\/` excluding `archive\/`/)
+    assert.match(intake, /delegate exactly one `git status --short` to `@technical-discovery`/)
+    assert.match(
+      intake,
+      /When the tree is clean or was not inspected because the request does not touch repository state, and no active change is foreign, emit nothing/
+    )
+    assert.match(intake, /in that case the intake adds no further delegation/)
+    assert.match(intake, /Never fetch a Work Item in this step/)
+
+    const check = normalize(section(t, '## Active Change Check'))
+    assert.match(check, /match the active-change list produced by Session Intake/)
+    assert.doesNotMatch(check, /Then check `aspec\/changes\/`/, 'el check no vuelve a listar el directorio')
+    // no-testeable-por-construccion: el silencio efectivo del intake (arbol limpio y sin
+    // change ajeno) no es ejecutable desde un guard de contenido.
+  })
+
+  it('(d) el aviso de overflow no nombra searchMemory y delega un Recall a @memory-keeper', () => {
+    const engine = readFileSync(join(ROOT, 'src', 'core', 'memory', 'engine.js'), 'utf8')
+    const line = engine.split(/\r?\n/).find((l) => l.includes('<ContextOverflowWarning>'))
+    assert.ok(line, 'no se encuentra el literal del aviso de overflow')
+    assert.match(line, /Context truncated due to size limits\. \$\{omitted\} rules omitted\./)
+    assert.match(line, /Recall/)
+    assert.match(line, /@memory-keeper/)
+    assert.doesNotMatch(line, /searchMemory/, 'el aviso no debe nombrar una capacidad que el agente no tiene')
+  })
+
+  it('(d) el contrato de Team Memory declara el trigger de overflow y la unicidad del Recall', () => {
+    const t = readAgent('orchestrator')
+    const memory = normalize(section(t, '## Team Memory'))
+    assert.match(memory, /`<ContextOverflowWarning>`/)
+    assert.match(memory, /delegate exactly one Recall to `@memory-keeper` with the task topic/)
+    assert.match(memory, /never repeat it for the same warning/)
+    // no-testeable-por-construccion: la unicidad real del Recall por warning no es ejecutable
+    // desde un guard de contenido; la declara el bullet de Team Memory.
+  })
+
+  it('la superficie de privilegio de technical-discovery queda acotada a dos literales allow', () => {
+    const t = readAgent('technical-discovery').replace(/\r\n/g, '\n')
+    const block = t.match(/^permission:\n  bash:\n((?: {4}.*\n)+)/m)
+    assert.ok(block, 'falta el bloque permission.bash')
+    assert.match(block[1], /^ {4}'\*': deny$/m, 'la base sigue denegada')
+    const allows = [...block[1].matchAll(/^ {4}'([^']+)': allow$/gm)].map((m) => m[1])
+    assert.deepEqual(allows, ['ancleto discovery --check', 'git status --short'])
+    // la clausula de comando: exactamente uno, read-only, desde la raiz del repo
+    assert.match(t, /run exactly `git status --short` once from the repository root/)
+    assert.match(t, /return its output unchanged/)
+  })
+})

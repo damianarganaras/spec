@@ -16,6 +16,7 @@ permission:
   bash:
     '*': deny
     'ancleto discovery --check': allow
+    'git status --short': allow
 ---
 
 # Technical Discovery Agent
@@ -72,7 +73,7 @@ The budget is a ceiling, not a target. If answering precisely would need more th
 
 ## Seed state
 
-Inspect seed state only when `docs/technical-discovery/` is the selected source. Run `ancleto discovery --check` exactly once and read its JSON. This is a deterministic, read-only state check: it does not run Repomix or write repository files. Do not execute any other command.
+Inspect seed state only when `docs/technical-discovery/` is the selected source. Run `ancleto discovery --check` exactly once and read its JSON. This is a deterministic, read-only state check: it does not run Repomix or write repository files. Do not execute any other command. The single exception is a delegated repository-tree state request: run exactly `git status --short` once from the repository root, return its output unchanged, and never run it on your own initiative.
 
 | State     | What you do                                                                                                                                                 |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |

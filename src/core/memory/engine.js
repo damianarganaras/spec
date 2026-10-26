@@ -141,7 +141,7 @@ function buildEngine(db) {
 
     const omitted = rows.length - includedCount
     if (omitted > 0) {
-      block += `\n<ContextOverflowWarning>Context truncated due to size limits. ${omitted} rules omitted. Use the 'searchMemory' tool to query historical architectural decisions if you lack specific context.</ContextOverflowWarning>`
+      block += `\n<ContextOverflowWarning>Context truncated due to size limits. ${omitted} rules omitted. Delegate one Recall to @memory-keeper with the task topic before delegating any other stage.</ContextOverflowWarning>`
       console.warn(`ancleto: ${omitted} reglas omitidas por limite de tamano (scope "${scope}")`)
     }
     const memoryBlock = `${block}\n</ProjectMemoryRules>`

@@ -540,6 +540,20 @@ describe('buildWorkingContext — truncamiento (v0.3.0 item 2)', () => {
     })
   })
 
+  it('el aviso de overflow delega un Recall a @memory-keeper y no nombra searchMemory', () => {
+    withEngine((eng, dir) => {
+      for (let i = 1; i <= 3; i++) {
+        eng.recordNode({ memory_key: `w${i}`, type: 'rule', scope: 'project', content: 'X'.repeat(60) })
+      }
+      const block = eng.buildWorkingContext('project', 60, dir) // 240 chars: 1 entra, 2 omitidas
+      // el prefijo y el conteo se conservan (contrato de las aserciones previas)
+      assert.match(block, /Context truncated due to size limits\. (\d+) rules omitted/)
+      assert.match(block, /@memory-keeper/)
+      assert.match(block, /Recall/)
+      assert.doesNotMatch(block, /searchMemory/, 'el aviso no debe nombrar una capacidad ajena al agente')
+    })
+  })
+
   it('prioriza task sobre project en la retencion con poco espacio', () => {
     withEngine((eng, dir) => {
       const projContent = 'P'.repeat(100)

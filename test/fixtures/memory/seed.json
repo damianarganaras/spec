@@ -1,0 +1,50 @@
+[
+  {
+    "memory_key": "test-runner-invocation",
+    "type": "rule",
+    "content": "Los tests del repo se corren con `node --test \"test/*.test.js\"`; acotar con rutas explicitas evita descubrir documentacion ajena a la suite.",
+    "justification": "El runner sin acotar descubre archivos que no pertenecen a la suite declarada.",
+    "scope": "project",
+    "createdAt": "2026-01-10T10:00:00.000Z"
+  },
+  {
+    "memory_key": "node-test-scope-explicit-paths",
+    "type": "rule",
+    "content": "Excepcion unica: al correr node --test se pasan rutas explicitas y nunca se invoca node --test sin acotar.",
+    "justification": "Correr el runner sin rutas descubre documentation y otros archivos ajenos a la suite.",
+    "scope": "project",
+    "createdAt": "2026-01-11T10:00:00.000Z"
+  },
+  {
+    "memory_key": "opencode-permission-bash-last-match-wins",
+    "type": "rule",
+    "content": "En las definiciones de agentes la ultima regla de permisos de bash que matchea gana: un deny o ask posterior redefine el permiso anterior.",
+    "justification": "El matcher de permisos de opencode evalua las reglas de abajo hacia arriba.",
+    "scope": "project",
+    "createdAt": "2026-01-12T10:00:00.000Z"
+  },
+  {
+    "memory_key": "validation-commands-declarative",
+    "type": "rule",
+    "content": "La validacion usa solo los comandos declarados en PRODUCT.md; si un comando no esta declarado se omite y se registra, nunca se inventa un runner o un linter.",
+    "justification": "Evita asumir herramientas de validacion que el proyecto no declara.",
+    "scope": "project",
+    "createdAt": "2026-01-13T10:00:00.000Z"
+  },
+  {
+    "memory_key": "lint-before-close",
+    "type": "rule",
+    "content": "Antes de cerrar una tarea se corre el linter declarado con npm run lint y se corrigen solo los archivos tocados, sin ensanchar el alcance.",
+    "justification": "El linter es la unica validacion estatica declarada por el proyecto.",
+    "scope": "project",
+    "createdAt": "2026-01-14T10:00:00.000Z"
+  },
+  {
+    "memory_key": "feature-flag-rollout",
+    "type": "decision",
+    "content": "El despliegue de features usa feature flags por workflow en lugar de una rama larga.",
+    "justification": "Reduce el riesgo de rollback del pipeline de entrega.",
+    "scope": "feature",
+    "createdAt": "2026-01-15T10:00:00.000Z"
+  }
+]

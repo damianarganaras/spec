@@ -9,8 +9,9 @@ import { join, dirname, resolve, basename, relative, isAbsolute } from 'node:pat
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
+import { snapshotDatabase } from '../core/memory/snapshot.js'
 import { adaptFrontmatter, parseFrontmatter } from '../core/adapters/frontmatter.js'
-import { writeWorkingContext, writeWorkingContextBlock, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite } from '../core/memory/working-context.js'
+import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite } from '../core/memory/working-context.js'
 import { materializeMachineEnv, checkMachineEnvTracked } from '../core/machine-env.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
@@ -91,6 +92,10 @@ ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FT
   ancleto memory export [--out <archivo>]  Exporta nodos activos a JSON (stdout o archivo)
   ancleto memory import <archivo>          Importa nodos desde JSON (upsert por memory_key, idempotente)
   ancleto memory gc [--dry-run] [--days N] Purga superseded con antiguedad > N dias (default 30)
+  ancleto memory snapshot --out <archivo.db> [--force] [--json]
+                                   Copia consistente de la memoria (incluye historial; --force sobrescribe)
+  ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]
+                                   Supersede cada source activa hacia el target (sin crear nodos)
   ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE
                                         expone searchMemory, recordRule y recordDecision
   ancleto check                         Verifica integridad de archivos instalados vs manifiesto
@@ -2240,7 +2245,7 @@ async function memoryDoctorCmd(flags) {
   const { checks, healthy, rebuilt } = memoryDoctor(dbPath, { rebuild })
   if (rebuilt) console.log('ancleto: indice FTS5 reconstruido')
   for (const c of checks) {
-    console.log(`  ${c.ok ? '✔' : '✖'} ${c.name}: ${c.detail}`)
+    console.log(`  ${c.skipped ? '−' : c.ok ? '✔' : '✖'} ${c.name}: ${c.detail}`)
   }
   // Frescura del working-context: advisory, no afecta el exit code (que sigue midiendo
   // la integridad de la DB). Read-only: no reescribe el artefacto.
@@ -2393,6 +2398,103 @@ async function memoryGc(flags) {
   }
 }
 
+// `flagValue` devuelve el token siguiente sin mirar si es otro flag. En los
+// comandos con flags obligatorios, un valor vacio o que empieza con `--` cuenta
+// como flag faltante (sin cambiar el helper global que usan otros comandos).
+function requiredMemoryFlag(flags, flag) {
+  const value = flagValue(flags, flag)
+  return value && !value.startsWith('--') ? value : null
+}
+
+async function memorySnapshot(flags) {
+  const out = requiredMemoryFlag(flags, '--out')
+  if (!out) {
+    console.error('ancleto: uso: ancleto memory snapshot --out <archivo.db> [--force] [--json]')
+    process.exitCode = 1
+    return
+  }
+  const dbPath = defaultMemoryDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exitCode = 1
+    return
+  }
+  let result
+  try {
+    result = snapshotDatabase(dbPath, resolve(out), { overwrite: flags.includes('--force') })
+  } catch (err) {
+    console.error(`ancleto: no se pudo crear el snapshot: ${err.message}`)
+    process.exitCode = 1
+    return
+  }
+  if (flags.includes('--json')) {
+    console.log(JSON.stringify({ out: result.out, bytes: result.bytes }))
+  } else {
+    console.log(`ancleto: snapshot escrito en ${result.out} (${result.bytes} bytes)`)
+  }
+}
+
+async function memoryMerge(flags) {
+  const target = requiredMemoryFlag(flags, '--target')
+  const sourcesRaw = requiredMemoryFlag(flags, '--sources')
+  if (!target || !sourcesRaw) {
+    console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]')
+    process.exitCode = 1
+    return
+  }
+  const sources = sourcesRaw.split(',').map((s) => s.trim()).filter(Boolean)
+  if (sources.length === 0) {
+    console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]')
+    process.exitCode = 1
+    return
+  }
+  const dryRun = flags.includes('--dry-run')
+  const dbPath = defaultMemoryDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exitCode = 1
+    return
+  }
+  // `createMemoryEngine` aplica `PRAGMA journal_mode=WAL` y migraciones al abrir;
+  // un dry-run no debe escribir ni la base ni sus sidecars, asi que usa la
+  // conexion read-only (su `merge` solo acepta `dryRun: true`).
+  const engine = dryRun ? createReadonlyMemoryEngine(dbPath) : createMemoryEngine(dbPath)
+  try {
+    let result
+    try {
+      result = engine.merge({ target, sources, dryRun })
+    } catch (err) {
+      console.error(`ancleto: merge rechazado: ${err.message}`)
+      process.exitCode = 1
+      return
+    }
+    if (result.dryRun) {
+      if (flags.includes('--json')) console.log(JSON.stringify(result))
+      else console.log(`ancleto: merge --dry-run -> target ${result.target}; sources ${result.sources.join(', ')}; ${result.superseded} nodo(s) a superseder`)
+      return
+    }
+    // Mismo render que el refresh on-write de `import`; la raiz se deriva del
+    // directorio de la DB, no de process.cwd() (aisla fixtures en tmpdir).
+    const projectRoot = resolveMemoryProjectRoot(dbPath)
+    try {
+      refreshWorkingContextOnWrite(engine, projectRoot)
+    } catch (err) {
+      // El merge ya quedo commiteado en la base: no se revierte. Reportar exito
+      // sobre un bloque derivado desactualizado seria mentir; salir != 0 y decir
+      // exactamente que si se aplico, que quedo viejo y como regenerarlo.
+      const ctxPath = workingContextPath(projectRoot)
+      console.error(`ancleto: el merge SI se aplico en la base (${result.superseded} nodo(s) superseded hacia ${result.target}), pero el bloque derivado ${ctxPath} quedo desactualizado: ${err.message}`)
+      console.error(`ancleto: regenera el bloque con: ancleto memory context --out ${ctxPath}`)
+      process.exitCode = 1
+      return
+    }
+    if (flags.includes('--json')) console.log(JSON.stringify(result))
+    else console.log(`ancleto: merge OK -> ${result.superseded} nodo(s) superseded hacia ${result.target}`)
+  } finally {
+    engine.close()
+  }
+}
+
 async function memoryCmd(args) {
   const [sub, ...flags] = args
   if (sub === 'context') {
@@ -2419,6 +2521,14 @@ async function memoryCmd(args) {
     await memoryGc(flags)
     return
   }
+  if (sub === 'snapshot') {
+    await memorySnapshot(flags)
+    return
+  }
+  if (sub === 'merge') {
+    await memoryMerge(flags)
+    return
+  }
   console.error(`ancleto: subcomando de memory desconocido: ${sub || '(ninguno)'}`)
   console.error('ancleto: uso: ancleto memory context [--scope X] [--out file]')
   console.error('ancleto: uso: ancleto memory list [--type X] [--scope X] [--all] [--json]')
@@ -2426,6 +2536,8 @@ async function memoryCmd(args) {
   console.error('ancleto: uso: ancleto memory export [--out <archivo>]')
   console.error('ancleto: uso: ancleto memory import <archivo>')
   console.error('ancleto: uso: ancleto memory gc [--dry-run] [--days <n>]')
+  console.error('ancleto: uso: ancleto memory snapshot --out <archivo.db> [--force] [--json]')
+  console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]')
   process.exit(1)
 }
 

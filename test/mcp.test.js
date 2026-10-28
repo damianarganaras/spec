@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, rmSync, existsSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -52,6 +53,23 @@ function mcpClient(cwd) {
 
 function runCli(args, cwd) {
   return spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', env: { ...process.env, ANCLETO_MUSE_SPARK: '0' } })
+}
+
+// El MCP hijo puede alcanzar a checkpointear al cerrarse: esperar a que el
+// tamaño del -wal se estabilice antes de medirlo.
+async function settleWalSize(walPath) {
+  let prev = -1
+  for (let i = 0; i < 20; i++) {
+    const size = existsSync(walPath) ? statSync(walPath).size : 0
+    if (size === prev) return size
+    prev = size
+    await new Promise((r) => setTimeout(r, 50))
+  }
+  return prev
+}
+
+function hashFile(file) {
+  return createHash('sha256').update(readFileSync(file)).digest('hex')
 }
 
 describe('MCP de memoria propia (ancleto mcp)', () => {
@@ -163,25 +181,13 @@ describe('CLI memory list (issue #12)', () => {
       }
 
       // Esperar a que el MCP hijo termine de cerrar (checkpoint) antes de medir.
-      const settle = async () => {
-        const { statSync } = await import('node:fs')
-        const path = join(dir, '.ancleto', 'memory.db-wal')
-        let prev = -1
-        for (let i = 0; i < 20; i++) {
-          const size = existsSync(path) ? statSync(path).size : 0
-          if (size === prev) return size
-          prev = size
-          await new Promise((r) => setTimeout(r, 50))
-        }
-        return prev
-      }
-      const before = await settle()
+      const before = await settleWalSize(join(dir, '.ancleto', 'memory.db-wal'))
 
       const r = runCli(['memory', 'list'], dir)
       assert.equal(r.status, 0)
       assert.match(r.stdout, /ro-1/)
 
-      const after = await settle()
+      const after = await settleWalSize(join(dir, '.ancleto', 'memory.db-wal'))
       assert.equal(after, before, `memory list no debe tocar el WAL (antes ${before}, despues ${after})`)
 
       // y los datos siguen intactos
@@ -207,7 +213,37 @@ describe('CLI memory list (issue #12)', () => {
     })
   })
 
-  it('memory doctor deja el WAL fusionado (checkpoint)', async () => {
+  // D2: el modo default es estrictamente read-only; el checkpoint (y con el la
+  // garantia de "seguro para copiar") solo ocurre con --rebuild.
+  it('memory doctor en modo default no fusiona el WAL ni cambia la DB', async () => {
+    await withDir(async (dir) => {
+      const { close, send } = mcpClient(dir)
+      try {
+        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'ck-ro-1', content: 'Regla para doctor read-only.' } })
+      } finally {
+        close()
+      }
+
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      const walPath = `${dbPath}-wal`
+      const walSize = await settleWalSize(walPath)
+      assert.ok(walSize > 0, `el -wal debe arrancar con frames sin checkpoint (size ${walSize})`)
+
+      const before = { db: hashFile(dbPath), wal: hashFile(walPath), walSize }
+
+      const r = runCli(['memory', 'doctor'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /− Checkpoint WAL: omitido/)
+      assert.match(r.stdout, /Checkpoint WAL: omitido[^\n]*read-only/)
+
+      const after = { db: hashFile(dbPath), wal: hashFile(walPath), walSize: statSync(walPath).size }
+      assert.equal(after.db, before.db, '.db no debe cambiar en modo default')
+      assert.equal(after.wal, before.wal, 'el modo default no debe fusionar el WAL')
+      assert.ok(after.walSize >= before.walSize, `el WAL no debe achicarse (antes ${before.walSize}, despues ${after.walSize})`)
+    })
+  })
+
+  it('memory doctor --rebuild fusiona el WAL y lo deja seguro para copiar', async () => {
     await withDir(async (dir) => {
       const { close, send } = mcpClient(dir)
       try {
@@ -215,16 +251,24 @@ describe('CLI memory list (issue #12)', () => {
       } finally {
         close()
       }
-      const walPath = join(dir, '.ancleto', 'memory.db-wal')
-      const { statSync } = await import('node:fs')
-      const before = existsSync(walPath) ? statSync(walPath).size : 0
 
-      const r = runCli(['memory', 'doctor'], dir)
-      assert.equal(r.status, 0)
-      assert.match(r.stdout, /Checkpoint WAL: WAL fusionado/)
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      const walPath = `${dbPath}-wal`
+      const before = await settleWalSize(walPath)
+      assert.ok(before > 0, `--rebuild debe tener frames para fusionar (size ${before})`)
+
+      const r = runCli(['memory', 'doctor', '--rebuild'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /✔ Checkpoint WAL: WAL fusionado en el \.db/)
+      assert.doesNotMatch(r.stdout, /Checkpoint WAL: omitido/)
 
       const after = existsSync(walPath) ? statSync(walPath).size : 0
-      assert.ok(after < before || after === 0, `el WAL debe reducirse (antes ${before}, despues ${after})`)
+      assert.equal(after, 0, `--rebuild debe fusionar y truncar el WAL (antes ${before}, despues ${after})`)
+
+      // el checkpoint no pierde datos: la regla sigue legible
+      const list = runCli(['memory', 'list'], dir)
+      assert.equal(list.status, 0, list.stderr)
+      assert.match(list.stdout, /ck-1/)
     })
   })
 })

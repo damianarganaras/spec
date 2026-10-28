@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-26T19:42:38Z
-pluginVersion: 0.15.2
+generatedAt: 2026-10-28T20:24:06Z
+pluginVersion: 0.15.3
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.15.2` (`package.json`); el último tag es `v0.15.1` (HEAD `0fe4482`, 11 commits por delante) y aún no hay tag `v0.15.2`. | `.github/workflows/publish.yml`, `package.json`, `git describe --tags` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.15.3` (`package.json`); el tag `v0.15.3` existe (lightweight, `74f713a`) y HEAD está 1 commit por delante en `development`. | `.github/workflows/publish.yml`, `package.json`, `git for-each-ref refs/tags` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -70,6 +70,21 @@ son invocables (2 s por intento, 10 s acumulados por corrida). La dependencia es
 local**, no de un servicio externo. Evidencia: `src/core/machine-env.js`,
 `aspec/specs/machine-environment/spec.md`.
 
+## Memoria local (sin servicios externos)
+
+`.ancleto/memory.db` es SQLite nativo (`node:sqlite`): no hay servidor ni dependencia de red.
+Las operaciones nuevas de PR-1 son **locales y sincrónicas**:
+
+- `memory snapshot` usa `VACUUM INTO` de SQLite sobre una conexión read-only y reemplaza el
+  destino con `renameSync` del runtime (`node:fs`). No invoca herramientas externas.
+- `memory merge` usa el mismo motor transaccional. No escribe archivos; el CLI refresca el
+  working-context derivado.
+- `memory doctor` usa `PRAGMA quick_check` y la tabla sombra `memory_fts_docsize`; no hay
+  chequeo remoto.
+
+Evidencia: `src/core/memory/snapshot.js`, `src/core/memory/doctor.js`,
+`src/core/memory/engine.js`.
+
 ## MCP (Model Context Protocol)
 
 Configurados por `setupHostMcp` (dueño único) con **excepciones de host-MCP**: antigravity
@@ -98,7 +113,7 @@ Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-ro
 |---|---|---|
 | **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Solo opencode. Es la fuente de la compuerta de medición del default de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
 | **`ancleto stats failures`** | Reporte **read-only** de tool parts fallidos de opencode: clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y enmascara secretos/rutas. No imprime `output` ni `state.error`. Es la medición de la mejora de `machine-env`. | `src/cli/index.js` (`statsFailuresCommand`), `aspec/specs/session-failure-report/spec.md` |
-| **Working-context advisory** | `ancleto memory doctor` expone `Working-context: <estado>` tras la integridad de la DB. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
+| **Working-context advisory** | `ancleto memory doctor` expone `Working-context: <estado>` tras los cuatro checks de integridad. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
 
 ## Azure DevOps (opcional, apagado)
 
@@ -120,5 +135,5 @@ Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-ro
   paquete publicado. Evidencia: `package.json`, `ancleto discovery --check`
   (`config.exclude`), `.discovery-map.json` (`root_files`).
 - `documentation/lnx-cli/` es material legado de otro CLI (`lnx`) usado como fuente de
-  relevamiento; no es dependencia de runtime y está gitignored. Evidencia: `BACKLOG.md`,
-  `.gitignore`, listado del directorio.
+  relevamiento; no es dependencia de runtime y está gitignored. Evidencia: `.gitignore`,
+  listado del directorio.

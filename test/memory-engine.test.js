@@ -1,8 +1,11 @@
 import { describe, it, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { openDatabase } from '../src/core/memory/database.js'
 import { createMemoryEngine, defaultMemoryDbPath } from '../src/core/memory/engine.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
@@ -603,11 +606,46 @@ describe('memory doctor (v0.3.0 item 4)', () => {
       assert.equal(result.healthy, true)
       assert.equal(result.checks.length, 4)
       assert.ok(result.checks.every((c) => c.ok))
-      assert.ok(result.checks.some((c) => c.name === 'Checkpoint WAL' && c.ok))
+      const walCheck = result.checks.find((c) => c.name === 'Checkpoint WAL')
+      assert.ok(walCheck && walCheck.ok)
+      assert.equal(walCheck.skipped, true, 'el checkpoint no es verificable en read-only')
+      const fts = result.checks.find((c) => c.name === 'Indice FTS5')
+      assert.equal('skipped' in fts, false, 'el FTS no debe omitirse en read-only')
+      assert.equal(fts.ok, true)
+      assert.match(fts.detail, /1 filas indexadas/)
+      assert.match(fts.detail, /1 nodos/)
+      assert.match(fts.detail, /coincide con memory_nodes/)
     })
   })
 
-  it('detecta indice FTS5 inconsistente y --rebuild lo repara', () => {
+  // Scenario "Forma del reporte retrocompatible": el contrato de forma es estable
+  // para consumidores; `skipped` solo aparece en los checks omitidos.
+  it('mantiene la forma {checks: [{name, ok, detail}], healthy, rebuilt} y skipped solo en omitidos', () => {
+    withDoctor((dbPath) => {
+      const eng = createMemoryEngine(dbPath)
+      eng.recordNode({ memory_key: 'shape-1', type: 'rule', scope: 'project', content: 'forma del reporte' })
+      eng.close()
+
+      const result = memoryDoctor(dbPath)
+
+      for (const key of ['checks', 'healthy', 'rebuilt']) {
+        assert.ok(key in result, `el reporte debe exponer ${key}`)
+      }
+      assert.equal(result.checks.length, 4, 'los cuatro checks se conservan')
+      for (const check of result.checks) {
+        assert.equal(typeof check.name, 'string', 'cada check expone name')
+        assert.equal(typeof check.ok, 'boolean', `${check.name}: ok debe ser booleano`)
+        assert.equal(typeof check.detail, 'string', `${check.name}: cada check expone detail`)
+      }
+
+      const omitted = result.checks.filter((c) => c.skipped === true)
+      assert.deepEqual(omitted.map((c) => c.name), ['Checkpoint WAL'], 'en read-only solo se omite el checkpoint')
+      const fts = result.checks.find((c) => c.name === 'Indice FTS5')
+      assert.equal('skipped' in fts, false, 'un check verificado no expone skipped')
+    })
+  })
+
+  it('detecta la desalineacion FTS en default y --rebuild la repara', () => {
     withDoctor((dbPath) => {
       const eng = createMemoryEngine(dbPath)
       eng.recordNode({ memory_key: 'd2', type: 'rule', scope: 'project', content: 'contenido doctor' })
@@ -620,14 +658,22 @@ describe('memory doctor (v0.3.0 item 4)', () => {
         VALUES ('raw-1', 'raw-key', 'rule', 'project', 'active', 'nodo sin indexar', '', 'test', 1, ?)`).run(new Date().toISOString())
       db.close()
 
+      // G1: el default no puede correr el integrity-check, pero si comparar filas
+      // indexadas contra nodos; el desalineado es una falla, no un skip.
       const before = memoryDoctor(dbPath)
       assert.equal(before.healthy, false)
       assert.equal(before.checks[1].ok, false)
+      assert.equal('skipped' in before.checks[1], false)
+      assert.match(before.checks[1].detail, /1 filas indexadas/)
+      assert.match(before.checks[1].detail, /2 nodos/)
+      assert.match(before.checks[1].detail, /--rebuild/)
+      assert.equal(before.rebuilt, false)
 
       const after = memoryDoctor(dbPath, { rebuild: true })
       assert.equal(after.healthy, true)
       assert.equal(after.rebuilt, true)
       assert.equal(after.checks[1].ok, true)
+      assert.equal('skipped' in after.checks[1], false)
 
       const eng2 = createMemoryEngine(dbPath)
       assert.equal(eng2.searchMemory({ query: 'indexar' }).length, 1)
@@ -996,6 +1042,562 @@ describe('gcSuperseded', () => {
       const result = eng.gcSuperseded()
       assert.equal(result.days, 30)
       assert.equal(result.removed, 1)
+    })
+  })
+})
+
+// PR-1: contrato del merge. `merge({ target, sources, dryRun })` supersede cada
+// source activa hacia el target en una unica transaccion y reporta
+// `{ dryRun, target, sources, superseded }`.
+describe('merge (PR-1)', () => {
+  function hashFile(file) {
+    return createHash('sha256').update(readFileSync(file)).digest('hex')
+  }
+
+  it('dry-run con 1 target y 2 sources no escribe nada y reporta el plan', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'k-target', type: 'rule', scope: 'project', content: 'target vigente' })
+      eng.recordNode({ memory_key: 'k-src-1', type: 'rule', scope: 'project', content: 'source uno' })
+      eng.recordNode({ memory_key: 'k-src-2', type: 'rule', scope: 'project', content: 'source dos' })
+
+      const selectStates = () => rawAt(
+        `SELECT memory_key, status, superseded_by FROM memory_nodes
+         WHERE memory_key IN ('k-target', 'k-src-1', 'k-src-2') ORDER BY memory_key`
+      )
+      const statesBefore = selectStates()
+      const dbBefore = hashFile(dbPath)
+      const walPath = `${dbPath}-wal`
+      const walBefore = existsSync(walPath) ? hashFile(walPath) : null
+      assert.ok(existsSync(walPath) && statSync(walPath).size > 0, 'la fixture debe tener WAL activo')
+
+      const plan = eng.merge({ target: 'k-target', sources: ['k-src-1', 'k-src-2'], dryRun: true })
+
+      assert.equal(plan.dryRun, true)
+      assert.equal(plan.target, 'k-target')
+      assert.deepEqual([...plan.sources].sort(), ['k-src-1', 'k-src-2'])
+      assert.equal(plan.superseded, 2, 'debe reportar cuantos nodos se supersederian')
+      assert.deepEqual(selectStates(), statesBefore, 'el dry-run no cambia estados ni superseded_by')
+      assert.equal(hashFile(dbPath), dbBefore, 'el dry-run no escribe el .db')
+      assert.equal(existsSync(walPath) ? hashFile(walPath) : null, walBefore, 'el dry-run no escribe el -wal')
+    })
+  })
+
+  it('merge real crea el vinculo, no toca el target ni el schema y respeta nodos ajenos', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'node-test-scope-explicit-paths', type: 'rule', scope: 'project', content: 'intacta' })
+      eng.recordNode({ memory_key: 'm-target', type: 'rule', scope: 'project', content: 'target vigente' })
+      eng.recordNode({ memory_key: 'm-src-1', type: 'rule', scope: 'project', content: 'source uno' })
+      eng.recordNode({ memory_key: 'm-src-2', type: 'rule', scope: 'project', content: 'source dos' })
+
+      const targetBefore = rawAt(`SELECT id, status, content, superseded_by FROM memory_nodes WHERE memory_key = 'm-target'`)
+      const otherBefore = rawAt(`SELECT status, superseded_by FROM memory_nodes WHERE memory_key = 'node-test-scope-explicit-paths'`)
+      const schemaBefore = rawAt(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`)
+
+      const result = eng.merge({ target: 'm-target', sources: ['m-src-1', 'm-src-2'] })
+      assert.deepEqual(result, { dryRun: false, target: 'm-target', sources: ['m-src-1', 'm-src-2'], superseded: 2 })
+
+      const targetId = targetBefore[0].id
+      const sources = rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes
+        WHERE memory_key IN ('m-src-1', 'm-src-2') ORDER BY memory_key`)
+      assert.equal(sources.length, 2)
+      for (const source of sources) {
+        assert.equal(source.status, 'superseded')
+        assert.equal(source.superseded_by, targetId)
+      }
+      assert.deepEqual(
+        rawAt(`SELECT id, status, content, superseded_by FROM memory_nodes WHERE memory_key = 'm-target'`),
+        targetBefore,
+        'el target queda activo y con el mismo contenido'
+      )
+      assert.deepEqual(
+        rawAt(`SELECT status, superseded_by FROM memory_nodes WHERE memory_key = 'node-test-scope-explicit-paths'`),
+        otherBefore,
+        'un nodo no nombrado no cambia'
+      )
+      assert.deepEqual(
+        rawAt(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`),
+        schemaBefore,
+        'sqlite_master debe ser identico antes y despues'
+      )
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM sqlite_master WHERE name = 'memory_refs'`)[0].c, 0)
+    })
+  })
+
+  it('fail-closed: un target o una source invalida no modifican ninguna fila', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'fc-target', type: 'rule', scope: 'project', content: 'target' })
+      eng.recordNode({ memory_key: 'fc-src-1', type: 'rule', scope: 'project', content: 'uno' })
+      eng.recordNode({ memory_key: 'fc-src-2', type: 'rule', scope: 'project', content: 'dos' })
+      // Una source que solo existe en estado superseded (historia sin activa).
+      const seed = openDatabase(dbPath)
+      seed.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('fc-sup-old', 'fc-src-sup', 'rule', 'project', 'superseded', 'viejo', '', 'test', 1, ?)`).run(new Date().toISOString())
+      seed.close()
+
+      const snapshot = () => rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY rowid`)
+      const before = snapshot()
+
+      assert.throws(() => eng.merge({ target: 'fc-missing', sources: ['fc-src-1'] }), /fc-missing/)
+      assert.throws(() => eng.merge({ target: 'fc-target', sources: ['fc-nope'] }), /fc-nope/)
+      assert.throws(() => eng.merge({ target: 'fc-target', sources: ['fc-src-sup'] }), /fc-src-sup/)
+      assert.throws(() => eng.merge({ target: 'fc-target', sources: ['fc-src-1', 'fc-src-1'] }), /fc-src-1/)
+      assert.throws(() => eng.merge({ target: 'fc-target', sources: ['fc-target'] }), /fc-target/)
+      assert.throws(() => eng.merge({ target: 'fc-target', sources: ['fc-nope'], dryRun: true }), /fc-nope/)
+
+      assert.deepEqual(snapshot(), before, 'ninguna fila se modifica ante un rechazo')
+    })
+  })
+
+  it('rechaza types distintos entre target y source sin modificar filas (G4)', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'tm-target', type: 'rule', scope: 'project', content: 'target rule' })
+      eng.recordNode({ memory_key: 'tm-src-rule', type: 'rule', scope: 'project', content: 'source rule' })
+      eng.recordNode({ memory_key: 'tm-src-dec', type: 'decision', scope: 'project', content: 'source decision' })
+
+      const snapshot = () => rawAt(`SELECT memory_key, type, status, superseded_by FROM memory_nodes ORDER BY rowid`)
+      const before = snapshot()
+
+      assert.throws(
+        () => eng.merge({ target: 'tm-target', sources: ['tm-src-rule', 'tm-src-dec'] }),
+        (err) => {
+          assert.match(err.message, /tm-target/)
+          assert.match(err.message, /rule/)
+          assert.match(err.message, /tm-src-dec/)
+          assert.match(err.message, /decision/)
+          return true
+        }
+      )
+
+      assert.deepEqual(snapshot(), before, 'ninguna fila cambia de estado ante el type mismatch')
+    })
+  })
+
+  // `merge` revalida target y sources dentro de `BEGIN IMMEDIATE`. Esta rama de
+  // ROLLBACK se ejercita sin seam de produccion: un trigger hace que la segunda
+  // source deje de estar activa entre el UPDATE de la primera y el suyo.
+  it('rollback: una source que deja de estar activa dentro de la transaccion no supersede a nadie', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'rb-target', type: 'rule', scope: 'project', content: 'target' })
+      eng.recordNode({ memory_key: 'rb-src-1', type: 'rule', scope: 'project', content: 'uno' })
+      eng.recordNode({ memory_key: 'rb-src-2', type: 'rule', scope: 'project', content: 'dos' })
+
+      const ids = Object.fromEntries(
+        rawAt(`SELECT memory_key, id FROM memory_nodes
+          WHERE memory_key IN ('rb-src-1', 'rb-src-2')`).map((row) => [row.memory_key, row.id])
+      )
+
+      const seed = openDatabase(dbPath)
+      try {
+        seed.exec(`CREATE TRIGGER rb_deactivate_second AFTER UPDATE OF status ON memory_nodes
+          WHEN NEW.id = '${ids['rb-src-1']}' AND NEW.status = 'superseded'
+          BEGIN
+            UPDATE memory_nodes SET status = 'superseded', superseded_by = NEW.superseded_by
+              WHERE id = '${ids['rb-src-2']}' AND status = 'active';
+          END`)
+      } finally {
+        seed.close()
+      }
+
+      assert.throws(
+        () => eng.merge({ target: 'rb-target', sources: ['rb-src-1', 'rb-src-2'] }),
+        /una source dejo de estar activa durante la transaccion/
+      )
+
+      const after = rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes
+        WHERE memory_key IN ('rb-target', 'rb-src-1', 'rb-src-2') ORDER BY memory_key`)
+      assert.equal(after.length, 3)
+      for (const row of after) {
+        assert.equal(row.status, 'active', `${row.memory_key} debe seguir activo tras el ROLLBACK`)
+        assert.equal(row.superseded_by, null, `${row.memory_key} no debe quedar vinculado tras el ROLLBACK`)
+      }
+    })
+  })
+})
+
+const CLI_PATH = fileURLToPath(new URL('../src/cli/index.js', import.meta.url))
+
+function withCliFixture(fn) {
+  const dir = mkdtempSync(join(tmpdir(), 'ancleto-memcli-'))
+  const dbPath = join(dir, '.ancleto', 'memory.db')
+  const engine = createMemoryEngine(dbPath)
+  let closed = false
+  const close = () => {
+    if (closed) return
+    engine.close()
+    closed = true
+  }
+  const rawAt = (sql, ...params) => {
+    const db = openDatabase(dbPath)
+    try {
+      return db.prepare(sql).all(...params)
+    } finally {
+      db.close()
+    }
+  }
+  try {
+    return fn({ dir, dbPath, engine, close, rawAt })
+  } finally {
+    try {
+      close()
+    } catch {
+      // best effort
+    }
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+    } catch {
+      // best effort: en Windows los handles de WAL pueden tardar en liberarse
+    }
+  }
+}
+
+function runCli(cwd, args) {
+  return spawnSync(process.execPath, [CLI_PATH, ...args], { cwd, encoding: 'utf8' })
+}
+
+function sha(file) {
+  return createHash('sha256').update(readFileSync(file)).digest('hex')
+}
+
+describe('memory snapshot (CLI)', () => {
+  it('sin --out sale con codigo != 0 y muestra el uso', () => {
+    withCliFixture(({ dir, close }) => {
+      close()
+      const r = runCli(dir, ['memory', 'snapshot'])
+      assert.notEqual(r.status, 0)
+      assert.match(r.stderr, /uso: ancleto memory snapshot --out/)
+    })
+  })
+
+  it('--json imprime {out, bytes} y crea el snapshot', () => {
+    withCliFixture(({ dir, engine, close }) => {
+      engine.recordNode({ memory_key: 'snap-cli', type: 'rule', scope: 'project', content: 'snapshot cli' })
+      close()
+      const out = join(dir, 'backup.db')
+      const r = runCli(dir, ['memory', 'snapshot', '--out', out, '--json'])
+      assert.equal(r.status, 0, r.stderr)
+      const payload = JSON.parse(r.stdout)
+      assert.equal(payload.out, out)
+      assert.ok(payload.bytes > 0)
+      assert.equal(statSync(out).size, payload.bytes)
+    })
+  })
+
+  it('destino existente sin --force falla, nombra la ruta y no lo toca', () => {
+    withCliFixture(({ dir, engine, close }) => {
+      engine.recordNode({ memory_key: 'snap-cli', type: 'rule', scope: 'project', content: 'snapshot cli' })
+      close()
+      const out = join(dir, 'existing.db')
+      writeFileSync(out, 'no tocar')
+      const r = runCli(dir, ['memory', 'snapshot', '--out', out])
+      assert.notEqual(r.status, 0)
+      assert.match(r.stderr, /existing\.db/)
+      assert.equal(readFileSync(out, 'utf8'), 'no tocar')
+    })
+  })
+
+  it('--force reemplaza un destino existente por un snapshot valido', () => {
+    withCliFixture(({ dir, engine, close }) => {
+      engine.recordNode({ memory_key: 'snap-cli', type: 'rule', scope: 'project', content: 'snapshot cli' })
+      close()
+      const out = join(dir, 'existing.db')
+      writeFileSync(out, 'stale')
+      const r = runCli(dir, ['memory', 'snapshot', '--out', out, '--force'])
+      assert.equal(r.status, 0, r.stderr)
+      const db = openDatabase(out, { migrate: false })
+      try {
+        assert.equal(db.prepare('PRAGMA quick_check').get().quick_check, 'ok')
+      } finally {
+        db.close()
+      }
+    })
+  })
+
+  it('--out seguido de otro flag cuenta como faltante y no crea un archivo con ese nombre', () => {
+    withCliFixture(({ dir, close }) => {
+      close()
+      const r = runCli(dir, ['memory', 'snapshot', '--out', '--force'])
+      assert.notEqual(r.status, 0)
+      assert.match(r.stderr, /uso: ancleto memory snapshot --out/)
+      assert.equal(existsSync(join(dir, '--force')), false)
+    })
+  })
+
+  it('target == source falla sin escribir y nombra el conflicto', () => {
+    withCliFixture(({ dir, dbPath, engine, close }) => {
+      engine.recordNode({ memory_key: 'snap-cli', type: 'rule', scope: 'project', content: 'snapshot cli' })
+      close()
+      const before = sha(dbPath)
+      const r = runCli(dir, ['memory', 'snapshot', '--out', dbPath])
+      assert.notEqual(r.status, 0)
+      assert.match(r.stderr, /fuente/)
+      assert.equal(sha(dbPath), before)
+    })
+  })
+})
+
+describe('memory merge (CLI)', () => {
+  function seedMergeFixture({ dir, engine, rawAt }) {
+    engine.recordNode({ memory_key: 'node-test-scope-explicit-paths', type: 'rule', scope: 'project', content: 'intacta' })
+    engine.recordNode({ memory_key: 'cli-target', type: 'rule', scope: 'project', content: 'target vigente' })
+    engine.recordNode({ memory_key: 'cli-src-1', type: 'rule', scope: 'project', content: 'source uno' })
+    engine.recordNode({ memory_key: 'cli-src-2', type: 'rule', scope: 'project', content: 'source dos' })
+    const ctxPath = join(dir, '.ancleto', 'working-context.md')
+    writeFileSync(ctxPath, engine.buildWorkingContext('project', undefined, dir) + '\n')
+    const targetId = rawAt(`SELECT id FROM memory_nodes WHERE memory_key = 'cli-target'`)[0].id
+    return { ctxPath, targetId }
+  }
+
+  // cwd del CLI != raiz del proyecto derivada de la DB: la raiz se resuelve por
+  // el `.ancletorc` ancestro, asi el test distingue process.cwd() de
+  // resolveMemoryProjectRoot(dbPath).
+  function withNestedCliFixture(fn) {
+    const base = mkdtempSync(join(tmpdir(), 'ancleto-memcli-cwd-'))
+    const projectRoot = join(base, 'project')
+    const cwd = join(projectRoot, 'nested')
+    const dbPath = join(cwd, '.ancleto', 'memory.db')
+    mkdirSync(projectRoot, { recursive: true })
+    writeFileSync(join(projectRoot, '.ancletorc'), '{}\n')
+    const engine = createMemoryEngine(dbPath)
+    let closed = false
+    const close = () => {
+      if (closed) return
+      engine.close()
+      closed = true
+    }
+    const rawAt = (sql, ...params) => {
+      const db = openDatabase(dbPath)
+      try {
+        return db.prepare(sql).all(...params)
+      } finally {
+        db.close()
+      }
+    }
+    try {
+      return fn({ projectRoot, cwd, dbPath, engine, close, rawAt })
+    } finally {
+      try {
+        close()
+      } catch {
+        // best effort
+      }
+      try {
+        rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+      } catch {
+        // best effort: en Windows los handles de WAL pueden tardar en liberarse
+      }
+    }
+  }
+
+  it('merge real supersede cada source, conserva el target y refresca el working-context bajo la raiz de la DB', () => {
+    withNestedCliFixture(({ projectRoot, cwd, engine, close, rawAt }) => {
+      engine.recordNode({ memory_key: 'node-test-scope-explicit-paths', type: 'rule', scope: 'project', content: 'intacta' })
+      engine.recordNode({ memory_key: 'cli-target', type: 'rule', scope: 'project', content: 'target vigente' })
+      engine.recordNode({ memory_key: 'cli-src-1', type: 'rule', scope: 'project', content: 'source uno' })
+      engine.recordNode({ memory_key: 'cli-src-2', type: 'rule', scope: 'project', content: 'source dos' })
+
+      const projectCtx = join(projectRoot, '.ancleto', 'working-context.md')
+      const cwdCtx = join(cwd, '.ancleto', 'working-context.md')
+      mkdirSync(dirname(projectCtx), { recursive: true })
+      writeFileSync(projectCtx, engine.buildWorkingContext('project', undefined, projectRoot) + '\n')
+      const targetId = rawAt(`SELECT id FROM memory_nodes WHERE memory_key = 'cli-target'`)[0].id
+      const schemaBefore = rawAt(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`)
+      const targetBefore = rawAt(`SELECT status, content, superseded_by FROM memory_nodes WHERE memory_key = 'cli-target'`)
+      const otherBefore = rawAt(`SELECT status, superseded_by FROM memory_nodes WHERE memory_key = 'node-test-scope-explicit-paths'`)
+      close()
+
+      const r = runCli(cwd, ['memory', 'merge', '--target', 'cli-target', '--sources', 'cli-src-1, cli-src-2'])
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /2 nodo\(s\) superseded/)
+
+      const sources = rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes
+        WHERE memory_key IN ('cli-src-1', 'cli-src-2') ORDER BY memory_key`)
+      assert.equal(sources.length, 2)
+      for (const source of sources) {
+        assert.equal(source.status, 'superseded')
+        assert.equal(source.superseded_by, targetId)
+      }
+      assert.deepEqual(
+        rawAt(`SELECT status, content, superseded_by FROM memory_nodes WHERE memory_key = 'cli-target'`),
+        targetBefore
+      )
+      assert.deepEqual(
+        rawAt(`SELECT status, superseded_by FROM memory_nodes WHERE memory_key = 'node-test-scope-explicit-paths'`),
+        otherBefore
+      )
+      assert.deepEqual(
+        rawAt(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`),
+        schemaBefore
+      )
+
+      assert.equal(existsSync(projectCtx), true, 'el bloque se escribe bajo la raiz derivada de la DB')
+      assert.equal(existsSync(cwdCtx), false, 'el bloque no se escribe bajo process.cwd()')
+      const ctx = readFileSync(projectCtx, 'utf8')
+      assert.doesNotMatch(ctx, /\[cli-src-1\]/)
+      assert.doesNotMatch(ctx, /\[cli-src-2\]/)
+      assert.match(ctx, /\[cli-target\] target vigente/)
+    })
+  })
+
+  it('--dry-run no escribe la base ni el working-context', () => {
+    withCliFixture(({ dir, engine, close, rawAt }) => {
+      const { ctxPath } = seedMergeFixture({ dir, engine, rawAt })
+      const ctxBefore = readFileSync(ctxPath)
+      const statesBefore = rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY rowid`)
+      close()
+
+      const r = runCli(dir, ['memory', 'merge', '--dry-run', '--target', 'cli-target', '--sources', 'cli-src-1,cli-src-2'])
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /dry-run/)
+      assert.deepEqual(readFileSync(ctxPath), ctxBefore, 'el working-context no cambia')
+      assert.deepEqual(
+        rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY rowid`),
+        statesBefore,
+        'la base no cambia'
+      )
+    })
+  })
+
+  // F2: el dry-run no puede abrir con `createMemoryEngine` (aplica
+  // `journal_mode=WAL` y migraciones antes del plan). Fixture en DELETE: si el
+  // CLI abriera en escritura, el header cambiaria y aparecerian sidecars.
+  it('--dry-run sobre DB en journal_mode=DELETE no escribe la base ni crea sidecars', () => {
+    withCliFixture(({ dir, dbPath, engine, close, rawAt }) => {
+      const { ctxPath } = seedMergeFixture({ dir, engine, rawAt })
+      const ctxBefore = readFileSync(ctxPath)
+      close()
+
+      const raw = openDatabase(dbPath, { migrate: false })
+      try {
+        raw.exec('PRAGMA journal_mode = DELETE')
+      } finally {
+        raw.close()
+      }
+
+      const wal = `${dbPath}-wal`
+      const shm = `${dbPath}-shm`
+      assert.equal(existsSync(wal), false, 'precondicion: la fixture no tiene -wal')
+      assert.equal(existsSync(shm), false, 'precondicion: la fixture no tiene -shm')
+      const dbBefore = sha(dbPath)
+      const walBefore = existsSync(wal) ? sha(wal) : null
+
+      const r = runCli(dir, ['memory', 'merge', '--dry-run', '--target', 'cli-target', '--sources', 'cli-src-1,cli-src-2'])
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /dry-run/)
+      assert.match(r.stdout, /cli-target/)
+      assert.match(r.stdout, /2 nodo\(s\) a superseder/)
+
+      assert.equal(sha(dbPath), dbBefore, 'el .db debe quedar byte a byte identico')
+      assert.equal(existsSync(wal), false, 'el dry-run no debe crear -wal')
+      assert.equal(existsSync(shm), false, 'el dry-run no debe crear -shm')
+      assert.equal(existsSync(wal) ? sha(wal) : null, walBefore, 'si apareciera un -wal, no podria cambiar')
+      assert.deepEqual(readFileSync(ctxPath), ctxBefore, 'el working-context no cambia')
+    })
+  })
+
+  it('--dry-run --json imprime las cuatro claves y no escribe (G5)', () => {
+    withCliFixture(({ dir, engine, close, rawAt }) => {
+      const { ctxPath } = seedMergeFixture({ dir, engine, rawAt })
+      const ctxBefore = readFileSync(ctxPath)
+      const statesBefore = rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY rowid`)
+      close()
+
+      const r = runCli(dir, ['memory', 'merge', '--dry-run', '--target', 'cli-target', '--sources', 'cli-src-1,cli-src-2', '--json'])
+      assert.equal(r.status, 0, r.stderr)
+      const payload = JSON.parse(r.stdout)
+      assert.deepEqual(Object.keys(payload).sort(), ['dryRun', 'sources', 'superseded', 'target'])
+      assert.equal(payload.dryRun, true)
+      assert.equal(payload.target, 'cli-target')
+      assert.deepEqual([...payload.sources].sort(), ['cli-src-1', 'cli-src-2'])
+      assert.equal(payload.superseded, 2)
+      assert.deepEqual(readFileSync(ctxPath), ctxBefore, 'el working-context no cambia')
+      assert.deepEqual(
+        rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY rowid`),
+        statesBefore,
+        'la base no cambia'
+      )
+    })
+  })
+
+  // G5 cubre ambos caminos: el real tambien publica las cuatro claves.
+  it('merge real --json imprime las cuatro claves (G5)', () => {
+    withCliFixture(({ dir, engine, close, rawAt }) => {
+      seedMergeFixture({ dir, engine, rawAt })
+      close()
+
+      const r = runCli(dir, ['memory', 'merge', '--target', 'cli-target', '--sources', 'cli-src-1,cli-src-2', '--json'])
+      assert.equal(r.status, 0, r.stderr)
+      const payload = JSON.parse(r.stdout)
+      assert.deepEqual(Object.keys(payload).sort(), ['dryRun', 'sources', 'superseded', 'target'])
+      assert.equal(payload.dryRun, false)
+      assert.equal(payload.target, 'cli-target')
+      assert.deepEqual([...payload.sources].sort(), ['cli-src-1', 'cli-src-2'])
+      assert.equal(payload.superseded, 2)
+
+      const sources = rawAt(`SELECT memory_key, status FROM memory_nodes
+        WHERE memory_key IN ('cli-src-1', 'cli-src-2') ORDER BY memory_key`)
+      assert.equal(sources.length, 2)
+      for (const source of sources) assert.equal(source.status, 'superseded')
+    })
+  })
+
+  it('sin --target o sin --sources sale con codigo != 0 y muestra el uso', () => {
+    withCliFixture(({ dir, close }) => {
+      close()
+      const noTarget = runCli(dir, ['memory', 'merge', '--sources', 'a'])
+      assert.notEqual(noTarget.status, 0)
+      assert.match(noTarget.stderr, /uso: ancleto memory merge/)
+      const noSources = runCli(dir, ['memory', 'merge', '--target', 'a'])
+      assert.notEqual(noSources.status, 0)
+      assert.match(noSources.stderr, /uso: ancleto memory merge/)
+    })
+  })
+
+  it('un valor de flag que es otro flag cuenta como faltante y muestra el uso', () => {
+    withCliFixture(({ dir, close }) => {
+      close()
+      const r = runCli(dir, ['memory', 'merge', '--target', '--sources', 'a'])
+      assert.notEqual(r.status, 0)
+      assert.match(r.stderr, /uso: ancleto memory merge/)
+    })
+  })
+
+  it('un rechazo nombra la memory_key y sale con codigo != 0', () => {
+    withCliFixture(({ dir, engine, close }) => {
+      engine.recordNode({ memory_key: 'cli-target', type: 'rule', scope: 'project', content: 'target' })
+      close()
+      const r = runCli(dir, ['memory', 'merge', '--target', 'cli-inexistente', '--sources', 'cli-target'])
+      assert.notEqual(r.status, 0)
+      assert.match(r.stderr, /cli-inexistente/)
+    })
+  })
+
+  // R2: si el refresh del bloque falla, el comando no puede fingir exito. Se fuerza
+  // sin seam de produccion: el path esperado del working-context es un directorio,
+  // asi el read/write del refresh falla con EISDIR.
+  it('si el refresh del working-context falla, sale != 0 y aclara que el merge si se aplico', () => {
+    withCliFixture(({ dir, engine, close, rawAt }) => {
+      engine.recordNode({ memory_key: 'cli-target', type: 'rule', scope: 'project', content: 'target vigente' })
+      engine.recordNode({ memory_key: 'cli-src-1', type: 'rule', scope: 'project', content: 'source uno' })
+      mkdirSync(join(dir, '.ancleto', 'working-context.md'))
+      close()
+
+      const r = runCli(dir, ['memory', 'merge', '--target', 'cli-target', '--sources', 'cli-src-1'])
+      assert.notEqual(r.status, 0, 'un refresh fallido no puede salir 0')
+      assert.match(r.stderr, /se aplico en la base/, 'debe decir que el merge si se aplico')
+      assert.match(r.stderr, /desactualizado/, 'debe decir que el bloque quedo desactualizado')
+      // F4: el destino se deriva del helper (raiz de la DB), no de un literal.
+      const ctxPath = join(dir, '.ancleto', 'working-context.md')
+      assert.ok(r.stderr.includes(ctxPath), `el mensaje debe nombrar el destino derivado (${r.stderr})`)
+      assert.ok(
+        r.stderr.includes(`ancleto memory context --out ${ctxPath}`),
+        `el comando sugerido debe usar el destino derivado (${r.stderr})`
+      )
+      assert.doesNotMatch(r.stdout, /merge OK/)
+
+      // El merge no se revierte: la source quedo superseded en la base.
+      const src = rawAt(`SELECT status, superseded_by FROM memory_nodes WHERE memory_key = 'cli-src-1'`)
+      assert.equal(src[0].status, 'superseded')
+      assert.ok(src[0].superseded_by)
     })
   })
 })

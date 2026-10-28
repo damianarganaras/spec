@@ -1,0 +1,69 @@
+[
+  {
+    "id": "M01",
+    "query": "¿Con qué comando se corren los tests del repo?",
+    "status": "active",
+    "expected": {
+      "mode": "topK",
+      "k": 3,
+      "memory_keys": ["test-runner-invocation"]
+    }
+  },
+  {
+    "id": "M02",
+    "query": "¿Cómo se recupera la memoria desde un snapshot cuando la base quedó inconsistente?",
+    "status": "deferred",
+    "blocker": "runbook MEM-01"
+  },
+  {
+    "id": "M03",
+    "query": "¿Cuáles son las cinco decisiones únicas que hay que backfillear?",
+    "status": "deferred",
+    "blocker": "PR-3 (backfill de las cinco decisiones únicas)"
+  },
+  {
+    "id": "M04",
+    "query": "¿Qué spec referencia la regla de validación declarativa?",
+    "status": "deferred",
+    "blocker": "MEM-04 (resolver de refs spec:/change:)"
+  },
+  {
+    "id": "M05",
+    "query": "¿Qué change introdujo el contrato de snapshot?",
+    "status": "deferred",
+    "blocker": "MEM-04 (resolver de refs spec:/change:)"
+  },
+  {
+    "id": "M06",
+    "query": "¿Qué decisión supersede la regla vieja de permisos de bash?",
+    "status": "deferred",
+    "blocker": "MEM-04 (resolver de refs spec:/change:)"
+  },
+  {
+    "id": "M07",
+    "query": "¿Qué convención de nombres sigue el pipeline de facturación electrónica de la AFIP?",
+    "status": "active",
+    "expected": {
+      "mode": "abstain",
+      "memory_keys": []
+    }
+  },
+  {
+    "id": "M08",
+    "query": "¿Qué decidió PR-2 sobre la sección Decisiones en los generadores?",
+    "status": "deferred",
+    "blocker": "PR-2/PR-3"
+  },
+  {
+    "id": "M09",
+    "query": "¿Cómo se promueven las refs obligatorias entre changes?",
+    "status": "deferred",
+    "blocker": "PR-2/PR-3"
+  },
+  {
+    "id": "M10",
+    "query": "¿Qué workflow de MEM-06 consolida la memoria a largo plazo?",
+    "status": "deferred",
+    "blocker": "MEM-06 (P2)"
+  }
+]

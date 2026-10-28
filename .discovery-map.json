@@ -1,20 +1,20 @@
 {
-  "last_updated": "2026-10-26T19:42:24.202Z",
-  "total_files": 688,
+  "last_updated": "2026-10-28T20:19:38.494Z",
+  "total_files": 701,
   "tree_summary": {
     ".github": 1,
     ".opencode": 66,
     "agents": 10,
-    "aspec": 140,
+    "aspec": 147,
     "audit logs": 9,
     "commands": 16,
-    "docs": 19,
+    "docs": 21,
     "documentation": 340,
     "profiles": 8,
     "skills": 35,
-    "src": 14,
+    "src": 15,
     "templates": 2,
-    "test": 13
+    "test": 17
   },
   "root_files": [
     ".ancletorc",
@@ -22,7 +22,6 @@
     ".gitattributes",
     ".gitignore",
     "AGENTS.md",
-    "BACKLOG.md",
     "CHANGELOG.md",
     "DESIGN-memory-engine-v0.2.0.md",
     "LICENSE",

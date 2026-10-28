@@ -401,8 +401,14 @@ ancleto memory list [--type rule|decision] [--scope project|feature|task] [--all
                           # Lista los nodos de memoria (read-only: no toca la base)
 
 ancleto memory doctor [--rebuild]
-                          # Diagnostica la base de memoria, reconstruye el índice FTS5 y
-                          # fusiona el WAL en el .db (deja la base segura para copiar)
+                          # Diagnostica la base de memoria (read-only por defecto);
+                          # --rebuild es el único camino que escribe y reconstruye el índice FTS5
+
+ancleto memory snapshot --out <archivo.db> [--force] [--json]
+                          # Copia consistente de la base vía VACUUM INTO
+
+ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]
+                          # Fusiona nodos fuente en el target y supersede los sources
 
 ancleto mcp               # Servidor MCP de memoria propia (stdio): lo consume tu IDE
 
@@ -422,7 +428,7 @@ Funciona en tres piezas que comparten el mismo archivo:
 |---|---|
 | **Almacenamiento** | Reglas y decisiones con supersesión atómica por `memory_key` (una sola activa por clave). |
 | **Tools del LLM** (`ancleto mcp`) | Servidor MCP local, sin dependencias, que expone tres herramientas a tu IDE. |
-| **CLI** | `ancleto memory context` materializa el bloque `<ProjectMemoryRules>`, `ancleto memory list` permite inspeccionar los nodos sin escribir, y `ancleto memory doctor` verifica integridad, reconstruye el índice FTS5 y fusiona el WAL. |
+| **CLI** | `ancleto memory context` materializa el bloque `<ProjectMemoryRules>`, `ancleto memory list` permite inspeccionar los nodos sin escribir, y `ancleto memory doctor` verifica integridad (read-only por defecto; `--rebuild` reconstruye el índice FTS5). |
 
 | Herramienta | Función |
 |---|---|

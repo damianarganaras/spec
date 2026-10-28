@@ -564,10 +564,15 @@ describe('working-context — sin recursion ni corrupcion (6.9)', () => {
         toolkit.engine.close()
       }
 
-      // indice FTS5 consistente tras cerrar el engine
-      const doctor = memoryDoctor(dbPath)
+      // indice FTS5 consistente tras cerrar el engine: `--rebuild` ejecuta el
+      // integrity-check real, asi que `ok` prueba consistencia (no un skip).
+      const doctor = memoryDoctor(dbPath, { rebuild: true })
       assert.equal(doctor.healthy, true, JSON.stringify(doctor.checks))
-      assert.ok(doctor.checks.some((c) => c.name === 'Indice FTS5' && c.ok))
+      assert.equal(doctor.rebuilt, true, '--rebuild debe ejecutarse sobre una DB legible')
+      const fts = doctor.checks.find((c) => c.name === 'Indice FTS5')
+      assert.ok(fts, 'debe existir el check Indice FTS5')
+      assert.equal(fts.skipped, undefined, 'con --rebuild el check no debe omitirse')
+      assert.equal(fts.ok, true, 'el indice debe quedar consistente tras el rebuild')
     })
   })
 })

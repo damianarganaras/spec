@@ -91,13 +91,28 @@ export function createMemoryEngine(dbPath = defaultMemoryDbPath()) {
 // Apertura read-only: sin migraciones ni escrituras. Pensada para inspeccionar
 // la memoria sin tocar el WAL ni modificar archivos.
 export function createReadonlyMemoryEngine(dbPath = defaultMemoryDbPath()) {
-  return buildEngine(openDatabase(dbPath, { migrate: false, readonly: true }))
+  return buildReadonlyEngine(openDatabase(dbPath, { migrate: false, readonly: true }))
+}
+
+// Misma superficie que el engine de escritura. `merge` solo puede planificar:
+// una corrida real se rechaza antes de tocar la conexion read-only, y el plan
+// sale de la validacion compartida (`validateMerge`), identico al de escritura.
+function buildReadonlyEngine(db) {
+  const engine = buildEngine(db)
+  return {
+    ...engine,
+    merge({ target, sources, dryRun = false } = {}) {
+      if (!dryRun) throw new Error('merge: la conexion es read-only')
+      return engine.merge({ target, sources, dryRun: true })
+    }
+  }
 }
 
 function buildEngine(db) {
 
-  const findActive = db.prepare(`SELECT id FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
+  const findActive = db.prepare(`SELECT id, type FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
   const findActiveRow = db.prepare(`SELECT id, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
+  const findLatestStatus = db.prepare(`SELECT status FROM memory_nodes WHERE memory_key = ? ORDER BY rowid DESC LIMIT 1`)
   const countSuperseded = db.prepare(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = ? AND status = 'superseded'`)
   const supersede = db.prepare(`UPDATE memory_nodes SET status = 'superseded', superseded_by = ? WHERE id = ? AND status = 'active'`)
   const insertNode = db.prepare(
@@ -372,9 +387,82 @@ function buildEngine(db) {
     return checkpointDatabase(db)
   }
 
+  // Validacion compartida por el engine de escritura y el read-only: deja el
+  // plan listo y falla cerrado (target activo, sources activas, sin repetidas y
+  // con `type` identico) antes de abrir cualquier transaccion.
+  function validateMerge({ target, sources } = {}) {
+    const targetKey = String(target || '').trim()
+    if (!targetKey) throw new Error('merge: target es obligatorio')
+    if (!Array.isArray(sources) || sources.length === 0) throw new Error('merge: sources debe ser una lista no vacia')
+
+    const sourceKeys = sources.map((s) => String(s || '').trim())
+    const seen = new Set()
+    for (const key of sourceKeys) {
+      if (!key) throw new Error('merge: memory_key vacia en sources')
+      if (seen.has(key)) throw new Error(`merge: source repetida: ${key}`)
+      seen.add(key)
+    }
+
+    const targetRow = findActive.get(targetKey)
+    if (!targetRow) throw new Error(`merge: target "${targetKey}" no es un nodo activo existente`)
+
+    const sourceIds = []
+    for (const key of sourceKeys) {
+      if (key === targetKey) throw new Error(`merge: source "${key}" es igual al target`)
+      const row = findActive.get(key)
+      if (!row) {
+        const latest = findLatestStatus.get(key)
+        if (latest) throw new Error(`merge: source "${key}" no esta activa (status: ${latest.status})`)
+        throw new Error(`merge: source "${key}" no existe`)
+      }
+      if (row.type !== targetRow.type) {
+        throw new Error(`merge: type incompatible entre target "${targetKey}" (${targetRow.type}) y source "${key}" (${row.type})`)
+      }
+      sourceIds.push(row.id)
+    }
+
+    return { targetKey, sourceKeys, sourceIds }
+  }
+
+  // Consolida duplicados supersediendo cada source activa hacia un target activo,
+  // sin insertar nodos ni aceptar contenido. Valida todo antes de escribir y usa
+  // una unica transaccion: cualquier violacion deja la base intacta. `dryRun` no
+  // abre transaccion ni escribe.
+  function merge({ target, sources, dryRun = false } = {}) {
+    const { targetKey, sourceKeys, sourceIds } = validateMerge({ target, sources })
+    const plan = { target: targetKey, sources: sourceKeys, superseded: sourceIds.length }
+    if (dryRun) return { dryRun: true, ...plan }
+
+    db.exec('BEGIN IMMEDIATE')
+    let superseded = 0
+    try {
+      // Revalidacion bajo lock: el target pudo quedar superseded entre la
+      // validacion previa y la transaccion, y las sources quedarian enlazadas a
+      // un nodo inactivo.
+      const lockedTarget = findActive.get(targetKey)
+      if (!lockedTarget) {
+        throw new Error(`merge: el target "${targetKey}" dejo de estar activo durante la transaccion`)
+      }
+      for (const id of sourceIds) {
+        const result = supersede.run(lockedTarget.id, id)
+        superseded += Number(result.changes || 0)
+      }
+      // Si una source dejo de estar activa entre la validacion y el UPDATE,
+      // `changes` es 0: se aborta y se revierte todo.
+      if (superseded !== sourceIds.length) {
+        throw new Error('merge: una source dejo de estar activa durante la transaccion')
+      }
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw err
+    }
+    return { dryRun: false, ...plan }
+  }
+
   function close() {
     db.close()
   }
 
-  return { buildWorkingContext, searchMemory, recordNode, listNodes, exportActive, importNodes, gcSuperseded, checkpoint, close }
+  return { buildWorkingContext, searchMemory, recordNode, listNodes, exportActive, importNodes, gcSuperseded, merge, checkpoint, close }
 }

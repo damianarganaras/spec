@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, entorno de máquina, sonda de invocabilidad de herramientas, superficie de shell por agente, stats failures, affected y refresh on-write en memory import"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, entorno de máquina, sonda de invocabilidad de herramientas, superficie de shell por agente, stats failures, affected y las ops de memoria del CLI (snapshot, merge, doctor read-only, refresh on-write)"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -14,12 +14,14 @@ covers:
   - machine-env
   - sonda de invocabilidad
   - stats failures
+  - memory snapshot
+  - memory merge
+  - memory doctor read-only
   - memory import refresh on-write
-  - memory doctor advisory staleness
   - permisos de shell por agente
-sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js"]
-generatedAt: 2026-10-26T19:42:38Z
-pluginVersion: 0.15.2
+sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js"]
+generatedAt: 2026-10-28T20:24:06Z
+pluginVersion: 0.15.3
 skillVersion: '2.3'
 ---
 
@@ -29,17 +31,18 @@ skillVersion: '2.3'
 
 `src/cli/index.js` es el **único entry point** (`bin.ancleto`/`bin.aspec`): parseo de
 comandos, instalación de assets por host, resolución de agente/IDE, gestión de tiers, MCP,
-discovery, memoria (incluyendo el refresh on-write desde el CLI y el chequeo advisory de
-staleness), entorno de máquina, reporte de fallos, registro de proyectos y diagnósticos. La
-adaptación de frontmatter es un módulo aparte (`src/core/adapters/frontmatter.js`),
-`src/core/machine-env.js` posee el entorno local y `src/cli/ui.js` aporta el wizard. Evidencia:
-`package.json`, `src/cli/index.js`.
+discovery, memoria (incluyendo snapshot, merge, el refresh on-write desde el CLI y el chequeo
+advisory de staleness), entorno de máquina, reporte de fallos, registro de proyectos y
+diagnósticos. La adaptación de frontmatter es un módulo aparte
+(`src/core/adapters/frontmatter.js`), `src/core/machine-env.js` posee el entorno local,
+`src/core/memory/snapshot.js` posee la copia binaria y `src/cli/ui.js` aporta el wizard.
+Evidencia: `package.json`, `src/cli/index.js`.
 
 ## Superficie de comandos
 
 `install`, `update`, `upgrade`, `init`, `export` (`--tar`), `import` (`<bundle>`/`--repair`),
 `discovery` (`--check` / pack), `affected` (read-only: `[--cwd <dir>] [--json] <archivo...>`),
-`mcp`, `memory (context|list|doctor|export|import|gc)`,
+`mcp`, `memory (context|list|doctor|export|import|gc|snapshot|merge)`,
 `specs check`, `stats`, **`stats failures`** (`[--all] [--limit N] [--since YYYY-MM-DD]
 [--session <id>] [--class <env|check|tool|unknown,...>] [--tool <t,...>] [--json]`),
 `projects (list|scan|prune|info|update)`, `list --projects`, `check`, `doctor`, `--help`,
@@ -51,20 +54,31 @@ adaptación de frontmatter es un módulo aparte (`src/core/adapters/frontmatter.
 
 **Escrituras de memoria del CLI**:
 
-- `memory import <archivo>` (`memoryImport` en `src/cli/index.js`) tras `engine.importNodes(json)`
-  invoca `refreshWorkingContextOnWrite(engine, projectRoot)` dentro de un `try/catch` aislado.
-  El refresh es **compare-based** y reusa la conexión abierta: reescribe
-  `.ancleto/working-context.md` solo si el bloque renderizado difiere del contenido en disco
-  (normalización CRLF/espacios/salto final). Si falla, el import igual se considera exitoso y
-  el fallo se reporta por stderr.
-- `memory doctor` (`memoryDoctorCmd`) ejecuta el chequeo de integridad habitual y, tras él,
-  agrega la línea **advisory** `Working-context: <ok|ausente|desactualizado>` usando
-  `checkWorkingContextFreshness(engine, projectRoot)` con `createReadonlyMemoryEngine`. El
-  exit code sigue midiendo la integridad de la DB. Cuando no está `ok` sugiere
-  `ancleto memory context --out` para corregir.
+- `memory import <archivo>` (`memoryImport`) tras `engine.importNodes(json)` invoca
+  `refreshWorkingContextOnWrite(engine, projectRoot)` dentro de un `try/catch` aislado.
+- `memory snapshot --out <archivo.db> [--force] [--json]` (`memorySnapshot`) exige `--out`,
+  comprueba que exista `.ancleto/memory.db` y delega en `snapshotDatabase`; imprime
+  `{ out, bytes }` o un resumen legible. **No** toca la fuente ni el working-context.
+- `memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]` (`memoryMerge`):
+  parsea flags con `requiredMemoryFlag` (un valor vacío o que empieza con `--` cuenta como
+  faltante), usa `createReadonlyMemoryEngine` en dry-run y `createMemoryEngine` en real. Tras un
+  merge real refresca el working-context con la raíz derivada de
+  `resolveMemoryProjectRoot(dbPath)`; si ese refresh falla, el merge ya está commiteado y el
+  comando sale con código ≠ 0 informando el hecho y `ancleto memory context --out <ruta>`.
+- `memory doctor` (`memoryDoctorCmd`) audita con `memoryDoctor` (read-only por defecto;
+  `--rebuild` es el único camino que escribe) y agrega la línea **advisory**
+  `Working-context: <ok|ausente|desactualizado>` usando `checkWorkingContextFreshness` con un
+  engine read-only. El exit code sigue midiendo la integridad de la DB. Cuando no está `ok`
+  sugiere `ancleto memory context --out`.
 
-Evidencia: `src/cli/index.js` (`memoryImport`, `memoryDoctorCmd`),
-`src/core/memory/working-context.js`, `aspec/specs/memory-engine/spec.md`.
+El refresh es **compare-based** y reusa la conexión abierta: reescribe
+`.ancleto/working-context.md` solo si el bloque renderizado difiere del contenido en disco
+(normalización CRLF/espacios/salto final). En `import`, si falla, la importación igual se
+considera exitosa y el fallo se reporta por stderr.
+
+Evidencia: `src/cli/index.js` (`memoryImport`, `memorySnapshot`, `memoryMerge`,
+`memoryDoctorCmd`, `requiredMemoryFlag`), `src/core/memory/snapshot.js`,
+`src/core/memory/working-context.js`, `aspec/specs/memory-ops/spec.md`.
 
 ## Modelo único de destinos por host (`AGENT_TARGETS`)
 
@@ -225,9 +239,9 @@ reimplementan formato, comparación o resolución de rutas git.
   `sin cambios` y el estado de la exclusión.
 - **Detección** (`detectMachineFacts`): plataforma, `osRelease`, `arch`, shell + `shell_source`,
   EOL + `eol_source`, disponibilidad de `rg`/`node`/`npm`/`git`/`python` y versión de ancleo. La
-  disponibilidad de una herramienta exige ser **resoluble en `PATH` Y invocable** (no basta la
-  presencia en `PATH`); la sonda usa una bandera de versión barata y **nunca** renderiza la
-  versión observada ni su salida. No renderiza `PATH` ni secretos.
+  disponibilidad de una herramienta exige ser **resoluble en `PATH` Y invocable**; la sonda usa
+  una bandera de versión barata y **nunca** renderiza la versión observada ni su salida. No
+  renderiza `PATH` ni secretos.
 - **Sonda de invocabilidad**: `findExecutables` resuelve el candidato en `PATH` (en `win32`,
   extensiones de `PATHEXT` antes que el nombre exacto); `spawnProbe` lo **ejecuta** con
   `--version` y `probeExecutable` emite el veredicto. Presupuestos: `TOOL_PROBE_TIMEOUT_MS = 2000`
@@ -236,12 +250,12 @@ reimplementan formato, comparación o resolución de rutas git.
   `process.env.ComSpec` (`/d /s /c` + `windowsVerbatimArguments`) porque `spawnSync` directo
   devuelve `EINVAL` (guarda de Node, CVE-2024-27980); esa guarda es **inconclusa**, no
   `bloqueado`, y tampoco lo es un candidato que se abandona por presupuesto agotado. El
-  veredicto `blocked` (error de arranque, salida ≠ 0 o timeout) publica el fallo saneado como
-  sufijo aditivo `- <tool>: no disponible — fallback: <X> — bloqueado: <fallo saneado>`; el
-  texto viene de la primera línea de `stderr` o del error de arranque, sin ANSI/OSC ni
-  caracteres de control, con espacios colapsados y tope de 200 caracteres (`FAILURE_TEXT_MAX`).
-  Un veredicto inconcluso no lleva sufijo. La versión observada nunca se renderiza.
-  Evidencia: `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`,
+  veredicto `blocked` publica el fallo saneado como sufijo aditivo
+  `- <tool>: no disponible — fallback: <X> — bloqueado: <fallo saneado>`; el texto viene de la
+  primera línea de `stderr` o del error de arranque, sin ANSI/OSC ni caracteres de control, con
+  espacios colapsados y tope de 200 caracteres (`FAILURE_TEXT_MAX`). Un veredicto inconcluso no
+  lleva sufijo. La versión observada nunca se renderiza. Evidencia:
+  `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`,
   `test/machine-env.test.js`.
 - **Shell**: en Windows prioriza MSYS/Cygwin (`MSYSTEM`/`CYGWIN`) → `bash`; `PSModulePath` con
   PowerShell 7 → `PowerShell 7`; `PROMPT` → `cmd`; `SHELL` POSIX + legacy → `unknown`; `SHELL`
@@ -384,8 +398,11 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 - **`ancleto affected` es read-only**: no escribe nada; delega el grafo de imports en
   `src/core/affected-set.js` y reporta `affected`/`unresolved`/`externalCount`.
 - **`ancleto stats failures` es read-only**: no escribe la base de opencode; solo consulta.
-- **Refresh on-write CLI y staleness advisory son best-effort** (no rompen el flujo):
+- **`memory snapshot` no modifica la fuente** y **`memory doctor` no muta por defecto**;
+  `--rebuild` es el único camino de escritura del doctor.
+- **Refresh on-write CLI y staleness advisory son best-effort**:
   - `memoryImport` envuelve el refresh en `try/catch` y reporta el fallo por stderr sin abortar.
+  - `memoryMerge` no revierte el merge si falla el refresh: sale ≠ 0 informando el estado real.
   - `memoryDoctorCmd` emite el staleness como **línea advisory** sin alterar el exit code.
 - **`machine-env` es best-effort**: un fallo de generación o de exclusión se reporta como
   warning y no aborta el lifecycle; el artefacto ya escrito se conserva.
@@ -400,17 +417,19 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `refreshMachineEnv`, `memoryImport` (con refresh on-write), `memoryDoctorCmd` (con advisory), `memoryExport`/`memoryGc`, `affectedCommand`, `statsFailuresCommand`. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `refreshMachineEnv`, `memoryImport`, `memorySnapshot`, `memoryMerge`, `memoryDoctorCmd`, `memoryExport`/`memoryGc`, `affectedCommand`, `statsFailuresCommand`. |
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`; dueño único de la transformación. |
 | `src/core/machine-env.js` | Exporta `machineEnvPath`, `detectMachineFacts`, `renderMachineEnv`, `writeMachineEnv`, `ensureMachineEnvExclusion`, `materializeMachineEnv`, `checkMachineEnvTracked` y la constante `TOOL_PROBE_TIMEOUT_MS`; la sonda de invocabilidad es **interna** (`findExecutables`, `spawnProbe`, `probeExecutable`, `isBatchShim`, `comspecCommand`, `firstLine`, `fallbackFor`). Dueño único del entorno local. |
+| `src/core/memory/snapshot.js` | `snapshotDatabase`; dueño único de la copia binaria consistente. |
 | `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext` (MCP), `refreshWorkingContextOnWrite` (CLI, compare-based), `checkWorkingContextFreshness`, `normalizeBlock`, `readWorkingContextFile`, `resolveMemoryProjectRoot` (día-cero). |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED (incl. `validation-commands`)/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable; en agents el frontmatter se adapta por host, en skills se copia. |
-| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js` | Guardas del CLI, del adaptador, de contenido, del working-context, del entorno de máquina y del reporte de fallos. |
-| `README.md`, `BACKLOG.md`, `agents/orchestrator.md` | Contrato operativo, backlog y sección de entorno de máquina. |
+| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js` | Guardas del CLI, del adaptador, de contenido, del working-context, del entorno de máquina, del reporte de fallos y del contrato de PR-1. |
+| `README.md`, `agents/orchestrator.md` | Contrato operativo y sección de entorno de máquina. |
 | `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/` | Change archivado con proposal, design, tasks y delta spec. |
 | `aspec/changes/archive/2026-10-25-machine-environment-block/` | Change archivado del entorno de máquina. |
 | `aspec/changes/archive/2026-10-25-session-failure-report/` | Change archivado del reporte de fallos. |
-| `aspec/changes/archive/2026-10-26-orchestrator-session-start/` | Change archivado del intake de sesión, el techo de lecturas acotado y el aviso de overflow accionable. |
+| `aspec/changes/archive/2026-10-26-orchestrator-session-start/` | Change archivado del intake de sesión, el techo de lecturas y el aviso de overflow accionable. |
+| `aspec/changes/archive/2026-10-28-reingenieria-memoria-first/` | Change archivado de PR-1: snapshot, doctor read-only y merge. |
 | `agents/technical-discovery.md` | Allowlist de `bash` de dos literales (`ancleto discovery --check`, `git status --short`) sobre `'*': deny`. |

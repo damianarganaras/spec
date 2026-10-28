@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-10-26T19:42:38Z
-pluginVersion: 0.15.2
+generatedAt: 2026-10-28T20:24:06Z
+pluginVersion: 0.15.3
 skillVersion: '2.3'
 ---
 
@@ -15,7 +15,7 @@ skillVersion: '2.3'
 |---|---|---|
 | Node.js ≥ 24.0.0 | Obligatorio: el motor de memoria usa el módulo nativo `node:sqlite`. | `package.json` (`engines.node`), `README.md` |
 | Repomix | Opcional: se resuelve por `PATH` o vía `npx -y repomix@1.18.0`. | `src/cli/index.js`, pack |
-| Git | Necesario para el ciclo de changes, el workflow de publish, la exclusión local de `.ancleto/machine-env.md` y el `git status --short` que el intake del orquestador delega a `@technical-discovery`. Si falta, el CLI degrada con warning. | `BACKLOG.md`, `.github/workflows/publish.yml`, `src/core/machine-env.js`, `agents/orchestrator.md` |
+| Git | Necesario para el ciclo de changes, el workflow de publish, la exclusión local de `.ancleto/machine-env.md` y el `git status --short` que el intake del orquestador delega a `@technical-discovery`. Si falta, el CLI degrada con warning. | `.github/workflows/publish.yml`, `src/core/machine-env.js`, `agents/orchestrator.md` |
 
 ## Instalación y CLI
 
@@ -34,10 +34,12 @@ ancleto affected [--cwd <dir>] [--json] <archivo...>   # affected-set read-only 
 ancleto mcp                       # servidor MCP stdio de memoria propia
 ancleto memory context [--scope X] [--out <archivo>]
 ancleto memory list [--type X] [--scope X] [--all] [--json]
-ancleto memory doctor [--rebuild]   # integridad + línea advisory de frescura del working-context
-ancleto memory export [--out <archivo>]   # nodos activos a JSON (stdout o archivo)
-ancleto memory import <archivo>           # upsert por memory_key, idempotente; refresca el working-context (compare-based) si alteró el bloque
-ancleto memory gc [--dry-run] [--days N]  # purga superseded con antigüedad > N días (default 30)
+ancleto memory doctor [--rebuild]   # integridad read-only + advisory de frescura del working-context
+ancleto memory export [--out <archivo>]        # nodos activos a JSON (stdout o archivo)
+ancleto memory import <archivo>                # upsert por memory_key, idempotente; refresca el working-context
+ancleto memory gc [--dry-run] [--days N]       # purga superseded con antigüedad > N días (default 30)
+ancleto memory snapshot --out <archivo.db> [--force] [--json]   # copia consistente con historial
+ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]   # supersede sources hacia el target
 ancleto specs check [--change <name>] [--json]
 ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
 ancleto stats failures [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--class <env|check|tool|unknown,...>] [--tool <t,...>] [--json]
@@ -45,7 +47,8 @@ ancleto projects list|scan <raiz>|prune|info|update [--all] [--json]
 ancleto check | doctor
 ```
 
-Evidencia: `src/cli/index.js`, `README.md`, `aspec/specs/session-failure-report/spec.md`.
+Evidencia: `src/cli/index.js` (texto de `--help` incluido), `README.md`,
+`aspec/specs/memory-ops/spec.md`, `aspec/specs/session-failure-report/spec.md`.
 `install` sin `--project`/`--global` opera sobre el proyecto actual si hay `.ancletorc`;
 `--global` fuerza el alcance global. `init` configura el MCP del host por defecto; `--no-mcp`
 lo evita. `--agent` acepta 8 hosts (`opencode` default, `claude`, `vscode`, `antigravity`,
@@ -53,6 +56,15 @@ lo evita. `--agent` acepta 8 hosts (`opencode` default, `claude`, `vscode`, `ant
 `affected-set` por stdout, los inconclusos por stderr y omite la línea de externos cuando el
 conteo es 0 (`externalCount` sigue en `--json`). `stats failures` también es **read-only** y
 solo funciona con la base de sesiones de opencode.
+
+**Ops nuevas de memoria** (PR-1, archivado `2026-10-28-reingenieria-memoria-first`):
+`memory snapshot` exige `--out` y rechaza sobrescribir sin `--force`; produce una copia con
+historial (`superseded` + `superseded_by`) y no modifica la fuente. `memory merge` requiere
+`--target` y `--sources` (lista separada por comas); valida target activo, sources activas,
+sin repetidas y con el mismo `type`, y aplica todo en una única transacción (`--dry-run` no
+escribe la base ni el working-context). Evidencia: `src/cli/index.js`
+(`memorySnapshot`, `memoryMerge`), `src/core/memory/snapshot.js`,
+`src/core/memory/engine.js` (`validateMerge`, `merge`).
 
 ## Configuración persistida
 
@@ -68,9 +80,10 @@ solo funciona con la base de sesiones de opencode.
   (planning/generation/healing/coverage), comandos `cleto-test-*`, estructura `testspec/` y
   bloque LOCKED de convenciones Playwright; instalable con cualquier host.
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
-  En este checkout `.opencode/.ancleto-tier` contiene **`gratis`**, por lo que el tier resuelto
-  es `gratis` (budget 50k; el pack real de esta corrida quedó en ~15.149 tokens). El tier decide
-  modelos de los agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
+  En este checkout `.opencode/.ancleto-tier` contiene **`minimo`**, por lo que el tier resuelto
+  es `minimo` (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, **sin token budget**; el
+  pack real de esta corrida quedó en 689 archivos / ~16.512 tokens). El tier decide modelos de
+  los agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
   `.opencode/.ancleto-tier`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`,
@@ -81,13 +94,14 @@ solo funciona con la base de sesiones de opencode.
   `.opencode/opencode.json` (ver `integrations.md`).
 - **`AGENTS.md` y bloques `LOCKED`**: `install`/`update`/`upgrade` re-aplican el interior de
   los bloques `<!-- LOCKED: name -->` y preservan el resto (EXTENSIBLE), tras reconciliar
-  superficies planas legadas. Bloques canónicos actuales: **`validation-commands`** (política
-  declarativa de validaciones), `memory-boundary`, `artifacts-language` y `seed-freshness`,
-  más `test-block`. Evidencia: `src/cli/index.js` (`mergeTemplateInto`, `mergeLocked`,
-  `reconcileLegacyBlocks`), `templates/AGENTS.md`, `AGENTS.md`.
+  superficies planas legadas. Bloques canónicos actuales: **`validation-commands`**,
+  `memory-boundary`, `artifacts-language` y `seed-freshness`, más `test-block`. Evidencia:
+  `src/cli/index.js` (`mergeTemplateInto`, `mergeLocked`, `reconcileLegacyBlocks`),
+  `templates/AGENTS.md`, `AGENTS.md`.
 - **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`) y **entorno de máquina**
   (`machine-env.md`); ignorado por git en este repo. `machine-env.md` no se versiona y no se
-  edita a mano.
+  edita a mano. `.ancleto/memory.db` es la fuente que consumen `memory snapshot` y
+  `memory merge`; el snapshot es la copia que se usa para rollback/auditoría.
 - **`machine-env.md`**: artefacto derivado y local. Se genera/regenera en `ancleto init`,
   `ancleto install --project` y `ancleto upgrade`; si los hechos no cambian, no se reescribe
   (se ignora `generated_at` en la comparación). La exclusión se escribe en
@@ -132,13 +146,12 @@ por presupuesto agotado también. Un fallo real se publica como sufijo aditivo
 inconcluso no lleva sufijo. La versión observada nunca se renderiza. Evidencia:
 `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
 
-**Estado en este checkout**: el artefacto **existe** (generado el 2026-10-26 por
-`ancleto upgrade`): `win32` / `10.0.26200` / `x64`, shell `Windows PowerShell 5.1`
-(`shell_source: PSModulePath`), EOL `lf` (`eol_source: gitattributes`), `rg` **no disponible**
-(fallback: `Select-String`), `node`/`npm`/`git`/`python` **disponibles** —resolubles **e
-invocables** según la sonda; el artefacto declara disponibilidad, no versión—. La exclusión
-local está escrita en `info/exclude`. Evidencia: `.ancleto/machine-env.md`,
-`BACKLOG.md` (ítem 10, "Activación: 2026-10-26").
+**Estado en este checkout**: el artefacto **existe** (generado el 2026-10-27): `win32` /
+`10.0.26200` / `x64`, shell `Windows PowerShell 5.1` (`shell_source: PSModulePath`), EOL `lf`
+(`eol_source: gitattributes`), `rg` **no disponible** (fallback: `Select-String`),
+`node`/`npm`/`git`/`python` **disponibles** —resolubles **e invocables** según la sonda; el
+artefacto declara disponibilidad, no versión—, `ancleto: 0.15.3`. La exclusión local está
+escrita en `info/exclude`. Evidencia: `.ancleto/machine-env.md`.
 
 ## Permisos de shell por agente
 
@@ -156,13 +169,14 @@ Evidencia: `agents/*.md`, `agents/technical-discovery.md`, `aspec/specs/prompt-c
 
 | Tier | Modelos y empaquetado |
 |---|---|
-| `normal` | Modelos balanceados (`qwen3.7-plus`, `minimax-m3`, etc.), pack sin comprimir ni ignores extra. |
-| `minimo` | Un único modelo `opencode-go/deepseek-v4.1-flash` para los 10 agents; pack comprimido (`--compress`) y excluye `test/**`, `docs/**`, `**/*.md`. |
-| `gratis` | Muse Spark 1.3 Free si está habilitado en la cuenta; fallback `opencode/big-pickle`; token budget estricto (50k). Mismos ignores que `minimo`. **Tier resuelto en este checkout.** |
+| `normal` | Modelos balanceados (`qwen3.7-plus`, `minimax-m3`, etc.), pack sin comprimir ni ignores extra, sin token budget. |
+| `minimo` | Un único modelo `opencode-go/deepseek-v4.1-flash` para los 10 agents; pack comprimido (`--compress`), excluye `test/**`, `docs/**`, `**/*.md` y **no fija token budget**. **Tier resuelto en este checkout.** |
+| `gratis` | Muse Spark 1.3 Free si está habilitado en la cuenta; fallback `opencode/big-pickle`; mismo empaquetado que `minimo` + token budget estricto (50k). |
 
-Evidencia: `src/core/tier-models.js`, `src/core/repomix-tier.js`, `README.md`.
+Evidencia: `src/core/tier-models.js`, `src/core/repomix-tier.js` (`TIER_PACK_CONFIG`),
+`README.md`.
 Nota: `readProjectTier` cae en `gratis` **por default** cuando no existe `.ancleto-tier`; aquí
-existe `.opencode/.ancleto-tier` con `gratis`.
+existe `.opencode/.ancleto-tier` con `minimo`.
 
 ## Variables de entorno
 
@@ -195,14 +209,14 @@ El contrato es **declarativo** (change archivado `2026-10-14-contrato-validacion
   mantiene la regla genérica de template "TypeScript strict" en "Guardrails & Conventions").
 - **Tests acotados**: para validar un subconjunto, pasar **rutas explícitas** al archivo
   relevante; **nunca** `node --test` sin acotar (descubre archivos fuera de la suite declarada).
-- **Suite**: 13 archivos (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`,
-  `discovery-tier`, `discovery-topology`, `linter-config`, **`machine-env`**, `mcp`,
-  `memory-engine`, **`stats-failures`**, `tier-models`, `working-context`). `content-guards`
-  asierta **behavior** (keywords y salvaguardas), no la redacción literal; incluye el bloque
-  "intake de sesion, techo de lecturas y recall accionable" y el assert del aviso de overflow
-  en `memory-engine`. La cifra en verde **no se re-ejecutó** en esta regeneración (la
-  validación del seed es state-only). Evidencia: `test/`,
-  `aspec/specs/machine-environment/spec.md`,
+- **Suite**: 15 archivos (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`,
+  `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`,
+  `memory-engine`, **`memory-fixtures`**, **`memory-pr1-contract`**, `stats-failures`,
+  `tier-models`, `working-context`), con fixtures en `test/fixtures/` (`seed.json` en formato
+  `exportActive()`, `golden.json` M01–M10). `content-guards` asierta **behavior** (keywords y
+  salvaguardas), no la redacción literal. La cifra en verde **no se re-ejecutó** en esta
+  regeneración (la validación del seed es state-only). Evidencia: `test/`,
+  `aspec/specs/memory-ops/spec.md`, `aspec/specs/machine-environment/spec.md`,
   `aspec/specs/session-failure-report/spec.md`.
 - **CI**: `.github/workflows/publish.yml` corre `npm ci` + `npm run lint` + `node --test
   test/*.test.js` y publica a npm al pushear un tag `v*` (o `workflow_dispatch`), con canary
@@ -211,14 +225,14 @@ El contrato es **declarativo** (change archivado `2026-10-14-contrato-validacion
 
 ## Convenciones de trabajo
 
-- Conventional Commits (`feat(scope):`, `fix(scope):`, ...); no commitear a `main`/`master`
-  (protección honor-based, ver `BACKLOG.md` B3). Evidencia: `AGENTS.md`.
-- Fuente de verdad: rama `development`; cada commit de feature lleva su version bump antes de
-  pushear. Evidencia: `AGENTS.md`, `BACKLOG.md`.
+- Conventional Commits (`feat(scope):`, `fix(scope):`, ...) y **no** commitear a `main`/`master`
+  (declarado en `AGENTS.md`; no se verificó protección real en el remoto). Evidencia:
+  `AGENTS.md`.
+- Rama de trabajo observada: `development`; el publish se dispara por tag y crea el Release.
+  Evidencia: `git status --short --branch`, `.github/workflows/publish.yml`.
 - Idioma de artifacts: español (`language: "es"` en el repo dogfooded); keywords y nombres de
   archivo siempre en inglés literal (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`).
   Única fuente canónica del texto: `LOCKED: artifacts-language` en `AGENTS.md`; las skills y
   agentes la referencian. Evidencia: `AGENTS.md`, `templates/AGENTS.md`.
 - Los mirrors `.opencode/agents/*.md` y `.opencode/commands/*.md` se **regeneran** con
-  `ancleto upgrade`; nunca se editan a mano. Evidencia: `agents/orchestrator.md`,
-  `aspec/changes/archive/2026-10-26-orchestrator-session-start/proposal.md`.
+  `ancleto upgrade`; nunca se editan a mano. Evidencia: `agents/orchestrator.md`.

@@ -69,7 +69,7 @@ Demo explore mode: read involved files, sketch diagrams. **PAUSE** for acknowled
 ## Phase 5: Proposal
 
 **EXPLAIN:** the proposal captures **why** and **what**.
-**DO:** draft (Why / What Changes / Capabilities / Impact), show it, **PAUSE** for approval, write `aspec/changes/<name>/proposal.md`.
+**DO:** draft (Why / What Changes / Capabilities / Impact), show it, **PAUSE** for approval, write `aspec/changes/<name>/proposal.md` including `## Decisiones` — one entry per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`, or the single-line form `decisión | alternativa descartada | por qué | fuente/evidencia`; follow the shape defined by `@spec-writer`.
 
 ## Phase 6: Specs
 

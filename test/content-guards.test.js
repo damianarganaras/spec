@@ -1560,3 +1560,400 @@ describe('content guards - intake de sesion, techo de lecturas y recall accionab
     assert.match(t, /return its output unchanged/)
   })
 })
+
+describe('contrato del change: ## Decisiones y checkpoint de contrato (CH-02a)', () => {
+  // El lector de skills sigue el patron del archivo: join(ROOT, 'skills', <name>, 'SKILL.md').
+  const readSkill = (name) => readFileSync(join(ROOT, 'skills', name, 'SKILL.md'), 'utf8')
+
+  const DECISION_FIELDS = ['memory_key', 'Elección', 'Descartado', 'Justificación', 'Refs', 'Estado']
+  const ONE_LINE_FORM = 'decisión | alternativa descartada | por qué | fuente/evidencia'
+  // Firma del parrafo de definicion: vive solo en la superficie canonica (agents/spec-writer.md).
+  // Aqui se usa en negativo: ningun skill puede duplicar esa redaccion normativa.
+  const CANONICAL_DEFINITION_SIGNATURE =
+    'one block per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`; a single line `decisión | alternativa descartada | por qué | fuente/evidencia` is equivalent'
+
+  // Predicado unico de T01 y de la mutacion A: cada generador emite `## Decisiones`, los
+  // seis campos y la forma de una linea. La semantica completa vive en spec-writer.
+  function guardProposalGenerator(t, label) {
+    assert.match(t, /## Decisiones/, `${label} debe emitir ## Decisiones en el proposal`)
+    for (const field of DECISION_FIELDS) {
+      assert.ok(t.includes(field), `${label} debe declarar ${field}`)
+    }
+    assert.ok(t.includes(ONE_LINE_FORM), `${label} debe declarar la forma de una línea`)
+  }
+
+  // Ningun skill duplica el texto normativo cuyo dueno es `## Decisions Section`.
+  function noCanonicalDecisionDuplication(t, label) {
+    assert.ok(
+      !t.includes(CANONICAL_DEFINITION_SIGNATURE),
+      `${label} no debe duplicar el párrafo de definición de @spec-writer`
+    )
+  }
+
+  // 4a acotado: mover la seccion a design.md (4b) debe romper el guard.
+  const proposalStep4a = (text) => normalize(section(text, '**4a. `proposal.md`**', '**4b.'))
+  const continueProposalBullet = (text) =>
+    normalize(section(text, '- **proposal.md** (first):', '\n- '))
+  const newProposalTemplate = (text) =>
+    normalize(section(text, 'Present the `proposal.md` template:', '\n\n'))
+  const onboardProposalDo = (text) =>
+    normalize(section(text, '**DO:** draft (Why / What Changes / Capabilities / Impact)', '\n'))
+  function upgradeProposalSlice(text) {
+    // La seccion termina en el cierre del fence del template, no en el `## Context` interno.
+    const start = text.indexOf('\n## proposal.md')
+    assert.ok(start >= 0, 'falta ## proposal.md en templates.md')
+    const open = text.indexOf('```markdown', start)
+    assert.ok(open >= 0, 'falta el fence del template del proposal')
+    const close = text.indexOf('\n```', open + 1)
+    assert.ok(close >= 0, 'falta el cierre del fence del template del proposal')
+    return normalize(text.slice(start + 1, close + '\n```'.length))
+  }
+  function ffProposalItem(text) {
+    const step = section(text, '### 4. Create all artifacts in dependency order', '\n### ')
+    const start = step.indexOf('1. **`proposal.md`**')
+    assert.ok(start >= 0, 'ancleto-ff debe mantener el proposal como ítem 1 del paso de artifacts')
+    const end = step.indexOf('\n2. ', start)
+    return normalize(step.slice(start, end === -1 ? undefined : end))
+  }
+
+  const specWriterDecisions = (text) => deBold(normalize(section(text, '## Decisions Section')))
+  function guardSpecWriterDecisions(t) {
+    assert.match(t, /## Decisiones/, 'spec-writer debe emitir `## Decisiones` en el proposal')
+    for (const field of DECISION_FIELDS) {
+      assert.ok(t.includes(field), `## Decisions Section debe declarar ${field}`)
+    }
+    assert.ok(t.includes(ONE_LINE_FORM), '## Decisions Section debe declarar la forma de una línea')
+    assert.match(t, /Both forms are equivalent/, 'el shape debe declarar la equivalencia semántica entre formas')
+    assert.match(
+      t,
+      /must not require the six-field block when the one-line form carries the same content/,
+      'un lector no puede exigir el bloque de seis campos si la línea ya trae el contenido'
+    )
+    for (const state of ['propuesto', 'aprobado', 'enmendado', 'descartado']) {
+      assert.ok(t.includes(state), `## Decisions Section debe declarar el estado ${state}`)
+    }
+    assert.match(
+      t,
+      /appended with its discarded alternative and its evidence/,
+      'la decisión que nace durante la implementación se apendea con su alternativa descartada y su evidencia'
+    )
+    assert.match(
+      t,
+      /a trivial implementation detail is not a decision/i,
+      '## Decisions Section debe excluir el detalle de implementación trivial como decisión'
+    )
+  }
+
+  const readGeneratorFile = (label) => readFileSync(join(ROOT, label), 'utf8')
+
+  // Slice propio de cada generador del proposal (spec-writer + 6 archivos de skill).
+  const PROPOSAL_SLICERS = {
+    'agents/spec-writer.md': specWriterDecisions,
+    'skills/ancleto-propose/SKILL.md': proposalStep4a,
+    'skills/ancleto-ff/SKILL.md': ffProposalItem,
+    'skills/ancleto-continue/SKILL.md': continueProposalBullet,
+    'skills/ancleto-new/SKILL.md': newProposalTemplate,
+    'skills/ancleto-onboard/SKILL.md': onboardProposalDo,
+    'skills/ancleto-upgrade/references/templates.md': upgradeProposalSlice
+  }
+
+  const proposalFiles = () =>
+    Object.fromEntries(Object.keys(PROPOSAL_SLICERS).map((label) => [label, readGeneratorFile(label)]))
+
+  // Guard de T01: el slice acota los keywords de comportamiento; la no-duplicacion corre
+  // sobre el texto completo del archivo para que una skill no esconda la firma fuera del bullet.
+  function guardProposalGenerators(files) {
+    for (const [label, slice] of Object.entries(PROPOSAL_SLICERS)) {
+      guardProposalGenerator(slice(files[label]), label)
+      if (label !== 'agents/spec-writer.md') {
+        noCanonicalDecisionDuplication(normalize(files[label]), label)
+      }
+    }
+  }
+
+  const contractCheckpoint = (text) => normalize(section(text, '### Contract Checkpoint', '\n### '))
+
+  // Una decision interna se apendea sin nueva aprobacion y la escribe el dueno del artifact.
+  function decisionAppendedWithoutApproval(text) {
+    const cc = contractCheckpoint(text)
+    assert.match(
+      cc,
+      /appended to `proposal ## Decisiones` without a new approval/,
+      'la decisión interna se apendea sin nueva aprobación'
+    )
+    assert.match(
+      cc,
+      /delegates the append to `@spec-writer`, the artifact owner/,
+      'la append la delega el orquestador a @spec-writer'
+    )
+  }
+
+  // Cambiar alcance, riesgo o arquitectura exige contrato enmendado + aprobacion nueva.
+  function amendmentOnContractChange(text) {
+    const cc = contractCheckpoint(text)
+    assert.match(
+      cc,
+      /If scope, risk, or the architecture decision changes after approval, present the contract as an amendment and wait for a new explicit approval before continuing/,
+      'un cambio de contrato exige presentar la enmienda y esperar aprobación explícita nueva'
+    )
+  }
+
+  // Path C y Path B no ganan checkpoints; el checkpoint de contrato no gatea lo trivial.
+  function directPathsHaveNoExtraCheckpoint(text) {
+    const pathC = normalize(section(text, '### Path C: Direct-Test-Only Changes'))
+    assert.doesNotMatch(pathC, /CHECKPOINT|🛑/, 'Path C no agrega ningún checkpoint')
+
+    const pathB = normalize(section(text, '### Path B: Direct-Implementation Changes', '\n### '))
+    assert.equal(
+      (pathB.match(/🛑 REQUIRED USER CONFIRMATION/g) || []).length,
+      1,
+      'Path B conserva un único REQUIRED USER CONFIRMATION'
+    )
+    assert.doesNotMatch(pathB, /CONTRACT CHECKPOINT/, 'Path B no recibe el checkpoint del contrato')
+
+    assert.doesNotMatch(
+      contractCheckpoint(text),
+      /trivial/i,
+      'el checkpoint del contrato no agrega un gate para cambios triviales'
+    )
+  }
+
+  // El checkpoint vive como hermano de las rutas: H3, sin absorber Path A/B/C.
+  function checkpointIsSiblingOfPaths(text) {
+    const start = text.indexOf('\n### Contract Checkpoint')
+    assert.ok(start >= 0, 'debe existir ### Contract Checkpoint como hermano de las rutas')
+    const checkpoint = contractCheckpoint(text)
+
+    assert.doesNotMatch(text, /\n## Contract Checkpoint/, 'el checkpoint no puede ser un heading H2')
+
+    const body = deBold(checkpoint)
+    for (const label of [
+      'Intention',
+      'Scope',
+      'Requirement',
+      'Risks',
+      'Architecture decision',
+      'Planned validation',
+      'Authorized paths'
+    ]) {
+      assert.ok(body.includes(label), `la presentación del contrato debe declarar ${label}`)
+    }
+
+    assert.doesNotMatch(checkpoint, /### Path [ABC]/, 'el slice no debe absorber las rutas')
+    assert.ok(text.includes('\n### Path A: Spec-Required Changes'), '### Path A debe seguir existiendo como heading propio')
+  }
+
+  // Predicado del stop de archive: vive en Path A y no dentro del checkpoint de contrato.
+  // Comparar dos literales distintos con notEqual no podia fallar nunca; esto si mata la mutacion.
+  function archiveStopSeparateFromContract(text) {
+    const cp = contractCheckpoint(text)
+    assert.doesNotMatch(
+      cp,
+      /🛑 FINAL ARCHIVE CHECKPOINT/,
+      'el checkpoint de contrato no puede contener el stop de archive'
+    )
+    const pathA = normalize(section(text, '### Path A: Spec-Required Changes', '\n### '))
+    assert.match(
+      pathA,
+      /🛑 FINAL ARCHIVE CHECKPOINT/,
+      'el stop de archive vive en Path A, separado del checkpoint de contrato'
+    )
+  }
+
+  // Predicado unico del test 6 y de la mutacion B: el checkpoint presenta el contrato y
+  // nunca enumera documentos ni pide su aprobacion.
+  function contractCheckpointPresentsContract(text) {
+    const t = contractCheckpoint(text)
+    const start = t.indexOf('The presentation must fit')
+    assert.ok(start >= 0, 'el checkpoint debe declarar que la presentación entra en menos de una pantalla')
+    const end = t.indexOf('Then wait for explicit approval', start)
+    assert.ok(end > start, 'el checkpoint debe esperar aprobación explícita después de la presentación')
+    const presentation = t.slice(start, end)
+    assert.doesNotMatch(
+      presentation,
+      /proposal\.md|design\.md|tasks\.md|specs\//,
+      'el objeto de la presentación no enumera documentos generados'
+    )
+    assert.match(
+      t,
+      /never condition this stop on the existence of `design\.md`/,
+      'el checkpoint no se condiciona a la existencia de design.md'
+    )
+    assert.match(
+      t,
+      /it does not authorize archive and it does not authorize merge, which stay as separate stops/,
+      'archive y merge quedan separados de la aprobación del contrato'
+    )
+    assert.doesNotMatch(
+      t,
+      /approval of the (?:generated )?(?:documents|artifacts)/i,
+      'el checkpoint no puede volver a pedir la aprobación de documentos'
+    )
+  }
+
+  it('T01 · los generadores emiten ## Decisiones sin duplicar la definición canónica y conservan el delta', () => {
+    // Itera los generadores del proposal: cada iteracion nombra el archivo que incumple.
+    guardProposalGenerators(proposalFiles())
+    // spec-writer ademas declara la equivalencia semántica, los estados y la regla trivial.
+    guardSpecWriterDecisions(specWriterDecisions(readGeneratorFile('agents/spec-writer.md')))
+    // El delta no desaparece: los templates siguen generando specs/<capability>/spec.md.
+    for (const name of ['ancleto-propose', 'ancleto-ff']) {
+      assert.ok(
+        readSkill(name).includes('specs/<capability>/spec.md'),
+        `${name} debe seguir generando el delta spec`
+      )
+    }
+  })
+
+  it('PR-2 no adelanta PR-4: los generadores siguen emitiendo design.md', () => {
+    // La asercion de no-generacion de design.md es de PR-4: en PR-2 los generadores
+    // tienen que seguir mencionandolo para no adelantar la eliminacion.
+    for (const [name, text] of [
+      ['agents/spec-writer.md', readAgent('spec-writer')],
+      ['skills/ancleto-propose/SKILL.md', readSkill('ancleto-propose')],
+      ['skills/ancleto-ff/SKILL.md', readSkill('ancleto-ff')]
+    ]) {
+      assert.match(text, /design\.md/, `${name} debe seguir mencionando design.md hasta PR-4`)
+    }
+  })
+
+  it('T05 · una decisión que nace durante la implementación la escribe el dueño del artifact', () => {
+    const sw = specWriterDecisions(readAgent('spec-writer'))
+    assert.match(sw, /completed also during implementation/, 'la sección se completa también durante la implementación')
+    assert.match(sw, /The artifact owner writes it/, 'la escribe el dueño del artifact')
+    assert.match(
+      sw,
+      /never the orchestrator \(no write\) and never the implementer/,
+      'ni el orquestador ni el implementador escriben la decisión'
+    )
+
+    assertMutationBreaks(decisionAppendedWithoutApproval, readAgent('orchestrator'), [
+      ['without a new approval', '']
+    ])
+  })
+
+  it('T22 · cambiar alcance, riesgo o arquitectura exige un contrato enmendado y aprobación nueva', () => {
+    assertMutationBreaks(amendmentOnContractChange, readAgent('orchestrator'), [
+      ['If scope, risk, or the architecture decision changes after approval', '']
+    ])
+  })
+
+  it('T12 · una tarea trivial no agrega aprobaciones extra y el checkpoint sigue siendo único', () => {
+    const orchestrator = readAgent('orchestrator')
+
+    const pathA = normalize(section(orchestrator, '### Path A: Spec-Required Changes', '\n### '))
+    assert.equal(
+      (pathA.match(/🛑 CONTRACT CHECKPOINT/g) || []).length,
+      1,
+      'Path A declara exactamente un contrato de checkpoint'
+    )
+
+    // Un checkpoint inyectado en Path C debe romper el guard.
+    assertMutationBreaks(directPathsHaveNoExtraCheckpoint, orchestrator, [
+      [
+        '3. **Review**: Delegate to **`@reviewer`** only when an independent review is useful',
+        '2. **🛑 CONTRACT CHECKPOINT**: extra stop\n3. **Review**: Delegate to **`@reviewer`** only when an independent review is useful'
+      ],
+      [
+        'Then wait for explicit approval.',
+        'This does not gate trivial changes. Then wait for explicit approval.'
+      ]
+    ])
+  })
+
+  it('T13 · un cambio crítico conserva los stops exigidos y el archive sigue separado del contrato', () => {
+    const orchestrator = readAgent('orchestrator')
+
+    const stops = normalize(section(orchestrator, '### MANDATORY STOPS'))
+    assert.match(
+      stops,
+      /\*\*MUST STOP\*\* after `@spec-writer` and wait for explicit approval of the change contract/,
+      'conserva el stop posterior a @spec-writer'
+    )
+    assert.match(
+      stops,
+      /\*\*MUST STOP\*\* if `@tester` reports failed verification/,
+      'conserva el stop por verificación fallida del @tester'
+    )
+    assert.match(
+      stops,
+      /\*\*MUST STOP\*\* if `@reviewer` reports critical issues \(including a `GUARANTEE NOT SUSTAINED` finding\)/,
+      'conserva el stop por hallazgos críticos del @reviewer'
+    )
+
+    const pathA = normalize(section(orchestrator, '### Path A: Spec-Required Changes', '\n### '))
+    assert.match(pathA, /🛑 CONTRACT CHECKPOINT/, 'Path A debe declarar el CONTRACT CHECKPOINT')
+    assertMutationBreaks(archiveStopSeparateFromContract, orchestrator, [
+      [
+        'the artifact owner.\n\n### Path A: Spec-Required Changes',
+        'the artifact owner.\n\n🛑 FINAL ARCHIVE CHECKPOINT\n\n### Path A: Spec-Required Changes'
+      ]
+    ])
+
+    const git = normalize(section(orchestrator, '### Git ownership', '\n### '))
+    assert.match(git, /Merge is permitted but authorized by process/, 'el merge sigue autorizado por proceso')
+    assert.match(
+      git,
+      /only after explicit user approval for that specific case/,
+      'el merge exige aprobación explícita del usuario para ese caso'
+    )
+  })
+
+  it('el checkpoint presenta el contrato y no enumera documentos', () => {
+    contractCheckpointPresentsContract(readAgent('orchestrator'))
+  })
+
+  it('el checkpoint del contrato es hermano de las rutas, no su contenedor', () => {
+    assertMutationBreaks(checkpointIsSiblingOfPaths, readAgent('orchestrator'), [
+      ['### Contract Checkpoint', '## Contract Checkpoint']
+    ])
+  })
+
+  it('mutación A · sin ## Decisiones el guard del proposal falla', () => {
+    // Cada generador de skill se muta con su propio slicer: el predicado es el mismo de T01.
+    for (const [rel, slice] of Object.entries(PROPOSAL_SLICERS)) {
+      if (rel === 'agents/spec-writer.md') continue
+      assertMutationBreaks(
+        (text) => guardProposalGenerator(slice(text), rel),
+        readGeneratorFile(rel),
+        [['## Decisiones', '']]
+      )
+    }
+
+    assertMutationBreaks(
+      guardSpecWriterDecisions,
+      specWriterDecisions(readAgent('spec-writer')),
+      [
+        ['## Decisiones', ''],
+        ['Both forms are equivalent', ''],
+        ['A trivial implementation detail is not a decision', '']
+      ]
+    )
+  })
+
+  it('mutación C · la firma duplicada fuera del slice también rompe la no-duplicación', () => {
+    const rel = 'skills/ancleto-propose/SKILL.md'
+    const files = proposalFiles()
+    assertMutationBreaks(
+      (fileText) => guardProposalGenerators({ ...files, [rel]: fileText }),
+      files[rel],
+      [['## Guardrails', `## Guardrails ${CANONICAL_DEFINITION_SIGNATURE}`]]
+    )
+    // Control positivo: la firma vive en la superficie canónica, así que el predicado distingue.
+    assert.ok(
+      normalize(readGeneratorFile('agents/spec-writer.md')).includes(CANONICAL_DEFINITION_SIGNATURE),
+      'la firma canónica debe existir en la superficie canónica'
+    )
+  })
+
+  it('mutación B · si el checkpoint vuelve a pedir documentos el guard falla', () => {
+    const orchestrator = readAgent('orchestrator')
+    assertMutationBreaks(contractCheckpointPresentsContract, orchestrator, [
+      [
+        'Then wait for explicit approval.',
+        'Wait for approval of the generated documents. Then wait for explicit approval.'
+      ],
+      ['- **Authorized paths** —', '- **Documents** — `proposal.md`\n- **Authorized paths** —']
+    ])
+  })
+})

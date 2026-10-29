@@ -45,7 +45,7 @@ Create `aspec/changes/<name>/` directly.
 
 Write each file directly, reading completed ones first:
 
-1. **`proposal.md`** — problem, proposed change, scope, risks. With Work Item context, use its title/description as the problem statement, acceptance criteria as the requirements basis, and include `## Related Work Item`: `**#{id}** — {title} ({type}) · Project: {project}`.
+1. **`proposal.md`** — problem, proposed change, scope, risks, and `## Decisiones` — one entry per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`, or the single-line form `decisión | alternativa descartada | por qué | fuente/evidencia`; the full shape lives in the Decisions section of `@spec-writer`. With Work Item context, use its title/description as the problem statement, acceptance criteria as the requirements basis, and include `## Related Work Item`: `**#{id}** — {title} ({type}) · Project: {project}`.
 2. **`specs/<capability>/spec.md`** — one file per capability touched, with `## ADDED Requirements` / `#### Scenario:` blocks in WHEN/THEN form. Skip only when the change specifies no behavior, and say why.
 3. **`design.md`** — approach, architecture, validation.
 4. **`tasks.md`** — phased `- [ ]` checklist of small, independently verifiable tasks.

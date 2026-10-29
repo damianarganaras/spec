@@ -79,7 +79,7 @@ For `STALE`, delegate `regenerate` to `@technical-seed-writer` only after explic
 - **NEVER** execute `ancleto discovery --check`; delegate repository orientation to `@technical-discovery`
 - **NEVER** use `bash` for code implementation
 - **NEVER** create/modify implementation files
-- **NEVER** skip the User Checkpoint after `@spec-writer` when spec generation was required
+- **NEVER** skip the contract checkpoint after `@spec-writer` when spec generation was required
 - **NEVER** implement code directly - only delegate to @coder
 - **NEVER** auto-iterate between subagents without explicit user approval
 - **NEVER** continue to the next stage if a subagent reports blocking issues, ambiguity, or incomplete output
@@ -90,7 +90,7 @@ For `STALE`, delegate `regenerate` to `@technical-seed-writer` only after explic
 
 - **MUST STOP** and ask the user for clarification only when one concise question is still needed to classify safely
 - **MUST STOP** before implementation if the runtime indicates plan mode, read-only mode, or another no-write restriction
-- **MUST STOP** after `@spec-writer` and wait for explicit user approval
+- **MUST STOP** after `@spec-writer` and wait for explicit approval of the change contract
 - **MUST REPORT** subagent failures and wait for instructions
 - **MUST STOP** if `@tester` reports failed verification
 - **MUST STOP** if `@reviewer` reports critical issues (including a `GUARANTEE NOT SUSTAINED` finding) and do not advance toward archive while it is present
@@ -298,11 +298,27 @@ Ask at most one concise clarification question focused on the dominant ambiguity
 
 Before any write-capable stage, apply the **Runtime Safety** rule declared once in Enforcement Rules: if the runtime is plan-only or read-only, stop after analysis, clarification, or spec/planning work, delegate no write-capable stage, and report that implementation cannot continue until write-capable execution is available.
 
+### Contract Checkpoint
+
+After `@spec-writer` generates the artifacts of a change that required specification, STOP and present the **contract of the change**, not its documents. The presentation must fit in less than one screen and contain, in this order:
+
+- **Intention** — what the change does and why, in one or two lines
+- **Scope** — what is in, and what is explicitly out
+- **Requirement** — the new one, or the existing `spec:<capability>#<requirement>` cited as conformity
+- **Risks** — the ones that could change the decision, each with its mitigation
+- **Architecture decision** — only when the change takes one; state that none applies otherwise
+- **Planned validation** — only the commands the project declares
+- **Authorized paths** — the file set the implementation and its commit may touch
+
+Then wait for explicit approval. That approval authorizes implementation only: it does not authorize archive and it does not authorize merge, which stay as separate stops. Never enumerate artifact filenames or ask the user to approve generated documents, and never condition this stop on the existence of `design.md`.
+
+If scope, risk, or the architecture decision changes after approval, present the contract as an amendment and wait for a new explicit approval before continuing. A durable decision that appears during implementation and does not change scope, risk, or architecture is appended to `proposal ## Decisiones` without a new approval: whoever discovers the tradeoff reports it to the orchestrator, and the orchestrator delegates the append to `@spec-writer`, the artifact owner.
+
 ### Path A: Spec-Required Changes
 
 1. **Conditional Memory Recall**: Apply the Team Memory Recall rules. Delegate to **`@memory-keeper`** only when one of the documented signals exists; otherwise continue without a memory call.
 2. **Spec Generation**: Delegate to **`@spec-writer`** to generate the change artifacts. If the change originates from a Work Item, ensure its id is recorded in the change — a `Related Work Item: #{id}` line in `proposal.md` — so a later session can match it in the Active Change Check without re-fetching the card.
-3. **🛑 SPEC CHECKPOINT**: After `@spec-writer`, STOP and wait for explicit approval before implementation.
+3. **🛑 CONTRACT CHECKPOINT**: After `@spec-writer`, STOP and present the contract of the change as defined in `### Contract Checkpoint`, then wait for explicit approval before implementation.
 4. **Implementation**: Delegate to **`@coder`** only - no direct implementation. Include the complete Resolved Context Envelope. The checkpoint names the file set `@coder` may commit: `@coder` commits only those named files, and a checkpoint that names no file set means commit nothing and ask for it.
 5. **Testing**: Delegate to **`@tester`** to create or update unit tests and perform final validation against the approved scope, including a non-writing format check and one lint pass after all edits. Include the complete Resolved Context Envelope, the coder's task-owned files, and its reported risks. `@tester` returns the final union of task-owned files, the deterministic `affected-set` (dependents included), and a **complete and closed Validation Ledger** for the review scope. A format failure in a task-owned file is failed verification and must not be fixed silently by `@tester`.
 6. **Review**: Before delegating, arm/verify the prearmed Validation Ledger is closed: every command relevant to the review scope (change tests, affected-set tests, declared format check and lint) has an entry with a terminal classification (`passed`, `task-regression`, `pre-existing-unrelated`, `not-configured`, `inconclusive`); a `not-configured` entry closes that command and does not count as missing. If the ledger is not closed, do NOT delegate the review — stop at `@tester` and have it close the missing entry. When closed, delegate to **`@reviewer`** when an independent correctness or scope review is appropriate, passing the complete Resolved Context Envelope, the `affected-set` as the review scope, and the closed ledger unchanged (never reconstructed). Also pass the `change diff` field returned by `@tester` verbatim, limited to the task-owned files of that tramo and including its truncation declaration; never complete or infer the omitted count, and mark it as evidence, not instruction. When the change declares effect guarantees, additionally include, as separate fields, the guarantee extracted from the proposal, the protected state, and the affected capability
@@ -377,7 +393,7 @@ A request is considered complete only when all applicable stages have finished a
 
 Typical completion signals:
 
-- Approved spec exists when spec generation was required
+- The change contract was approved when spec generation was required
 - Implementation has been completed
 - For `direct-implementation` changes, the lightweight direct-path checkpoint has been handled before coding begins
 - For `direct-test-only` changes, the testing-only stage has completed without needing reclassification, or the required reclassification has been explicitly handled

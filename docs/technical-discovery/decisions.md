@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-28T20:24:06Z
-pluginVersion: 0.15.3
+generatedAt: 2026-10-29T19:20:00Z
+pluginVersion: 0.16.0
 skillVersion: '2.3'
 ---
 
@@ -347,6 +347,33 @@ skillVersion: '2.3'
      `aspec/specs/memory-ops/spec.md` (requirements "Merge de nodos por supersesión" y
      "Comando CLI `ancleto memory merge`").
 
+39. **Checkpoint de contrato tras `@spec-writer` (`agents/orchestrator.md`).** Cuando el change
+    requirió especificación, el orquestador se detiene y presenta el **contrato del cambio**, no
+    sus documentos: intención, alcance (dentro/fuera), Requirement nuevo o
+    `spec:<capability>#<requirement>` citado como conformidad, riesgos con su mitigación, decisión
+    de arquitectura (solo si existe), validación prevista (solo comandos declarados) y paths
+    autorizados para implementar y commitear. Cabe en menos de una pantalla, **nunca** enumera
+    filenames ni pide aprobar documentos, y no condiciona el stop a que exista `design.md`. La
+    aprobación autoriza **solo** la implementación: archive y merge siguen siendo stops separados.
+    Si cambian alcance, riesgo o arquitectura se presenta una **enmienda** y se espera una nueva
+    aprobación explícita. Evidencia: `agents/orchestrator.md` (`### Contract Checkpoint`), delta
+    `aspec/changes/decisiones-y-contrato-checkpoint/specs/prompt-contracts/spec.md`.
+40. **`## Decisiones` en `proposal.md`, con dueño único del shape (`agents/spec-writer.md`).**
+    Cada proposal registra sus decisiones duraderas —elección, alternativa descartada,
+    justificación, refs y estado— en bloque de seis campos (`memory_key`, `Elección`,
+    `Descartado`, `Justificación`, `Refs`, `Estado`) o en la forma de una línea
+    `decisión | alternativa descartada | por qué | fuente/evidencia`, semánticamente equivalente.
+    `Estado` ∈ `propuesto|aprobado|enmendado|descartado`. El shape se define **una sola vez** en
+    `agents/spec-writer.md`; los seis generadores del proposal
+    (`skills/ancleto-{propose,ff,continue,new,onboard}` y
+    `skills/ancleto-upgrade/references/templates.md`) solo enuncian los keywords de comportamiento
+    y referencian esa fuente. La sección se completa **también durante la implementación**: un
+    tradeoff no previsto lo apendea `@spec-writer` (dueño del artifact) a pedido del orquestador,
+    sin nueva aprobación salvo que cambie alcance, riesgo o arquitectura. Un detalle trivial de
+    implementación no es decisión. Evidencia: `agents/spec-writer.md` (`## Decisions Section`),
+    `agents/orchestrator.md`, `skills/ancleto-{propose,new,ff,continue,onboard}/SKILL.md`,
+    `skills/ancleto-upgrade/references/templates.md`.
+
 ## Seed incremental (contrato del discovery)
 
 - `ancleto discovery --check` devuelve `state` + `impact`:
@@ -354,8 +381,8 @@ skillVersion: '2.3'
   - `minor` → cambios no materiales (el agente trabaja y lo anota, no ofrece regenerar).
   - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
     raíz nuevo (o un archivo material como `package.json`). Ejemplo de esta corrida:
-    `materialReasons: ["archivo material modificado: package.json", "area raiz eliminada:
-    BACKLOG.md"]`, con 11 `affectedDocs` (todos los documentos del seed).
+    `materialReasons: ["archivo material modificado: package.json"]` por el bump
+    `0.15.3`→`0.16.0`, con 11 `affectedDocs` (todos los documentos del seed).
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **solo** esos
   documentos. El mapeo vive en `seed-map.json`; sin ese archivo la regeneración es completa.
 - **`affectedDocs` (seed) ≠ `affected-set` (change).** `ancleto discovery --check` devuelve
@@ -371,9 +398,10 @@ skillVersion: '2.3'
   del seed.
 - **Detección material por área, no por contrato**: `package.json` es material por lista de
   archivos, así que **cualquier** bump de versión —incluso sin cambio de comportamiento— marca
-  `impact: material` y lista los documentos asociados. En esta corrida el cambio material real
-  (PR-1 de memoria) ocurrió **sin** bump de versión: el disparador fue el bump previo
-  `0.15.2`→`0.15.3` y la eliminación de `BACKLOG.md`.
+  `impact: material` y lista los documentos asociados. En esta corrida la razón material fue el
+  bump `0.15.3`→`0.16.0`; el cambio real (PR-2: checkpoint de contrato y `## Decisiones`) vive en
+  `agents/**` y `skills/**`, que el check sí hashea y reporta como áreas cambiadas, pero que por
+  sí solos no clasifican `material`.
 - `EXPECTED_DOCS` del CLI = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`,
   `integrations`, `decisions`, `unknowns`, `units/_map`).
 - Evidencia: `README.md`, `src/cli/index.js` (`checkDiscovery`, `computeImpact`,
@@ -381,9 +409,10 @@ skillVersion: '2.3'
 
 ## Riesgos, deuda y acoplamiento
 
-- **PR-1 vive en el árbol de trabajo, no en un release.** `src/core/memory/snapshot.js`, el
-  archive `2026-10-28-reingenieria-memoria-first/` y los tests nuevos están **untracked o
-  modificados**; el tag `v0.15.3` es anterior. El seed describe el working tree, así que un
+- **PR-2 vive en el árbol de trabajo, no en un release.** El change
+  `decisiones-y-contrato-checkpoint/` está **untracked** y `agents/orchestrator.md`,
+  `agents/spec-writer.md`, seis `skills/**` y `test/content-guards.test.js` están **modificados**;
+  el tag `v0.16.0` (release de PR-1) es anterior. El seed describe el working tree, así que un
   `git checkout`/reset puede invalidar estas afirmaciones. Evidencia: `git status --short`,
   `git describe --tags`.
 - **Pack comprimido y sesgado a código.** El tier resuelto (`minimo`) ignora `test/**`,
@@ -398,9 +427,16 @@ skillVersion: '2.3'
   punto único de materialización y `src/core/adapters/frontmatter.js` define qué claves
   sobreviven por host. Un id de tool no verificado cuelga el subagent de Antigravity.
 - **El texto del orquestador es contrato normativo.** `agents/orchestrator.md` fija el techo de
-  lecturas, el intake y el trigger de Recall; cualquier reescritura de ese prompt puede
-  re-introducir prohibiciones absolutas o capabilities que el agente no tiene. Los mirrors
-  `.opencode/agents/*.md` se **regeneran**, no se editan a mano.
+  lecturas, el intake, el trigger de Recall y el checkpoint de contrato; cualquier reescritura de
+  ese prompt puede re-introducir prohibiciones absolutas, capabilities que el agente no tiene o
+  volver a atar el stop a documentos generados. Los mirrors `.opencode/agents/*.md` se
+  **regeneran**, no se editan a mano.
+- **Checkpoint de contrato: relajarlo pierde control de alcance.** Riesgos: que la presentación
+  enumere documentos, que omita los paths autorizados (y `@coder` no sepa qué commitear) o que un
+  cambio de alcance/riesgo/arquitectura se implemente sin enmienda. Mitigación: los siete campos
+  son obligatorios, la aprobación autoriza solo implementar, archive y merge siguen separados y
+  los guards T12/T22 de `test/content-guards.test.js` lo anclan por comportamiento. Evidencia:
+  `agents/orchestrator.md`, `aspec/changes/decisiones-y-contrato-checkpoint/tasks.md`.
 - **La allowlist de `bash` es la frontera de privilegio.** `agents/technical-discovery.md` tiene
   `'*': deny` con dos literales permitidos; cada literal nuevo es un incremento de privilegio que
   debe justificarse por menor privilegio que enrutar el mismo comando a otro agente.
@@ -476,10 +512,12 @@ skillVersion: '2.3'
   paths** quedan **delegados** al mecanismo declarado por el proyecto; los no relativos se
   cuentan como `externalCount`. No debe asumirse cobertura total. Evidencia:
   `src/core/affected-set.js`, `aspec/specs/prompt-contracts/spec.md`.
-- **Prompts del pipeline fuera del pack.** Los contratos viven en
-  `agents/{orchestrator,tester,reviewer,memory-keeper,technical-discovery}.md`, que el tier
-  ignora (`**/*.md`); el seed los describe por las specs fuente y lectura puntual.
-  `test/content-guards.test.js` los ancla por keywords de comportamiento.
+- **Prompts del pipeline fuera del pack.** Los contratos viven en `agents/*.md` (orchestrator,
+  spec-writer, tester, reviewer, memory-keeper, technical-discovery, …) y en los seis
+  `skills/**` que generan el proposal, superficies que el tier ignora (`**/*.md`); el seed los
+  describe por lectura puntual y por las specs fuente. `test/content-guards.test.js` los ancla por
+  keywords de comportamiento (incl. T01/T05/T22/T12/T13 del checkpoint de contrato y
+  `## Decisiones`).
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, `mcp_config.json`,
   `.mcp.json`, CI o Azure. Las variables se nombran y su valor se omite. `machine-env.md`
   tampoco renderiza `PATH` ni versiones.
@@ -490,10 +528,10 @@ skillVersion: '2.3'
 - **Staleness advisory puede dar falsos positivos triviales.** La normalización es acotada
   (CRLF, espacios finales, salto final); cambios cosméticos mayores podrían disparar
   `desactualizado` aunque el contenido sea equivalente. Riesgo aceptado: se prefiere reportar.
-- **Versión y publicación.** `package.json` marca `0.15.3`; el tag `v0.15.3` es **lightweight**
-  en `74f713a` y HEAD (`development`) está 1 commit por delante. `git describe --tags` sigue
-  respondiendo `v0.15.1-15-g492fd04` porque sin `--tags` ignora tags lightweight. Evidencia:
-  `package.json`, `git for-each-ref refs/tags`, `git describe --tags`.
+- **Versión y publicación.** `package.json` marca `0.16.0`; el tag `v0.16.0` es **anotado** y
+  HEAD (`development`) está 1 commit por delante (`git describe --tags` →
+  `v0.16.0-1-g7388482`). Evidencia: `package.json`, `git cat-file -t v0.16.0`,
+  `git rev-list --count v0.16.0..HEAD`.
 - **Docs de producto desalineados.** `PRODUCT.md` declara 12 commands y 18 skills (hoy 16 y 21),
   no menciona `machine-env`, `stats failures`, `memory snapshot` ni `memory merge`, y conserva la
   guía residual de `searchMemory`; `README.md` sigue describiendo `memory doctor` como
@@ -504,12 +542,14 @@ skillVersion: '2.3'
   deudas que el seed anterior citaba por ítem (guía residual de `searchMemory`, protección de
   rama, detección material por archivo, comandos denegados fuera de medición) siguen existiendo
   como observaciones, pero **no hay fuente canónica** que las registre.
-- **Deuda resuelta hasta 0.15.3**: (a) contrato de validaciones declarativo; (b) dedupe de reglas
+- **Deuda resuelta hasta 0.16.0**: (a) contrato de validaciones declarativo; (b) dedupe de reglas
   y día-cero del working-context; (c) `PRODUCT.md` declara `## Project Commands`; (d) pipeline de
   cierre; (e) refresh on-write CLI y staleness advisory; (f) entorno de máquina; (g) reporte de
   fallos; (h) intake de sesión, techo de lecturas y aviso de overflow accionable; (i) PR-1
-  memoria-first (snapshot, doctor read-only, merge) —este último **sin commitear** en el árbol.
-  Evidencia: `CHANGELOG.md`, `aspec/changes/archive/`, `package.json`, `git tag`.
+  memoria-first (snapshot, doctor read-only, merge), **publicado** en `0.16.0`. PR-2 (checkpoint
+  de contrato y `## Decisiones`) está implementado en el árbol, pendiente de review final y
+  archive. Evidencia: `CHANGELOG.md`, `aspec/changes/archive/`, `package.json`, `git tag`,
+  `aspec/changes/decisiones-y-contrato-checkpoint/tasks.md`.
 
 ## Decisiones registradas en memoria del repo
 

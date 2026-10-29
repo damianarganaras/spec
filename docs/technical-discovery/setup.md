@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-10-28T20:24:06Z
-pluginVersion: 0.15.3
+generatedAt: 2026-10-29T19:20:00Z
+pluginVersion: 0.16.0
 skillVersion: '2.3'
 ---
 
@@ -82,7 +82,7 @@ escribe la base ni el working-context). Evidencia: `src/cli/index.js`
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
   En este checkout `.opencode/.ancleto-tier` contiene **`minimo`**, por lo que el tier resuelto
   es `minimo` (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, **sin token budget**; el
-  pack real de esta corrida quedó en 689 archivos / ~16.512 tokens). El tier decide modelos de
+  pack real de esta corrida quedó en 692 archivos / ~16.512 tokens). El tier decide modelos de
   los agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
   `.opencode/.ancleto-tier`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
@@ -146,11 +146,11 @@ por presupuesto agotado también. Un fallo real se publica como sufijo aditivo
 inconcluso no lleva sufijo. La versión observada nunca se renderiza. Evidencia:
 `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
 
-**Estado en este checkout**: el artefacto **existe** (generado el 2026-10-27): `win32` /
+**Estado en este checkout**: el artefacto **existe** (generado el 2026-10-29): `win32` /
 `10.0.26200` / `x64`, shell `Windows PowerShell 5.1` (`shell_source: PSModulePath`), EOL `lf`
 (`eol_source: gitattributes`), `rg` **no disponible** (fallback: `Select-String`),
 `node`/`npm`/`git`/`python` **disponibles** —resolubles **e invocables** según la sonda; el
-artefacto declara disponibilidad, no versión—, `ancleto: 0.15.3`. La exclusión local está
+artefacto declara disponibilidad, no versión—, `ancleto: 0.16.0`. La exclusión local está
 escrita en `info/exclude`. Evidencia: `.ancleto/machine-env.md`.
 
 ## Permisos de shell por agente

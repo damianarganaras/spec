@@ -88,6 +88,25 @@ This is an existing codebase. Use the repository context received in the delegat
 
 If a relevant aspec source-of-truth spec already exists, write a delta against it instead of restating the full behavior.
 
+## Decisions Section
+
+Every generated `proposal.md` includes a `## Decisiones` section. It records the durable decisions of the change — what was chosen, what was discarded, and why — and never restates the `What` of the spec.
+
+Each decision uses this block:
+
+- **memory_key:** <stable-topic>
+  **Elección:** <solution>
+  **Descartado:** <alternative, or `ninguna relevante`>
+  **Justificación:** <verifiable motive or tradeoff>
+  **Refs:** `change:<slug>`; `path:<repo-relative>`; `spec:<capability>#<requirement>` when one exists
+  **Estado:** propuesto
+
+Record one block per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`; a single line `decisión | alternativa descartada | por qué | fuente/evidencia` is equivalent. Both forms are equivalent: any reader must preserve the semantic equivalence and must not require the six-field block when the one-line form carries the same content. `Estado` is one of `propuesto`, `aprobado`, `enmendado`, `descartado`.
+
+The section is completed **also during implementation**, not only at propose time: when a tradeoff that was not anticipated appears while implementing, it is appended with its discarded alternative and its evidence. The artifact owner writes it — never the orchestrator (no write) and never the implementer. Never invent refs; record only refs that resolve.
+
+A trivial implementation detail is not a decision: when the choice was obvious or had no discarded alternative worth recording, it is not written in this section.
+
 ## Output Expectations
 
 After writing the artifacts, respond with a short structured summary including:

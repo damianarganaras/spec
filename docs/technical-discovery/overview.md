@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-10-28T20:24:06Z
-pluginVersion: 0.15.3
+generatedAt: 2026-10-29T19:20:00Z
+pluginVersion: 0.16.0
 skillVersion: '2.3'
 ---
 
@@ -39,8 +39,8 @@ CLI monolítica en ESM, sin framework externo. Capas:
 | Entorno de máquina | `src/core/machine-env.js` | **Dueño único** de detectar plataforma/shell/EOL/tooling (disponibilidad = **resoluble e invocable**, con sonda `--version` acotada), renderizar y escribir `.ancleto/machine-env.md`, y garantizar su exclusión local vía `info/exclude`; `checkMachineEnvTracked` para `check`. |
 | Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (search/record/export/import/gc/**merge**, `formatTopologyBlock`, procedencia `source`, aviso de overflow), `snapshot` (**copia consistente con historial**), `tools`, `mcp-server`, `doctor` (**read-only por defecto**), `working-context` (render compartido; refresh on-write CLI compare-based y staleness advisory). |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 16 commands, 21 skills, 2 templates + perfil `test`). |
-| Contratos de prompt | `agents/*.md` | Normativa del pipeline: intake de sesión, techo de lecturas, trigger de Recall, contrato de validación, destilado entre tramos. Los mirrors `.opencode/agents/*.md` se regeneran, no se editan a mano. |
-| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 1 change activo + `changes/archive/` (29). |
+| Contratos de prompt | `agents/*.md` | Normativa del pipeline: intake de sesión, techo de lecturas, trigger de Recall, contrato de validación, **checkpoint de contrato** tras `@spec-writer` y sección `## Decisiones` del proposal, destilado entre tramos. Los mirrors `.opencode/agents/*.md` se regeneran, no se editan a mano. |
+| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 2 changes activos + `changes/archive/` (29). |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
 | Tests | `test/*.test.js` | Suite `node --test` (15 archivos; no re-ejecutada en esta regeneración). |
 | Análisis (no runtime) | `optimizacion-de-tokens.md` | Barrido de costo de tokens del producto y matriz de decisión de la promesa "token-economy". |
@@ -125,9 +125,12 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   mejora de entorno (`machine-environment`). Evidencia: `src/cli/index.js`
   (`statsFailuresCommand`), `aspec/specs/session-failure-report/spec.md`.
 - **Contratos de prompt del orquestador** (`agents/orchestrator.md`): **intake de sesión**,
-  **techo de lecturas** (3 archivos + exenciones) y **trigger de Recall** ante
-  `<ContextOverflowWarning>`. Evidencia: `agents/orchestrator.md`,
-  `aspec/specs/prompt-contracts/spec.md`.
+  **techo de lecturas** (3 archivos + exenciones), **trigger de Recall** ante
+  `<ContextOverflowWarning>` y **checkpoint de contrato** tras `@spec-writer`: se presenta el
+  contrato del cambio (intención, alcance, Requirement, riesgos, decisión de arquitectura,
+  validación prevista, paths autorizados) en menos de una pantalla, la aprobación autoriza solo
+  la implementación y una enmienda es obligatoria si cambian alcance, riesgo o arquitectura.
+  Evidencia: `agents/orchestrator.md`, `aspec/specs/prompt-contracts/spec.md`.
 - **Ciclo SDD**: comandos `/cleto-*` que consumen `aspec/changes/<name>/` y las skills nativas;
   no requieren binario externo. Incluye `/cleto-review` (calidad), `/cleto-security`,
   `/cleto-update` y `/cleto-transplant`.
@@ -172,12 +175,15 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
    leen el archivo antes de ejecutar comandos; el orquestador incluye el bloque en cada
    delegación con `bash: true` y esa lectura no consume su techo de 3 archivos. Evidencia:
    `src/core/machine-env.js`, `agents/*.md`, `aspec/specs/machine-environment/spec.md`.
-7. **Ciclo de change** — `/cleto-new` → `/cleto-propose` → `/cleto-apply` → `/cleto-verify`
-   → `/cleto-archive`, con `/cleto-review`/`/cleto-security` para calidad y seguridad,
-   `/cleto-update` para actualizar artifacts ante cambios de definición y `/cleto-transplant`
-   para mudar proyectos entre máquinas. Con perfil `test`, el orchestrator rutea lo test-only
-   al tester ampliado (`cleto-test-*`). Evidencia: `commands/`, `skills/`,
-   `aspec/changes/archive/`.
+7. **Ciclo de change** — `/cleto-new` → `/cleto-propose` → **checkpoint de contrato** →
+   `/cleto-apply` → `/cleto-verify` → `/cleto-archive`, con `/cleto-review`/`/cleto-security`
+   para calidad y seguridad, `/cleto-update` para actualizar artifacts ante cambios de definición
+   y `/cleto-transplant` para mudar proyectos entre máquinas. El proposal registra sus decisiones
+   duraderas en `## Decisiones` (bloque de seis campos o forma de una línea); un tradeoff que
+   aparece durante la implementación se apendea ahí por `@spec-writer`, con enmienda del contrato
+   solo si cambia alcance, riesgo o arquitectura. Con perfil `test`, el orchestrator rutea lo
+   test-only al tester ampliado (`cleto-test-*`). Evidencia: `commands/`, `skills/`,
+   `agents/spec-writer.md`, `agents/orchestrator.md`, `aspec/changes/archive/`.
 8. **Cierre del change (pipeline de throughput)** — el tester computa el `affected-set` con
    `ancleto affected` (dependientes, no solo archivos tocados) y produce un Validation Ledger
    completo y cerrado; el orquestador arma/verifica el cierre y delega el review con el
@@ -197,16 +203,16 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 
 ## Estado del repositorio
 
-Versión `0.15.3` en rama `development`; tag `v0.15.3` en `74f713a` (lightweight) y HEAD
-`492fd04` **1 commit por delante** del tag. `CHANGELOG.md` cubre hasta `0.15.3`. El árbol de
-trabajo tiene **PR-1 de la reingeniería memoria-first sin commitear** (14 entradas en
-`git status --short`: `src/core/memory/snapshot.js` y el archive
-`2026-10-28-reingenieria-memoria-first/` son untracked; `src/cli/index.js`,
-`src/core/memory/{doctor,engine}.js`, `aspec/specs/memory-ops/spec.md` y tests están
-modificados). Dogfooding histórico: el framework fue inicializado sobre este repo; este checkout
-**sí materializa `.ancletorc` y `.opencode/`** (ambos gitignored, no versionados) y persiste
-`AGENTS.md`, `PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier resuelto es **`minimo`** vía
-`.opencode/.ancleto-tier`. **`.ancleto/machine-env.md` ya existe** (generado el 2026-10-27).
-El único **change activo** es `ancleto-vscode-extension`; el más reciente archivado es
-`2026-10-28-reingenieria-memoria-first`. Evidencia: `.gitignore`, `.discovery-map.json`,
-`ancleto discovery --check`, `git describe --tags`, `aspec/changes/`.
+Versión `0.16.0` en rama `development`; tag **anotado** `v0.16.0` y HEAD `7388482` **1 commit por
+delante**. `CHANGELOG.md` cubre hasta `0.16.0`, versión que publicó PR-1 (snapshot, doctor
+read-only, merge). El árbol de trabajo tiene **PR-2 (`decisiones-y-contrato-checkpoint`) sin
+commitear**: `agents/orchestrator.md`, `agents/spec-writer.md`, seis `skills/**` y
+`test/content-guards.test.js` modificados, y la carpeta del change untracked; `src/**` está limpio.
+Dogfooding histórico: el framework fue inicializado sobre este repo; este checkout **sí materializa
+`.ancletorc` y `.opencode/`** (ambos gitignored, no versionados) y persiste `AGENTS.md`,
+`PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier resuelto es **`minimo`** vía
+`.opencode/.ancleto-tier`. **`.ancleto/machine-env.md` ya existe** (generado el 2026-10-29) y los
+mirrors `.opencode/` están regenerados. Los **changes activos** son `ancleto-vscode-extension` y
+`decisiones-y-contrato-checkpoint` (implementado, pendiente de review final y archive); el más
+reciente archivado es `2026-10-28-reingenieria-memoria-first`. Evidencia: `.gitignore`,
+`.discovery-map.json`, `ancleto discovery --check`, `git describe --tags`, `aspec/changes/`.

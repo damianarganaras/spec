@@ -2,15 +2,15 @@
 node: unknowns
 kind: unknowns
 read_when: "límites de evidencia: qué no se pudo verificar en este seed"
-generatedAt: 2026-10-28T20:24:06Z
-pluginVersion: 0.15.3
+generatedAt: 2026-10-29T19:20:00Z
+pluginVersion: 0.16.0
 skillVersion: '2.3'
 ---
 
 # Límites de evidencia
 
 - **Pack comprimido (tree-sitter).** El pack usado contiene firmas de funciones, no cuerpos ni
-  valores de constantes (689 fuentes, ~16.512 tokens, tier `minimo`). Las descripciones de flujo
+  valores de constantes (692 fuentes, ~16.512 tokens, tier `minimo`). Las descripciones de flujo
   de `src/**` provienen de firmas + `README.md` + `CHANGELOG.md` + specs de `aspec/` + el
   proposal del change archivado, más lectura puntual de los archivos citados (en particular
   `src/core/memory/{snapshot,doctor,engine}.js`, `src/core/machine-env.js`, `src/cli/index.js` y
@@ -40,18 +40,32 @@ skillVersion: '2.3'
   lee directamente: su contenido se consume solo resuelto vía `ancleto discovery --check`
   (`config.outputDir`, `config.tier`, `config.exclude`). El **tier resuelto `minimo`** proviene
   del reporte y del valor de `.opencode/.ancleto-tier`.
-- **PR-1 no está commiteado.** `src/core/memory/snapshot.js`, el archive
-  `2026-10-28-reingenieria-memoria-first/` y los tests nuevos están untracked; `src/cli/index.js`,
-  `src/core/memory/{doctor,engine}.js`, `aspec/specs/memory-ops/spec.md` y tres tests están
-  modificados. El seed describe el **árbol de trabajo** al 2026-10-28, no un artefacto publicado;
-  el tag `v0.15.3` es anterior a estos cambios. Evidencia: `git status --short`.
-- **Versión del CLI global vs. versión del paquete.** El repositorio está en `0.15.3`
-  (`package.json`) y `.ancleto/machine-env.md` registra `ancleto: 0.15.3`; no se verificó qué
-  versión reporta el binario `ancleto` instalado en `PATH`.
-- **Tag lightweight vs. `git describe`.** El tag `v0.15.3` existe pero es **lightweight**
-  (`74f713a`); `git describe --tags` responde `v0.15.1-15-g492fd04` porque sin `--tags` ignora
-  tags lightweight. `git rev-list --count v0.15.3..HEAD` = 1. No se investigó si el Release de
-  GitHub quedó asociado al tag.
+- **PR-2 no está commiteado.** El change `decisiones-y-contrato-checkpoint` está **untracked** y
+  sus cambios viven en el árbol: `agents/orchestrator.md`, `agents/spec-writer.md`, seis
+  `skills/**` y `test/content-guards.test.js` están modificados. `src/**` ya está limpio: PR-1
+  (snapshot, doctor read-only, merge) quedó publicado en `0.16.0`. El seed describe el **árbol de
+  trabajo** al 2026-10-29, no un artefacto publicado; el tag `v0.16.0` es anterior a PR-2.
+  Evidencia: `git status --short`, `CHANGELOG.md`.
+- **Versión del CLI global vs. versión del paquete.** El repositorio está en `0.16.0`
+  (`package.json`), pero el binario `ancleto` resuelto en `PATH` (`C:\nvm4w\nodejs\ancleto.ps1`)
+  reporta **`0.15.3`** con `ancleto --version`. El `--check` y el pack de esta regeneración los
+  produjo ese binario, no la copia `0.16.0` del repo: el formato de reporte (`schemaVersion: 2`)
+  y el estado derivado son los de la versión instalada. No se ejecutó el CLI local
+  (`node src/cli/index.js`) para comparar.
+- **Tag y distancia.** `v0.16.0` es un tag **anotado** (`git cat-file -t` → `tag`);
+  `git describe --tags` → `v0.16.0-1-g7388482` y `git rev-list --count v0.16.0..HEAD` = 1. No se
+  verificó si el Release de GitHub quedó asociado al tag.
+- **Change `decisiones-y-contrato-checkpoint`: implementado, sin archivar.** `tasks.md` declara
+  la fase "revisión final" con `npm test` 649 pass / 0 fail / 4 skip (653 totales), `npm run lint`
+  exit 0 y format `not-configured`; **esas cifras son declaradas, no re-ejecutadas** en esta
+  regeneración. El delta `ADDED`-only de `prompt-contracts` todavía vive solo en
+  `aspec/changes/decisiones-y-contrato-checkpoint/specs/prompt-contracts/spec.md`; el merge a
+  `aspec/specs/` ocurre en el archive.
+- **Contrato de checkpoint y `## Decisiones`: verificados por lectura, no por ejecución.** El
+  texto se leyó en `agents/orchestrator.md`, `agents/spec-writer.md` y los seis `skills/**`
+  modificados (fuera del pack). Los guards T01/T05/T22/T12/T13 de `test/content-guards.test.js`
+  (excluido del pack por `**/*.test.*`) no se corrieron; no se ejecutó una sesión real del
+  orquestador que ejercite el checkpoint ni una implementación que apendee una decisión.
 - **Snapshot: no ejecutado.** El comportamiento se describe por lectura de
   `src/core/memory/snapshot.js`, del wrapper `memorySnapshot` y de los escenarios de
   `aspec/specs/memory-ops/spec.md`; no se generó un snapshot real ni se probó una restauración.
@@ -114,8 +128,10 @@ skillVersion: '2.3'
 - **`optimizacion-de-tokens.md` es análisis, no contrato.** Mide costo (su encabezado habla de
   tier `normal`; hoy el checkout resuelve `minimo`) y deja la promesa "optimizador de tokens"
   como decisión pendiente; sus cifras no se re-verificaron.
-- **`aspec/`**: 19 specs fuente + 1 change activo (`ancleto-vscode-extension`) + 29 archivados.
-  No se analizó el contenido completo de cada spec/delta más allá de las capabilities afectadas
+- **`aspec/`**: 19 specs fuente + **2 changes activos** (`ancleto-vscode-extension` y
+  `decisiones-y-contrato-checkpoint`) + 29 archivados. El delta de PR-2 (`prompt-contracts`,
+  `ADDED`-only con dos `Requirement`) vive todavía en el change; se mergea al archivar. No se
+  analizó el contenido completo de cada spec/delta más allá de las capabilities afectadas
   (`memory-ops`, `memory-engine`, `machine-environment`, `session-failure-report`,
   `prompt-contracts`, `review`, `agent-install-routing`).
 - **Memoria del repo**: la sección de decisiones registradas proviene de una regeneración

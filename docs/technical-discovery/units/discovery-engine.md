@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y el presupuesto por tier"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js"]
-generatedAt: 2026-10-28T20:24:06Z
-pluginVersion: 0.15.3
+generatedAt: 2026-10-29T19:20:00Z
+pluginVersion: 0.16.0
 skillVersion: '2.3'
 ---
 
@@ -35,7 +35,7 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
 - `writeDiscoveryMap(rootDir)`: escribe `.discovery-map.json` en la raíz del repo.
 - `readTopologySummary(cwd)`: valida y lee el resumen para inyectarlo en el working context.
 - El mapa se regenera al correr `ancleto discovery` (no en `--check`). En esta corrida:
-  `total_files: 701` (`last_updated: 2026-10-28T20:19:38.494Z`); `tree_summary` incluye
+  `total_files: 704` (`last_updated: 2026-10-29T19:10:53.105Z`); `tree_summary` incluye
   `documentation` 340 y `audit logs` 9 porque el mapa recorre el disco y no aplica `.gitignore`.
   El `total_files` **no** coincide con el número de archivos del pack: el mapa cuenta el disco
   y el pack aplica los ignores del tier y `.gitignore`.
@@ -47,7 +47,7 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
   `minimo` + budget 50000).
 - `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
   En este checkout existe `.opencode/.ancleto-tier` con valor **`minimo`**, por lo que el tier
-  resuelto es `minimo` y el pack de esta corrida quedó en **689 archivos / ~16.512 tokens**
+  resuelto es `minimo` y el pack de esta corrida quedó en **692 archivos / ~16.512 tokens**
   (sin budget que lo limite). El conteo de tokens depende de la compresión efectiva de Repomix
   y **no es comparable entre corridas**.
 - `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
@@ -111,10 +111,11 @@ objetivo de verificación del tester.
    runtime, `index.html`, `src/main|index.*`), apareció/desapareció un área raíz o un archivo
    material; si no, `minor`; si no hay cambios atribuibles, `none`. **La detección es por
    lista de archivos, no por contrato**: la corrida que originó esta regeneración reportó
-   `material` con `materialReasons: ["archivo material modificado: package.json",
-   "area raiz eliminada: BACKLOG.md"]` y 11 `affectedDocs`, aunque el cambio de comportamiento
-   real (PR-1 de memoria) no movió la versión: el bump `0.15.2`→`0.15.3` venía de un release
-   anterior y la eliminación de `BACKLOG.md` aportó la segunda razón.
+    `material` con `materialReasons: ["archivo material modificado: package.json"]` (bump
+    `0.15.3`→`0.16.0`) y 11 `affectedDocs`; el cambio de comportamiento real de esta
+    regeneración (PR-2: checkpoint de contrato y `## Decisiones`) no toca `src/**` ni mueve la
+    versión: vive en `agents/**`, `skills/**` y `test/**`, superficies que el tier excluye del
+    pack y que por eso se leyeron directamente.
 4. `readSeedMap` + `affectedDocsFor` cruzan áreas cambiadas con `seed-map.json` para acotar la
    regeneración a `affectedDocs` (documentos del **seed**; no confundir con el `affected-set`
    del change). Sin `seed-map.json` la regeneración es completa.
@@ -145,7 +146,7 @@ objetivo de verificación del tester.
 | `src/core/repomix-tier.js` | Args de Repomix, ignores y budget por tier (`TIER_PACK_CONFIG`, `readProjectTier`, `buildRepomixArgs`, `tierTokenBudget`). |
 | `src/core/tier-models.js` | Modelos por tier y resolución gratis. |
 | `src/cli/index.js` | `checkDiscovery`, `runRepomix`, `packDiscovery`, `affectedCommand`, `computeSources`, `computeImpact`, `readSeedMap`, `affectedDocsFor`. |
-| `.discovery-map.json` | Mapa topológico regenerado por la corrida del pack (701 archivos). |
+| `.discovery-map.json` | Mapa topológico regenerado por la corrida del pack (704 archivos). |
 | `docs/technical-discovery/.discovery-state.json` | Estado de hashes y `packTokens` que consume `--check`. |
 | `docs/technical-discovery/seed-map.json` | Documento del seed → áreas de evidencia (lo escribe la skill). |
 | `aspec/specs/prompt-contracts/spec.md` | Contrato del affected-set y taxonomía de 4 categorías. |

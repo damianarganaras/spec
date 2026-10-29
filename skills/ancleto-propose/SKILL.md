@@ -42,7 +42,7 @@ Create `aspec/changes/<name>/` if missing.
 
 Write each directly, reading each completed one before drafting the next.
 
-**4a. `proposal.md`** — what & why: `# Proposal: <title>`, then `## Problem`, `## Proposed change`, `## Scope` (In/Out of scope), `## Risks` (`<risk>: <mitigation>`).
+**4a. `proposal.md`** — what & why: `# Proposal: <title>`, then `## Problem`, `## Proposed change`, `## Scope` (In/Out of scope), `## Risks` (`<risk>: <mitigation>`), and `## Decisiones` — one entry per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`, or the one-line form `decisión | alternativa descartada | por qué | fuente/evidencia`; the full shape is defined in the Decisions section of the `@spec-writer` contract. The section is completed also during implementation when a tradeoff appears.
 
 **4b. `design.md`** — how: `# Design: <title>`, then `## Approach`, `## Architecture`, `## Validation`.
 

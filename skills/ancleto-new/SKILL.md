@@ -56,7 +56,7 @@ Report: "Change `<name>` created at `aspec/changes/<name>/`. 0/4 artifacts compl
 
 ### 5. Show the template for the first artifact
 
-Present the `proposal.md` template: `# Proposal: <title>`, then `## Problem`, `## Proposed change`, `## Scope` (In/Out), `## Risks` (`<risk>: <mitigation>`).
+Present the `proposal.md` template: `# Proposal: <title>`, then `## Problem`, `## Proposed change`, `## Scope` (In/Out), `## Risks` (`<risk>: <mitigation>`), and `## Decisiones` — one entry per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`, or the one-line form `decisión | alternativa descartada | por qué | fuente/evidencia`; the shape is owned by the Decisions section of `@spec-writer`.
 
 ### 6. STOP and wait for user direction
 

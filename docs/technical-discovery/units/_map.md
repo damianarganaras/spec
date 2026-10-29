@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-10-28T20:24:06Z
-pluginVersion: 0.15.3
+generatedAt: 2026-10-29T19:20:00Z
+pluginVersion: 0.16.0
 skillVersion: '2.3'
 ---
 
@@ -39,13 +39,15 @@ skillVersion: '2.3'
 | Memory doctor | **Read-only por defecto**: integridad `quick_check`, alineación FTS (`memory_fts_docsize` vs `memory_nodes`, tres estados), unicidad de activas y estado observable del WAL; `--rebuild` es el único camino que escribe. Línea advisory de frescura del working-context. | `src/core/memory/doctor.js`, `src/cli/index.js` (`memoryDoctorCmd`) | `units/memory-engine.md` |
 | Working context | Render único (`renderWorkingContextBlock`) + persistencia (`writeWorkingContext`/`writeWorkingContextBlock`); día-cero sin DB desde la topología; refresh on-write CLI compare-based (`refreshWorkingContextOnWrite`) y staleness advisory (`checkWorkingContextFreshness`); trigger MCP (`shouldRefreshWorkingContext`); resolución de raíz (`resolveMemoryProjectRoot`, `workingContextPath`). | `src/core/memory/working-context.js` | `units/memory-engine.md` |
 | **Reporte de fallos** | `ancleto stats failures`: lectura read-only de tool parts de opencode, clasificación `env`/`check`/`tool`/`unknown`, agregación por proyecto/herramienta/clase/esqueleto y enmascarado de secretos/rutas. | `src/cli/index.js` (`statsFailuresCommand`) | `units/cli-install.md` |
-| Agents (10) | Subagentes instalables: orchestrator, coder, tester, spec-writer, reviewer, documenter, technical-discovery, technical-seed-writer, memory-keeper, context-resolver. Todos leen `.ancleto/machine-env.md`; orchestrator incluye `## Machine Environment`, exime esa lectura del techo y define el intake de sesión; technical-discovery tiene allowlist de `bash` de dos literales sobre `'*': deny`. | `agents/*.md` | — |
+| Agents (10) | Subagentes instalables: orchestrator, coder, tester, spec-writer, reviewer, documenter, technical-discovery, technical-seed-writer, memory-keeper, context-resolver. Todos leen `.ancleto/machine-env.md`; orchestrator incluye `## Machine Environment`, exime esa lectura del techo, define el intake de sesión y el checkpoint de contrato; spec-writer es dueño único del shape de `## Decisiones`; technical-discovery tiene allowlist de `bash` de dos literales sobre `'*': deny`. | `agents/*.md` | — |
 | Commands (16) | Comandos `/cleto-*` del ciclo SDD + review/security + recall/pr + transplant + update. | `commands/*.md` | — |
-| Skills (21 dirs) | Ciclo de vida, discovery, commit/pr, review/security, update, upgrade y `triage-clarifier`; se instalan en el directorio del host. | `skills/*/SKILL.md` | `units/cli-install.md` |
+| Skills (21 dirs) | Ciclo de vida, discovery, commit/pr, review/security, update, upgrade y `triage-clarifier`; los seis generadores del proposal (`propose`, `ff`, `continue`, `new`, `onboard`, `upgrade`) emiten `## Decisiones`; se instalan en el directorio del host. | `skills/*/SKILL.md` | `units/cli-install.md` |
 | Templates (2) | `AGENTS.md` (bloques `LOCKED` canónicos, incl. `validation-commands`) y `PRODUCT.md` base para proyectos nuevos; sin valores de máquina. Aún contienen la guía residual de `searchMemory` ante `<ContextOverflowWarning>` (deuda sin backlog raíz que la registre). | `templates/` | `units/cli-install.md` |
 | Linter | Flat config ESLint con 4 reglas sobre `src/` y `test/`. | `eslint.config.js` | — |
-| Specs del repo | Configuración aspec, **19 specs fuente** y changes (**1 activo** + 29 archivados), incl. `machine-environment` (8 requirements / 53 scenarios), `session-failure-report`, `memory-ops` (**13 requirements**, PR-1) y el aviso de overflow en `memory-engine`. | `aspec/config.yaml`, `aspec/specs/**`, `aspec/changes/**` | — |
-| Tests | Suite `node --test` (15 archivos; incluye `memory-fixtures`/`memory-pr1-contract`, `machine-env`, `stats-failures` y el assert del aviso de overflow en `memory-engine`) + fixtures `test/fixtures/{seed,golden}.json`. | `test/*.test.js` | — |
+| **Checkpoint de contrato** | Tras `@spec-writer`, el orquestador presenta el contrato del cambio (intención, alcance, Requirement, riesgos, decisión de arquitectura si aplica, validación prevista, paths autorizados) en menos de una pantalla; la aprobación autoriza solo implementación y una enmienda es obligatoria si cambian alcance, riesgo o arquitectura. | `agents/orchestrator.md` | — |
+| **Decisiones del change** | `## Decisiones` en `proposal.md`: shape de seis campos (o línea equivalente) definido **una sola vez** por `@spec-writer`; los seis generadores del proposal emiten la sección y se completa también durante la implementación. | `agents/spec-writer.md`, `skills/ancleto-{propose,ff,continue,new,onboard}/SKILL.md`, `skills/ancleto-upgrade/references/templates.md` | — |
+| Specs del repo | Configuración aspec, **19 specs fuente** y changes (**2 activos**: `ancleto-vscode-extension` y `decisiones-y-contrato-checkpoint`; + 29 archivados), incl. `machine-environment` (8 requirements / 53 scenarios), `session-failure-report`, `memory-ops` (**13 requirements**, PR-1) y el aviso de overflow en `memory-engine`; el delta `ADDED`-only de `prompt-contracts` de PR-2 vive en el change. | `aspec/config.yaml`, `aspec/specs/**`, `aspec/changes/**` | — |
+| Tests | Suite `node --test` (15 archivos; incluye `memory-fixtures`/`memory-pr1-contract`, `machine-env`, `stats-failures`, el assert del aviso de overflow en `memory-engine` y los guards T01/T05/T22/T12/T13 de PR-2 en `content-guards`) + fixtures `test/fixtures/{seed,golden}.json`. `tasks.md` de PR-2 declara 649 pass / 0 fail / 4 skip (653 totales), no re-ejecutados. | `test/*.test.js` | — |
 | Análisis de tokens | Barrido de costo de tokens y matriz de decisión de "token-economy"; no runtime. | `optimizacion-de-tokens.md` | — |
 
 Cada dossier describe responsabilidades, flujo, reglas y paths clave; no repite inventario.

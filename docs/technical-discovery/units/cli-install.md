@@ -20,8 +20,8 @@ covers:
   - memory import refresh on-write
   - permisos de shell por agente
 sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js"]
-generatedAt: 2026-10-28T20:24:06Z
-pluginVersion: 0.15.3
+generatedAt: 2026-10-29T19:20:00Z
+pluginVersion: 0.16.0
 skillVersion: '2.3'
 ---
 
@@ -425,11 +425,12 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED (incl. `validation-commands`)/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable; en agents el frontmatter se adapta por host, en skills se copia. |
-| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js` | Guardas del CLI, del adaptador, de contenido, del working-context, del entorno de máquina, del reporte de fallos y del contrato de PR-1. |
+| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js` | Guardas del CLI, del adaptador, de contenido (incluye T01/T05/T22/T12/T13 del checkpoint de contrato y `## Decisiones`), del working-context, del entorno de máquina, del reporte de fallos y del contrato de PR-1. |
 | `README.md`, `agents/orchestrator.md` | Contrato operativo y sección de entorno de máquina. |
 | `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/` | Change archivado con proposal, design, tasks y delta spec. |
 | `aspec/changes/archive/2026-10-25-machine-environment-block/` | Change archivado del entorno de máquina. |
 | `aspec/changes/archive/2026-10-25-session-failure-report/` | Change archivado del reporte de fallos. |
 | `aspec/changes/archive/2026-10-26-orchestrator-session-start/` | Change archivado del intake de sesión, el techo de lecturas y el aviso de overflow accionable. |
-| `aspec/changes/archive/2026-10-28-reingenieria-memoria-first/` | Change archivado de PR-1: snapshot, doctor read-only y merge. |
+| `aspec/changes/archive/2026-10-28-reingenieria-memoria-first/` | Change archivado de PR-1: snapshot, doctor read-only y merge (publicado en `0.16.0`). |
+| `aspec/changes/decisiones-y-contrato-checkpoint/` | Change activo (PR-2) de checkpoint de contrato y `## Decisiones`: toca `agents/orchestrator.md`, `agents/spec-writer.md`, seis `skills/**` y `test/content-guards.test.js`; sin cambios en `src/**`. |
 | `agents/technical-discovery.md` | Allowlist de `bash` de dos literales (`ancleto discovery --check`, `git status --short`) sobre `'*': deny`. |

@@ -188,6 +188,10 @@ ese ítem está bloqueado; después de PR-1 el `doctor` es seguro.
    `opencode-permission-bash-last-match-wins` (regla antigua, hoy inyectada) con
    `bash-permission-deny-not-a-capability-boundary` (decisión posterior, hoy **no** inyectada),
    conservando la evidencia del test que la refuta. La regla vieja no se inyecta más.
+   **Evidencia (2026-10-29, este repo, con la política `bash` denegando `*git push*`):** `git push`
+   fue denegado correctamente por la regla; `git checkout main`, también denegado, se ejecutó igual a
+   través de un shim `caveman.CMD`. El deny no es una frontera técnica: la autorización real del
+   release depende del usuario o de un agente host nombrado explícitamente, no de la regla de permisos.
 4. Re-registrar las **6–8 bitácoras de sesión** de `scope: project` a `scope: task`
    (`session-failure-report-closure`, `fix-init-tier-huerfano-0.6.36`, `…0.6.37`,
    `dogfooding-versionado-init`, `ancleto-worktree-merge-protocol`, `technical-seed-stale-2026-10-25`).
@@ -233,6 +237,7 @@ decisión de arquitectura, validación prevista, paths autorizados) en menos de 
 **Tests.** T01 (proposal + delta, sin `design.md`), T05 (decisión que nace durante la implementación
 aparece en el proposal), T22 (enmienda aprobada cuando cambia alcance o riesgo), T12 (tarea trivial:
 sin aprobaciones extra), T13 (cambio crítico: los stops exigidos siguen ahí).
+(La mitad "sin `design.md`" se verifica en PR-4; PR-2 sólo cubre proposal + delta.)
 Incluye **tests de mutación**: el guard debe fallar si `## Decisiones` desaparece del proposal
 generado o si el checkpoint vuelve a exigir "documentos".
 

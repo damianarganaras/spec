@@ -2,6 +2,8 @@
 
 ## proposal.md
 
+The emitted proposal includes a `## Decisiones` section — one entry per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`, or the single-line form `decisión | alternativa descartada | por qué | fuente/evidencia`; the full shape is defined by the Decisions section of `@spec-writer`.
+
 ```markdown
 # Proposal: Migration to {LIBRARY} v{TARGET_VERSION}
 

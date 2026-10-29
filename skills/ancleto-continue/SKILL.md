@@ -42,7 +42,7 @@ Read every present artifact — they constrain what you write. If `context.md` e
 
 Draft the missing artifact using the same templates as `ancleto-propose`:
 
-- **proposal.md** (first): problem statement, proposed change, scope, risks. With Work Item context, use its title/description as the problem statement, acceptance criteria as the requirements basis, and include `## Related Work Item`: `**#{id}** — {title} ({type}) · Project: {project}`.
+- **proposal.md** (first): problem statement, proposed change, scope, risks, and `## Decisiones` — one entry per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`, or the single-line form `decisión | alternativa descartada | por qué | fuente/evidencia`; reuse the shape defined in the Decisions section of `@spec-writer`. With Work Item context, use its title/description as the problem statement, acceptance criteria as the requirements basis, and include `## Related Work Item`: `**#{id}** — {title} ({type}) · Project: {project}`.
 - **specs/\<capability\>/spec.md**: one spec file per capability touched, with `## ADDED Requirements` / `#### Scenario:` blocks in WHEN/THEN form.
 - **design.md**: approach, architecture, validation.
 - **tasks.md**: phased `- [ ]` checklist.

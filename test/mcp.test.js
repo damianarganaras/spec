@@ -48,24 +48,55 @@ function mcpClient(cwd) {
     pending.set(id, (msg) => { clearTimeout(timer); resolve(msg) })
     child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
   })
-  return { child, send, close: () => child.kill() }
+  // El MCP hijo hace checkpoint (TRUNCATE) del WAL al recibir SIGTERM/SIGINT. En
+  // POSIX kill() entrega esa senal y borra los frames que estos tests necesitan
+  // medir; en Windows kill() termina el proceso sin correr el handler. SIGKILL
+  // deja el -wal sin checkpoint en ambas plataformas.
+  return { child, send, close: () => child.kill('SIGKILL') }
 }
 
 function runCli(args, cwd) {
   return spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', env: { ...process.env, ANCLETO_MUSE_SPARK: '0' } })
 }
 
-// El MCP hijo puede alcanzar a checkpointear al cerrarse: esperar a que el
-// tamaño del -wal se estabilice antes de medirlo.
-async function settleWalSize(walPath) {
-  let prev = -1
-  for (let i = 0; i < 20; i++) {
-    const size = existsSync(walPath) ? statSync(walPath).size : 0
+// Deadline para la precondicion de los tests: el -wal tiene que tener frames
+// antes de medirlo (en Linux el flush del hijo puede tardar mas que en Windows).
+const WAL_FRAMES_DEADLINE_MS = 5000
+const WAL_POLL_INTERVAL_MS = 50
+
+function walSizeIfPresent(walPath) {
+  try {
+    return statSync(walPath).size
+  } catch {
+    // el -wal todavia no existe
+    return 0
+  }
+}
+
+// Esperar a que el -wal tenga frames (fase 1) y recien entonces a que su tamaño
+// se estabilice entre dos muestras consecutivas (fase 2). Devuelve 0 si los
+// frames nunca aparecen antes del deadline, para que el caller falle con un
+// mensaje claro en vez de colgarse.
+async function settleWalSize(walPath, deadlineMs = WAL_FRAMES_DEADLINE_MS) {
+  const sleep = () => new Promise((r) => setTimeout(r, WAL_POLL_INTERVAL_MS))
+
+  let size = walSizeIfPresent(walPath)
+  const framesDeadline = Date.now() + deadlineMs
+  while (size === 0) {
+    if (Date.now() >= framesDeadline) return 0
+    await sleep()
+    size = walSizeIfPresent(walPath)
+  }
+
+  const settleDeadline = Date.now() + deadlineMs
+  let prev = size
+  while (Date.now() < settleDeadline) {
+    await sleep()
+    size = walSizeIfPresent(walPath)
     if (size === prev) return size
     prev = size
-    await new Promise((r) => setTimeout(r, 50))
   }
-  return prev
+  return size
 }
 
 function hashFile(file) {
@@ -180,14 +211,16 @@ describe('CLI memory list (issue #12)', () => {
         close()
       }
 
-      // Esperar a que el MCP hijo termine de cerrar (checkpoint) antes de medir.
-      const before = await settleWalSize(join(dir, '.ancleto', 'memory.db-wal'))
+      // Esperar a que el MCP hijo termine de escribir sus frames antes de medir.
+      const walPath = join(dir, '.ancleto', 'memory.db-wal')
+      const before = await settleWalSize(walPath)
+      assert.ok(before > 0, `precondicion no satisfecha: el -wal no tuvo frames en ${WAL_FRAMES_DEADLINE_MS} ms (size ${before})`)
 
       const r = runCli(['memory', 'list'], dir)
       assert.equal(r.status, 0)
       assert.match(r.stdout, /ro-1/)
 
-      const after = await settleWalSize(join(dir, '.ancleto', 'memory.db-wal'))
+      const after = await settleWalSize(walPath)
       assert.equal(after, before, `memory list no debe tocar el WAL (antes ${before}, despues ${after})`)
 
       // y los datos siguen intactos
@@ -227,7 +260,7 @@ describe('CLI memory list (issue #12)', () => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
       const walPath = `${dbPath}-wal`
       const walSize = await settleWalSize(walPath)
-      assert.ok(walSize > 0, `el -wal debe arrancar con frames sin checkpoint (size ${walSize})`)
+      assert.ok(walSize > 0, `precondicion no satisfecha: el -wal no tuvo frames en ${WAL_FRAMES_DEADLINE_MS} ms (size ${walSize})`)
 
       const before = { db: hashFile(dbPath), wal: hashFile(walPath), walSize }
 
@@ -255,7 +288,7 @@ describe('CLI memory list (issue #12)', () => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
       const walPath = `${dbPath}-wal`
       const before = await settleWalSize(walPath)
-      assert.ok(before > 0, `--rebuild debe tener frames para fusionar (size ${before})`)
+      assert.ok(before > 0, `precondicion no satisfecha: --rebuild necesita frames en el -wal y no los hubo en ${WAL_FRAMES_DEADLINE_MS} ms (size ${before})`)
 
       const r = runCli(['memory', 'doctor', '--rebuild'], dir)
       assert.equal(r.status, 0, r.stderr)

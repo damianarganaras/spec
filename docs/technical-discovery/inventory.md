@@ -2,15 +2,15 @@
 node: inventory
 kind: inventory
 read_when: "cobertura del repositorio por directorios y globs, y qué queda fuera"
-generatedAt: 2026-10-28T20:24:06Z
-pluginVersion: 0.15.3
+generatedAt: 2026-10-29T19:20:00Z
+pluginVersion: 0.16.0
 skillVersion: '2.3'
 ---
 
 # Inventario (orientación)
 
 Cobertura por directorio/glob, no auditoría archivo por archivo. Conteos de
-`.discovery-map.json` (`total_files: 701`, `last_updated: 2026-10-28T20:19:38.494Z`; `tree_summary`
+`.discovery-map.json` (`total_files: 704`, `last_updated: 2026-10-29T19:10:53.105Z`; `tree_summary`
 por directorio de primer nivel).
 
 | Área | Contenido | Archivos |
@@ -22,7 +22,7 @@ por directorio de primer nivel).
 | `skills/*/SKILL.md` (+ references) | 21 directorios de skills (~35 archivos; incluye `ancleto-update`, `ancleto-review`, `ancleto-technical-discovery`, `ancleto-workflow`, `triage-clarifier`). | 35 |
 | `templates/` | `AGENTS.md` (bloques `LOCKED` canónicos, incl. `validation-commands`) y `PRODUCT.md`; **sin** valores de máquina. | 2 |
 | `profiles/test/` | Overlay del perfil test: tester/reviewer ampliados, comandos `cleto-test-*`, `AGENTS.md` con bloque LOCKED. | 8 |
-| `aspec/` | `config.yaml` + `specs/` (**19 capacidades**, incl. `memory-ops`, `machine-environment`, `session-failure-report`) + **1 change activo** (`ancleto-vscode-extension`) + `changes/archive/` (29, el último `2026-10-28-reingenieria-memoria-first`). | 147 |
+| `aspec/` | `config.yaml` + `specs/` (**19 capacidades**, incl. `memory-ops`, `machine-environment`, `session-failure-report`) + **2 changes activos** (`ancleto-vscode-extension` y `decisiones-y-contrato-checkpoint`, este último con delta `ADDED`-only de `prompt-contracts`) + `changes/archive/` (29, el último `2026-10-28-reingenieria-memoria-first`). | 150 |
 | `test/**` | 15 archivos `*.test.js` (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`, `memory-engine`, `memory-fixtures`, `memory-pr1-contract`, `stats-failures`, `tier-models`, `working-context`) + `fixtures/{seed,golden}.json`. | 17 |
 | `docs/**` | Documentación del framework + relevamiento (`.md`) + este seed; excluida del pack por el tier. | 21 |
 | `documentation/**` | Material legado `lnx-cli/` + guías; **gitignored**. El mapa lo cuenta porque recorre el disco, pero el pack lo excluye por `.gitignore`. | 340 |
@@ -30,14 +30,14 @@ por directorio de primer nivel).
 | `.opencode/**` | Instalación local del host (incluye `.ancleto-tier` = `minimo` y los mirrors `.opencode/agents/*.md`, que se regeneran); gitignored. | 66 |
 | `.github/workflows/**` | `publish.yml` (publicación a npm + Release + gate de lint). | 1 |
 | `eslint.config.js` | Flat config del linter (4 reglas sobre `src/` y `test/`). | 1 |
-| Raíz | `package.json` (`0.15.3`), `README.md`, `CHANGELOG.md` (hasta `0.15.3`), `DESIGN-memory-engine-v0.2.0.md`, `optimizacion-de-tokens.md` (análisis, no runtime), `LICENSE` (MIT), `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `package-lock.json`, `.ancletorc` (gitignored). **Ya no existe `BACKLOG.md`.** | 14 |
+| Raíz | `package.json` (`0.16.0`), `README.md`, `CHANGELOG.md` (hasta `0.16.0`), `DESIGN-memory-engine-v0.2.0.md`, `optimizacion-de-tokens.md` (análisis, no runtime), `LICENSE` (MIT), `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `package-lock.json`, `.ancletorc` (gitignored). **Ya no existe `BACKLOG.md`.** | 14 |
 
 ## Fuera del árbol versionado (gitignored, puede no existir)
 
 `.ancletorc`, `.opencode/**` (instalación local del host), `.ancleto/**` (memoria y artefactos
 locales) y `/documentation` están en `.gitignore`. En este checkout `.ancletorc` y `.opencode/`
 **sí existen**; persisten `.ancleto/memory.db`, `.ancleto/working-context.md` y
-**`.ancleto/machine-env.md`** (generado el 2026-10-27). El tier del proyecto vive en
+**`.ancleto/machine-env.md`** (generado el 2026-10-29). El tier del proyecto vive en
 `.opencode/.ancleto-tier` (`minimo`). `audit logs/` **no** está en `.gitignore`: es untracked y
 se excluye solo del commit por no agregarse.
 
@@ -55,9 +55,9 @@ la topología) + `test/**`, `docs/**`, `**/*.md` (tier) + `**/*.test.*`, `**/*.s
 `**/__tests__/**`, imágenes (`png/jpg/svg/ico`), `public`, lockfiles (`package-lock.json`,
 `yarn.lock`, `pnpm-lock.yaml`). Además, Repomix respeta `.gitignore` (`.opencode/`, `.ancletorc`,
 `.ancleto/`, `/documentation`). `minimo` **no** fija token budget (solo `gratis`: 50k); el pack
-de esta corrida fue de **689 archivos, ~16.512 tokens**. `audit logs/` no está excluido y por eso
+de esta corrida fue de **692 archivos, ~16.512 tokens**. `audit logs/` no está excluido y por eso
 aparece en el pack; no se usa como evidencia. El conteo del pack difiere del `total_files` del
-mapa (701) porque el mapa recorre el disco y el pack aplica los ignores del tier y `.gitignore`.
+mapa (704) porque el mapa recorre el disco y el pack aplica los ignores del tier y `.gitignore`.
 
 ## Cobertura conceptual
 

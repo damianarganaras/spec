@@ -2,6 +2,41 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.16.0] - 2026-10-29
+
+### Added
+- **`memory snapshot --out <archivo> [--force] [--json]`**: copia consistente de la base con `VACUUM INTO`, historial incluido (`superseded_by`), verificación `quick_check` del destino y reemplazo con backup.
+- **`memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]`**: consolida duplicados marcando cada source con `superseded_by` hacia un target activo existente; transacción única, mismas `type` obligatorias, sin tablas nuevas.
+- Fixtures de memoria (`test/fixtures/memory/seed.json`, `golden.json`) y corpus golden M01–M10 evaluado contra una DB congelada.
+
+### Changed
+- `memory doctor` es **estrictamente read-only** por defecto: no ejecuta checkpoint, DDL ni escrituras sobre FTS. `--rebuild` es el único camino que escribe.
+- El check `Indice FTS5` detecta desalineación en modo read-only comparando `memory_fts_docsize` contra `memory_nodes` (tres estados: índice ausente = falla; sombra no consultable = omitido; resto = comparación).
+- El check `Checkpoint WAL` reporta el estado observable del `-wal` sin ejecutar checkpoint.
+- El merge real refresca `.ancleto/working-context.md`; si el refresco falla, el comando reporta que el merge se aplicó y que el bloque quedó desactualizado, con exit code distinto de cero.
+
+### Fixed
+- Espera determinista de frames del WAL en los tests de MCP: fallaban sólo en CI Linux.
+
+### Security
+- El snapshot compara por identidad de archivo (`realpathSync.native`, case-insensitive en win32) para que un alias de ruta no borre la base fuente.
+
+## [0.15.3] - 2026-10-27
+
+### Changed
+- Contrato de delegación de agentes: `@coder` es el único que commitea, sólo los paths nombrados en el checkpoint.
+- `git push` denegado como capacidad en toda definición con `bash`; el merge requiere aprobación explícita del usuario caso por caso.
+- `task` declarado en las 10 definiciones, `true` sólo en el orquestador.
+- `@tester` devuelve un `change diff` (`-U3`, tope de 200 líneas, truncamiento declarado); `@reviewer` lo consume como evidencia y mantiene `bash: false`.
+- Reglas de memoria del proyecto destiladas por delegación (5 reglas / 1500 bytes).
+- `@documenter` debe citar `archivo:línea` en cada afirmación actualizada o confirmada.
+- Ningún agente borra una carpeta de change; `@spec-writer` no recibe capacidad de borrado.
+- Content guards migrados a asserts de comportamiento con pruebas de mutación.
+- Cierra los ítems de backlog 1, 3 y 9.
+
+### Known limitation
+- Los denies de permisos de bash **no** son una frontera técnica en este host: son evadibles con un shim `.CMD` (ítem 19 del backlog).
+
 ## [0.15.2] - 2026-10-26
 
 ### Added

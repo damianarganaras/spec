@@ -2,6 +2,16 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.16.2] - 2026-10-29
+
+### Added
+- **`## Decisiones` en el proposal**: los siete generadores del proposal (`@spec-writer` y las skills `propose`, `ff`, `continue`, `new`, `onboard`, `upgrade`) emiten la sección, con el shape canónico declarado una sola vez en `agents/spec-writer.md` y referencia desde las skills.
+
+### Changed
+- **Checkpoint de contrato**: el checkpoint posterior a `@spec-writer` aprueba el contrato del cambio —intención, alcance, `Requirement` nuevo o existente, riesgos, decisión de arquitectura si aplica, validación prevista y paths autorizados— en menos de una pantalla; ya no enumera documentos ni depende de `design.md`. Archive y merge siguen siendo stops separados y explícitos.
+- Delta `ADDED`-only mergeado en `aspec/specs/prompt-contracts/spec.md`: 2 `Requirement` nuevos, 0 existentes modificados.
+- **Nota de release**: `v0.16.1` se tageó sin bump de versión y su `npm publish` se omitió por versión ya existente; `0.16.2` es la primera versión publicada que incluye estos cambios.
+
 ## [0.16.0] - 2026-10-29
 
 ### Added

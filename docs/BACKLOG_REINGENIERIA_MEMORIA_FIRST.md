@@ -237,6 +237,7 @@ decisión de arquitectura, validación prevista, paths autorizados) en menos de 
 **Tests.** T01 (proposal + delta, sin `design.md`), T05 (decisión que nace durante la implementación
 aparece en el proposal), T22 (enmienda aprobada cuando cambia alcance o riesgo), T12 (tarea trivial:
 sin aprobaciones extra), T13 (cambio crítico: los stops exigidos siguen ahí).
+(La mitad "sin `design.md`" se verifica en PR-4; PR-2 sólo cubre proposal + delta.)
 Incluye **tests de mutación**: el guard debe fallar si `## Decisiones` desaparece del proposal
 generado o si el checkpoint vuelve a exigir "documentos".
 

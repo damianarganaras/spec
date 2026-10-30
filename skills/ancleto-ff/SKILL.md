@@ -47,8 +47,7 @@ Write each file directly, reading completed ones first:
 
 1. **`proposal.md`** — problem, proposed change, scope, risks, and `## Decisiones` — one entry per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`, or the single-line form `decisión | alternativa descartada | por qué | fuente/evidencia`; the full shape lives in the Decisions section of `@spec-writer`. With Work Item context, use its title/description as the problem statement, acceptance criteria as the requirements basis, and include `## Related Work Item`: `**#{id}** — {title} ({type}) · Project: {project}`.
 2. **`specs/<capability>/spec.md`** — one file per capability touched, with `## ADDED Requirements` / `#### Scenario:` blocks in WHEN/THEN form. Skip only when the change specifies no behavior, and say why.
-3. **`design.md`** — approach, architecture, validation.
-4. **`tasks.md`** — phased `- [ ]` checklist of small, independently verifiable tasks.
+3. **`tasks.md`** — phased `- [ ]` checklist of small, independently verifiable tasks.
 
 Verify each file exists before moving on. If an artifact needs user input, ask (use the runtime question tool when available) and continue.
 
@@ -58,9 +57,9 @@ Report change name/location and artifacts created, then: "All artifacts created!
 
 ## Guardrails
 
-- Create ALL artifacts needed for implementation in this single run (proposal, specs, design, tasks).
+- Create ALL artifacts needed for implementation in this single run (proposal, specs, tasks).
 - Read dependency artifacts before creating the next one.
-- Use the fixed templates above as structure; keep each artifact focused on its own concern (what / how / steps / requirements).
+- Use the fixed templates above as structure; keep each artifact focused on its own concern (what / steps / requirements).
 - **IMPORTANT**: project background and constraints guide what you write but must never appear as blocks in the output files.
 - If context is critically unclear, ask the user — but prefer reasonable decisions to keep momentum.
 - If a change with that name already exists, ask whether to continue it or create a new one.

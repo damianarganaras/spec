@@ -28,7 +28,6 @@ Implement a change's tasks directly from its artifact files. No external binarie
 Read `aspec/changes/<name>/` and load:
 
 - `proposal.md` — what & why (if present)
-- `design.md` — approach and decisions (if present)
 - `tasks.md` — task list with checkbox state (required)
 - `specs/` — delta requirements (if present)
 
@@ -36,7 +35,7 @@ If `tasks.md` is missing, report it and stop: nothing to implement. Suggest comp
 
 ### 3. Read context files
 
-Read every artifact found in step 2 before writing code; do not assume file names beyond these four.
+Read every artifact found in step 2 before writing code; do not assume file names beyond these three.
 
 ### 4. Show current progress
 

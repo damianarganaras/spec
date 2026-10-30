@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-30T15:53:12Z
-pluginVersion: 0.16.2
+generatedAt: 2026-10-30T19:34:51Z
+pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
 
@@ -177,13 +177,18 @@ skillVersion: '2.3'
       sin repetir texto. `test/content-guards.test.js` aserta **keywords de comportamiento** y
       presencia de salvaguardas, no redacción literal. Evidencia: `AGENTS.md`,
       `templates/AGENTS.md`, `aspec/specs/prompt-contracts/spec.md`.
-24. **Actualización de artifacts de un change (`ancleto-update`, `0.12.0`).** La skill
+24. **Actualización de artifacts de un change (`ancleto-update`).** La skill
       `ancleto-update` (`/cleto-update`) actualiza los artifacts de un change existente ante
-      cambios de definición con merge no destructivo: clasifica por artifact dueño
-      (`specs/`, `design.md`, `proposal.md`, `tasks.md`), detecta drift entre delta specs y specs
+      cambios de definición con merge no destructivo. Clasificación vigente por artifact dueño:
+      requisito/comportamiento → `specs/<capability>/spec.md`; **decisión de diseño →
+      `proposal.md ## Decisiones`**; alcance → `proposal.md`; trabajo nuevo → `tasks.md`.
+      `design.md` **no** se crea ni se actualiza. Detecta drift entre delta specs y specs
       principales y pregunta el modo de escritura (in-place vs `rev2`). Evidencia:
-      `skills/ancleto-update/SKILL.md`, `commands/cleto-update.md`,
-      `aspec/specs/artifact-update/spec.md`.
+      `skills/ancleto-update/SKILL.md` (`### 4`), `docs/skill-ancleto-update.md`,
+      `aspec/changes/retire-design-and-context-artifacts/specs/artifact-update/spec.md`.
+      **Conflicto registrado**: el spec fuente `aspec/specs/artifact-update/spec.md` (líneas 16 y 33)
+      todavía mapea "decisión de diseño → `design.md`" porque el delta del retiro **aún no se
+      mergeó**; ver `unknowns.md`.
 25. **Affected-set determinístico por grafo de imports (`throughput-pipeline`).** El conjunto
       afectado es la **clausura transitiva de dependientes** sobre el grafo de imports, sembrada
       por los `task-owned files` e incluyendo siempre los archivos tocados; es **determinístico**,
@@ -432,7 +437,26 @@ skillVersion: '2.3'
      `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes y **no** incluye
      al orquestador (`opencode.json:1-14`). `package.json` → `files` lista `agents`, `commands`,
      `skills`, `templates`, `profiles` y `src`; `opencode.json` **no** se publica
-     (`package.json:10-17`). Es configuración del checkout, no contrato del producto.
+      (`package.json:10-17`). Es configuración del checkout, no contrato del producto.
+
+47. **Retiro de `design.md` y `context.md` sin artifact sucesor
+      (`retire-design-and-context-artifacts`, change **activo**).** El flujo nuevo produce
+      **solo** `proposal.md`, `tasks.md` y `specs/`; ningún generador emite `design.md` ni
+      `context.md`. Una decisión durable se registra en `proposal.md ## Decisiones` (shape en
+      `agents/spec-writer.md`). Los consumidores (`@coder`, `@tester`, `@reviewer`, `@documenter`,
+      `@orchestrator`, `ancleto-apply`, `ancleto-verify`, `ancleto-bulk-archive`) tratan un
+      `design.md`/`context.md` legacy como lectura **opcional**, nunca precondición ni hueco de
+      completitud. `ancleto-verify` declara la frontera de completitud en `tasks.md` + `specs/`.
+      El archive (`ancleto-archive`, `ancleto-onboard`, `ancleto-bulk-archive`) **mueve el
+      directorio sin modificarlo**: ya no borra `context.md`, y los artifacts de changes
+      archivados no se eliminan, migran ni reescriben. Evidencia:
+      `aspec/changes/retire-design-and-context-artifacts/proposal.md` (`## Decisiones`) y
+      `specs/prompt-contracts/spec.md`; `agents/spec-writer.md`, `agents/{orchestrator,coder,tester,reviewer,documenter}.md`,
+      `skills/ancleto-{apply,verify,archive,bulk-archive,continue,update,workflow,propose,ff,new,onboard,explore,upgrade}/SKILL.md`,
+      `skills/ancleto-upgrade/references/templates.md`, `docs/skill-ancleto-update.md`,
+      `docs/skill-ancleto-upgrade.md`, `README.md`; guard único `test/content-guards.test.js`.
+      **Estado del árbol**: implementado en el working tree pero **sin commitear**; el change
+      tampoco está archivado.
 
 ## Seed incremental (contrato del discovery)
 
@@ -442,10 +466,11 @@ skillVersion: '2.3'
   - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
     raíz nuevo (o un archivo material como `package.json`).
 - En esta corrida el reporte fue `STALE` / `impact: material`, con
-  `materialReasons: ["archivo material modificado: package.json", "area raiz nueva:
-  opencode.json"]`. El bump `0.16.1`→`0.16.2` y el nuevo `opencode.json` explican la
-  clasificación; el cambio de comportamiento real (MEM-03: refs obligatorias y promoción al
-  archivar) vive en `src/**` y en los contratos de `agents/**`/`skills/**`.
+  `materialReasons: ["archivo material modificado: package.json"]` y `changedAreas` que incluye
+  `agents`, `skills`, `docs`, `README.md`, `test` y `aspec`. El bump `0.16.2`→`0.17.0` explica
+  la clasificación material (detección por lista de archivos, no por contrato); el cambio de
+  comportamiento real de esta corrida es el **retiro de `design.md`/`context.md`**
+  (`retire-design-and-context-artifacts`, activo), más el release `0.17.0` de MEM-03.
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **solo** esos
   documentos. El mapeo vive en `seed-map.json`; sin ese archivo la regeneración es completa.
 - **`affectedDocs` (seed) ≠ `affected-set` (change).** `ancleto discovery --check` devuelve
@@ -462,7 +487,8 @@ skillVersion: '2.3'
 - **Detección material por área, no por contrato**: `package.json` es material por lista de
   archivos, así que **cualquier** bump de versión —incluso sin cambio de comportamiento— marca
   `impact: material` y lista los documentos asociados. En esta corrida la razón material fue el
-  bump `0.16.1`→`0.16.2` **más** la aparición del área raíz `opencode.json`.
+  bump `0.16.2`→`0.17.0`; el retiro de `design.md`/`context.md` (en `agents/**`, `skills/**`,
+  `docs/**`, `test/**`) no es, por sí solo, una razón material.
 - `EXPECTED_DOCS` del CLI = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`,
   `integrations`, `decisions`, `unknowns`, `units/_map`).
 - Evidencia: `README.md`, `src/cli/index.js` (`checkDiscovery`, `computeImpact`,
@@ -470,11 +496,13 @@ skillVersion: '2.3'
 
 ## Riesgos, deuda y acoplamiento
 
-- **MEM-03 está commiteado pero no publicado.** El commit `90dba0d` (refs obligatorias y
-  promoción al archivar) está 1 commit por delante del commit de release `6f80293`; el tag
-  `v0.16.2` (en `main`) no lo incluye y `CHANGELOG.md` no lo menciona. El seed describe el
-  working tree de `development`, no el artefacto publicado. Evidencia: `git log`, `git tag`,
-  `CHANGELOG.md`.
+- **MEM-03 ya está publicado como `0.17.0`; el retiro de `design.md`/`context.md` no.** El
+  release `b283ff2` (`chore(release): v0.17.0`) y el tag **anotado** `v0.17.0` en `main`
+  (`cdc18d5`, "Merge development into main for v0.17.0") cubren MEM-03 y `CHANGELOG.md` lo
+  detalla. En cambio, las modificaciones del retiro (`agents/**`, `skills/**`, `docs/skill-*.md`,
+  `README.md`, `test/content-guards.test.js`) están **sin commitear** en `development` y el
+  change sigue activo: el seed describe el working tree, no el artefacto publicado. Evidencia:
+  `git status --short`, `git show --stat HEAD`, `git tag`, `CHANGELOG.md`.
 - **Pack comprimido y sesgado a código.** El tier resuelto (`minimo`) ignora `test/**`,
   `docs/**` y `**/*.md`; Repomix además respeta `.gitignore` (`.opencode/`, `.ancletorc`,
   `.ancleto/`, `/documentation`). Por eso `agents/`, `commands/`, `skills/`, `templates/`,
@@ -497,6 +525,24 @@ skillVersion: '2.3'
   son obligatorios, la aprobación autoriza solo implementar, archive y merge siguen separados y
   los guards de `test/content-guards.test.js` lo anclan por comportamiento. Evidencia:
   `agents/orchestrator.md`, `aspec/changes/archive/2026-10-29-decisiones-y-contrato-checkpoint/`.
+- **Retiro de artifacts: spec fuente y código divergen hasta el archive.** El delta del change
+  activo (`specs/artifact-update`, `specs/prompt-contracts`) y los agents/skills ya implementan el
+  retiro, pero el **spec fuente** `aspec/specs/artifact-update/spec.md` conserva la clasificación
+  vieja (`decisión de diseño → design.md`) y `aspec/specs/prompt-contracts/spec.md` aún no tiene el
+  Requirement de retiro. Mientras el change no se archive/mergee, cualquier lectura del spec fuente
+  contradice al código. Mitigación: tratar el delta del change como contrato vigente y mergear
+  antes de prometer el estado publicado. Evidencia:
+  `aspec/changes/retire-design-and-context-artifacts/specs/**`, `aspec/specs/artifact-update/spec.md`.
+- **Guard del retiro acotado por sección, no global.** `test/content-guards.test.js` prohíbe
+  `design.md`/`context.md` solo en las superficies y slices que declaran el set/orden de artifacts,
+  y exige un control positivo de que la lectura legacy sigue viva en `continue`, `update`, `coder`,
+  `tester` y `reviewer`. Un grep global rompería por menciones legítimas (archive, checkpoint,
+  specs históricos); aflojar el predicado dejaría pasar una regresión. Evidencia:
+  `test/content-guards.test.js` (constantes `RETIRED_ARTIFACT_GENERATORS`,
+  `NO_DESIGN_MD_SLICERS`, `NO_CONTEXT_MD_SURFACES`, `LEGACY_READ_SLICES`).
+- **El archive ya no borra `context.md`.** Un change legacy activo con `context.md` se archiva con
+  ese archivo adentro; es el tradeoff aceptado (preserva el registro, evita data loss). Ningún
+  consumidor lo exige, así que su presencia no debe leerse como artifact del flujo nuevo.
 - **Refs obligatorias: el radio de rechazo es amplio.** Toda escritura MCP (`source:
   mcp:ancleto-memory`) o de agente debe traer refs resolubles; un heading de spec que cambie,
   un change que se archive con otro slug o un `path:` que desaparezca vuelven inválida una
@@ -610,28 +656,31 @@ skillVersion: '2.3'
 - **Staleness advisory puede dar falsos positivos triviales.** La normalización es acotada
   (CRLF, espacios finales, salto final); cambios cosméticos mayores podrían disparar
   `desactualizado` aunque el contenido sea equivalente. Riesgo aceptado: se prefiere reportar.
-- **Versión y publicación.** `package.json` marca `0.16.2`; el tag `v0.16.2` es **anotado** y
-  vive en `main` (`6e90903`); `development` HEAD `90dba0d` está 1 commit por delante del commit
-  de release `6f80293`. Evidencia: `package.json`, `git tag`, `git log`.
+- **Versión y publicación.** `package.json` marca `0.17.0`; el tag `v0.17.0` es **anotado** y
+  vive en `main` (`cdc18d5`, merge del release); `development` HEAD `b283ff2` es el commit de
+  release. El retiro de `design.md`/`context.md` sigue **sin commitear ni publicar**. Evidencia:
+  `package.json`, `git tag`, `git log`, `git status --short`.
 - **Docs de producto desalineados.** `PRODUCT.md` declara 12 commands y 18 skills (hoy 16 y 21),
-  no menciona `machine-env`, `stats failures`, `memory snapshot` ni `memory merge`, y conserva la
-  guía residual de `searchMemory`; `README.md` sigue describiendo `memory doctor` como
+  no menciona `machine-env`, `stats failures`, `memory snapshot`, `memory merge` ni el retiro, y
+  conserva la guía residual de `searchMemory`; `README.md` sigue describiendo `memory doctor` como
   "reconstruye el índice FTS5 y fusiona el WAL", que ya **no** es el comportamiento por defecto.
-  `CHANGELOG.md` cubre `0.16.2` pero no el commit MEM-03. El seed refleja el estado observado.
+  `CHANGELOG.md` cubre `0.17.0` e incluye MEM-03, pero **no** el retiro. El seed refleja el estado
+  observado.
   Evidencia: `PRODUCT.md`, `README.md`, `CHANGELOG.md`, `commands/`, `skills/`,
   `src/core/memory/doctor.js`.
 - **Sin backlog raíz.** `BACKLOG.md` no existe. Las deudas que el seed anterior citaba por ítem
   (guía residual de `searchMemory`, protección de rama, detección material por archivo, comandos
   denegados fuera de medición) siguen existiendo como observaciones, pero **no hay fuente
   canónica** que las registre.
-- **Deuda resuelta hasta 0.16.2**: (a) contrato de validaciones declarativo; (b) dedupe de reglas
+- **Deuda resuelta hasta 0.17.0**: (a) contrato de validaciones declarativo; (b) dedupe de reglas
   y día-cero del working-context; (c) `PRODUCT.md` declara `## Project Commands`; (d) pipeline de
   cierre; (e) refresh on-write CLI y staleness advisory; (f) entorno de máquina; (g) reporte de
   fallos; (h) intake de sesión, techo de lecturas y aviso de overflow accionable; (i) PR-1
   memoria-first (snapshot, doctor read-only, merge), publicado en `0.16.0`; (j) PR-2 (checkpoint
   de contrato y `## Decisiones`), publicado en `0.16.2`; (k) MEM-03 (refs obligatorias y
-  promoción al archivar), **archivado y commiteado pero aún no publicado**. Evidencia:
-  `CHANGELOG.md`, `aspec/changes/archive/`, `package.json`, `git log`.
+  promoción al archivar), publicado en `0.17.0`. **Pendiente de publicar**: `retire-design-and-context-artifacts`
+  (activo, sin commitear). Evidencia: `CHANGELOG.md`, `aspec/changes/`,
+  `package.json`, `git log`.
 
 ## Decisiones registradas en memoria del repo
 

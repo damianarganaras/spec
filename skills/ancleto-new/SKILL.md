@@ -48,11 +48,10 @@ aspec/changes/<name>/
 A new change starts with zero artifacts. Standard sequence, in dependency order:
 
 1. `proposal.md` (what & why)
-2. `design.md` (how)
-3. `tasks.md` (implementation steps)
-4. `specs/` (delta requirements, optional)
+2. `tasks.md` (implementation steps)
+3. `specs/` (delta requirements, optional)
 
-Report: "Change `<name>` created at `aspec/changes/<name>/`. 0/4 artifacts complete."
+Report: "Change `<name>` created at `aspec/changes/<name>/`. 0/3 artifacts complete."
 
 ### 5. Show the template for the first artifact
 
@@ -63,7 +62,7 @@ Present the `proposal.md` template: `# Proposal: <title>`, then `## Problem`, `#
 ## Output
 
 - Change name and location
-- Artifact sequence and status (0/4)
+- Artifact sequence and status (0/3)
 - The first-artifact template
 - "Ready to create the first artifact? Run `ancleto-propose`, or describe this change and I'll draft it."
 

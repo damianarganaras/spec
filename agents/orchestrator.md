@@ -112,7 +112,7 @@ Before fetching anything, if the request references a Work Item (a numeric ID, o
 
 If a relevant active change exists:
 
-1. Read its state — which artifacts are present (`proposal.md`, `design.md`, `tasks.md`, `specs/`) and the task progress in `tasks.md`.
+1. Read its state — which artifacts are present (`proposal.md`, `tasks.md`, `specs/`) and the task progress in `tasks.md`.
 2. Summarize what you found and offer the developer three options (do NOT auto-decide; use the apparent state only to suggest a sensible default):
    - **Continue** — the change is mid-way (artifacts or tasks pending). Resume from the appropriate stage only when the current session still has the material implementation scope: `@spec-writer` for missing artifacts, `@coder` for pending implementation tasks, `@tester`/`@reviewer` for validation.
    - **Archive** — the change looks finished (tasks complete, implementation done) but was never archived. Delegate to `@documenter` (Change Archive mode).
@@ -215,7 +215,7 @@ In the explore stance you are a **read-only thinking partner**:
 Leaving explore:
 
 - When the user converges on a concrete change → proceed to normal triage.
-- If the user wants to capture the thinking as artifacts (proposal/design/spec), that is the `spec-required` path — delegate to `@spec-writer` (you cannot write artifacts yourself).
+- If the user wants to capture the thinking as artifacts (proposal/spec), that is the `spec-required` path — delegate to `@spec-writer` (you cannot write artifacts yourself).
 - No pressure to formalize — sometimes the thinking itself is the value.
 
 **Boundary with `triage-clarifier` (do not conflate):**

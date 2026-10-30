@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-10-30T15:53:12Z
-pluginVersion: 0.16.2
+generatedAt: 2026-10-30T19:34:51Z
+pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
 
@@ -39,8 +39,8 @@ CLI monolítica en ESM, sin framework externo. Capas:
 | Entorno de máquina | `src/core/machine-env.js` | **Dueño único** de detectar plataforma/shell/EOL/tooling (disponibilidad = **resoluble e invocable**, con sonda `--version` acotada), renderizar y escribir `.ancleto/machine-env.md`, y garantizar su exclusión local vía `info/exclude`; `checkMachineEnvTracked` para `check`. |
 | Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (refs fail-closed en `recordNode`, rechazo de secretos, search/record/export/import/gc/**merge**, `formatTopologyBlock`, procedencia `source`, aviso de overflow), `snapshot` (**copia consistente con historial**), `tools`, `mcp-server`, `doctor` (**read-only por defecto**), `working-context` (render compartido; refresh on-write CLI compare-based y staleness advisory). |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 16 commands, 21 skills, 2 templates + perfil `test`). |
-| Contratos de prompt | `agents/*.md` | Normativa del pipeline: intake de sesión, techo de lecturas, trigger de Recall, contrato de validación, **checkpoint de contrato** tras `@spec-writer`, sección `## Decisiones` del proposal y **promoción al archivar**. Los mirrors `.opencode/agents/*.md` se regeneran, no se editan a mano. |
-| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 1 change activo + `changes/archive/` (31). |
+| Contratos de prompt | `agents/*.md` | Normativa del pipeline: intake de sesión, techo de lecturas, trigger de Recall, contrato de validación, **checkpoint de contrato** tras `@spec-writer`, sección `## Decisiones` del proposal, **retiro de `design.md`/`context.md`** (lectura legacy opcional, nunca precondición) y **promoción al archivar**. Los mirrors `.opencode/agents/*.md` se regeneran, no se editan a mano. |
+| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 2 changes activos (`ancleto-vscode-extension`, `retire-design-and-context-artifacts`) + `changes/archive/` (31). El delta del retiro aún **no** está mergeado en `aspec/specs/`. |
 | Config del host opencode | `opencode.json` (raíz) | Override de `agent.model` para 9 subagentes; **no** se publica en el paquete. |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
 | Tests | `test/*.test.js` | Suite `node --test` (15 archivos; no re-ejecutada en esta regeneración). |
@@ -143,6 +143,15 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   `<ContextOverflowWarning>`, **checkpoint de contrato** tras `@spec-writer` y **promoción**
   en el archive. Evidencia: `agents/orchestrator.md`,
   `aspec/specs/prompt-contracts/spec.md`.
+- **Set de artifacts retirado** (`retire-design-and-context-artifacts`, activo): ningún generador
+  (`@spec-writer`, `propose`, `ff`, `continue`, `new`, `onboard`, `upgrade`) emite `design.md` ni
+  `context.md`; el set es `proposal.md` + `tasks.md` + `specs/`. Una decisión durable va a
+  `proposal.md ## Decisiones`. Los consumidores (`coder`, `tester`, `reviewer`, `documenter`,
+  `orchestrator`, `apply`, `verify`, `bulk-archive`) leen un `design.md`/`context.md` legacy solo
+  como contexto opcional y `verify` mide completitud contra `tasks.md` + `specs/`. El archive
+  mueve el directorio sin modificarlo (ya no borra `context.md`). Evidencia:
+  `aspec/changes/retire-design-and-context-artifacts/`, `agents/*.md`, `skills/**`,
+  `test/content-guards.test.js`.
 - **Ciclo SDD**: comandos `/cleto-*` que consumen `aspec/changes/<name>/` y las skills nativas;
   no requieren binario externo. Incluye `/cleto-review` (calidad), `/cleto-security`,
   `/cleto-update` y `/cleto-transplant`.
@@ -221,17 +230,19 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 
 ## Estado del repositorio
 
-Versión `0.16.2` en rama `development`; tag **anotado** `v0.16.2` en `main` y HEAD `90dba0d`
-**1 commit por delante** del commit de release `6f80293`. `CHANGELOG.md` cubre hasta `0.16.2`
-(PR-2: `## Decisiones` y checkpoint de contrato). El commit `90dba0d` (MEM-03: refs
-obligatorias y promoción al archivar) está en el árbol pero **no** en el changelog ni en el tag.
-El árbol de trabajo está **limpio**: los changes `decisiones-y-contrato-checkpoint` y
-`2026-10-30-mem-03-promocion-decisiones-refs` ya están archivados. Dogfooding histórico: el
-framework fue inicializado sobre este repo; este checkout **sí materializa `.ancletorc` y
-`.opencode/`** (ambos gitignored, no versionados) y persiste `AGENTS.md`, `PRODUCT.md`,
-`aspec/` y `.ancleto/memory.db`. El tier resuelto es **`minimo`** vía
-`.opencode/.ancleto-tier`. **`.ancleto/machine-env.md` ya existe** (generado el 2026-10-29 con
-`ancleto: 0.16.2`) y los mirrors `.opencode/` están regenerados. El único **change activo** es
-`ancleto-vscode-extension`; el más reciente archivado es
+Versión `0.17.0` en rama `development`; tag **anotado** `v0.17.0` en `main` (`cdc18d5`, "Merge
+development into main for v0.17.0"); HEAD `b283ff2` (`chore(release): v0.17.0`). `CHANGELOG.md`
+cubre hasta `0.17.0` (MEM-03: refs obligatorias, promoción al archivar, resolutores y
+`opencode.json`). El **retiro de `design.md`/`context.md`** está implementado en el working tree
+pero **sin commitear**: `git status --short` muestra modificados `agents/*.md` (6), `skills/**`,
+`docs/skill-*.md`, `README.md`, `test/content-guards.test.js` y el seed; el change
+`retire-design-and-context-artifacts` está activo (untracked). Dogfooding histórico: el framework
+fue inicializado sobre este repo; este checkout **sí materializa `.ancletorc` y `.opencode/`**
+(ambos gitignored, no versionados) y persiste `AGENTS.md`, `PRODUCT.md`, `aspec/` y
+`.ancleto/memory.db`. El tier resuelto es **`minimo`** vía `.opencode/.ancleto-tier`.
+**`.ancleto/machine-env.md` ya existe** (generado el 2026-10-30 con `ancleto: 0.17.0`) y los
+mirrors `.opencode/` están regenerados. Hay **dos changes activos**: `ancleto-vscode-extension` y
+`retire-design-and-context-artifacts`; el más reciente archivado es
 `2026-10-30-mem-03-promocion-decisiones-refs`. Evidencia: `.gitignore`,
-`.discovery-map.json`, `ancleto discovery --check`, `git log`, `aspec/changes/`.
+`.discovery-map.json`, `ancleto discovery --check`, `git log`, `git status --short`,
+`aspec/changes/`.

@@ -266,7 +266,7 @@ Create `aspec/changes/${CHANGE_NAME}/` (+ `specs/` if applicable). If it exists,
 
 ## Step 7 — Write the aspec artifacts
 
-Read `references/templates.md`; write in order `proposal.md`, `specs/{LIBRARY_SLUG}{TARGET_VERSION}.md`, `tasks.md`, `design.md`.
+Read `references/templates.md`; write in order `proposal.md`, `specs/{LIBRARY_SLUG}{TARGET_VERSION}.md`, `tasks.md`.
 
 - every code match: `file`, `line_number`, `snippet`
 - `confidence` (`high|medium|low`)
@@ -285,7 +285,7 @@ Library: {LIBRARY} {CURRENT_VERSION} → v{TARGET_VERSION} | Docs: {URL(s) | "No
 Patterns: {N} version (high) + {N} semantic (docs) | Analysis: {source_files_scanned} source / {test_files_scanned} tests / {config_files_scanned} config / {total_matches} matches
 Affected: {N} package.json, {N} config, {N} code, {N} tests | Breaking changes: {id/severity/description/occurrences/confidence | "None detected"}
 Low confidence: {file:line + reason | "None"} | Validation commands: {the project's declared commands from `PRODUCT.md` → `## Project Commands` | "not-configured"}
-Artifacts: proposal.md ✅ | specs/{LIBRARY_SLUG}{TARGET_VERSION}.md ✅ | tasks.md ✅ ({N} tasks, 6 phases) | design.md ✅
+Artifacts: proposal.md ✅ | specs/{LIBRARY_SLUG}{TARGET_VERSION}.md ✅ | tasks.md ✅ ({N} tasks, 6 phases)
 Implement: /cleto-apply {CHANGE_NAME}
 ```
 

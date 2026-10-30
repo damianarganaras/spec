@@ -30,14 +30,16 @@ Cada cambio tiene un único artifact dueño:
 | Qué cambió | Artifact dueño |
 |---|---|
 | Requisito / comportamiento | `specs/<capability>/spec.md` (`## MODIFIED Requirements`) |
-| Decisión de diseño | `design.md` |
+| Decisión de diseño | `proposal.md ## Decisiones` |
 | Alcance | `proposal.md` |
 | Trabajo nuevo | `tasks.md` |
 
 ## El flujo
 
 1. **Seleccionar el change** — nunca auto-selecciona; si el nombre cae en `archive/`, se detiene.
-2. **Leer los artifacts** presentes (proposal, specs, design, tasks).
+2. **Leer los artifacts** presentes (proposal, specs, tasks). Si existe un `design.md` o
+   `context.md` legacy, se lee como contexto opcional y de solo lectura; no es un artifact
+   del flujo nuevo.
 3. **Consolidar el cambio** desde dos fuentes aditivas: el **drift** entre los delta specs y los specs
    principales, y la definición que describe el usuario.
 4. **Clasificar por dueño y mergear** con preservación del contenido no mencionado.

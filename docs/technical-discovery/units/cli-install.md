@@ -21,8 +21,8 @@ covers:
   - promoción al archivar
   - permisos de shell por agente
 sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js"]
-generatedAt: 2026-10-30T15:53:12Z
-pluginVersion: 0.16.2
+generatedAt: 2026-10-30T19:34:51Z
+pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
 
@@ -101,6 +101,11 @@ skill y en los agentes, y escribe a través del MCP/engine:
    ella escribe un `recordDecision` por bloque (nunca `recordRule`).
 4. La promoción corre **después** de que `@documenter` termina el merge de specs y **nunca en
    paralelo**, para que `spec:` resuelva contra la fuente de verdad.
+
+El paso de archive **mueve el directorio sin modificarlo**: desde el retiro de
+`design.md`/`context.md` ya no borra `context.md` ni ningún scaffold legacy; los artifacts de un
+change archivado se preservan intactos. Evidencia: `skills/ancleto-archive/SKILL.md`,
+`aspec/changes/retire-design-and-context-artifacts/specs/prompt-contracts/spec.md`.
 
 Evidencia: `skills/ancleto-archive/SKILL.md:51-70`,
 `agents/memory-keeper.md:80-97`, `agents/orchestrator.md:192`, `agents/orchestrator.md:326`,

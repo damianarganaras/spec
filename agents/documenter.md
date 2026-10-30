@@ -53,7 +53,7 @@ In this mode:
 - Update only the affected source-of-truth spec at `aspec/specs/{capability}/spec.md` so it reflects the completed direct change
 - Base the update on the change's implemented behavior and the `@reviewer` `SPEC UPDATE RECOMMENDED` flag passed by `@orchestrator`
 - Keep the edit minimal: change only the requirements or scenarios whose behavior actually changed
-- Do not create a change folder, do not archive anything, and do not invent proposal, design, or tasks artifacts
+- Do not create a change folder, do not archive anything, and do not invent proposal or tasks artifacts
 - The flag is only raised when a spec already exists, so the spec file should be present; if it is unexpectedly missing, report that back instead of creating a new spec or capability
 - Return a short summary stating which spec file was updated and what behavior it now reflects
 
@@ -107,7 +107,6 @@ Do not treat archive as a blind file move.
 1. Inspect the change folder in `aspec/changes/{change-name}/`
 2. Confirm the presence of the relevant artifacts:
    - `proposal.md`
-   - `design.md`
    - `tasks.md`
    - `specs/` when the change includes delta specs
 3. Determine whether the change includes spec deltas that must be reflected in `aspec/specs/`

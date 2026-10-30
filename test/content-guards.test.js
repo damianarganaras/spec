@@ -1822,16 +1822,160 @@ describe('contrato del change: ## Decisiones y checkpoint de contrato (CH-02a)',
     }
   })
 
-  it('PR-2 no adelanta PR-4: los generadores siguen emitiendo design.md', () => {
-    // La asercion de no-generacion de design.md es de PR-4: en PR-2 los generadores
-    // tienen que seguir mencionandolo para no adelantar la eliminacion.
-    for (const [name, text] of [
-      ['agents/spec-writer.md', readAgent('spec-writer')],
-      ['skills/ancleto-propose/SKILL.md', readSkill('ancleto-propose')],
-      ['skills/ancleto-ff/SKILL.md', readSkill('ancleto-ff')]
-    ]) {
-      assert.match(text, /design\.md/, `${name} debe seguir mencionando design.md hasta PR-4`)
+  // Retiro de design.md y context.md: superficies que declaran el set u orden de
+  // artifacts de un change nuevo. Los lectores legacy (continue para context.md,
+  // verify) y los agentes con lectura legacy opcional quedan fuera del predicado
+  // negativo: su mención es deliberada y la cubre el control positivo. `update` entra
+  // al predicado de design.md solo por su sección de clasificación; su lectura legacy
+  // queda fuera del slice y también la cubre el control positivo.
+  const RETIRED_ARTIFACT_GENERATORS = [
+    'agents/spec-writer.md',
+    'skills/ancleto-propose/SKILL.md',
+    'skills/ancleto-ff/SKILL.md',
+    'skills/ancleto-new/SKILL.md',
+    'skills/ancleto-onboard/SKILL.md',
+    'skills/ancleto-upgrade/SKILL.md',
+    'skills/ancleto-upgrade/references/templates.md',
+    'skills/ancleto-explore/SKILL.md',
+    'skills/ancleto-continue/SKILL.md'
+  ]
+
+  // Superficies donde una mencion legítima de `design.md` vive fuera de la sección que
+  // declara el set de artifacts consumidos: el guard solo mira esa sección. En
+  // orchestrator, `:313` ("never condition this stop on design.md") queda fuera de
+  // `## Active Change Check`; por eso un predicado de archivo completo sería incorrecto.
+  // En update, la tabla de clasificación (sección 4) es la dueña del mapeo design
+  // decision -> `proposal.md ## Decisiones`; las menciones legacy de `design.md` viven
+  // en `### 2. Read the artifacts` y en la viñeta de aplicación de la misma sección 4,
+  // ambas fuera del slice.
+  const NO_DESIGN_MD_SLICERS = {
+    'agents/orchestrator.md': (text) => section(text, '## Active Change Check', '\n## '),
+    'agents/documenter.md': (text) => section(text, '## Required Workflow', '\n## '),
+    'skills/ancleto-apply/SKILL.md': (text) =>
+      section(text, '### 2. Understand the change state', '\n### '),
+    'skills/ancleto-update/SKILL.md': (text) =>
+      section(
+        text,
+        '### 4. Classify by owner and apply a non-destructive merge',
+        '\nApply the **minimal**'
+      )
+  }
+  const designSurface = (label, text) =>
+    NO_DESIGN_MD_SLICERS[label] ? NO_DESIGN_MD_SLICERS[label](text) : text
+
+  // `workflow` deja de rutear a design.md; el archive deja de borrar context.md. Son
+  // superficies propias del retiro, no generadores de un artifact.
+  const NO_DESIGN_MD_SURFACES = [
+    ...RETIRED_ARTIFACT_GENERATORS,
+    'skills/ancleto-workflow/SKILL.md',
+    ...Object.keys(NO_DESIGN_MD_SLICERS)
+  ]
+  const NO_CONTEXT_MD_SURFACES = [
+    ...RETIRED_ARTIFACT_GENERATORS.filter((label) => label !== 'skills/ancleto-continue/SKILL.md'),
+    'skills/ancleto-archive/SKILL.md',
+    'skills/ancleto-bulk-archive/SKILL.md'
+  ]
+
+  // Predicado negativo unico de las dos aserciones: el mensaje nombra el archivo que
+  // reintroduce el artifact retirado.
+  function assertNoRetiredArtifact(files, artifact) {
+    for (const [label, text] of Object.entries(files)) {
+      assert.ok(
+        !normalize(text).includes(artifact),
+        `${label} no debe nombrar ${artifact}: el artifact se retiró sin sucesor`
+      )
     }
+  }
+
+  const surfaces = (labels) =>
+    Object.fromEntries(labels.map((label) => [label, readGeneratorFile(label)]))
+
+  // Para las superficies con menciones legítimas fuera de la sección, el predicado
+  // negativo corre sobre el slice, nunca sobre el archivo entero.
+  const designSurfaces = (labels) =>
+    Object.fromEntries(
+      labels.map((label) => {
+        const text = readGeneratorFile(label)
+        return [label, designSurface(label, text)]
+      })
+    )
+
+  // La compatibilidad legacy sigue viva: cada lector conserva, dentro de la sección que
+  // la declara, el token del artifact retirado. Sin el slice, un literal de otra sección
+  // haría pasar el assert por la razón equivocada.
+  const LEGACY_READ_SLICES = {
+    'skills/ancleto-continue/SKILL.md': {
+      heading: '### 2. Load context files',
+      artifacts: ['context.md']
+    },
+    'skills/ancleto-update/SKILL.md': {
+      heading: '### 2. Read the artifacts',
+      artifacts: ['design.md', 'context.md']
+    },
+    'agents/coder.md': { heading: '### 1. aspec Change', artifacts: ['design.md'] },
+    'agents/tester.md': { heading: '### 1. aspec Change', artifacts: ['design.md'] },
+    'agents/reviewer.md': { heading: '### 1. aspec Change', artifacts: ['design.md'] }
+  }
+
+  function assertLegacyReadSurvives(label, text) {
+    const { heading, artifacts } = LEGACY_READ_SLICES[label]
+    const slice = normalize(section(text, heading, '\n### '))
+    for (const artifact of artifacts) {
+      assert.ok(
+        slice.includes(artifact),
+        `${label} debe nombrar ${artifact} dentro de ${heading}: la lectura legacy opcional sigue viva`
+      )
+    }
+  }
+
+  it('ningún generador emite design.md (retiro sin artifact sucesor)', () => {
+    assertNoRetiredArtifact(designSurfaces(NO_DESIGN_MD_SURFACES), 'design.md')
+  })
+
+  it('ninguna superficie generadora ni el archive nombra context.md', () => {
+    assertNoRetiredArtifact(surfaces(NO_CONTEXT_MD_SURFACES), 'context.md')
+  })
+
+  it('control positivo · continue conserva la lectura legacy de context.md en su sección', () => {
+    const label = 'skills/ancleto-continue/SKILL.md'
+    assertMutationBreaks(
+      (text) => assertLegacyReadSurvives(label, text),
+      readGeneratorFile(label),
+      [['If `context.md` exists, read it as background', 'Read it as background']]
+    )
+  })
+
+  it('control positivo · update conserva la lectura legacy de design.md y context.md en su sección', () => {
+    const label = 'skills/ancleto-update/SKILL.md'
+    assertMutationBreaks(
+      (text) => assertLegacyReadSurvives(label, text),
+      readGeneratorFile(label),
+      [
+        ['a legacy `design.md` or `context.md` exists', 'a legacy `context.md` exists'],
+        ['a legacy `design.md` or `context.md` exists', 'a legacy `design.md` exists']
+      ]
+    )
+  })
+
+  it('control positivo · coder conserva la lectura legacy de design.md en su sección', () => {
+    const label = 'agents/coder.md'
+    assertMutationBreaks((text) => assertLegacyReadSurvives(label, text), readGeneratorFile(label), [
+      ['`design.md`', '']
+    ])
+  })
+
+  it('control positivo · tester conserva la lectura legacy de design.md en su sección', () => {
+    const label = 'agents/tester.md'
+    assertMutationBreaks((text) => assertLegacyReadSurvives(label, text), readGeneratorFile(label), [
+      ['`design.md`', '']
+    ])
+  })
+
+  it('control positivo · reviewer conserva la lectura legacy de design.md en su sección', () => {
+    const label = 'agents/reviewer.md'
+    assertMutationBreaks((text) => assertLegacyReadSurvives(label, text), readGeneratorFile(label), [
+      ['`design.md`', '']
+    ])
   })
 
   it('T05 · una decisión que nace durante la implementación la escribe el dueño del artifact', () => {
@@ -1972,5 +2116,71 @@ describe('contrato del change: ## Decisiones y checkpoint de contrato (CH-02a)',
       ],
       ['- **Authorized paths** —', '- **Documents** — `proposal.md`\n- **Authorized paths** —']
     ])
+  })
+
+  it('mutación D · reinsertar design.md en un generador rompe el guard negativo', () => {
+    assertMutationBreaks(
+      (text) => assertNoRetiredArtifact({ 'skills/ancleto-propose/SKILL.md': text }, 'design.md'),
+      readGeneratorFile('skills/ancleto-propose/SKILL.md'),
+      [['## Guardrails', '## Guardrails\n\n- Emit `design.md` after the proposal.']]
+    )
+  })
+
+  it('mutación E · reinsertar el borrado de context.md en el archive rompe el guard negativo', () => {
+    assertMutationBreaks(
+      (text) => assertNoRetiredArtifact({ 'skills/ancleto-archive/SKILL.md': text }, 'context.md'),
+      readGeneratorFile('skills/ancleto-archive/SKILL.md'),
+      [
+        [
+          'without modifying it',
+          'without modifying it after deleting any legacy `context.md`'
+        ]
+      ]
+    )
+  })
+
+  it('mutación G · reinsertar design.md en una superficie de consumo rompe el guard negativo', () => {
+    // Cada superficie se muta dentro de su propia sección: el slice es el que debe fallar.
+    const cases = {
+      'agents/orchestrator.md': [
+        [
+          '`proposal.md`, `tasks.md`, `specs/`',
+          '`proposal.md`, `design.md`, `tasks.md`, `specs/`'
+        ]
+      ],
+      'agents/documenter.md': [
+        [
+          '2. Confirm the presence of the relevant artifacts:',
+          '2. Confirm the presence of the relevant artifacts (including `design.md`):'
+        ]
+      ],
+      'skills/ancleto-apply/SKILL.md': [
+        [
+          '- `proposal.md` — what & why (if present)',
+          '- `proposal.md` — what & why (if present)\n- `design.md` — archived design (if present)'
+        ]
+      ]
+    }
+    for (const [label, mutations] of Object.entries(cases)) {
+      assertMutationBreaks(
+        (text) => assertNoRetiredArtifact({ [label]: designSurface(label, text) }, 'design.md'),
+        readGeneratorFile(label),
+        mutations
+      )
+    }
+  })
+
+  it('mutación H · reinsertar design.md en la clasificación de update rompe el guard negativo', () => {
+    const label = 'skills/ancleto-update/SKILL.md'
+    assertMutationBreaks(
+      (text) => assertNoRetiredArtifact({ [label]: designSurface(label, text) }, 'design.md'),
+      readGeneratorFile(label),
+      [
+        [
+          '| Design decision | `proposal.md ## Decisiones` |',
+          '| Design decision | `design.md` |'
+        ]
+      ]
+    )
   })
 })

@@ -36,7 +36,7 @@ I'll walk you through a complete change cycle.
 1. Pick a small task
 2. Explore it
 3. Create a change
-4. Build artifacts: proposal → specs → design → tasks
+4. Build artifacts: proposal → specs → tasks
 5. Implement tasks
 6. Archive it
 
@@ -64,7 +64,7 @@ Demo explore mode: read involved files, sketch diagrams. **PAUSE** for acknowled
 ## Phase 4: Create the Change
 
 **EXPLAIN:** a change is the container for all work thinking/planning, at `aspec/changes/<name>/`.
-**DO:** create `aspec/changes/<derived-kebab-name>/`; show the layout (`proposal.md`, `design.md`, `specs/`, `tasks.md`).
+**DO:** create `aspec/changes/<derived-kebab-name>/`; show the layout (`proposal.md`, `specs/`, `tasks.md`).
 
 ## Phase 5: Proposal
 
@@ -76,28 +76,23 @@ Demo explore mode: read involved files, sketch diagrams. **PAUSE** for acknowled
 **EXPLAIN:** specs define **what** precisely, in testable WHEN/THEN form.
 **DO:** create `aspec/changes/<name>/specs/<capability>/spec.md` with `## ADDED Requirements` / `#### Scenario:` blocks.
 
-## Phase 7: Design
-
-**EXPLAIN:** the design captures **how** — decisions, tradeoffs, approach.
-**DO:** draft Context / Goals-Non-Goals / Decisions; save `aspec/changes/<name>/design.md`.
-
-## Phase 8: Tasks
+## Phase 7: Tasks
 
 **EXPLAIN:** break the work into checkboxed implementation tasks.
 **DO:** generate the checklist, show it, **PAUSE** for confirmation, save `aspec/changes/<name>/tasks.md`.
 
-## Phase 9: Apply
+## Phase 8: Apply
 
-**EXPLAIN:** implement each task, announce it, reference specs/design, mark `- [ ]` → `- [x]`, keep narration light.
+**EXPLAIN:** implement each task, announce it, reference specs and the proposal's `## Decisiones`, mark `- [ ]` → `- [x]`, keep narration light.
 
-## Phase 10: Archive
+## Phase 9: Archive
 
 **EXPLAIN:** archiving moves the change to `aspec/changes/archive/YYYY-MM-DD-<name>/`, preserving the decision record.
-**DO:** create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), move it, show the location.
+**DO:** create `aspec/changes/archive/` if missing, move it, show the location.
 
-## Phase 11: Recap
+## Phase 10: Recap
 
-Congratulate, recap the cycle (Explore → New → Proposal → Specs → Design → Tasks → Apply → Archive), show the command reference:
+Congratulate, recap the cycle (Explore → New → Proposal → Specs → Tasks → Apply → Archive), show the command reference:
 
 | Command | What it does |
 |---------|--------------|

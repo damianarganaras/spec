@@ -56,8 +56,9 @@ If an approved aspec change exists, implement from:
 
 - relevant delta specs under `specs/`
 - `proposal.md`
-- `design.md`
 - `tasks.md`
+
+A legacy `design.md` may be read as optional background when present; it is never a precondition.
 
 Treat the change's delta specs as the primary behavior input for active aspec work. Read source-of-truth specs in `aspec/specs/` only after that, and only when they are relevant to the affected capability.
 

@@ -7,13 +7,23 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDatabase } from '../src/core/memory/database.js'
-import { createMemoryEngine, defaultMemoryDbPath } from '../src/core/memory/engine.js'
+import { createMemoryEngine, defaultMemoryDbPath, resolveProjectRoot } from '../src/core/memory/engine.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
 import { memoryTools, createMemoryToolkit } from '../src/core/memory/tools.js'
+import { resolveMemoryProjectRoot } from '../src/core/memory/working-context.js'
 
 const dir = mkdtempSync(join(tmpdir(), 'ancleto-memory-'))
 const dbPath = join(dir, '.ancleto', 'memory.db')
 const engine = createMemoryEngine(dbPath)
+
+// MEM-03: refs resolubles para las pruebas existentes de procedencia. Toda
+// escritura con `source !== 'runtime'` pasa por la validacion fail-closed; estas
+// fixtures viven en la raiz derivada de la DB (`dir`).
+mkdirSync(join(dir, 'test'), { recursive: true })
+writeFileSync(join(dir, 'test', 'ref-fixture.test.js'), '// fixture de refs\n')
+mkdirSync(join(dir, 'aspec', 'changes', 'ref-fixture'), { recursive: true })
+const RULE_REFS = '\n\nrefs:\n  - path:test/ref-fixture.test.js'
+const DECISION_REFS = '\n\nrefs:\n  - change:ref-fixture'
 
 after(() => {
   engine.close()
@@ -359,7 +369,7 @@ describe('recordNode', () => {
   })
 
   it('resuelve id, status, source y confidence desde el runtime', () => {
-    engine.recordNode({ memory_key: 'k-runtime', type: 'rule', content: 'c', source: 'forged', status: 'deleted', id: 'forged' }, { source: 'agent:memory-keeper', confidence: 0.8 })
+    engine.recordNode({ memory_key: 'k-runtime', type: 'rule', content: 'c' + RULE_REFS, source: 'forged', status: 'deleted', id: 'forged' }, { source: 'agent:memory-keeper', confidence: 0.8 })
     const [row] = raw(`SELECT id, status, source, confidence, created_at FROM memory_nodes WHERE memory_key = 'k-runtime' AND status = 'active'`)
     assert.match(row.id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
     assert.equal(row.status, 'active')
@@ -377,7 +387,7 @@ describe('recordNode', () => {
 
 describe('listNodes — procedencia (memory-actor-provenance)', () => {
   it('incluye source en cada nodo y refleja el valor real', () => {
-    engine.recordNode({ memory_key: 'ln-provenance', type: 'rule', scope: 'repo', content: 'con procedencia' }, { source: 'agent:tester' })
+    engine.recordNode({ memory_key: 'ln-provenance', type: 'rule', scope: 'repo', content: 'con procedencia' + RULE_REFS }, { source: 'agent:tester' })
     engine.recordNode({ memory_key: 'ln-runtime', type: 'rule', scope: 'repo', content: 'runtime default' })
 
     const nodes = engine.listNodes()
@@ -415,8 +425,8 @@ describe('tools', () => {
   it('los handlers fijan el type y el runtime resuelve source/confidence', () => {
     const toolkit = createMemoryToolkit(dbPath, { source: 'agent:test', confidence: 0.5 })
     try {
-      toolkit.handlers.recordRule({ memory_key: 'th-1', content: 'regla via tool', scope: 'repo' })
-      toolkit.handlers.recordDecision({ memory_key: 'th-2', content: 'decision via tool', justification: 'porque si' })
+      toolkit.handlers.recordRule({ memory_key: 'th-1', content: 'regla via tool' + RULE_REFS, scope: 'repo' })
+      toolkit.handlers.recordDecision({ memory_key: 'th-2', content: 'decision via tool' + DECISION_REFS, justification: 'porque si' })
       const rows = raw(`SELECT type, source, confidence FROM memory_nodes WHERE memory_key IN ('th-1','th-2') AND status = 'active'`)
       assert.equal(rows.length, 2)
       const rule = rows.find((r) => r.type === 'rule')
@@ -435,7 +445,7 @@ describe('tools', () => {
   it('campos forjados en los args de las tools son ignorados', () => {
     const toolkit = createMemoryToolkit(dbPath, { source: 'runtime-confiable' })
     try {
-      toolkit.handlers.recordRule({ memory_key: 'th-forge', content: 'contenido limpio', source: 'LLM-FORGED', status: 'deleted', id: 'LLM-FORGED', confidence: 0 })
+      toolkit.handlers.recordRule({ memory_key: 'th-forge', content: 'contenido limpio' + RULE_REFS, source: 'LLM-FORGED', status: 'deleted', id: 'LLM-FORGED', confidence: 0 })
       const [row] = raw(`SELECT source, status, id, confidence FROM memory_nodes WHERE memory_key = 'th-forge' AND status = 'active'`)
       assert.equal(row.source, 'runtime-confiable')
       assert.equal(row.status, 'active')
@@ -578,6 +588,70 @@ describe('buildWorkingContext — truncamiento (v0.3.0 item 2)', () => {
       assert.equal(block.endsWith('</ProjectMemoryRules>'), true)
       assert.equal((block.match(/^- \[/gm) || []).length, 0)
       assert.match(block, /1 rules omitted/)
+    })
+  })
+})
+
+describe('buildWorkingContext — reglas con bloque refs: (provenance)', () => {
+  function withEngine(fn) {
+    const dir = mkdtempSync(join(tmpdir(), 'ancleto-refs-render-'))
+    const eng = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+    try {
+      return fn(eng, dir)
+    } finally {
+      eng.close()
+      try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+      } catch {
+        // best effort: en Windows los handles de WAL pueden tardar en liberarse
+      }
+    }
+  }
+
+  it('muestra la prosa y excluye el bloque refs: del bloque proactivo', () => {
+    withEngine((eng, dir) => {
+      const prose = 'Prefiere el camino estrecho'
+      const refs = ['path:src/core/memory/engine.js', 'change:ref-fixture']
+      const content = `${prose}\n\nrefs:\n${refs.map((r) => `  - ${r}`).join('\n')}`
+      eng.recordNode({ memory_key: 'render-with-refs', type: 'rule', scope: 'project', content })
+
+      const block = eng.buildWorkingContext('project', undefined, dir)
+      assert.match(block, new RegExp(`- \\[render-with-refs\\] ${prose}`))
+      assert.equal(block.includes('refs:'), false)
+      for (const ref of refs) assert.equal(block.includes(ref), false)
+
+      // el contenido persistido conserva sus refs: solo cambia el render
+      const stored = eng.listNodes({ type: 'rule' }).find((n) => n.memory_key === 'render-with-refs')
+      assert.equal(stored.content, content)
+    })
+  })
+
+  it('con dos bloques refs: (via runtime) muestra solo la prosa previa al primero', () => {
+    withEngine((eng, dir) => {
+      const prose = 'Prefiere el camino estrecho'
+      const first = 'path:src/core/memory/engine.js'
+      const second = 'change:ref-fixture'
+      const content = `${prose}\n\nrefs:\n  - ${first}\n\nrefs:\n  - ${second}`
+      eng.recordNode({ memory_key: 'render-two-refs', type: 'rule', scope: 'project', content }, { source: 'runtime' })
+
+      const block = eng.buildWorkingContext('project', undefined, dir)
+      assert.match(block, new RegExp(`- \\[render-two-refs\\] ${prose}`))
+      assert.equal(block.includes('refs:'), false)
+      assert.equal(block.includes(first), false)
+      assert.equal(block.includes(second), false)
+
+      const stored = eng.listNodes({ type: 'rule' }).find((n) => n.memory_key === 'render-two-refs')
+      assert.equal(stored.content, content)
+    })
+  })
+
+  it('una regla sin bloque refs: se renderiza sin alterar su contenido', () => {
+    withEngine((eng, dir) => {
+      const plain = 'Regla  con  espacios  internos'
+      eng.recordNode({ memory_key: 'render-plain', type: 'rule', scope: 'project', content: plain })
+
+      const block = eng.buildWorkingContext('project', undefined, dir)
+      assert.equal(block.includes(`- [render-plain] ${plain}`), true)
     })
   })
 })
@@ -1599,5 +1673,423 @@ describe('memory merge (CLI)', () => {
       assert.equal(src[0].status, 'superseded')
       assert.ok(src[0].superseded_by)
     })
+  })
+})
+
+// MEM-03: refs fail-closed y rechazo de secretos. Todos los asserts son
+// predicates de comportamiento sobre el engine, no literales de oracion (D-B).
+describe('MEM-03 — refs fail-closed (engine)', () => {
+  function withRefsEngine(fn) {
+    const root = mkdtempSync(join(tmpdir(), 'ancleto-refs-'))
+    const refsDbPath = join(root, '.ancleto', 'memory.db')
+    const eng = createMemoryEngine(refsDbPath)
+    const rawAt = (sql, ...params) => {
+      const db = openDatabase(refsDbPath)
+      try {
+        return db.prepare(sql).all(...params)
+      } finally {
+        db.close()
+      }
+    }
+    try {
+      return fn({ eng, root, rawAt })
+    } finally {
+      eng.close()
+      try {
+        rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+      } catch {
+        // best effort: en Windows los handles de WAL pueden tardar en liberarse
+      }
+    }
+  }
+
+  const CAPTURE = { source: 'mcp:ancleto-memory' }
+  const block = (text, refs) => `${text}\n\nrefs:\n${refs.map((r) => `  - ${r}`).join('\n')}`
+
+  function seedChange(root, name, archived = false) {
+    const base = archived
+      ? join(root, 'aspec', 'changes', 'archive')
+      : join(root, 'aspec', 'changes')
+    const full = join(base, name)
+    mkdirSync(full, { recursive: true })
+    return full
+  }
+
+  function seedFile(root, rel) {
+    const full = join(root, rel)
+    mkdirSync(dirname(full), { recursive: true })
+    writeFileSync(full, '// fixture\n')
+    return full
+  }
+
+  function seedSpec(root, capability, headings) {
+    const full = join(root, 'aspec', 'specs', capability, 'spec.md')
+    mkdirSync(dirname(full), { recursive: true })
+    writeFileSync(full, headings.map((h) => `### Requirement: ${h}\n`).join('\n'))
+    return full
+  }
+
+  it('T05: una decision con refs resolubles escrita por una superficie de captura queda activa', () => {
+    withRefsEngine(({ eng, root, rawAt }) => {
+      seedChange(root, 'ref-active')
+      seedFile(root, 'docs/note.md')
+      const schemaBefore = rawAt(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`)
+      const content = block('Se adopta el motor unico de memoria.', ['change:ref-active', 'path:docs/note.md'])
+
+      const result = eng.recordNode(
+        { memory_key: 'refs-t05', type: 'decision', scope: 'project', content },
+        CAPTURE
+      )
+      assert.equal(result.node.memory_key, 'refs-t05')
+
+      const [active] = rawAt(`SELECT content FROM memory_nodes WHERE memory_key = 'refs-t05' AND status = 'active'`)
+      assert.match(active.content, /^refs:/m)
+      assert.match(active.content, /- change:ref-active/)
+      assert.deepEqual(
+        rawAt(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`),
+        schemaBefore,
+        'la escritura no altera sqlite_master'
+      )
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM sqlite_master WHERE name = 'memory_refs'`)[0].c, 0)
+    })
+  })
+
+  it('T06: una decision sin memory_key no produce nodo y la forma de una linea no promueve', () => {
+    withRefsEngine(({ eng, rawAt }) => {
+      const before = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c
+      assert.throws(
+        () => eng.recordNode({ type: 'decision', content: 'decision | alternativa | por que | fuente' }, CAPTURE),
+        /memory_key es obligatorio/
+      )
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-one-line', type: 'decision', content: 'decision | alternativa | por que | fuente' }, CAPTURE),
+        /refs-one-line/
+      )
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c, before)
+    })
+  })
+
+  it('T09: change archivado resuelve; cero y dos coincidencias se rechazan sin elegir', () => {
+    withRefsEngine(({ eng, root }) => {
+      seedChange(root, '2026-01-01-arch-fixture', true)
+      const ok = eng.recordNode(
+        { memory_key: 'refs-t09-ok', type: 'decision', content: block('decision archivada', ['change:arch-fixture']) },
+        CAPTURE
+      )
+      assert.equal(ok.node.memory_key, 'refs-t09-ok')
+
+      // El slug archivado completo resuelve; un sufijo de otro slug no.
+      seedChange(root, '2026-09-30-cross-machine-export-import', true)
+      const fullSlug = eng.recordNode(
+        {
+          memory_key: 'refs-t09-full-slug',
+          type: 'decision',
+          content: block('decision archivada por slug completo', ['change:cross-machine-export-import'])
+        },
+        CAPTURE
+      )
+      assert.equal(fullSlug.node.memory_key, 'refs-t09-full-slug')
+      assert.throws(
+        () => eng.recordNode(
+          { memory_key: 'refs-t09-suffix', type: 'decision', content: block('decision por sufijo', ['change:export-import']) },
+          CAPTURE
+        ),
+        (err) => /refs-t09-suffix/.test(err.message) && /change/.test(err.message) && /inexistente/.test(err.message)
+      )
+
+      assert.throws(
+        () => eng.recordNode(
+          { memory_key: 'refs-t09-miss', type: 'decision', content: block('decision huerfana', ['change:no-existe']) },
+          CAPTURE
+        ),
+        (err) => /refs-t09-miss/.test(err.message) && /change/.test(err.message) && /inexistente/.test(err.message)
+      )
+
+      seedChange(root, '2026-02-01-dup-slug', true)
+      seedChange(root, '2026-03-01-dup-slug', true)
+      assert.throws(
+        () => eng.recordNode(
+          { memory_key: 'refs-t09-amb', type: 'decision', content: block('decision ambigua', ['change:dup-slug']) },
+          CAPTURE
+        ),
+        (err) => /refs-t09-amb/.test(err.message) && /ambiguo/.test(err.message)
+      )
+    })
+  })
+
+  it('T29: heading exacto resuelve; colision canonica y capability inexistente se rechazan', () => {
+    withRefsEngine(({ eng, root }) => {
+      seedSpec(root, 'cap-exact', ['Alcance del bloque de reglas proactivas'])
+      const ok = eng.recordNode(
+        {
+          memory_key: 'refs-t29-ok',
+          type: 'decision',
+          content: block('decision con spec', ['spec:cap-exact#Alcance del bloque de reglas proactivas'])
+        },
+        CAPTURE
+      )
+      assert.equal(ok.node.memory_key, 'refs-t29-ok')
+
+      seedSpec(root, 'cap-amb', ['Alcance del bloque', 'alcance del bloque'])
+      assert.throws(
+        () => eng.recordNode(
+          { memory_key: 'refs-t29-amb', type: 'decision', content: block('decision ambigua', ['spec:cap-amb#ALCANCE DEL BLOQUE']) },
+          CAPTURE
+        ),
+        (err) => /refs-t29-amb/.test(err.message) && /ambiguo/.test(err.message)
+      )
+
+      assert.throws(
+        () => eng.recordNode(
+          { memory_key: 'refs-t29-miss', type: 'decision', content: block('decision sin spec', ['spec:no-cap#x']) },
+          CAPTURE
+        ),
+        /refs-t29-miss/
+      )
+    })
+  })
+
+  it('T29: un heading exacto no cortocircuita la ambiguedad canonica', () => {
+    withRefsEngine(({ eng, root, rawAt }) => {
+      seedSpec(root, 'cap-exact-amb', ['Alcance del bloque', 'alcance del bloque'])
+      const before = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c
+      assert.throws(
+        () => eng.recordNode(
+          { memory_key: 'refs-t29-exact-amb', type: 'decision', content: block('decision ambigua', ['spec:cap-exact-amb#Alcance del bloque']) },
+          CAPTURE
+        ),
+        (err) => {
+          assert.match(err.message, /refs-t29-exact-amb/)
+          assert.match(err.message, /ambiguo/)
+          assert.match(err.message, /2 coincidencias/)
+          return true
+        }
+      )
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c, before)
+    })
+  })
+
+  it('T29: un unico heading canonicamente equivalente (no exacto) resuelve', () => {
+    withRefsEngine(({ eng, root }) => {
+      seedSpec(root, 'cap-canon', ['Alcance del bloque de reglas proactivas'])
+      const ok = eng.recordNode(
+        {
+          memory_key: 'refs-t29-canon',
+          type: 'decision',
+          content: block('decision canonica', ['spec:cap-canon#ALCANCE DEL BLOQUE DE REGLAS PROACTIVAS'])
+        },
+        CAPTURE
+      )
+      assert.equal(ok.node.memory_key, 'refs-t29-canon')
+    })
+  })
+
+  it('un segundo bloque refs: se rechaza como bloque malformado y no escribe', () => {
+    withRefsEngine(({ eng, root, rawAt }) => {
+      seedFile(root, 'test/ref-fixture.test.js')
+      const before = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c
+      const content = 'regla\n\nrefs:\n  - path:test/ref-fixture.test.js\n\nrefs:\n  - path:../fuera.js'
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-two-blocks', type: 'rule', content }, CAPTURE),
+        (err) => {
+          assert.match(err.message, /refs-two-blocks/)
+          assert.match(err.message, /bloques refs:/)
+          return true
+        }
+      )
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c, before)
+    })
+  })
+
+  it('T23: credencial en content o justification rechaza sin eco ni escritura', () => {
+    withRefsEngine(({ eng, root, rawAt }) => {
+      seedChange(root, 'ref-t23')
+      const before = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c
+
+      assert.throws(
+        () => eng.recordNode(
+          {
+            memory_key: 'refs-t23-content',
+            type: 'decision',
+            content: block('usa Authorization: Bearer sk-abcdefghijklmnop', ['change:ref-t23'])
+          },
+          CAPTURE
+        ),
+        (err) => {
+          assert.match(err.message, /refs-t23-content/)
+          assert.equal(err.message.includes('sk-abcdefghijklmnop'), false)
+          return true
+        }
+      )
+
+      assert.throws(
+        () => eng.recordNode(
+          {
+            memory_key: 'refs-t23-just',
+            type: 'decision',
+            content: block('decision valida', ['change:ref-t23']),
+            justification: 'API_TOKEN=supersecretovalor'
+          },
+          CAPTURE
+        ),
+        (err) => {
+          assert.match(err.message, /refs-t23-just/)
+          assert.equal(err.message.includes('supersecretovalor'), false)
+          return true
+        }
+      )
+
+      // La exencion de refs para `runtime` no exime del rechazo de secretos.
+      assert.throws(
+        () => eng.recordNode(
+          {
+            memory_key: 'refs-t23-runtime',
+            type: 'decision',
+            content: 'usa Authorization: Bearer credencial-de-runtime'
+          },
+          { source: 'runtime' }
+        ),
+        (err) => {
+          assert.match(err.message, /credencial/)
+          assert.equal(err.message.includes('credencial-de-runtime'), false)
+          return true
+        }
+      )
+
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c, before)
+    })
+  })
+
+  it('texto que solo nombra una variable de entorno no se bloquea', () => {
+    withRefsEngine(({ eng, root }) => {
+      seedChange(root, 'ref-clean')
+      const ok = eng.recordNode(
+        {
+          memory_key: 'refs-clean',
+          type: 'rule',
+          content: block('Lee la variable API_TOKEN del entorno sin asignarle un valor.', ['change:ref-clean'])
+        },
+        CAPTURE
+      )
+      assert.equal(ok.node.memory_key, 'refs-clean')
+    })
+  })
+
+  it('T21: dos afirmaciones con la misma memory_key dejan una sola activa y ambas en el historial', () => {
+    withRefsEngine(({ eng, root, rawAt }) => {
+      seedChange(root, 'ref-t21')
+      const refs = ['change:ref-t21']
+      eng.recordNode(
+        { memory_key: 'refs-t21', type: 'decision', content: block('primera afirmacion', refs) },
+        CAPTURE
+      )
+      eng.recordNode(
+        { memory_key: 'refs-t21', type: 'decision', content: block('segunda afirmacion', refs) },
+        { source: 'agent:memory-keeper' }
+      )
+
+      const rows = rawAt(`SELECT content, status FROM memory_nodes WHERE memory_key = 'refs-t21' ORDER BY rowid`)
+      assert.equal(rows.length, 2)
+      assert.equal(rows.filter((r) => r.status === 'active').length, 1)
+      assert.equal(rows.find((r) => r.status === 'active').content.includes('segunda afirmacion'), true)
+    })
+  })
+
+  it('rechaza rule sin ancla, decision sin spec/change, path invalido, prefijo desconocido y bloque refs vacio', () => {
+    withRefsEngine(({ eng, root }) => {
+      seedChange(root, 'ref-anchor')
+      seedFile(root, 'test/anchor.test.js')
+
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-rule-no-anchor', type: 'rule', content: block('regla', ['commit:abcdef123']) }, CAPTURE),
+        (err) => /refs-rule-no-anchor/.test(err.message) && /path:|spec:|change:/.test(err.message)
+      )
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-dec-path', type: 'decision', content: block('decision', ['path:test/anchor.test.js']) }, CAPTURE),
+        (err) => /refs-dec-path/.test(err.message) && /spec:<cap>#<heading>|change:<slug>/.test(err.message)
+      )
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-path-abs', type: 'rule', content: block('regla', ['path:/etc/passwd']) }, CAPTURE),
+        (err) => /refs-path-abs/.test(err.message) && /absoluto/.test(err.message)
+      )
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-path-up', type: 'rule', content: block('regla', ['path:../fuera.js']) }, CAPTURE),
+        (err) => /refs-path-up/.test(err.message) && /\.\.\//.test(err.message)
+      )
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-unknown', type: 'rule', content: block('regla', ['tracker:abc']) }, CAPTURE),
+        (err) => /refs-unknown/.test(err.message) && /ref invalida/.test(err.message)
+      )
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-empty', type: 'rule', content: 'regla\n\nrefs:\n' }, CAPTURE),
+        (err) => /refs-empty/.test(err.message) && /vacio/.test(err.message)
+      )
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-none', type: 'rule', content: 'regla sin bloque' }, CAPTURE),
+        (err) => /refs-none/.test(err.message) && /bloque refs:/.test(err.message)
+      )
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-agent', type: 'rule', content: 'sin refs' }, { source: 'agent:memory-keeper' }),
+        /refs-agent/,
+        'una procedencia distinta de runtime tambien se valida'
+      )
+
+      const okRule = eng.recordNode(
+        { memory_key: 'refs-rule-ok', type: 'rule', content: block('regla anclada', ['path:test/anchor.test.js']) },
+        CAPTURE
+      )
+      assert.equal(okRule.node.memory_key, 'refs-rule-ok')
+    })
+  })
+
+  it('no regresion: importNodes sin refs mantiene LWW y la escritura runtime sin refs se acepta', () => {
+    withRefsEngine(({ eng, rawAt }) => {
+      const summary = eng.importNodes([
+        { memory_key: 'refs-imp', type: 'rule', scope: 'project', content: 'import sin refs', justification: '', createdAt: '2026-01-01T00:00:00.000Z' }
+      ])
+      assert.deepEqual(summary, { inserted: 1, updated: 0, skipped: 0 })
+
+      eng.recordNode({ memory_key: 'refs-runtime', type: 'rule', scope: 'project', content: 'runtime sin refs' })
+      const active = rawAt(
+        `SELECT memory_key FROM memory_nodes WHERE memory_key IN ('refs-imp', 'refs-runtime') AND status = 'active' ORDER BY memory_key`
+      )
+      assert.equal(active.length, 2)
+    })
+  })
+
+  it('paridad: resolveProjectRoot y resolveMemoryProjectRoot coinciden en las mismas fixtures', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ancleto-root-parity-'))
+    try {
+      // (a) `.ancletorc` en un ancestro a distinta profundidad que la DB.
+      const rootA = join(base, 'a', 'project')
+      const dbA = join(rootA, 'nested', 'deeper', '.ancleto', 'memory.db')
+      mkdirSync(join(rootA, 'nested', 'deeper', '.ancleto'), { recursive: true })
+      writeFileSync(join(rootA, '.ancletorc'), '{}\n')
+      assert.equal(resolveProjectRoot(null, dbA), rootA)
+      assert.equal(resolveMemoryProjectRoot(dbA), rootA)
+
+      // (b) Sin `.ancletorc`: la raiz sale del layout `.ancleto/` derivado de la DB.
+      const rootB = join(base, 'b')
+      const dbB = join(rootB, '.ancleto', 'memory.db')
+      mkdirSync(join(rootB, '.ancleto'), { recursive: true })
+      assert.equal(resolveProjectRoot(null, dbB), rootB)
+      assert.equal(resolveMemoryProjectRoot(dbB), rootB)
+
+      // (c) `projectRoot` explicito gana sobre la derivacion de la DB.
+      const rootC = join(base, 'c')
+      const dbC = join(rootC, 'deep', '.ancleto', 'memory.db')
+      mkdirSync(join(rootC, 'deep', '.ancleto'), { recursive: true })
+      writeFileSync(join(rootC, '.ancletorc'), '{}\n')
+      assert.equal(resolveProjectRoot({ projectRoot: rootC }, dbC), rootC)
+      assert.equal(resolveMemoryProjectRoot(dbC), rootC)
+    } finally {
+      rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+    }
+  })
+
+  it('no regresion: los inputSchema de las tools no ganan campos de refs ni de procedencia', () => {
+    const serialized = JSON.stringify(memoryTools.map((t) => t.inputSchema))
+    assert.doesNotMatch(serialized, /refs/)
+    assert.doesNotMatch(serialized, /source|confidence|status/)
   })
 })

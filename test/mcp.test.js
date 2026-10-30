@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, rmSync, existsSync, readFileSync, statSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, existsSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,8 +11,14 @@ import { createMemoryEngine } from '../src/core/memory/engine.js'
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const CLI = join(TEST_DIR, '..', 'src', 'cli', 'index.js')
 
+// MEM-03: toda escritura MCP pasa por la validacion fail-closed de refs
+// (`source: 'mcp:ancleto-memory'`). La fixture temporal declara un change
+// resolubles bajo la raiz derivada de la DB.
+const CHANGE_REFS = '\n\nrefs:\n  - change:mcp-fixture'
+
 async function withDir(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'ancleto-mcp-'))
+  mkdirSync(join(dir, 'aspec', 'changes', 'mcp-fixture'), { recursive: true })
   try {
     return await fn(dir)
   } finally {
@@ -119,7 +125,7 @@ describe('MCP de memoria propia (ancleto mcp)', () => {
 
         const rec = await send(3, 'tools/call', {
           name: 'recordRule',
-          arguments: { memory_key: 'api-error-format', content: 'Los errores de API devuelven { code, message }.' }
+          arguments: { memory_key: 'api-error-format', content: 'Los errores de API devuelven { code, message }.' + CHANGE_REFS }
         })
         assert.equal(rec.result.isError, undefined)
         assert.equal(JSON.parse(rec.result.content[0].text).node.memory_key, 'api-error-format')
@@ -156,7 +162,7 @@ describe('MCP de memoria propia (ancleto mcp)', () => {
       try {
         await send(1, 'tools/call', {
           name: 'recordRule',
-          arguments: { memory_key: 'scope-default', content: 'Regla sin scope explicito.' }
+          arguments: { memory_key: 'scope-default', content: 'Regla sin scope explicito.' + CHANGE_REFS }
         })
       } finally {
         close()
@@ -175,8 +181,8 @@ describe('CLI memory list (issue #12)', () => {
     await withDir(async (dir) => {
       const { close, send } = mcpClient(dir)
       try {
-        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'r-proj', content: 'Regla de proyecto.' } })
-        await send(2, 'tools/call', { name: 'recordDecision', arguments: { memory_key: 'd-feat', content: 'Decision de feature.', scope: 'feature' } })
+        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'r-proj', content: 'Regla de proyecto.' + CHANGE_REFS } })
+        await send(2, 'tools/call', { name: 'recordDecision', arguments: { memory_key: 'd-feat', content: 'Decision de feature.' + CHANGE_REFS, scope: 'feature' } })
       } finally {
         close()
       }
@@ -206,7 +212,7 @@ describe('CLI memory list (issue #12)', () => {
     await withDir(async (dir) => {
       const { close, send } = mcpClient(dir)
       try {
-        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'ro-1', content: 'Regla para read-only.' } })
+        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'ro-1', content: 'Regla para read-only.' + CHANGE_REFS } })
       } finally {
         close()
       }
@@ -240,7 +246,7 @@ describe('CLI memory list (issue #12)', () => {
   it('memory list rechaza filtros invalidos', async () => {
     await withDir(async (dir) => {
       const { close, send } = mcpClient(dir)
-      try { await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'x', content: 'x' } }) } finally { close() }
+      try { await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'x', content: 'x' + CHANGE_REFS } }) } finally { close() }
       assert.equal(runCli(['memory', 'list', '--type', 'nope'], dir).status, 1)
       assert.equal(runCli(['memory', 'list', '--scope', 'nope'], dir).status, 1)
     })
@@ -252,7 +258,7 @@ describe('CLI memory list (issue #12)', () => {
     await withDir(async (dir) => {
       const { close, send } = mcpClient(dir)
       try {
-        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'ck-ro-1', content: 'Regla para doctor read-only.' } })
+        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'ck-ro-1', content: 'Regla para doctor read-only.' + CHANGE_REFS } })
       } finally {
         close()
       }
@@ -280,7 +286,7 @@ describe('CLI memory list (issue #12)', () => {
     await withDir(async (dir) => {
       const { close, send } = mcpClient(dir)
       try {
-        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'ck-1', content: 'Regla para checkpoint.' } })
+        await send(1, 'tools/call', { name: 'recordRule', arguments: { memory_key: 'ck-1', content: 'Regla para checkpoint.' + CHANGE_REFS } })
       } finally {
         close()
       }
@@ -384,7 +390,7 @@ describe('MCP de memoria propia — procedencia (memory-actor-provenance)', () =
       try {
         const rec = await send(1, 'tools/call', {
           name: 'recordRule',
-          arguments: { memory_key: 'prov-mcp', content: 'Procedencia de la superficie MCP.' }
+          arguments: { memory_key: 'prov-mcp', content: 'Procedencia de la superficie MCP.' + CHANGE_REFS }
         })
         assert.equal(rec.result.isError, undefined)
       } finally {
@@ -405,7 +411,7 @@ describe('MCP de memoria propia — procedencia (memory-actor-provenance)', () =
       try {
         const rec = await send(1, 'tools/call', {
           name: 'recordRule',
-          arguments: { memory_key: 'prov-forge', content: 'Intento de forja.', source: 'agent:hacker' }
+          arguments: { memory_key: 'prov-forge', content: 'Intento de forja.' + CHANGE_REFS, source: 'agent:hacker' }
         })
         assert.equal(rec.result.isError, undefined)
       } finally {

@@ -1,6 +1,6 @@
 ---
 name: ancleto-archive
-description: Archive a completed change, syncing delta specs first when needed. Use when implementation and verification are done. Captures lessons into persistent memory. No external binaries required.
+description: Archive a completed change, syncing delta specs first when needed. Use when implementation and verification are done. Promotes approved decisions into persistent memory. No external binaries required.
 license: MIT
 compatibility: No external binaries required. Works with any agent runtime.
 metadata:
@@ -48,29 +48,28 @@ Check for delta specs at `aspec/changes/<name>/specs/`; if none, proceed without
 
 Follow the `LOCKED: seed-freshness` block in `AGENTS.md` (single source of truth for this rule). If the `ancleto` CLI is available in this project, run `ancleto discovery --check` (read-only) and read its JSON `state` and `impact` to apply that rule; if the CLI is unavailable, skip this step.
 
-### 4. Perform the archive
+### 4. Preflight the promotion batch
+
+Run this while the change is still in place, before moving anything. The shape of `## Decisiones` is defined in `agents/spec-writer.md`; reference it, do not restate it here.
+
+1. Read `proposal.md` and collect the blocks under `## Decisiones`.
+2. A candidate is a block with **its own `memory_key` and `Estado: aprobado`**. A one-line decision is never a candidate: it has no `memory_key` and no `Estado`. Promote only `decision`; a block classified as a permanent rule is not promoted from here.
+3. **Preflight the whole batch before the first write:** own keys, keys unique within the batch, `Estado: aprobado`, refs present and resolvable, no `path:` that points inside `aspec/changes/<change-name>/` (it resolves now but stops resolving once the change is moved to `archive/`), and no session candidate (transcript, task state, session summary). Any violation ⇒ **zero writes**, a per-block report with its location in `proposal.md`, and **the change is not moved**; fix it and re-run the archive. If two blocks share a `memory_key` and differ in content or refs, reject the whole batch and report both.
+4. **Zero candidates ⇒ zero memory writes and zero `@memory-keeper` delegations.** Do not ask the memory agent whether there is anything to store.
+
+### 5. Perform the archive
 
 Create `aspec/changes/archive/` if absent. Target: `YYYY-MM-DD-<change-name>` (current date).
 
 - **Target exists**: fail, suggesting a rename or different date.
 - **Otherwise**: delete scaffold-only files (e.g., `aspec/changes/<name>/context.md` — never preserved), then move the change directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`.
 
-### 5. Capture lessons into persistent memory
+### 6. Promote approved decisions into persistent memory
 
-Record what this change taught:
+1. With valid candidates, delegate `@memory-keeper` **once** in Promotion mode with the change slug and the approved blocks verbatim. It writes one `recordDecision` per approved block with `content` of 1–3 sentences plus the `refs:` block, and reports per key.
+2. If a write fails after the change was moved, report **archived, memory pending**, naming the `memory_key` and the reason, with a retry instruction. Never report "archived and memorized" when only the archive happened.
 
-- Architectural decisions taken, with reasons → `recordDecision`:
-  ```
-  recordDecision({ memory_key: "<kebab-topic>", content: "<the decision>", justification: "<why this path>" })
-  ```
-- Standing rules or constraints discovered (future agents must keep following) → `recordRule`:
-  ```
-  recordRule({ memory_key: "<kebab-topic>", content: "<the rule>", justification: "<evidence>" })
-  ```
-
-Record only durable lessons — decisions whose reasons aren't visible in the result, constraints, verified workarounds. Never workflow meta. If nothing meets the bar, record nothing and say so.
-
-### 6. Display summary
+### 7. Display summary
 
 ```
 ## Archive Complete
@@ -78,8 +77,10 @@ Record only durable lessons — decisions whose reasons aren't visible in the re
 **Change:** <change-name>
 **Archived to:** aspec/changes/archive/YYYY-MM-DD-<name>/
 **Specs:** ✓ Synced (or: No delta specs / Sync skipped)
-**Memories recorded:** <list, or "None">
+**Memories promoted:** <list, or "None">
 ```
+
+If a promotion failed after the move, add `**Memory pending:** <memory_key> — <reason> (retry required)`. Never label the archive as memorized when a write is pending.
 
 When the seed was `STALE`, add a `**Seed:**` line: `Regenerated` or `Stale — regeneration declined`.
 
@@ -92,4 +93,6 @@ If warnings applied (incomplete tasks, skipped sync, stale seed), show an "Archi
 - Seed freshness follows the `LOCKED: seed-freshness` rule in `AGENTS.md`.
 - If the target archive directory exists, fail instead of overwriting.
 - Delete scaffold-only files (`context.md`) before moving; never archive them.
+- Promotion only uses `recordDecision`; it never invents a `memory_key`, never derives one from the change, and never promotes a `rule` from `## Decisiones`.
+- Zero candidates ⇒ zero writes and zero `@memory-keeper` spawn.
 - `recordRule`/`recordDecision` accept only `memory_key`, `content`, `justification`, `scope`. Never send `source`, `confidence`, `status` or `id` — the runtime manages those.

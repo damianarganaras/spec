@@ -46,20 +46,16 @@ A non-canonical spec cannot be matched for coverage or merged reliably, so repor
 
 **Patterns:** review new code against project patterns (naming, dirs, style). Significant deviation → SUGGESTION: "Code pattern deviation: `<details>`" + "Consider following project pattern: `<example>`".
 
-### 5. Capture findings into persistent memory
+### 5. Capture durable findings into persistent memory
 
-For every WARNING/CRITICAL revealing an architectural decision, standing rule, or reusable lesson:
+Verify is not a second promotion point. **Do not promote the change's `## Decisiones`**: the archive gate owns that and will promote the approved blocks when the change is archived. The shape of `## Decisiones` is defined in `agents/spec-writer.md`; reference it, do not restate it here.
 
-- Standing rules/constraints/conventions → `recordRule`:
-  ```
-  recordRule({ memory_key: "<kebab-topic>", content: "<the rule>", justification: "<evidence>" })
-  ```
-- Design decisions/trade-offs and why → `recordDecision`:
-  ```
-  recordDecision({ memory_key: "<kebab-topic>", content: "<the decision>", justification: "<reason>" })
-  ```
+Only record a durable finding that is **not** a decision of this change and that survives the change — a standing rule, a constraint, or a reusable lesson revealed by a WARNING/CRITICAL:
 
-Record only what saves future investigation, not the outcome. If nothing meets the bar, record nothing and say so.
+- Standing rules/constraints/conventions → `recordRule` with a `refs:` block.
+- Durable, non-decision lessons → `recordDecision` with a `refs:` block.
+
+Every write carries a normalized `refs:` block; the engine rejects a capture write without it. A `decision` requires at least one `spec:` or `change:` ref; a `rule` requires at least one `path:`, `spec:` or `change:` ref. Record only what saves future investigation, never workflow meta and never the outcome of the verification itself. If nothing meets the bar, record nothing and say so.
 
 ### 6. Verification Report
 
@@ -101,4 +97,5 @@ Record only what saves future investigation, not the outcome. If nothing meets t
 
 - Reference code as `file.ts:123`.
 - No vague suggestions ("consider reviewing") — every issue needs a specific recommendation.
+- Never promote `## Decisiones` from verify; that is the archive's promotion gate.
 - `recordRule`/`recordDecision` accept only `memory_key`, `content`, `justification`, `scope`. Never send `source`, `confidence`, `status` or `id` — the runtime manages those.

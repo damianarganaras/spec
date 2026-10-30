@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-10-29T19:20:00Z
-pluginVersion: 0.16.0
+generatedAt: 2026-10-30T15:53:12Z
+pluginVersion: 0.16.2
 skillVersion: '2.3'
 ---
 
@@ -37,10 +37,11 @@ CLI monolítica en ESM, sin framework externo. Capas:
 | Empaquetado y tiers | `src/core/repomix-tier.js` | Args de Repomix, ignores por tier, `--compress`, token budget. |
 | Selección de modelos | `src/core/tier-models.js` | Modelos por tier, resolución de tier gratis (Muse Spark/probe/env). |
 | Entorno de máquina | `src/core/machine-env.js` | **Dueño único** de detectar plataforma/shell/EOL/tooling (disponibilidad = **resoluble e invocable**, con sonda `--version` acotada), renderizar y escribir `.ancleto/machine-env.md`, y garantizar su exclusión local vía `info/exclude`; `checkMachineEnvTracked` para `check`. |
-| Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (search/record/export/import/gc/**merge**, `formatTopologyBlock`, procedencia `source`, aviso de overflow), `snapshot` (**copia consistente con historial**), `tools`, `mcp-server`, `doctor` (**read-only por defecto**), `working-context` (render compartido; refresh on-write CLI compare-based y staleness advisory). |
+| Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (refs fail-closed en `recordNode`, rechazo de secretos, search/record/export/import/gc/**merge**, `formatTopologyBlock`, procedencia `source`, aviso de overflow), `snapshot` (**copia consistente con historial**), `tools`, `mcp-server`, `doctor` (**read-only por defecto**), `working-context` (render compartido; refresh on-write CLI compare-based y staleness advisory). |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 16 commands, 21 skills, 2 templates + perfil `test`). |
-| Contratos de prompt | `agents/*.md` | Normativa del pipeline: intake de sesión, techo de lecturas, trigger de Recall, contrato de validación, **checkpoint de contrato** tras `@spec-writer` y sección `## Decisiones` del proposal, destilado entre tramos. Los mirrors `.opencode/agents/*.md` se regeneran, no se editan a mano. |
-| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 2 changes activos + `changes/archive/` (29). |
+| Contratos de prompt | `agents/*.md` | Normativa del pipeline: intake de sesión, techo de lecturas, trigger de Recall, contrato de validación, **checkpoint de contrato** tras `@spec-writer`, sección `## Decisiones` del proposal y **promoción al archivar**. Los mirrors `.opencode/agents/*.md` se regeneran, no se editan a mano. |
+| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 1 change activo + `changes/archive/` (31). |
+| Config del host opencode | `opencode.json` (raíz) | Override de `agent.model` para 9 subagentes; **no** se publica en el paquete. |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
 | Tests | `test/*.test.js` | Suite `node --test` (15 archivos; no re-ejecutada en esta regeneración). |
 | Análisis (no runtime) | `optimizacion-de-tokens.md` | Barrido de costo de tokens del producto y matriz de decisión de la promesa "token-economy". |
@@ -91,10 +92,17 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 - **Memoria**: 3 tools (`searchMemory`, `recordRule`, `recordDecision`) sobre SQLite + FTS5 con
   supersesión atómica por `memory_key` y **procedencia `source` runtime-owned**
   (`mcp:ancleto-memory`, `cli:import`, `runtime`, `agent:<rol>`), expuesta como MCP stdio
-  (`ancleto mcp`). Los subcomandos `memory export|import|gc|snapshot|merge|context|list|doctor`
+  (`ancleto mcp`). **Camino de escritura único `recordNode`**: valida un bloque `refs:`
+  normalizado de forma **fail-closed** (única exención: `source === 'runtime'`) y rechaza
+  credenciales sin eco del valor. `importNodes` no pasa por `recordNode` (conserva LWW y no
+  valida refs). Los subcomandos `memory export|import|gc|snapshot|merge|context|list|doctor`
   respaldan/restauran nodos activos, **copian la base con historial**, **consolidan duplicados
   por supersesión**, materializan el bloque activo, lo listan en modo read-only y verifican
   integridad. Detalle: `units/memory-engine.md`.
+- **Render de reglas**: `buildWorkingContext` compone `<ProjectMemoryRules>` solo con reglas
+  activas; por cada regla renderiza **solo la prosa**, recortando el bloque `refs:`
+  (`renderRuleContent`); el `content` almacenado conserva sus refs. Evidencia:
+  `src/core/memory/engine.js`.
 - **Doctor read-only**: `memoryDoctor` abre la base con `{ migrate: false, readonly: true }` por
   defecto: sin checkpoint, sin DDL y sin `INSERT` sobre FTS. Mantiene los cuatro nombres de
   check (`Integridad DB`, `Indice FTS5`, `Reglas activas (unicidad)`, `Checkpoint WAL`);
@@ -119,6 +127,12 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   `<ContextOverflowWarning>` con el conteo de reglas omitidas y la instrucción de **delegar un
   Recall a `@memory-keeper`**; el texto **no nombra** `searchMemory`. Evidencia:
   `src/core/memory/engine.js`, `aspec/specs/memory-engine/spec.md`.
+- **Promoción al archivar**: el gate vive en `skills/ancleto-archive/SKILL.md`; solo promueve
+  bloques de `proposal ## Decisiones` con `memory_key` propia y `Estado: aprobado`, hace
+  preflight del lote completo, no promueve `rule`, y sin candidatos no escribe ni delega. El
+  orquestador ejecuta la promoción **después** del merge de specs de `@documenter` y nunca en
+  paralelo. Evidencia: `skills/ancleto-archive/SKILL.md`, `agents/orchestrator.md`,
+  `agents/memory-keeper.md`.
 - **Reporte de fallos**: `ancleto stats failures` lee solo lectura la tabla `part` de opencode,
   clasifica cada fallo (`env`, `check`, `tool`, `unknown`), agrupa por proyecto/herramienta/
   clase/esqueleto y aplica enmascarado de secretos/rutas. Es la superficie de medición de la
@@ -126,11 +140,9 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   (`statsFailuresCommand`), `aspec/specs/session-failure-report/spec.md`.
 - **Contratos de prompt del orquestador** (`agents/orchestrator.md`): **intake de sesión**,
   **techo de lecturas** (3 archivos + exenciones), **trigger de Recall** ante
-  `<ContextOverflowWarning>` y **checkpoint de contrato** tras `@spec-writer`: se presenta el
-  contrato del cambio (intención, alcance, Requirement, riesgos, decisión de arquitectura,
-  validación prevista, paths autorizados) en menos de una pantalla, la aprobación autoriza solo
-  la implementación y una enmienda es obligatoria si cambian alcance, riesgo o arquitectura.
-  Evidencia: `agents/orchestrator.md`, `aspec/specs/prompt-contracts/spec.md`.
+  `<ContextOverflowWarning>`, **checkpoint de contrato** tras `@spec-writer` y **promoción**
+  en el archive. Evidencia: `agents/orchestrator.md`,
+  `aspec/specs/prompt-contracts/spec.md`.
 - **Ciclo SDD**: comandos `/cleto-*` que consumen `aspec/changes/<name>/` y las skills nativas;
   no requieren binario externo. Incluye `/cleto-review` (calidad), `/cleto-security`,
   `/cleto-update` y `/cleto-transplant`.
@@ -162,57 +174,64 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
    `memory merge`, compare-based) y `memory doctor` reporta su frescura como línea advisory.
    Evidencia: `agents/orchestrator.md`, `src/core/memory/working-context.js`,
    `src/cli/index.js`, `src/core/memory/engine.js`.
-5. **Mantenimiento de memoria** — `memory doctor` audita sin mutar (por defecto);
+5. **Escritura de memoria con refs** — `recordRule`/`recordDecision` pasan por `recordNode`;
+   el runtime fija `source` (`mcp:ancleto-memory` para el MCP) y, si no es `runtime`, el
+   contenido debe incluir un bloque `refs:` válido y resoluble. Una ref rota, ambigua, un
+   segundo bloque `refs:` o una credencial rechazan la escritura **antes** de la transacción.
+   Evidencia: `src/core/memory/engine.js`, `src/core/memory/mcp-server.js`.
+6. **Mantenimiento de memoria** — `memory doctor` audita sin mutar (por defecto);
    `memory snapshot --out <archivo.db>` produce una copia restaurable con historial;
    `memory merge --target <key> --sources <k1,k2,...>` consolida duplicados supersediendo cada
    source activa hacia el target en una sola transacción (`--dry-run` no escribe);
    `memory export|import|gc` mueven/purgan nodos activos. Evidencia:
    `src/core/memory/{snapshot,doctor,engine}.js`, `src/cli/index.js`,
    `aspec/specs/memory-ops/spec.md`.
-6. **Entorno de máquina** — en cada ciclo de vida el CLI detecta hechos locales y escribe
+7. **Entorno de máquina** — en cada ciclo de vida el CLI detecta hechos locales y escribe
    `.ancleto/machine-env.md`; si el contenido (sin `generated_at`) no cambió, no reescribe.
    Después agrega/verifica la exclusión en `info/exclude` (sin tocar `.gitignore`). Los agentes
    leen el archivo antes de ejecutar comandos; el orquestador incluye el bloque en cada
    delegación con `bash: true` y esa lectura no consume su techo de 3 archivos. Evidencia:
    `src/core/machine-env.js`, `agents/*.md`, `aspec/specs/machine-environment/spec.md`.
-7. **Ciclo de change** — `/cleto-new` → `/cleto-propose` → **checkpoint de contrato** →
+8. **Ciclo de change** — `/cleto-new` → `/cleto-propose` → **checkpoint de contrato** →
    `/cleto-apply` → `/cleto-verify` → `/cleto-archive`, con `/cleto-review`/`/cleto-security`
    para calidad y seguridad, `/cleto-update` para actualizar artifacts ante cambios de definición
    y `/cleto-transplant` para mudar proyectos entre máquinas. El proposal registra sus decisiones
-   duraderas en `## Decisiones` (bloque de seis campos o forma de una línea); un tradeoff que
-   aparece durante la implementación se apendea ahí por `@spec-writer`, con enmienda del contrato
-   solo si cambia alcance, riesgo o arquitectura. Con perfil `test`, el orchestrator rutea lo
-   test-only al tester ampliado (`cleto-test-*`). Evidencia: `commands/`, `skills/`,
-   `agents/spec-writer.md`, `agents/orchestrator.md`, `aspec/changes/archive/`.
-8. **Cierre del change (pipeline de throughput)** — el tester computa el `affected-set` con
-   `ancleto affected` (dependientes, no solo archivos tocados) y produce un Validation Ledger
-   completo y cerrado; el orquestador arma/verifica el cierre y delega el review con el
-   `affected-set` como scope. Tras la aprobación de archive y con candidato real de memoria,
-   delega `@documenter` ∥ `@memory-keeper`; el cierre hace **como máximo una** llamada a
-   memoria. Evidencia: `agents/orchestrator.md`, `agents/tester.md`, `agents/reviewer.md`,
-   `aspec/specs/prompt-contracts/spec.md`, `aspec/specs/review/spec.md`.
-9. **Arranque de sesión del orquestador** — intake read-only (changes activos excluyendo
-   `archive/`; `git status --short` delegado a `@technical-discovery` sólo si el pedido toca
-   el estado del repo; silencio si no hay nada que reportar) → **Active Change Check** → triage
-   (`spec-required` / `direct-test-only` / `direct-implementation` / `clarification-needed`) →
-   ejecución delegada, con el techo de 3 archivos. Evidencia: `agents/orchestrator.md`,
-   `agents/technical-discovery.md`, `aspec/specs/prompt-contracts/spec.md`.
-10. **Validación local** — contrato **declarativo**: se corre solo lo declarado en `PRODUCT.md`
+   duraderas en `## Decisiones`; un tradeoff que aparece durante la implementación se apendea
+   ahí por `@spec-writer`, con enmienda del contrato solo si cambia alcance, riesgo o
+   arquitectura. Con perfil `test`, el orchestrator rutea lo test-only al tester ampliado
+   (`cleto-test-*`). Evidencia: `commands/`, `skills/`, `agents/spec-writer.md`,
+   `agents/orchestrator.md`, `aspec/changes/archive/`.
+9. **Cierre del change** — el tester computa el `affected-set` con `ancleto affected`
+   (dependientes, no solo archivos tocados) y produce un Validation Ledger completo y cerrado;
+   el orquestador arma/verifica el cierre y delega el review con el `affected-set` como scope.
+   Tras la aprobación de archive, `@documenter` mergea las specs; **después** de ese merge (y
+   nunca en paralelo) el gate de archive promueve las decisiones aprobadas a memoria con una
+   pasada de `@memory-keeper`. El cierre hace **como máximo una** llamada de Automatic Record.
+   Evidencia: `agents/orchestrator.md`, `agents/tester.md`, `agents/reviewer.md`,
+   `skills/ancleto-archive/SKILL.md`, `aspec/specs/prompt-contracts/spec.md`.
+10. **Arranque de sesión del orquestador** — intake read-only (changes activos excluyendo
+    `archive/`; `git status --short` delegado a `@technical-discovery` sólo si el pedido toca
+    el estado del repo; silencio si no hay nada que reportar) → **Active Change Check** → triage
+    (`spec-required` / `direct-test-only` / `direct-implementation` / `clarification-needed`) →
+    ejecución delegada, con el techo de 3 archivos. Evidencia: `agents/orchestrator.md`,
+    `agents/technical-discovery.md`, `aspec/specs/prompt-contracts/spec.md`.
+11. **Validación local** — contrato **declarativo**: se corre solo lo declarado en `PRODUCT.md`
     → `## Project Commands` (aquí `npm run lint` y `npm test`). Evidencia: `AGENTS.md`
     (`LOCKED: validation-commands`), `PRODUCT.md`, `package.json`.
 
 ## Estado del repositorio
 
-Versión `0.16.0` en rama `development`; tag **anotado** `v0.16.0` y HEAD `7388482` **1 commit por
-delante**. `CHANGELOG.md` cubre hasta `0.16.0`, versión que publicó PR-1 (snapshot, doctor
-read-only, merge). El árbol de trabajo tiene **PR-2 (`decisiones-y-contrato-checkpoint`) sin
-commitear**: `agents/orchestrator.md`, `agents/spec-writer.md`, seis `skills/**` y
-`test/content-guards.test.js` modificados, y la carpeta del change untracked; `src/**` está limpio.
-Dogfooding histórico: el framework fue inicializado sobre este repo; este checkout **sí materializa
-`.ancletorc` y `.opencode/`** (ambos gitignored, no versionados) y persiste `AGENTS.md`,
-`PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier resuelto es **`minimo`** vía
-`.opencode/.ancleto-tier`. **`.ancleto/machine-env.md` ya existe** (generado el 2026-10-29) y los
-mirrors `.opencode/` están regenerados. Los **changes activos** son `ancleto-vscode-extension` y
-`decisiones-y-contrato-checkpoint` (implementado, pendiente de review final y archive); el más
-reciente archivado es `2026-10-28-reingenieria-memoria-first`. Evidencia: `.gitignore`,
-`.discovery-map.json`, `ancleto discovery --check`, `git describe --tags`, `aspec/changes/`.
+Versión `0.16.2` en rama `development`; tag **anotado** `v0.16.2` en `main` y HEAD `90dba0d`
+**1 commit por delante** del commit de release `6f80293`. `CHANGELOG.md` cubre hasta `0.16.2`
+(PR-2: `## Decisiones` y checkpoint de contrato). El commit `90dba0d` (MEM-03: refs
+obligatorias y promoción al archivar) está en el árbol pero **no** en el changelog ni en el tag.
+El árbol de trabajo está **limpio**: los changes `decisiones-y-contrato-checkpoint` y
+`2026-10-30-mem-03-promocion-decisiones-refs` ya están archivados. Dogfooding histórico: el
+framework fue inicializado sobre este repo; este checkout **sí materializa `.ancletorc` y
+`.opencode/`** (ambos gitignored, no versionados) y persiste `AGENTS.md`, `PRODUCT.md`,
+`aspec/` y `.ancleto/memory.db`. El tier resuelto es **`minimo`** vía
+`.opencode/.ancleto-tier`. **`.ancleto/machine-env.md` ya existe** (generado el 2026-10-29 con
+`ancleto: 0.16.2`) y los mirrors `.opencode/` están regenerados. El único **change activo** es
+`ancleto-vscode-extension`; el más reciente archivado es
+`2026-10-30-mem-03-promocion-decisiones-refs`. Evidencia: `.gitignore`,
+`.discovery-map.json`, `ancleto discovery --check`, `git log`, `aspec/changes/`.

@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-29T19:20:00Z
-pluginVersion: 0.16.0
+generatedAt: 2026-10-30T15:53:12Z
+pluginVersion: 0.16.2
 skillVersion: '2.3'
 ---
 
@@ -73,306 +73,366 @@ skillVersion: '2.3'
    host desconocido → identidad + aviso. Evidencia:
    `src/core/adapters/frontmatter.js`, `aspec/specs/skill-frontmatter-adapters/spec.md`.
 10. **Antigravity: transformación determinista y conjunto cerrado de tools.** Orden de emisión:
-     `name`, `description`, `tools` (siempre lista), `mainAgent`, `subagent`, `model: inherit`,
-     `commandExecutionPolicy: sandbox`, `mcpServers`, `skills`, extras. `mode` → flags:
-     `primary`→(`true`,`false`),`subagent`→(`false`,`true`), sin `mode`→(`true`,`true`). Solo se
-     emiten los 5 ids verificados: `read→view_file`, `edit→replace_file_content`,
-     `grep→grep_search`, `bash→run_command`, `todowrite→manage_task`. Toda otra clave se omite
-     con aviso a stderr no bloqueante; un id inexistente cuelga el subagent (Known Issue).
-     `skill` se saltea en silencio; `call_mcp_tool` está **prohibido**; el uso de MCP se expresa
-     por `mcpServers`/`.agents/mcp_config.json`. Evidencia:
-     `src/core/adapters/frontmatter.js`, `units/cli-install.md`.
+      `name`, `description`, `tools` (siempre lista), `mainAgent`, `subagent`, `model: inherit`,
+      `commandExecutionPolicy: sandbox`, `mcpServers`, `skills`, extras. `mode` → flags:
+      `primary`→(`true`,`false`),`subagent`→(`false`,`true`), sin `mode`→(`true`,`true`). Solo se
+      emiten los 5 ids verificados: `read→view_file`, `edit→replace_file_content`,
+      `grep→grep_search`, `bash→run_command`, `todowrite→manage_task`. Toda otra clave se omite
+      con aviso a stderr no bloqueante; un id inexistente cuelga el subagent (Known Issue).
+      `skill` se saltea en silencio; `call_mcp_tool` está **prohibido**; el uso de MCP se expresa
+      por `mcpServers`/`.agents/mcp_config.json`. Evidencia:
+      `src/core/adapters/frontmatter.js`, `units/cli-install.md`.
 11. **Command Code: layout nativo y semántica de `tools` invertida.** El host `commandcode`
-     (CLI `cmd`) usa `.commandcode/{skills,agents,commands}`. `adaptCommandCodeFrontmatter`
-     inyecta `name`, preserva `description`, elimina `mode`/`color`/`temperature`/`permission` y
-     **omite** `model` (el host hereda el modelo de sesión; el tier no lo reescribe). `tools`
-     sale como **lista** de ids verificados (`COMMANDCODE_TOOL_MAP`); las tools de memoria se
-     emiten con la convención MCP del host (`COMMANDCODE_MCP_TOOL_MAP` →
-     `mcp__ancleto-memory__<tool>`). Clave sin id verificado → omisión con aviso. **Inversión de
-     default**: en Command Code `tools` omitido significa "ninguna tool" (en opencode, "todas"),
-     por eso un origen sin `tools` emite `tools: "*"`. El MCP de proyecto vive en `.mcp.json`.
-     Evidencia: `src/core/adapters/frontmatter.js`, `README.md`, `CHANGELOG.md` (`0.12.1`),
-     `aspec/specs/commandcode-support/spec.md`.
+      (CLI `cmd`) usa `.commandcode/{skills,agents,commands}`. `adaptCommandCodeFrontmatter`
+      inyecta `name`, preserva `description`, elimina `mode`/`color`/`temperature`/`permission` y
+      **omite** `model` (el host hereda el modelo de sesión; el tier no lo reescribe). `tools`
+      sale como **lista** de ids verificados (`COMMANDCODE_TOOL_MAP`); las tools de memoria se
+      emiten con la convención MCP del host (`COMMANDCODE_MCP_TOOL_MAP` →
+      `mcp__ancleto-memory__<tool>`). Clave sin id verificado → omisión con aviso. **Inversión de
+      default**: en Command Code `tools` omitido significa "ninguna tool" (en opencode, "todas"),
+      por eso un origen sin `tools` emite `tools: "*"`. El MCP de proyecto vive en `.mcp.json`.
+      Evidencia: `src/core/adapters/frontmatter.js`, `README.md`, `CHANGELOG.md` (`0.12.1`),
+      `aspec/specs/commandcode-support/spec.md`.
 12. **`ancleto check` valida el frontmatter real contra el adaptador.** Por cada `.md` de un
-     directorio de agents instalado, compara el instalado contra
-     `adaptFrontmatter(origen, host, 'agents', name)` (con la simulación del `model:` del tier
-     en opencode y la nota de picker en copilot). La divergencia se reporta como **warning (⚠),
-     no bloqueante**: solo los archivos faltantes cambian el exit code. Siguiendo el manifiesto
-     multi-host (`installedHostsFromPaths`), aplica el adaptador de cada host. Evidencia:
-     `src/cli/index.js` (`checkAgentsFrontmatter`), `test/adapters-frontmatter.test.js`.
+      directorio de agents instalado, compara el instalado contra
+      `adaptFrontmatter(origen, host, 'agents', name)` (con la simulación del `model:` del tier
+      en opencode y la nota de picker en copilot). La divergencia se reporta como **warning (⚠),
+      no bloqueante**: solo los archivos faltantes cambian el exit code. Siguiendo el manifiesto
+      multi-host (`installedHostsFromPaths`), aplica el adaptador de cada host. Evidencia:
+      `src/cli/index.js` (`checkAgentsFrontmatter`), `test/adapters-frontmatter.test.js`.
 13. **Export/import/gc de memoria (`memory-ops`).** `exportActive()` devuelve solo nodos activos
-     con `{memory_key, type, content, justification, scope, createdAt}` y **sanitiza paths
-     absolutos** a `<redacted>`; los superseded no se exportan. `importNodes(json)` valida el
-     schema antes de procesar y **aborta el batch entero** si una entrada es inválida; upsert por
-     `memory_key`: inserta si no existe, supersede solo si el `createdAt` del JSON es más
-     reciente, y **no reactiva** nodos superseded. `gcSuperseded({days, dryRun})` purga
-     superseded con antigüedad mayor al umbral (default 30 días, medido con `created_at` como
-     proxy porque no existe `superseded_at`); tras el DELETE hace `VACUUM`+`REINDEX` best-effort.
-     Evidencia: `src/core/memory/engine.js`, `src/cli/index.js`,
-     `aspec/specs/memory-ops/spec.md`.
+      con `{memory_key, type, content, justification, scope, createdAt}` y **sanitiza paths
+      absolutos** a `<redacted>`; los superseded no se exportan. `importNodes(json)` valida el
+      schema antes de procesar y **aborta el batch entero** si una entrada es inválida; upsert por
+      `memory_key`: inserta si no existe, supersede solo si el `createdAt` del JSON es más
+      reciente, y **no reactiva** nodos superseded. `gcSuperseded({days, dryRun})` purga
+      superseded con antigüedad mayor al umbral (default 30 días, medido con `created_at` como
+      proxy porque no existe `superseded_at`); tras el DELETE hace `VACUUM`+`REINDEX` best-effort.
+      Evidencia: `src/core/memory/engine.js`, `src/cli/index.js`,
+      `aspec/specs/memory-ops/spec.md`.
 14. **Migración/importación `openspec/` → `aspec/` no destructiva.** `migrateLegacyOpenspec`
-     copia recursiva con `force: false`, escribe el marcador `.migrated-from-openspec` y conserva
-     `openspec/` como backup; si `aspec/` ya tiene contenido real avisa y no migra.
-     `detectLegacyOpenSpec` clasifica (`none`/`legacy`/`external`); lo externo pide confirmación
-     (default No, `--yes` para script) e importa sin pisar el `AGENTS.md` local. Punto único
-     `maybeImportOpenspec`, invocado por `init`, `install --project` y `upgrade`. Evidencia:
-     `src/cli/index.js`, `aspec/specs/aspec-bootstrap/spec.md`.
+      copia recursiva con `force: false`, escribe el marcador `.migrated-from-openspec` y conserva
+      `openspec/` como backup; si `aspec/` ya tiene contenido real avisa y no migra.
+      `detectLegacyOpenSpec` clasifica (`none`/`legacy`/`external`); lo externo pide confirmación
+      (default No, `--yes` para script) e importa sin pisar el `AGENTS.md` local. Punto único
+      `maybeImportOpenspec`, invocado por `init`, `install --project` y `upgrade`. Evidencia:
+      `src/cli/index.js`, `aspec/specs/aspec-bootstrap/spec.md`.
 15. **MCP de host, dueño único `setupHostMcp`.** Excepciones de host-MCP: antigravity mergea
-     `.agents/mcp_config.json` (`{ "mcpServers": { "<n>": { command, args, env } } }`),
-     commandcode mergea `.mcp.json` (`{ mcpServers: { <n>: { transport: 'stdio', command, args,
-     env? } } }`) y copilot mergea `copilot-mcp.json`; los tres de forma **no destructiva**
-     (preservan `mcpServers` y claves top-level, no pisan homónimos; un JSON inválido avisa sin
-     escribir). El resto conserva `mergeMcp` sobre `opencode.json`. `init` e `install`
-     configuran MCP igual; `--no-mcp` es el escape. Evidencia: `src/cli/index.js`, `README.md`.
+      `.agents/mcp_config.json` (`{ "mcpServers": { "<n>": { command, args, env } } }`),
+      commandcode mergea `.mcp.json` (`{ mcpServers: { <n>: { transport: 'stdio', command, args,
+      env? } } }`) y copilot mergea `copilot-mcp.json`; los tres de forma **no destructiva**
+      (preservan `mcpServers` y claves top-level, no pisan homónimos; un JSON inválido avisa sin
+      escribir). El resto conserva `mergeMcp` sobre `opencode.json`. `init` e `install`
+      configuran MCP igual; `--no-mcp` es el escape. Evidencia: `src/cli/index.js`, `README.md`.
 16. **Perfil `test`: overlay, no fork.** `installProfileOverlay` reinstala
-     `profiles/test/agents` + `commands` sobre los destinos nativos del host (misma ext y
-     adapter que la base) y `copyTemplates` lee `profiles/test/templates/`; el paquete base queda
-     intacto y el tier sigue ortogonal. Evidencia: `src/cli/index.js`, `profiles/test/`,
-     `aspec/specs/test-profile/spec.md`.
+      `profiles/test/agents` + `commands` sobre los destinos nativos del host (misma ext y
+      adapter que la base) y `copyTemplates` lee `profiles/test/templates/`; el paquete base queda
+      intacto y el tier sigue ortogonal. Evidencia: `src/cli/index.js`, `profiles/test/`,
+      `aspec/specs/test-profile/spec.md`.
 17. **Portabilidad = intención, no rutas.** `export` genera bundle + `manifest.json` con solo
-     nombres+tipos de MCP (nunca `command`/`args`); aborta si el manifiesto contiene absolutos.
-     `import` aplica portables y **regenera** entradas con el host local (`mcpCommandBroken`),
-     sin pisar sanas, y cierra con `doctor`. Nunca se exportan credenciales, `service.json`,
-     global ni `memory.db` (la memoria tiene su propio export JSON y, ahora, un snapshot
-     binario). Evidencia: `src/cli/index.js`, `aspec/specs/project-portability/spec.md`.
+      nombres+tipos de MCP (nunca `command`/`args`); aborta si el manifiesto contiene absolutos.
+      `import` aplica portables y **regenera** entradas con el host local (`mcpCommandBroken`),
+      sin pisar sanas, y cierra con `doctor`. Nunca se exportan credenciales, `service.json`,
+      global ni `memory.db` (la memoria tiene su propio export JSON y, ahora, un snapshot
+      binario). Evidencia: `src/cli/index.js`, `aspec/specs/project-portability/spec.md`.
 18. **Linter mínimo: 4 reglas, sin estilo.** `eslint.config.js` es flat config (array) con
-     `ecmaVersion: latest`, `sourceType: module`, globals de Node y exactamente `no-undef`,
-     `no-unused-vars` (con `argsIgnorePattern`/`caughtErrorsIgnorePattern` `^_`), `eqeqeq`
-     (`always`) y `no-dupe-keys`. Sin Prettier, sin plugins. Evidencia: `eslint.config.js`,
-     `test/linter-config.test.js`, `aspec/specs/linter-standard/spec.md`.
+      `ecmaVersion: latest`, `sourceType: module`, globals de Node y exactamente `no-undef`,
+      `no-unused-vars` (con `argsIgnorePattern`/`caughtErrorsIgnorePattern` `^_`), `eqeqeq`
+      (`always`) y `no-dupe-keys`. Sin Prettier, sin plugins. Evidencia: `eslint.config.js`,
+      `test/linter-config.test.js`, `aspec/specs/linter-standard/spec.md`.
 19. **Patrón "CLI materializa + agente lee".** `ancleto memory context` escribe
-     `.ancleto/working-context.md`; el orquestador lo lee como datos no confiables sin `bash`.
-     El mismo patrón rige `.ancleto/machine-env.md`: el CLI detecta y escribe, los agentes leen.
-     Evidencia: `agents/orchestrator.md`, `src/core/memory/working-context.js`,
-     `src/core/machine-env.js`.
+      `.ancleto/working-context.md`; el orquestador lo lee como datos no confiables sin `bash`.
+      El mismo patrón rige `.ancleto/machine-env.md`: el CLI detecta y escribe, los agentes leen.
+      Evidencia: `agents/orchestrator.md`, `src/core/memory/working-context.js`,
+      `src/core/machine-env.js`.
 20. **Compresión (caveman) host-scoped, con compuerta de medición** (`token-budget`). El CLI
-     configura el MCP de compresión por defecto cuando el binario está disponible, como
-     **configuración del host** (solo `opencode`/`antigravity`). La **directiva de uso** se
-     materializa únicamente en superficies de un host cuya config MCP incluye la tool
-     (`hostSupportsCompression`/`hostConfigHasCompression`, `CAVEMAN_USAGE_NOTE`), **nunca** en
-     texto compartido: "donde no hay tool, no hay instrucción". El default es **reversible a
-     opt-in** si `ancleto stats` no muestra un descenso neto. Evidencia: `src/cli/index.js`,
-     `aspec/specs/prompt-contracts/spec.md`.
+      configura el MCP de compresión por defecto cuando el binario está disponible, como
+      **configuración del host** (solo `opencode`/`antigravity`). La **directiva de uso** se
+      materializa únicamente en superficies de un host cuya config MCP incluye la tool
+      (`hostSupportsCompression`/`hostConfigHasCompression`, `CAVEMAN_USAGE_NOTE`), **nunca** en
+      texto compartido: "donde no hay tool, no hay instrucción". El default es **reversible a
+      opt-in** si `ancleto stats` no muestra un descenso neto. Evidencia: `src/cli/index.js`,
+      `aspec/specs/prompt-contracts/spec.md`.
 21. **Día-cero del working-context** (`token-budget`). El CLI **no** omite materializar
-     `.ancleto/working-context.md` por ausencia de `.ancleto/memory.db`: si existe
-     `.discovery-map.json`, escribe el bloque `<ProjectTopology>` (creando `.ancleto/` si falta)
-     **sin abrir el motor**. Render único (`renderWorkingContextBlock`) compartido por el refresh
-     de lifecycle y `memory context`; `buildWorkingContext` conserva firma, default `cwd` y
-     resultado `null` sin topología ni reglas. Evidencia: `src/cli/index.js`,
-     `src/core/memory/working-context.js`, `aspec/specs/memory-engine/spec.md`.
-22. **Procedencia `source` runtime-owned** (`memory-actor-provenance`). `source` se resuelve
-     exclusivamente desde `context.source` (nunca desde args del caller) con vocabulario estable:
-     `mcp:ancleto-memory`, `cli:import`, `runtime` y `agent:<rol>` (solo si un runtime confiable
-     lo provee). Se expone en `listNodes`/`memory list --json` pero **no** en `searchMemory` ni en
-     los JSON Schema MCP. La procedencia es **descriptiva**; el motor **no** autoriza ni deniega
-     escrituras con ella. Evidencia: `src/core/memory/engine.js`,
-     `aspec/specs/memory-engine/spec.md`, `aspec/changes/archive/2026-10-05-memory-actor-provenance/`.
+      `.ancleto/working-context.md` por ausencia de `.ancleto/memory.db`: si existe
+      `.discovery-map.json`, escribe el bloque `<ProjectTopology>` (creando `.ancleto/` si falta)
+      **sin abrir el motor**. Render único (`renderWorkingContextBlock`) compartido por el refresh
+      de lifecycle y `memory context`; `buildWorkingContext` conserva firma, default `cwd` y
+      resultado `null` sin topología ni reglas. Evidencia: `src/cli/index.js`,
+      `src/core/memory/working-context.js`, `aspec/specs/memory-engine/spec.md`.
+22. **Procedencia `source` runtime-owned y compuerta de validación**
+      (`memory-actor-provenance`, actualizada por `MEM-03`). `source` se resuelve
+      exclusivamente desde `context.source || 'runtime'`, **nunca** desde args del caller, con
+      vocabulario estable: `mcp:ancleto-memory` (tools MCP), `cli:import` (import del CLI),
+      `runtime` (default programático y fixtures) y `agent:<rol>` (solo si un runtime confiable
+      lo provee). Se expone en `listNodes`/`memory list --json` pero **no** en `searchMemory` ni
+      en los JSON Schema MCP. La procedencia ahora **decide una única cosa**: si la escritura
+      pasa por la validación de refs. La exención es el valor exacto `runtime`; cualquier otro
+      valor se valida fail-closed. Sigue sin ser un canal de autorización/autenticación.
+      Evidencia: `src/core/memory/engine.js:438-475`, `src/core/memory/mcp-server.js:16`,
+      `aspec/specs/memory-engine/spec.md`.
 23. **Fuente única de reglas compartidas + guards por comportamiento** (`token-budget`). Toda
-     regla que se declaraba en skill y agente pasa a tener **un único hogar canónico**: las
-     transversales viven en `AGENTS.md` (bloques `LOCKED`) y las demás superficies **referencian**
-     sin repetir texto. `test/content-guards.test.js` aserta **keywords de comportamiento** y
-     presencia de salvaguardas, no redacción literal. Evidencia: `AGENTS.md`,
-     `templates/AGENTS.md`, `aspec/specs/prompt-contracts/spec.md`.
+      regla que se declaraba en skill y agente pasa a tener **un único hogar canónico**: las
+      transversales viven en `AGENTS.md` (bloques `LOCKED`) y las demás superficies **referencian**
+      sin repetir texto. `test/content-guards.test.js` aserta **keywords de comportamiento** y
+      presencia de salvaguardas, no redacción literal. Evidencia: `AGENTS.md`,
+      `templates/AGENTS.md`, `aspec/specs/prompt-contracts/spec.md`.
 24. **Actualización de artifacts de un change (`ancleto-update`, `0.12.0`).** La skill
-     `ancleto-update` (`/cleto-update`) actualiza los artifacts de un change existente ante
-     cambios de definición con merge no destructivo: clasifica por artifact dueño
-     (`specs/`, `design.md`, `proposal.md`, `tasks.md`), detecta drift entre delta specs y specs
-     principales y pregunta el modo de escritura (in-place vs `rev2`). Evidencia:
-     `skills/ancleto-update/SKILL.md`, `commands/cleto-update.md`,
-     `aspec/specs/artifact-update/spec.md`.
+      `ancleto-update` (`/cleto-update`) actualiza los artifacts de un change existente ante
+      cambios de definición con merge no destructivo: clasifica por artifact dueño
+      (`specs/`, `design.md`, `proposal.md`, `tasks.md`), detecta drift entre delta specs y specs
+      principales y pregunta el modo de escritura (in-place vs `rev2`). Evidencia:
+      `skills/ancleto-update/SKILL.md`, `commands/cleto-update.md`,
+      `aspec/specs/artifact-update/spec.md`.
 25. **Affected-set determinístico por grafo de imports (`throughput-pipeline`).** El conjunto
-     afectado es la **clausura transitiva de dependientes** sobre el grafo de imports, sembrada
-     por los `task-owned files` e incluyendo siempre los archivos tocados; es **determinístico**,
-     **objetivo de verificación** de `@tester` y **scope de review** de `@reviewer`. Vive en
-     `src/core/affected-set.js` (zero-dep) y se expone **read-only** por
-     `ancleto affected [--cwd <dir>] [--json] <archivo...>`. Cobertura: formas estáticas `import`,
-     `import … from`, `export … from`, `require(...)` e `import(...)` con literal puro, sobre
-     `.js/.mjs/.cjs/.ts/.tsx`; respeta los ignores de topología. **Taxonomía cerrada (4
-     categorías)**: (1) relativo resoluble → arista; (2) no relativo (paquete/builtin/**alias**)
-     → `externalCount`, sin arista ni `unresolved`; (3) llamada `import(...)`/`require(...)` con
-     **argumento no literal** → `unresolved`; (4) relativo irresoluble → `unresolved`. El
-     **clasificador es conservador por argumento**. `externalCount` es **dato informativo**. Si
-     el proyecto declara su propio mecanismo en `PRODUCT.md` → `## Project Commands`, ese tiene
-     prioridad. Evidencia: `src/core/affected-set.js`, `src/cli/index.js` (`affectedCommand`),
-     `aspec/specs/prompt-contracts/spec.md`, `test/affected-set.test.js`.
+      afectado es la **clausura transitiva de dependientes** sobre el grafo de imports, sembrada
+      por los `task-owned files` e incluyendo siempre los archivos tocados; es **determinístico**,
+      **objetivo de verificación** de `@tester` y **scope de review** de `@reviewer`. Vive en
+      `src/core/affected-set.js` (zero-dep) y se expone **read-only** por
+      `ancleto affected [--cwd <dir>] [--json] <archivo...>`. Cobertura: formas estáticas `import`,
+      `import … from`, `export … from`, `require(...)` e `import(...)` con literal puro, sobre
+      `.js/.mjs/.cjs/.ts/.tsx`; respeta los ignores de topología. **Taxonomía cerrada (4
+      categorías)**: (1) relativo resoluble → arista; (2) no relativo (paquete/builtin/**alias**)
+      → `externalCount`, sin arista ni `unresolved`; (3) llamada `import(...)`/`require(...)` con
+      **argumento no literal** → `unresolved`; (4) relativo irresoluble → `unresolved`. El
+      **clasificador es conservador por argumento**. `externalCount` es **dato informativo**. Si
+      el proyecto declara su propio mecanismo en `PRODUCT.md` → `## Project Commands`, ese tiene
+      prioridad. Evidencia: `src/core/affected-set.js`, `src/cli/index.js` (`affectedCommand`),
+      `aspec/specs/prompt-contracts/spec.md`, `test/affected-set.test.js`.
 26. **Pipeline de mayor throughput (`throughput-pipeline`).** Cuatro contratos de prompt reducen
-     round-trips sin degradar salvaguardas: (a) **cierre en paralelo**: tras la aprobación de
-     archive y **con candidato real**, `@orchestrator` delega `@documenter` ∥ `@memory-keeper`
-     (superficies disjuntas `aspec/` vs `.ancleto/memory.db`); (b) **reviewer sin rebote**:
-     `@tester` produce un **Validation Ledger completo y cerrado**; (c) **affected-set** como
-     scope; (d) **memoria en un solo paso**: como máximo **una** llamada, solo con candidato
-     real. Evidencia: `agents/{orchestrator,tester,reviewer,memory-keeper}.md`,
-     `aspec/specs/prompt-contracts/spec.md`, `aspec/specs/review/spec.md`,
-     `aspec/changes/archive/2026-10-15-throughput-pipeline/`.
+      round-trips sin degradar salvaguardas: (a) **cierre en paralelo**: tras la aprobación de
+      archive y **con candidato real**, `@orchestrator` delega `@documenter` ∥ `@memory-keeper`
+      (superficies disjuntas `aspec/` vs `.ancleto/memory.db`); (b) **reviewer sin rebote**:
+      `@tester` produce un **Validation Ledger completo y cerrado**; (c) **affected-set** como
+      scope; (d) **memoria en un solo paso**: como máximo **una** llamada, solo con candidato
+      real. **La promoción de decisiones aprobadas queda fuera de ese presupuesto** (regla 44).
+      Evidencia: `agents/{orchestrator,tester,reviewer,memory-keeper}.md`,
+      `aspec/specs/prompt-contracts/spec.md`, `aspec/specs/review/spec.md`,
+      `aspec/changes/archive/2026-10-15-throughput-pipeline/`.
 27. **Refresh on-write del working-context en **ambas** superficies**
-     (`2026-10-17-memory-cli-writes-refresh-working-context`, archivado). El bloque
-     `<ProjectMemoryRules>` de `.ancleto/working-context.md` se regenera tras cualquier escritura
-     que pueda alterarlo: (a) **MCP** — filtrado por `shouldRefreshWorkingContext(result)`;
-     (b) **CLI** — `refreshWorkingContextOnWrite(engine, projectRoot, scope)`,
-     **compare-based**: reescribe el archivo **solo si** el bloque renderizado difiere del
-     contenido en disco, no crea un archivo vacío y **reusa la conexión abierta**. `memory
-     import` y, desde PR-1, `memory merge` lo invocan dentro de un `try/catch` aislado. La
-     regeneración usa el **mismo camino único de render** (`renderWorkingContextBlock`).
-     Evidencia: `src/cli/index.js` (`memoryImport`, `memoryMerge`),
-     `src/core/memory/working-context.js`,
-     `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/`,
-     `aspec/specs/memory-engine/spec.md`.
+      (`2026-10-17-memory-cli-writes-refresh-working-context`, archivado). El bloque
+      `<ProjectMemoryRules>` de `.ancleto/working-context.md` se regenera tras cualquier escritura
+      que pueda alterarlo: (a) **MCP** — filtrado por `shouldRefreshWorkingContext(result)`;
+      (b) **CLI** — `refreshWorkingContextOnWrite(engine, projectRoot, scope)`,
+      **compare-based**: reescribe el archivo **solo si** el bloque renderizado difiere del
+      contenido en disco, no crea un archivo vacío y **reusa la conexión abierta**. `memory
+      import` y, desde PR-1, `memory merge` lo invocan dentro de un `try/catch` aislado. La
+      regeneración usa el **mismo camino único de render** (`renderWorkingContextBlock`).
+      Evidencia: `src/cli/index.js` (`memoryImport`, `memoryMerge`),
+      `src/core/memory/working-context.js`,
+      `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/`,
+      `aspec/specs/memory-engine/spec.md`.
 28. **Detección de staleness del working-context (advisory, no altera el exit code).**
-     `checkWorkingContextFreshness(engine, projectRoot, scope)` renderiza el bloque esperado y lo
-     compara (CRLF, espacios finales por línea, salto final) contra
-     `.ancleto/working-context.md`, devolviendo `ok` / `ausente` / `desactualizado`. Es
-     **read-only**: nunca reescribe el archivo. Se expone como línea `Working-context: <estado>`
-     en `ancleto memory doctor`; el exit code sigue midiendo la integridad de la DB. Cuando no
-     está `ok`, sugiere `ancleto memory context --out`. Evidencia:
-     `src/core/memory/working-context.js`, `src/cli/index.js` (`memoryDoctorCmd`),
-     `aspec/specs/memory-engine/spec.md`.
+      `checkWorkingContextFreshness(engine, projectRoot, scope)` renderiza el bloque esperado y lo
+      compara (CRLF, espacios finales por línea, salto final) contra
+      `.ancleto/working-context.md`, devolviendo `ok` / `ausente` / `desactualizado`. Es
+      **read-only**: nunca reescribe el archivo. Se expone como línea `Working-context: <estado>`
+      en `ancleto memory doctor`; el exit code sigue midiendo la integridad de la DB. Cuando no
+      está `ok`, sugiere `ancleto memory context --out`. Evidencia:
+      `src/core/memory/working-context.js`, `src/cli/index.js` (`memoryDoctorCmd`),
+      `aspec/specs/memory-engine/spec.md`.
 29. **Entorno de máquina: artefacto local, dueño único y exclusión sin `.gitignore`**
-     (`2026-10-25-machine-environment-block`, archivado). `src/core/machine-env.js` es el
-     **único dueño** de detectar, renderizar, escribir y excluir `.ancleto/machine-env.md`; ni el
-     ciclo de vida ni `check` reimplementan formato, comparación o resolución de rutas. El
-     artefacto **no** forma parte de `working-context.md` ni de `AGENTS.md` y `templates/AGENTS.md`
-     no contiene valores de máquina. La escritura es idempotente y **no reescribe** si solo cambió
-     `generated_at`. La exclusión usa `git rev-parse --show-toplevel` + `--show-prefix` para
-     componer `<prefix>.ancleto/machine-env.md`, consulta `check-ignore --no-index` antes y
-     después, y agrega **una** entrada a `git rev-parse --git-path info/exclude`, preservando el
-     contenido previo byte a byte. Nunca toca `.gitignore`. `ancleto check` advierte si
-     `git ls-files` muestra el artefacto trackeado, sin cambiar el exit code. Evidencia:
-     `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
+      (`2026-10-25-machine-environment-block`, archivado). `src/core/machine-env.js` es el
+      **único dueño** de detectar, renderizar, escribir y excluir `.ancleto/machine-env.md`; ni el
+      ciclo de vida ni `check` reimplementan formato, comparación o resolución de rutas. El
+      artefacto **no** forma parte de `working-context.md` ni de `AGENTS.md` y `templates/AGENTS.md`
+      no contiene valores de máquina. La escritura es idempotente y **no reescribe** si solo cambió
+      `generated_at`. La exclusión usa `git rev-parse --show-toplevel` + `--show-prefix` para
+      componer `<prefix>.ancleto/machine-env.md`, consulta `check-ignore --no-index` antes y
+      después, y agrega **una** entrada a `git rev-parse --git-path info/exclude`, preservando el
+      contenido previo byte a byte. Nunca toca `.gitignore`. `ancleto check` advierte si
+      `git ls-files` muestra el artefacto trackeado, sin cambiar el exit code. Evidencia:
+      `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
 30. **Entrega del entorno a todos los subagentes y precedencia.** Toda definición de agente
-     instalada (10) contiene la instrucción canónica de leer `.ancleto/machine-env.md` antes de
-     ejecutar comandos; si no existe, continúa con la guía genérica y reporta la ausencia. Si un
-     comando falla por entorno, reporta el shell declarado y el comando textual en lugar de
-     reintentar a ciegas. `agents/orchestrator.md` agrega `## Machine Environment`, incluye el
-     bloque **verbatim** en cada delegación a un subagente con `bash: true` y **no** lo incluye
-     para `@spec-writer`, `@reviewer` ni `@memory-keeper` (sin `bash`). La lectura proactiva de
-     `machine-env.md` **no consume** el techo de 3 archivos. El bloque prevalece sobre
-     indicaciones genéricas de shell, pero **nunca** sobre seguridad, autorización, validación,
-     permisos o instrucciones explícitas del usuario. Evidencia: `agents/*.md`,
-     `src/core/machine-env.js` (`## Hint`), `aspec/specs/machine-environment/spec.md`.
+      instalada (10) contiene la instrucción canónica de leer `.ancleto/machine-env.md` antes de
+      ejecutar comandos; si no existe, continúa con la guía genérica y reporta la ausencia. Si un
+      comando falla por entorno, reporta el shell declarado y el comando textual en lugar de
+      reintentar a ciegas. `agents/orchestrator.md` agrega `## Machine Environment`, incluye el
+      bloque **verbatim** en cada delegación a un subagente con `bash: true` y **no** lo incluye
+      para `@spec-writer`, `@reviewer` ni `@memory-keeper` (sin `bash`). La lectura proactiva de
+      `machine-env.md` **no consume** el techo de 3 archivos. El bloque prevalece sobre
+      indicaciones genéricas de shell, pero **nunca** sobre seguridad, autorización, validación,
+      permisos o instrucciones explícitas del usuario. Evidencia: `agents/*.md`,
+      `src/core/machine-env.js` (`## Hint`), `aspec/specs/machine-environment/spec.md`.
 31. **Reporte de fallos de herramientas (`session-failure-report`, archivado 2026-10-25).**
-     `ancleto stats failures` lee **solo lectura** la tabla `part` de la base de opencode y
-     considera fallo a `state.status='error'` o a `metadata.exit` presente y distinto de 0.
-     Clasifica con precedencia: `tool`, `env` (exit 127/9009 o señales de entorno/tooling),
-     `check` (exit ≥ 1 legítimo) y `unknown`. Agrupa por proyecto, herramienta, clase y esqueleto
-     estructural del comando; **nunca** imprime `title`, `output`, `state.error` ni el `input` de
-     herramientas no-shell, y enmascara secretos, rutas y wrappers. Evidencia:
-     `src/cli/index.js` (`statsFailuresCommand`, `failureBucketsQuery`),
-     `aspec/specs/session-failure-report/spec.md`, `test/stats-failures.test.js`.
+      `ancleto stats failures` lee **solo lectura** la tabla `part` de la base de opencode y
+      considera fallo a `state.status='error'` o a `metadata.exit` presente y distinto de 0.
+      Clasifica con precedencia: `tool`, `env` (exit 127/9009 o señales de entorno/tooling),
+      `check` (exit ≥ 1 legítimo) y `unknown`. Agrupa por proyecto, herramienta, clase y esqueleto
+      estructural del comando; **nunca** imprime `title`, `output`, `state.error` ni el `input` de
+      herramientas no-shell, y enmascara secretos, rutas y wrappers. Evidencia:
+      `src/cli/index.js` (`statsFailuresCommand`, `failureBucketsQuery`),
+      `aspec/specs/session-failure-report/spec.md`, `test/stats-failures.test.js`.
 32. **El aviso de overflow nombra sólo capacidades que el orquestador tiene**
-     (`2026-10-26-orchestrator-session-start`, archivado). `<ContextOverflowWarning>` se emite
-     **incondicionalmente** al truncar el bloque de reglas y su texto **no** menciona
-     `searchMemory`: indica delegar **un** Recall a `@memory-keeper` con el topic de la tarea.
-     Conserva el conteo de reglas omitidas, el registro por consola y el presupuesto
-     (`MAX_TOKENS = 2000` × `CHARS_PER_TOKEN = 4` = 8.000 caracteres). El **consumidor** es
-     `@orchestrator`: el warning es trigger inmediato de **exactamente un** Recall a
-     `@memory-keeper` **antes** de delegar cualquier otra etapa. La tool MCP `searchMemory` sigue
-     expuesta al IDE (sin cambios de schema). Evidencia: `src/core/memory/engine.js`,
-     `agents/orchestrator.md` ("Team Memory"), `aspec/specs/memory-engine/spec.md`,
-     `aspec/specs/prompt-contracts/spec.md`, `test/memory-engine.test.js`,
-     `test/content-guards.test.js`.
+      (`2026-10-26-orchestrator-session-start`, archivado). `<ContextOverflowWarning>` se emite
+      **incondicionalmente** al truncar el bloque de reglas y su texto **no** menciona
+      `searchMemory`: indica delegar **un** Recall a `@memory-keeper` con el topic de la tarea.
+      Conserva el conteo de reglas omitidas, el registro por consola y el presupuesto
+      (`MAX_TOKENS = 2000` × `CHARS_PER_TOKEN = 4` = 8.000 caracteres). El **consumidor** es
+      `@orchestrator`: el warning es trigger inmediato de **exactamente un** Recall a
+      `@memory-keeper` **antes** de delegar cualquier otra etapa. La tool MCP `searchMemory` sigue
+      expuesta al IDE (sin cambios de schema). Evidencia: `src/core/memory/engine.js`,
+      `agents/orchestrator.md` ("Team Memory"), `aspec/specs/memory-engine/spec.md`,
+      `aspec/specs/prompt-contracts/spec.md`, `test/memory-engine.test.js`,
+      `test/content-guards.test.js`.
 33. **Techo de lecturas del orquestador: 3 archivos + exenciones acotadas**
-     (`2026-10-26-orchestrator-session-start`, archivado). Máximo **3 archivos de repositorio**
-     no dirigidos; **exentos** (a) las lecturas proactivas de `.ancleto/working-context.md` y
-     `.ancleto/machine-env.md` y (b) hasta **5 archivos que el usuario nombre explícitamente en
-     un mensaje**, con tope **por mensaje**. Por encima del tope, la lectura se **delega** a
-     `@technical-discovery` (sin conteo adicional). Evidencia: `agents/orchestrator.md`
-     ("Repository Reading Limit" y "PROHIBITED ACTIONS"),
-     `aspec/specs/prompt-contracts/spec.md`, `test/content-guards.test.js`.
+      (`2026-10-26-orchestrator-session-start`, archivado). Máximo **3 archivos de repositorio**
+      no dirigidos; **exentos** (a) las lecturas proactivas de `.ancleto/working-context.md` y
+      `.ancleto/machine-env.md` y (b) hasta **5 archivos que el usuario nombre explícitamente en
+      un mensaje**, con tope **por mensaje**. Por encima del tope, la lectura se **delega** a
+      `@technical-discovery` (sin conteo adicional). Evidencia: `agents/orchestrator.md`
+      ("Repository Reading Limit" y "PROHIBITED ACTIONS"),
+      `aspec/specs/prompt-contracts/spec.md`, `test/content-guards.test.js`.
 34. **Intake de sesión con estado del árbol y changes activos**
-     (`2026-10-26-orchestrator-session-start`, archivado). Al inicio de sesión el orquestador
-     ejecuta un intake **read-only** que no carga contexto de repositorio: (1) lista una vez las
-     entradas de `aspec/changes/` **excluyendo `archive/`**; (2) cuando el pedido **toca el estado
-     del repositorio** delega **exactamente un** `git status --short` a `@technical-discovery` y
-     usa su salida tal cual; (3) **reporta sólo diferencias**: con árbol limpio y sin change
-     ajeno, **no emite nada**. El enabler es una allowlist mínima: `'*': deny` y **exactamente
-     dos literales**: `'ancleto discovery --check'` y `'git status --short'`. Evidencia:
-     `agents/orchestrator.md` ("## Session Intake"), `agents/technical-discovery.md`,
-     `aspec/specs/prompt-contracts/spec.md`, `test/content-guards.test.js`.
+      (`2026-10-26-orchestrator-session-start`, archivado). Al inicio de sesión el orquestador
+      ejecuta un intake **read-only** que no carga contexto de repositorio: (1) lista una vez las
+      entradas de `aspec/changes/` **excluyendo `archive/`**; (2) cuando el pedido **toca el estado
+      del repositorio** delega **exactamente un** `git status --short` a `@technical-discovery` y
+      usa su salida tal cual; (3) **reporta sólo diferencias**: con árbol limpio y sin change
+      ajeno, **no emite nada**. El enabler es una allowlist mínima: `'*': deny` y **exactamente
+      dos literales**: `'ancleto discovery --check'` y `'git status --short'`. Evidencia:
+      `agents/orchestrator.md` ("## Session Intake"), `agents/technical-discovery.md`,
+      `aspec/specs/prompt-contracts/spec.md`, `test/content-guards.test.js`.
 35. **Disponibilidad de herramientas = resoluble **Y** invocable** (spec `machine-environment`).
-     `detectMachineFacts` resuelve el candidato en `PATH` (en `win32`, con las extensiones de
-     `PATHEXT` antes que el nombre exacto) y **lo ejecuta** con la bandera barata `--version`:
-     solo un candidato que termina con éxito habilita `disponible`. Los intentos están acotados
-     por `TOOL_PROBE_TIMEOUT_MS = 2000` y `TOOL_PROBE_BUDGET_MS = 10000`; `GIT_TIMEOUT_MS = 5000`
-     para cada llamada a `git`. En `win32`, los shims `.cmd`/`.bat` se sondean por
-     `process.env.ComSpec`; la guarda `EINVAL` de Node (CVE-2024-27980) es **inconclusa**. El
-     veredicto es de **tres estados**: `ok`, `blocked` e `inconclusive`. Un veredicto inconcluso
-     **nunca** habilita `disponible` y **no** agrega el sufijo `— bloqueado:`; un fallo real se
-     publica con el texto saneado (sin ANSI/OSC ni caracteres de control, espacios colapsados,
-     tope de 200 caracteres) y sin la versión observada. Evidencia: `src/core/machine-env.js`
-     (`findExecutables`, `spawnProbe`, `probeExecutable`, `firstLine`),
-     `aspec/specs/machine-environment/spec.md`, `test/machine-env.test.js`.
+      `detectMachineFacts` resuelve el candidato en `PATH` (en `win32`, con las extensiones de
+      `PATHEXT` antes que el nombre exacto) y **lo ejecuta** con la bandera barata `--version`:
+      solo un candidato que termina con éxito habilita `disponible`. Los intentos están acotados
+      por `TOOL_PROBE_TIMEOUT_MS = 2000` y `TOOL_PROBE_BUDGET_MS = 10000`; `GIT_TIMEOUT_MS = 5000`
+      para cada llamada a `git`. En `win32`, los shims `.cmd`/`.bat` se sondean por
+      `process.env.ComSpec`; la guarda `EINVAL` de Node (CVE-2024-27980) es **inconclusa**. El
+      veredicto es de **tres estados**: `ok`, `blocked` e `inconclusive`. Un veredicto inconcluso
+      **nunca** habilita `disponible` y **no** agrega el sufijo `— bloqueado:`; un fallo real se
+      publica con el texto saneado (sin ANSI/OSC ni caracteres de control, espacios colapsados,
+      tope de 200 caracteres) y sin la versión observada. Evidencia: `src/core/machine-env.js`
+      (`findExecutables`, `spawnProbe`, `probeExecutable`, `firstLine`),
+      `aspec/specs/machine-environment/spec.md`, `test/machine-env.test.js`.
 36. **Snapshot consistente con historial (`2026-10-28-reingenieria-memoria-first`, PR-1).**
-     `snapshotDatabase(dbPath, outPath, { overwrite })` es el **dueño único** de la copia
-     binaria. Usa `VACUUM INTO` sobre una conexión fuente **read-only, sin pragmas ni
-     migraciones** (nunca `fs.copyFile` de un `.db` con WAL activo): copia el estado commiteado
-     —WAL incluido— y el historial completo (`superseded` + `superseded_by`), a diferencia de
-     `memory export`, que solo exporta activos y sanitiza. El destino viaja como **parámetro
-     vinculado** a `VACUUM INTO`, no interpolado. Rechaza `target == source` por **identidad de
-     archivo** (`realpathSync.native` + ancestro existente más cercano para rutas inexistentes),
-     no por comparación de strings. Escribe en un temporal del **mismo directorio**, verifica
-     `quick_check`, y solo entonces reemplaza: en Windows el destino previo se aparta a un
-     `.bak-<uuid>` y se restaura si el movimiento final falla; si el snapshot ya quedó en su
-     lugar, un `.bak` remanente no invalida la copia. Sin `overwrite`/`--force` un destino
-     existente es error. Evidencia: `src/core/memory/snapshot.js`,
-     `aspec/specs/memory-ops/spec.md` (requirement "Snapshot consistente de la base de memoria").
+      `snapshotDatabase(dbPath, outPath, { overwrite })` es el **dueño único** de la copia
+      binaria. Usa `VACUUM INTO` sobre una conexión fuente **read-only, sin pragmas ni
+      migraciones** (nunca `fs.copyFile` de un `.db` con WAL activo): copia el estado commiteado
+      —WAL incluido— y el historial completo (`superseded` + `superseded_by`), a diferencia de
+      `memory export`, que solo exporta activos y sanitiza. El destino viaja como **parámetro
+      vinculado** a `VACUUM INTO`, no interpolado. Rechaza `target == source` por **identidad de
+      archivo** (`realpathSync.native` + ancestro existente más cercano para rutas inexistentes),
+      no por comparación de strings. Escribe en un temporal del **mismo directorio**, verifica
+      `quick_check`, y solo entonces reemplaza: en Windows el destino previo se aparta a un
+      `.bak-<uuid>` y se restaura si el movimiento final falla; si el snapshot ya quedó en su
+      lugar, un `.bak` remanente no invalida la copia. Sin `overwrite`/`--force` un destino
+      existente es error. Evidencia: `src/core/memory/snapshot.js`,
+      `aspec/specs/memory-ops/spec.md` (requirement "Snapshot consistente de la base de memoria").
 37. **`memory doctor` es estrictamente read-only por defecto (PR-1).** Abre la base con
-     `openDatabase(dbPath, { migrate: false, readonly: true })`: sin checkpoint, sin DDL y sin
-     `INSERT` sobre FTS. Los cuatro nombres de check se conservan (`Integridad DB`,
-     `Indice FTS5`, `Reglas activas (unicidad)`, `Checkpoint WAL`).
-     `Indice FTS5` tiene **tres estados**: índice ausente ⇒ **falla** (nunca `skipped`, baja
-     `healthy`); tabla sombra `memory_fts_docsize` no consultable ⇒ **omitido** (no baja
-     `healthy`, caso p. ej. FTS5 con `columnsize=0`); si no, compara `count(*)` de la sombra
-     contra `memory_nodes` (el `count(*)` de `memory_fts` no sirve porque external-content lo
-     resuelve contra `memory_nodes`). `Checkpoint WAL` reporta el tamaño observable del `-wal`
-     sin checkpointear. El integrity-check completo (INSERT de control) y la reconstrucción
-     quedan **solo** en `--rebuild`, el único camino que abre en escritura. Un error de apertura
-     conserva los cuatro nombres y marca cada check no ejecutable como falla. Evidencia:
-     `src/core/memory/doctor.js`, `src/cli/index.js` (`memoryDoctorCmd`),
-     `aspec/specs/memory-ops/spec.md` (requirements "`memory doctor` estrictamente read-only" y
-     "Reparación explícita con `memory doctor --rebuild`").
+      `openDatabase(dbPath, { migrate: false, readonly: true })`: sin checkpoint, sin DDL y sin
+      `INSERT` sobre FTS. Los cuatro nombres de check se conservan (`Integridad DB`,
+      `Indice FTS5`, `Reglas activas (unicidad)`, `Checkpoint WAL`).
+      `Indice FTS5` tiene **tres estados**: índice ausente ⇒ **falla** (nunca `skipped`, baja
+      `healthy`); tabla sombra `memory_fts_docsize` no consultable ⇒ **omitido** (no baja
+      `healthy`, caso p. ej. FTS5 con `columnsize=0`); si no, compara `count(*)` de la sombra
+      contra `memory_nodes` (el `count(*)` de `memory_fts` no sirve porque external-content lo
+      resuelve contra `memory_nodes`). `Checkpoint WAL` reporta el tamaño observable del `-wal`
+      sin checkpointear. El integrity-check completo (INSERT de control) y la reconstrucción
+      quedan **solo** en `--rebuild`, el único camino que abre en escritura. Un error de apertura
+      conserva los cuatro nombres y marca cada check no ejecutable como falla. Evidencia:
+      `src/core/memory/doctor.js`, `src/cli/index.js` (`memoryDoctorCmd`),
+      `aspec/specs/memory-ops/spec.md` (requirements "`memory doctor` estrictamente read-only" y
+      "Reparación explícita con `memory doctor --rebuild`").
 38. **Merge de nodos por supersesión, sin tabla nueva (PR-1).** `engine.merge({ target,
-     sources, dryRun })` consolida duplicados supersediendo cada source **activa** hacia un
-     target **activo**, reutilizando el statement `supersede` y el patrón transaccional de
-     `recordNode` (`BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK`). `validateMerge` —compartida por
-     el engine de escritura y el read-only— falla cerrado antes de abrir transacción: target
-     obligatorio y activo, sources lista no vacía, sin repetidas, distintas del target, activas
-     y con el **mismo `type`**. No inserta nodos, no acepta contenido y no toca el filesystem.
-     Bajo lock revalida target y sources: si una source deja de estar activa, `changes == 0` y se
-     revierte todo. El engine read-only solo expone `merge` para `dryRun` (rechaza el real antes
-     de tocar la conexión). El CLI `memory merge` refresca el working-context tras un merge real
-     con el mismo render del import, derivando la raíz de `resolveMemoryProjectRoot(dbPath)`; si
-     ese refresh falla, el merge **ya está commiteado** y el comando sale con código ≠ 0
-     informando el hecho y cómo regenerar el bloque. Evidencia: `src/core/memory/engine.js`
-     (`validateMerge`, `merge`, `buildReadonlyEngine`), `src/cli/index.js` (`memoryMerge`),
-     `aspec/specs/memory-ops/spec.md` (requirements "Merge de nodos por supersesión" y
-     "Comando CLI `ancleto memory merge`").
+      sources, dryRun })` consolida duplicados supersediendo cada source **activa** hacia un
+      target **activo**, reutilizando el statement `supersede` y el patrón transaccional de
+      `recordNode` (`BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK`). `validateMerge` —compartida por
+      el engine de escritura y el read-only— falla cerrado antes de abrir transacción: target
+      obligatorio y activo, sources lista no vacía, sin repetidas, distintas del target, activas
+      y con el **mismo `type`**. No inserta nodos, no acepta contenido y no toca el filesystem.
+      Bajo lock revalida target y sources: si una source deja de estar activa, `changes == 0` y se
+      revierte todo. El engine read-only solo expone `merge` para `dryRun` (rechaza el real antes
+      de tocar la conexión). El CLI `memory merge` refresca el working-context tras un merge real
+      con el mismo render del import, derivando la raíz de `resolveMemoryProjectRoot(dbPath)`; si
+      ese refresh falla, el merge **ya está commiteado** y el comando sale con código ≠ 0
+      informando el hecho y cómo regenerar el bloque. Evidencia: `src/core/memory/engine.js`
+      (`validateMerge`, `merge`, `buildReadonlyEngine`), `src/cli/index.js` (`memoryMerge`),
+      `aspec/specs/memory-ops/spec.md` (requirements "Merge de nodos por supersesión" y
+      "Comando CLI `ancleto memory merge`").
 
 39. **Checkpoint de contrato tras `@spec-writer` (`agents/orchestrator.md`).** Cuando el change
-    requirió especificación, el orquestador se detiene y presenta el **contrato del cambio**, no
-    sus documentos: intención, alcance (dentro/fuera), Requirement nuevo o
-    `spec:<capability>#<requirement>` citado como conformidad, riesgos con su mitigación, decisión
-    de arquitectura (solo si existe), validación prevista (solo comandos declarados) y paths
-    autorizados para implementar y commitear. Cabe en menos de una pantalla, **nunca** enumera
-    filenames ni pide aprobar documentos, y no condiciona el stop a que exista `design.md`. La
-    aprobación autoriza **solo** la implementación: archive y merge siguen siendo stops separados.
-    Si cambian alcance, riesgo o arquitectura se presenta una **enmienda** y se espera una nueva
-    aprobación explícita. Evidencia: `agents/orchestrator.md` (`### Contract Checkpoint`), delta
-    `aspec/changes/decisiones-y-contrato-checkpoint/specs/prompt-contracts/spec.md`.
+     requirió especificación, el orquestador se detiene y presenta el **contrato del cambio**, no
+     sus documentos: intención, alcance (dentro/fuera), Requirement nuevo o
+     `spec:<capability>#<requirement>` citado como conformidad, riesgos con su mitigación, decisión
+     de arquitectura (solo si existe), validación prevista (solo comandos declarados) y paths
+     autorizados para implementar y commitear. Cabe en menos de una pantalla, **nunca** enumera
+     filenames ni pide aprobar documentos, y no condiciona el stop a que exista `design.md`. La
+     aprobación autoriza **solo** la implementación: archive y merge siguen siendo stops separados.
+     Si cambian alcance, riesgo o arquitectura se presenta una **enmienda** y se espera una nueva
+     aprobación explícita. Evidencia: `agents/orchestrator.md` (`### Contract Checkpoint`),
+     `aspec/specs/prompt-contracts/spec.md`.
 40. **`## Decisiones` en `proposal.md`, con dueño único del shape (`agents/spec-writer.md`).**
-    Cada proposal registra sus decisiones duraderas —elección, alternativa descartada,
-    justificación, refs y estado— en bloque de seis campos (`memory_key`, `Elección`,
-    `Descartado`, `Justificación`, `Refs`, `Estado`) o en la forma de una línea
-    `decisión | alternativa descartada | por qué | fuente/evidencia`, semánticamente equivalente.
-    `Estado` ∈ `propuesto|aprobado|enmendado|descartado`. El shape se define **una sola vez** en
-    `agents/spec-writer.md`; los seis generadores del proposal
-    (`skills/ancleto-{propose,ff,continue,new,onboard}` y
-    `skills/ancleto-upgrade/references/templates.md`) solo enuncian los keywords de comportamiento
-    y referencian esa fuente. La sección se completa **también durante la implementación**: un
-    tradeoff no previsto lo apendea `@spec-writer` (dueño del artifact) a pedido del orquestador,
-    sin nueva aprobación salvo que cambie alcance, riesgo o arquitectura. Un detalle trivial de
-    implementación no es decisión. Evidencia: `agents/spec-writer.md` (`## Decisions Section`),
-    `agents/orchestrator.md`, `skills/ancleto-{propose,new,ff,continue,onboard}/SKILL.md`,
-    `skills/ancleto-upgrade/references/templates.md`.
+     Cada proposal registra sus decisiones duraderas —elección, alternativa descartada,
+     justificación, refs y estado— en bloque de seis campos (`memory_key`, `Elección`,
+     `Descartado`, `Justificación`, `Refs`, `Estado`) o en la forma de una línea
+     `decisión | alternativa descartada | por qué | fuente/evidencia`, semánticamente equivalente.
+     `Estado` ∈ `propuesto|aprobado|enmendado|descartado`. El shape se define **una sola vez** en
+     `agents/spec-writer.md`; los seis generadores del proposal
+     (`skills/ancleto-{propose,ff,continue,new,onboard}` y
+     `skills/ancleto-upgrade/references/templates.md`) solo enuncian los keywords de comportamiento
+     y referencian esa fuente. La sección se completa **también durante la implementación**: un
+     tradeoff no previsto lo apendea `@spec-writer` (dueño del artifact) a pedido del orquestador,
+     sin nueva aprobación salvo que cambie alcance, riesgo o arquitectura. Un detalle trivial de
+     implementación no es decisión. Evidencia: `agents/spec-writer.md` (`## Decisions Section`),
+     `agents/orchestrator.md`, `skills/ancleto-{propose,new,ff,continue,onboard}/SKILL.md`,
+     `skills/ancleto-upgrade/references/templates.md`.
+41. **Refs normalizadas dentro de `content` y validación fail-closed en `recordNode`
+     (`MEM-03`, commit `90dba0d`).** No hay tabla ni columna nueva: las refs viajan en el propio
+     `content` como un bloque `refs:` (línea `refs:` + lista con guion) y se resuelven sobre el
+     texto indexado. Gramática cerrada: `spec:<cap>#<heading>`, `change:<slug>`,
+     `path:<repo-relative>`, `commit:<sha>` y `workitem:<tracker>:<key>` (`engine.js:86-149`).
+     `validateRefsForWrite` corre **antes** de la transacción (`engine.js:284-311`,
+     `engine.js:461-475`): exige exactamente un bloque, al menos una ref, y falla cerrado ante
+     gramática inválida, prefijo desconocido, `path:` absoluto o con `../`, ref irresoluble o
+     ref ambigua. Una `decision` exige al menos `spec:` o `change:`; una `rule` exige al menos
+     `path:`, `spec:` o `change:` (`engine.js:302-310`). La **única exención** es
+     `context.source === 'runtime'` (`engine.js:468`). Los nodos existentes sin refs no se
+     revalidan ni se backfillean. `importNodes` **no** pasa por `recordNode`: conserva su LWW y
+     no valida refs (`engine.js:540-570`; `aspec/specs/memory-engine/spec.md`).
+42. **Resolución de refs: `change:` exacto, `spec:` por heading canónico, `path:` relativo
+     existente.** `change:<slug>` busca el change activo y un archive anclado exacto
+     `YYYY-MM-DD-<slug>` (no un sufijo suelto), y reporta ambigüedad si hay más de un match
+     (`engine.js:250-269`). `spec:<cap>#<heading>` lee
+     `aspec/specs/<capability>/spec.md`, compara headings `### Requirement:` por forma exacta y
+     canonizada (trim, minúsculas, sin diacríticos, sin backticks/`**`), deduplica por bloque y
+     **reporta ambigüedad** en vez de elegir el primero (`engine.js:222-244`). `path:` debe ser
+     relativo (rechaza absolutos y `..`), existir y ser archivo (`engine.js:271-282`).
+     `commit:` y `workitem:` se validan por gramática; el motor no resuelve su existencia.
+43. **Rechazo de secretos en el camino de escritura, sin eco del valor.** `recordNode` inspecciona
+     `content` y `justification` con `looksLikeSecret` antes de abrir la transacción y rechaza
+     claves tipo `sk-`, `ghp_`, `AKIA`, `Authorization: Bearer`, `*TOKEN/SECRET/PASSWORD=...` y
+     bloques `BEGIN ... PRIVATE KEY` (`engine.js:88-100`, `engine.js:461-467`). El error nombra
+     la `memory_key` y el campo, **nunca** repite el valor detectado.
+44. **Render proactivo sin el bloque `refs:`.** `buildWorkingContext` sigue inyectando solo
+     `rule` activas; por cada regla usa `renderRuleContent(content)`, que recorta desde la línea
+     `refs:` hasta el final del bloque (`engine.js:197-206`, `engine.js:385-393`). El `content`
+     **almacenado** queda intacto con sus refs: solo cambia la vista proactiva. Las refs no
+     consumen el presupuesto `maxChars` del bloque. Una regla sin `refs:` se renderiza igual que
+     antes (`aspec/specs/memory-engine/spec.md`, requirement "Render del bloque proactivo sin el
+     bloque `refs:`").
+45. **Promoción al archivar solo de decisiones aprobadas**
+     (`2026-10-30-mem-03-promocion-decisiones-refs`, archivado). El gate de
+     `skills/ancleto-archive/SKILL.md` lee `proposal ## Decisiones` y considera candidato solo
+     un bloque con **`memory_key` propia y `Estado: aprobado`**; la forma de una línea nunca es
+     candidata y una `rule` nunca se promueve desde ahí (`SKILL.md:51-58`, `SKILL.md:96-97`).
+     Hace **preflight del lote completo antes de la primera escritura**: claves propias y
+     únicas, refs presentes y resolubles, ningún `path:` dentro de
+     `aspec/changes/<change-name>/` (dejaría de resolver al mover el change) y ningún candidato
+     de sesión; una violación ⇒ **cero escrituras** y el change no se mueve. Con candidatos
+     válidos delega **una** pasada de `@memory-keeper` en modo Promotion, que escribe **un
+     `recordDecision` por bloque** (nunca `recordRule`) y reporta por clave
+     (`SKILL.md:67-70`, `agents/memory-keeper.md:80-97`). Sin candidatos ⇒ **cero escrituras y
+     cero delegación**. El orquestador ejecuta la promoción **después** de que `@documenter`
+     termina el merge de specs y **nunca en paralelo**, para que `spec:` resuelva contra la
+     fuente de verdad; si no hubo sync, la pasada igual corre y una `spec:` no resoluble se
+     rechaza fail-closed (`agents/orchestrator.md:192`, `agents/orchestrator.md:326`).
+46. **`opencode.json` en la raíz: override local del host, fuera del paquete.** El archivo fija
+     `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes y **no** incluye
+     al orquestador (`opencode.json:1-14`). `package.json` → `files` lista `agents`, `commands`,
+     `skills`, `templates`, `profiles` y `src`; `opencode.json` **no** se publica
+     (`package.json:10-17`). Es configuración del checkout, no contrato del producto.
 
 ## Seed incremental (contrato del discovery)
 
@@ -380,9 +440,12 @@ skillVersion: '2.3'
   - `none` → sin cambios.
   - `minor` → cambios no materiales (el agente trabaja y lo anota, no ofrece regenerar).
   - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
-    raíz nuevo (o un archivo material como `package.json`). Ejemplo de esta corrida:
-    `materialReasons: ["archivo material modificado: package.json"]` por el bump
-    `0.15.3`→`0.16.0`, con 11 `affectedDocs` (todos los documentos del seed).
+    raíz nuevo (o un archivo material como `package.json`).
+- En esta corrida el reporte fue `STALE` / `impact: material`, con
+  `materialReasons: ["archivo material modificado: package.json", "area raiz nueva:
+  opencode.json"]`. El bump `0.16.1`→`0.16.2` y el nuevo `opencode.json` explican la
+  clasificación; el cambio de comportamiento real (MEM-03: refs obligatorias y promoción al
+  archivar) vive en `src/**` y en los contratos de `agents/**`/`skills/**`.
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **solo** esos
   documentos. El mapeo vive en `seed-map.json`; sin ese archivo la regeneración es completa.
 - **`affectedDocs` (seed) ≠ `affected-set` (change).** `ancleto discovery --check` devuelve
@@ -399,9 +462,7 @@ skillVersion: '2.3'
 - **Detección material por área, no por contrato**: `package.json` es material por lista de
   archivos, así que **cualquier** bump de versión —incluso sin cambio de comportamiento— marca
   `impact: material` y lista los documentos asociados. En esta corrida la razón material fue el
-  bump `0.15.3`→`0.16.0`; el cambio real (PR-2: checkpoint de contrato y `## Decisiones`) vive en
-  `agents/**` y `skills/**`, que el check sí hashea y reporta como áreas cambiadas, pero que por
-  sí solos no clasifican `material`.
+  bump `0.16.1`→`0.16.2` **más** la aparición del área raíz `opencode.json`.
 - `EXPECTED_DOCS` del CLI = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`,
   `integrations`, `decisions`, `unknowns`, `units/_map`).
 - Evidencia: `README.md`, `src/cli/index.js` (`checkDiscovery`, `computeImpact`,
@@ -409,12 +470,11 @@ skillVersion: '2.3'
 
 ## Riesgos, deuda y acoplamiento
 
-- **PR-2 vive en el árbol de trabajo, no en un release.** El change
-  `decisiones-y-contrato-checkpoint/` está **untracked** y `agents/orchestrator.md`,
-  `agents/spec-writer.md`, seis `skills/**` y `test/content-guards.test.js` están **modificados**;
-  el tag `v0.16.0` (release de PR-1) es anterior. El seed describe el working tree, así que un
-  `git checkout`/reset puede invalidar estas afirmaciones. Evidencia: `git status --short`,
-  `git describe --tags`.
+- **MEM-03 está commiteado pero no publicado.** El commit `90dba0d` (refs obligatorias y
+  promoción al archivar) está 1 commit por delante del commit de release `6f80293`; el tag
+  `v0.16.2` (en `main`) no lo incluye y `CHANGELOG.md` no lo menciona. El seed describe el
+  working tree de `development`, no el artefacto publicado. Evidencia: `git log`, `git tag`,
+  `CHANGELOG.md`.
 - **Pack comprimido y sesgado a código.** El tier resuelto (`minimo`) ignora `test/**`,
   `docs/**` y `**/*.md`; Repomix además respeta `.gitignore` (`.opencode/`, `.ancletorc`,
   `.ancleto/`, `/documentation`). Por eso `agents/`, `commands/`, `skills/`, `templates/`,
@@ -427,16 +487,38 @@ skillVersion: '2.3'
   punto único de materialización y `src/core/adapters/frontmatter.js` define qué claves
   sobreviven por host. Un id de tool no verificado cuelga el subagent de Antigravity.
 - **El texto del orquestador es contrato normativo.** `agents/orchestrator.md` fija el techo de
-  lecturas, el intake, el trigger de Recall y el checkpoint de contrato; cualquier reescritura de
-  ese prompt puede re-introducir prohibiciones absolutas, capabilities que el agente no tiene o
-  volver a atar el stop a documentos generados. Los mirrors `.opencode/agents/*.md` se
-  **regeneran**, no se editan a mano.
+  lecturas, el intake, el trigger de Recall, el checkpoint de contrato y el orden de la
+  promoción; cualquier reescritura de ese prompt puede re-introducir prohibiciones absolutas,
+  capabilities que el agente no tiene o volver a atar el stop a documentos generados. Los
+  mirrors `.opencode/agents/*.md` se **regeneran**, no se editan a mano.
 - **Checkpoint de contrato: relajarlo pierde control de alcance.** Riesgos: que la presentación
   enumere documentos, que omita los paths autorizados (y `@coder` no sepa qué commitear) o que un
   cambio de alcance/riesgo/arquitectura se implemente sin enmienda. Mitigación: los siete campos
   son obligatorios, la aprobación autoriza solo implementar, archive y merge siguen separados y
-  los guards T12/T22 de `test/content-guards.test.js` lo anclan por comportamiento. Evidencia:
-  `agents/orchestrator.md`, `aspec/changes/decisiones-y-contrato-checkpoint/tasks.md`.
+  los guards de `test/content-guards.test.js` lo anclan por comportamiento. Evidencia:
+  `agents/orchestrator.md`, `aspec/changes/archive/2026-10-29-decisiones-y-contrato-checkpoint/`.
+- **Refs obligatorias: el radio de rechazo es amplio.** Toda escritura MCP (`source:
+  mcp:ancleto-memory`) o de agente debe traer refs resolubles; un heading de spec que cambie,
+  un change que se archive con otro slug o un `path:` que desaparezca vuelven inválida una
+  escritura futura. El error es fail-closed y previo a la transacción: no escribe ni supersede.
+  Mitigación: la resolución exacta de `change:` y la detección de ambigüedad evitan matches
+  accidentales; la deuda es operativa (mantener refs vivas), no estructural. Evidencia:
+  `src/core/memory/engine.js:222-311`,
+  `aspec/specs/memory-engine/spec.md` (requirements "Validación fail-closed de refs…").
+- **`cli:import` queda fuera de la validación de refs.** `importNodes` no pasa por `recordNode`
+  y conserva LWW; importar un JSON con nodos sin refs es posible aunque esos mismos nodos no
+  podrían escribirse por MCP. La spec lo declara explícitamente. No debe prometerse que la
+  memoria importada cumple el mismo contrato de refs. Evidencia: `src/core/memory/engine.js`
+  (`importNodes`), `aspec/specs/memory-engine/spec.md`.
+- **`commit:` y `workitem:` son sintácticas.** El motor valida el SHA (7–40 hex) y la forma
+  `tracker:key`, pero no comprueba que el commit exista ni que el work item sea accesible; esas
+  refs no se resuelven en disco. Evidencia: `src/core/memory/engine.js:137-147`.
+- **La promoción depende de dos gates alineados.** El gate de archive y el preflight de
+  `@memory-keeper` deben rechazar el mismo lote; si divergen, puede quedar un change archivado
+  con "Memory pending" (nunca "archivado y memorizado"). Además, un `path:` dentro de
+  `aspec/changes/<change>/` resuelve antes del move y deja de resolver después: el preflight lo
+  prohíbe. Evidencia: `skills/ancleto-archive/SKILL.md:51-70`,
+  `agents/memory-keeper.md:84`.
 - **La allowlist de `bash` es la frontera de privilegio.** `agents/technical-discovery.md` tiene
   `'*': deny` con dos literales permitidos; cada literal nuevo es un incremento de privilegio que
   debe justificarse por menor privilegio que enrutar el mismo comando a otro agente.
@@ -486,9 +568,10 @@ skillVersion: '2.3'
   Para historial, usar `memory snapshot`.
 - **GC usa `created_at` como proxy.** No existe `superseded_at`; un nodo creado hace mucho y
   superseded recientemente puede purgarse antes de lo deseado. `--dry-run` permite auditarlo.
-- **Procedencia ≠ autorización.** La columna `source` es auditable pero no enforceable: no hay
-  canal de identidad autenticado (MCP stdio), así que el ownership de escritura sigue siendo una
-  convención. No debe prometerse enforcement.
+- **Procedencia ≠ autorización, pero sí compuerta de validación.** La columna `source` es
+  auditable y ahora decide si se validan refs; no hay canal de identidad autenticado (MCP
+  stdio), así que no debe prometerse enforcement de autorización. Evidencia:
+  `src/core/memory/engine.js`, `aspec/specs/memory-engine/spec.md`.
 - **`ancleto stats` y `stats failures` acoplados a opencode**: leen la base de sesiones de
   opencode; no funcionan con otros IDEs. Evidencia: `README.md`, `src/cli/index.js`
   (`opencodeDbPath`).
@@ -513,11 +596,10 @@ skillVersion: '2.3'
   cuentan como `externalCount`. No debe asumirse cobertura total. Evidencia:
   `src/core/affected-set.js`, `aspec/specs/prompt-contracts/spec.md`.
 - **Prompts del pipeline fuera del pack.** Los contratos viven en `agents/*.md` (orchestrator,
-  spec-writer, tester, reviewer, memory-keeper, technical-discovery, …) y en los seis
-  `skills/**` que generan el proposal, superficies que el tier ignora (`**/*.md`); el seed los
+  spec-writer, tester, reviewer, memory-keeper, technical-discovery, …) y en las skills que
+  generan el proposal y archivan, superficies que el tier ignora (`**/*.md`); el seed los
   describe por lectura puntual y por las specs fuente. `test/content-guards.test.js` los ancla por
-  keywords de comportamiento (incl. T01/T05/T22/T12/T13 del checkpoint de contrato y
-  `## Decisiones`).
+  keywords de comportamiento.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, `mcp_config.json`,
   `.mcp.json`, CI o Azure. Las variables se nombran y su valor se omite. `machine-env.md`
   tampoco renderiza `PATH` ni versiones.
@@ -528,28 +610,28 @@ skillVersion: '2.3'
 - **Staleness advisory puede dar falsos positivos triviales.** La normalización es acotada
   (CRLF, espacios finales, salto final); cambios cosméticos mayores podrían disparar
   `desactualizado` aunque el contenido sea equivalente. Riesgo aceptado: se prefiere reportar.
-- **Versión y publicación.** `package.json` marca `0.16.0`; el tag `v0.16.0` es **anotado** y
-  HEAD (`development`) está 1 commit por delante (`git describe --tags` →
-  `v0.16.0-1-g7388482`). Evidencia: `package.json`, `git cat-file -t v0.16.0`,
-  `git rev-list --count v0.16.0..HEAD`.
+- **Versión y publicación.** `package.json` marca `0.16.2`; el tag `v0.16.2` es **anotado** y
+  vive en `main` (`6e90903`); `development` HEAD `90dba0d` está 1 commit por delante del commit
+  de release `6f80293`. Evidencia: `package.json`, `git tag`, `git log`.
 - **Docs de producto desalineados.** `PRODUCT.md` declara 12 commands y 18 skills (hoy 16 y 21),
   no menciona `machine-env`, `stats failures`, `memory snapshot` ni `memory merge`, y conserva la
   guía residual de `searchMemory`; `README.md` sigue describiendo `memory doctor` como
   "reconstruye el índice FTS5 y fusiona el WAL", que ya **no** es el comportamiento por defecto.
-  El seed refleja el estado observado. Evidencia: `PRODUCT.md`, `README.md`, `commands/`,
-  `skills/`, `src/core/memory/doctor.js`.
-- **Sin backlog raíz.** `BACKLOG.md` fue eliminado (razón material de esta regeneración). Las
-  deudas que el seed anterior citaba por ítem (guía residual de `searchMemory`, protección de
-  rama, detección material por archivo, comandos denegados fuera de medición) siguen existiendo
-  como observaciones, pero **no hay fuente canónica** que las registre.
-- **Deuda resuelta hasta 0.16.0**: (a) contrato de validaciones declarativo; (b) dedupe de reglas
+  `CHANGELOG.md` cubre `0.16.2` pero no el commit MEM-03. El seed refleja el estado observado.
+  Evidencia: `PRODUCT.md`, `README.md`, `CHANGELOG.md`, `commands/`, `skills/`,
+  `src/core/memory/doctor.js`.
+- **Sin backlog raíz.** `BACKLOG.md` no existe. Las deudas que el seed anterior citaba por ítem
+  (guía residual de `searchMemory`, protección de rama, detección material por archivo, comandos
+  denegados fuera de medición) siguen existiendo como observaciones, pero **no hay fuente
+  canónica** que las registre.
+- **Deuda resuelta hasta 0.16.2**: (a) contrato de validaciones declarativo; (b) dedupe de reglas
   y día-cero del working-context; (c) `PRODUCT.md` declara `## Project Commands`; (d) pipeline de
   cierre; (e) refresh on-write CLI y staleness advisory; (f) entorno de máquina; (g) reporte de
   fallos; (h) intake de sesión, techo de lecturas y aviso de overflow accionable; (i) PR-1
-  memoria-first (snapshot, doctor read-only, merge), **publicado** en `0.16.0`. PR-2 (checkpoint
-  de contrato y `## Decisiones`) está implementado en el árbol, pendiente de review final y
-  archive. Evidencia: `CHANGELOG.md`, `aspec/changes/archive/`, `package.json`, `git tag`,
-  `aspec/changes/decisiones-y-contrato-checkpoint/tasks.md`.
+  memoria-first (snapshot, doctor read-only, merge), publicado en `0.16.0`; (j) PR-2 (checkpoint
+  de contrato y `## Decisiones`), publicado en `0.16.2`; (k) MEM-03 (refs obligatorias y
+  promoción al archivar), **archivado y commiteado pero aún no publicado**. Evidencia:
+  `CHANGELOG.md`, `aspec/changes/archive/`, `package.json`, `git log`.
 
 ## Decisiones registradas en memoria del repo
 

@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-29T19:20:00Z
-pluginVersion: 0.16.0
+generatedAt: 2026-10-30T15:53:12Z
+pluginVersion: 0.16.2
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.16.0` (`package.json`); el tag `v0.16.0` es **anotado** y HEAD está 1 commit por delante en `development`. | `.github/workflows/publish.yml`, `package.json`, `git cat-file -t v0.16.0` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.16.2` (`package.json`); el tag `v0.16.2` es **anotado** y vive en `main` (`6e90903`). `development` HEAD `90dba0d` está 1 commit por delante del commit de release `6f80293`. | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -47,6 +47,13 @@ Con perfil `test`, el overlay (`profiles/test/`) se materializa en los mismos de
 host. `ancleto check` valida que el frontmatter instalado coincida con la salida del adaptador
 (warning no bloqueante). Detalle: `units/cli-install.md`.
 
+## Configuración del host opencode (raíz del repo)
+
+`opencode.json` es configuración **del checkout**, no del paquete: fija `agent.model =
+commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes (no incluye al orquestador) y
+`package.json` → `files` no lo publica. Es una integración local con el host opencode, no un
+contrato de producto. Evidencia: `opencode.json`, `package.json`.
+
 ## Entorno de máquina (integración local con git)
 
 `.ancleto/machine-env.md` no es un servicio externo: es un artefacto derivado y local por
@@ -73,7 +80,7 @@ local**, no de un servicio externo. Evidencia: `src/core/machine-env.js`,
 ## Memoria local (sin servicios externos)
 
 `.ancleto/memory.db` es SQLite nativo (`node:sqlite`): no hay servidor ni dependencia de red.
-Las operaciones nuevas de PR-1 son **locales y sincrónicas**:
+Las operaciones de memoria son **locales y sincrónicas**:
 
 - `memory snapshot` usa `VACUUM INTO` de SQLite sobre una conexión read-only y reemplaza el
   destino con `renameSync` del runtime (`node:fs`). No invoca herramientas externas.
@@ -81,6 +88,9 @@ Las operaciones nuevas de PR-1 son **locales y sincrónicas**:
   working-context derivado.
 - `memory doctor` usa `PRAGMA quick_check` y la tabla sombra `memory_fts_docsize`; no hay
   chequeo remoto.
+- La validación de refs (`MEM-03`) resuelve `spec:`/`change:`/`path:` contra el **filesystem
+  local** del repo (`aspec/specs`, `aspec/changes`, paths relativos); no hay servicio externo
+  ni tabla nueva. `commit:` y `workitem:` solo se validan por gramática.
 
 Evidencia: `src/core/memory/snapshot.js`, `src/core/memory/doctor.js`,
 `src/core/memory/engine.js`.
@@ -94,10 +104,15 @@ resto en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp
 
 | MCP | Tipo | Rol | Default |
 |---|---|---|---|
-| `ancleto-memory` | local (stdio) | Memoria propia del repo: expone `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. La tool sigue disponible para el IDE: lo que cambió es que **el orquestador no la invoca** —delega la recuperación en `@memory-keeper`— y que el `<ContextOverflowWarning>` ya no la nombra. | Habilitado |
+| `ancleto-memory` | local (stdio) | Memoria propia del repo: expone `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. Escribe con `source: 'mcp:ancleto-memory'`, por lo que **sus escrituras pasan por la validación fail-closed de refs** (excepto que la procedencia resuelta sea `runtime`). El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. La tool sigue disponible para el IDE: el orquestador no la invoca y el `<ContextOverflowWarning>` ya no la nombra. | Habilitado |
 | `caveman` | local (binario) | Compresión de salida del agente (`caveman-mcp.exe`). Su **directiva de uso es host-scoped**: se materializa solo donde la config MCP del host incluye la tool (`opencode`/`antigravity`); revertible a opt-in por compuerta de medición. | Habilitado si está en `PATH` |
 | `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`), no se agrega por defecto por su costo (~4.900 tokens/request). | Deshabilitado |
 | `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Solo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
+
+Del lado del motor, la procedencia de escritura se fija en `createMemoryServer`:
+`createMemoryToolHandlers(engine, { source: 'mcp:ancleto-memory', projectRoot })`
+(`src/core/memory/mcp-server.js:13-17`). El `cli:import` **no** usa esa ruta: `importNodes`
+queda fuera de `recordNode` y conserva LWW sin validar refs.
 
 Adicionalmente, `ancleto memory doctor` emite un **chequeo de staleness advisory** sobre el
 working-context (línea `Working-context: <ok|ausente|desactualizado>`,

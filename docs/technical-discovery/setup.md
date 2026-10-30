@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-10-29T19:20:00Z
-pluginVersion: 0.16.0
+generatedAt: 2026-10-30T15:53:12Z
+pluginVersion: 0.16.2
 skillVersion: '2.3'
 ---
 
@@ -57,7 +57,16 @@ lo evita. `--agent` acepta 8 hosts (`opencode` default, `claude`, `vscode`, `ant
 conteo es 0 (`externalCount` sigue en `--json`). `stats failures` también es **read-only** y
 solo funciona con la base de sesiones de opencode.
 
-**Ops nuevas de memoria** (PR-1, archivado `2026-10-28-reingenieria-memoria-first`):
+**Contrato de escritura de memoria** (`MEM-03`, commit `90dba0d`): `recordRule` y
+`recordDecision` pasan por `recordNode`. Toda escritura cuya procedencia no sea `runtime`
+debe incluir en `content` un bloque `refs:` con al menos una ref válida; `decision` exige al
+menos `spec:` o `change:`, `rule` exige al menos `path:`, `spec:` o `change:`. El bloque se
+valida **fail-closed** antes de abrir la transacción: refs rotas, ambiguas, un segundo bloque
+`refs:`, un `path:` absoluto o con `../`, o una credencial aparente rechazan la escritura. El
+MCP real escribe con `source: 'mcp:ancleto-memory'`; `cli:import` no pasa por `recordNode` y
+conserva LWW. Evidencia: `src/core/memory/engine.js`, `src/core/memory/mcp-server.js`.
+
+**Ops nuevas de memoria** (`PR-1`, archivado `2026-10-28-reingenieria-memoria-first`):
 `memory snapshot` exige `--out` y rechaza sobrescribir sin `--force`; produce una copia con
 historial (`superseded` + `superseded_by`) y no modifica la fuente. `memory merge` requiere
 `--target` y `--sources` (lista separada por comas); valida target activo, sources activas,
@@ -76,14 +85,21 @@ escribe la base ni el working-context). Evidencia: `src/cli/index.js`
   skills). **No editar a mano durante el seed**; se consume resuelto desde
   `ancleto discovery --check`. En este checkout `.ancletorc` **existe** (gitignored, no
   versionado); el contrato de contenido se describe por código, no por lectura directa.
+- **`opencode.json`** (raíz): configuración del host opencode versionada en el repo. Fija
+  `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes (`coder`,
+  `spec-writer`, `tester`, `reviewer`, `documenter`, `memory-keeper`, `context-resolver`,
+  `technical-discovery`, `technical-seed-writer`); **no** incluye al orquestador. Es un
+  override local del host: **no** forma parte del paquete publicado (`package.json` → `files`
+  lista `agents`, `commands`, `skills`, `templates`, `profiles`, `src`). Evidencia:
+  `opencode.json`, `package.json`.
 - **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/reviewer ampliados
   (planning/generation/healing/coverage), comandos `cleto-test-*`, estructura `testspec/` y
   bloque LOCKED de convenciones Playwright; instalable con cualquier host.
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
   En este checkout `.opencode/.ancleto-tier` contiene **`minimo`**, por lo que el tier resuelto
   es `minimo` (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, **sin token budget**; el
-  pack real de esta corrida quedó en 692 archivos / ~16.512 tokens). El tier decide modelos de
-  los agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
+  pack de esta corrida quedó en 699 archivos / ~17.319 tokens). El tier decide modelos de los
+  agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
   `.opencode/.ancleto-tier`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`,
@@ -150,7 +166,7 @@ inconcluso no lleva sufijo. La versión observada nunca se renderiza. Evidencia:
 `10.0.26200` / `x64`, shell `Windows PowerShell 5.1` (`shell_source: PSModulePath`), EOL `lf`
 (`eol_source: gitattributes`), `rg` **no disponible** (fallback: `Select-String`),
 `node`/`npm`/`git`/`python` **disponibles** —resolubles **e invocables** según la sonda; el
-artefacto declara disponibilidad, no versión—, `ancleto: 0.16.0`. La exclusión local está
+artefacto declara disponibilidad, no versión—, `ancleto: 0.16.2`. La exclusión local está
 escrita en `info/exclude`. Evidencia: `.ancleto/machine-env.md`.
 
 ## Permisos de shell por agente

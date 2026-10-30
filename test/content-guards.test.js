@@ -649,10 +649,27 @@ describe('content guards - throughput-pipeline', () => {
 
   it('el orchestrator declara la memoria en un solo paso sin ping-pong Optional Draft sin candidato', () => {
     const t = readAgent('orchestrator')
-    assert.match(t, /at most \*\*one\*\* memory call/)
-    assert.match(t, /never chain Automatic Record → Optional Draft → approval → User-Approved Record when there is no candidate/)
-    assert.match(t, /do \*\*not\*\* invoke Optional Draft/)
+    const memory = normalize(section(t, '## Team Memory'))
+    assert.match(deBold(memory), /at most one memory call/)
+    assert.match(memory, /never chain Automatic Record → Optional Draft → approval → User-Approved Record when there is no candidate/)
+    assert.match(memory, /do \*\*not\*\* invoke Optional Draft/)
     assert.match(t, /Reserve User-Approved Record for an explicit user request/)
+  })
+
+  it('el orchestrator excluye la promoción del presupuesto de Automatic Record y la condiciona a candidatos aprobados', () => {
+    const memory = normalize(section(readAgent('orchestrator'), '## Team Memory'))
+
+    function guardPromotionBudget(text) {
+      assert.match(text, /Promotion is outside this budget/)
+      assert.match(text, /one call per approved `proposal ## Decisiones` block/)
+      assert.match(text, /only when the batch has approved candidates/)
+      assert.match(text, /zero delegation and zero writes/)
+    }
+
+    assertMutationBreaks(guardPromotionBudget, memory, [
+      ['Promotion is outside this budget', ''],
+      ['only when the batch has approved candidates', 'unconditionally']
+    ])
   })
 
   it('el tester declara el affected-set determinístico por grafo de imports con dependientes', () => {

@@ -268,7 +268,7 @@ describe('working-context — refresh en handlers MCP', () => {
   it('recordRule scope project refresca el working-context (6.3)', () => {
     withProject((dir) => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
-      const toolkit = createMemoryToolkit(dbPath, { source: 'test', projectRoot: dir })
+      const toolkit = createMemoryToolkit(dbPath, { source: 'runtime', projectRoot: dir })
       try {
         const result = toolkit.handlers.recordRule({ memory_key: 'wc-pos', content: 'regla fresca de proyecto', scope: 'project' })
         assert.equal(result.node.memory_key, 'wc-pos')
@@ -291,7 +291,7 @@ describe('working-context — refresh en handlers MCP', () => {
   it('decisiones y reglas feature/task que NO superseden no crean el working-context (6.4)', () => {
     withProject((dir) => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
-      const toolkit = createMemoryToolkit(dbPath, { source: 'test', projectRoot: dir })
+      const toolkit = createMemoryToolkit(dbPath, { source: 'runtime', projectRoot: dir })
       try {
         const decision = toolkit.handlers.recordDecision({ memory_key: 'wc-dec', content: 'decision de proyecto', scope: 'project' })
         const feature = toolkit.handlers.recordRule({ memory_key: 'wc-feat', content: 'regla feature', scope: 'feature' })
@@ -316,7 +316,7 @@ describe('working-context — refresh en handlers MCP', () => {
       writeFileSync(out, sentinel)
 
       const dbPath = join(dir, '.ancleto', 'memory.db')
-      const toolkit = createMemoryToolkit(dbPath, { source: 'test', projectRoot: dir })
+      const toolkit = createMemoryToolkit(dbPath, { source: 'runtime', projectRoot: dir })
       try {
         const decision = toolkit.handlers.recordDecision({ memory_key: 'wc-dec', content: 'decision de proyecto', scope: 'project' })
         const feature = toolkit.handlers.recordRule({ memory_key: 'wc-feat', content: 'regla feature', scope: 'feature' })
@@ -334,7 +334,7 @@ describe('working-context — refresh en handlers MCP', () => {
   it('supersesion de una rule project refresca con el contenido nuevo (6.5)', () => {
     withProject((dir) => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
-      const toolkit = createMemoryToolkit(dbPath, { source: 'test', projectRoot: dir })
+      const toolkit = createMemoryToolkit(dbPath, { source: 'runtime', projectRoot: dir })
       try {
         toolkit.handlers.recordRule({ memory_key: 'wc-sup', content: 'version uno', scope: 'project' })
         const out = workingContextPath(dir)
@@ -355,7 +355,7 @@ describe('working-context — refresh en handlers MCP', () => {
   it('supersesion cross-type (decision) de una rule project refresca y retira la rule (6.10)', () => {
     withProject((dir) => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
-      const toolkit = createMemoryToolkit(dbPath, { source: 'test', projectRoot: dir })
+      const toolkit = createMemoryToolkit(dbPath, { source: 'runtime', projectRoot: dir })
       try {
         toolkit.handlers.recordRule({ memory_key: 'wc-cross-d', content: 'regla original', scope: 'project' })
         const out = workingContextPath(dir)
@@ -377,7 +377,7 @@ describe('working-context — refresh en handlers MCP', () => {
   it('supersesion cross-scope (rule feature) de una rule project refresca y retira la rule (6.10)', () => {
     withProject((dir) => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
-      const toolkit = createMemoryToolkit(dbPath, { source: 'test', projectRoot: dir })
+      const toolkit = createMemoryToolkit(dbPath, { source: 'runtime', projectRoot: dir })
       try {
         toolkit.handlers.recordRule({ memory_key: 'wc-cross-f', content: 'regla project original', scope: 'project' })
         const out = workingContextPath(dir)
@@ -400,7 +400,7 @@ describe('working-context — refresh en handlers MCP', () => {
   it('una falla del refresh no pierde la escritura, conserva el archivo y avisa por stderr (6.6)', () => {
     withProject((dir) => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
-      const toolkit = createMemoryToolkit(dbPath, { source: 'test', projectRoot: dir })
+      const toolkit = createMemoryToolkit(dbPath, { source: 'runtime', projectRoot: dir })
       try {
         toolkit.handlers.recordRule({ memory_key: 'wc-seed', content: 'contenido previo', scope: 'project' })
         const out = workingContextPath(dir)
@@ -412,7 +412,7 @@ describe('working-context — refresh en handlers MCP', () => {
           buildWorkingContext: () => { throw new Error('fallo simulado del refresh') },
           searchMemory: (args) => toolkit.engine.searchMemory(args)
         }
-        const handlers = createMemoryToolHandlers(failingEngine, { source: 'test', projectRoot: dir })
+        const handlers = createMemoryToolHandlers(failingEngine, { source: 'runtime', projectRoot: dir })
 
         const warnings = []
         const logged = []
@@ -481,7 +481,7 @@ describe('working-context — idempotencia (6.7)', () => {
   it('over-refresh intencional: decision -> decision misma key dispara pero deja bytes identicos (6.7)', () => {
     withProject((dir) => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
-      const toolkit = createMemoryToolkit(dbPath, { source: 'test', projectRoot: dir })
+      const toolkit = createMemoryToolkit(dbPath, { source: 'runtime', projectRoot: dir })
       try {
         // una rule project garantiza que el archivo exista con un bloque no vacio
         toolkit.handlers.recordRule({ memory_key: 'wc-idem-rule', content: 'regla estable', scope: 'project' })
@@ -523,7 +523,15 @@ describe('working-context — raiz del server MCP (6.8)', () => {
           jsonrpc: '2.0',
           id: 1,
           method: 'tools/call',
-          params: { name: 'recordRule', arguments: { memory_key: 'wc-root', content: 'regla desde la raiz', scope: 'project' } }
+          params: {
+            name: 'recordRule',
+            arguments: {
+              memory_key: 'wc-root',
+              // procedencia MCP: la escritura pasa por la validacion de refs (MEM-03)
+              content: 'regla desde la raiz\n\nrefs:\n  - path:.discovery-map.json',
+              scope: 'project'
+            }
+          }
         })
         assert.equal(res.result.isError, undefined)
 
@@ -546,7 +554,7 @@ describe('working-context — sin recursion ni corrupcion (6.9)', () => {
     withProject((dir) => {
       writeFileSync(join(dir, '.ancletorc'), '{}\n')
       const dbPath = join(dir, '.ancleto', 'memory.db')
-      const toolkit = createMemoryToolkit(dbPath, { source: 'test', projectRoot: dir })
+      const toolkit = createMemoryToolkit(dbPath, { source: 'runtime', projectRoot: dir })
       try {
         // cada recordRule project dispara el refresh; si recursara o se colgara, el test no termina
         for (let i = 0; i < 3; i++) {

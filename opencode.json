@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "coder": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
+    "spec-writer": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
+    "tester": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
+    "reviewer": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
+    "documenter": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
+    "memory-keeper": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
+    "context-resolver": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
+    "technical-discovery": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
+    "technical-seed-writer": { "model": "commandcode/deepseek/deepseek-v4.1-flash" }
+  }
+}

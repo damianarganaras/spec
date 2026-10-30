@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { dirname, isAbsolute, join } from 'node:path'
 import { openDatabase, checkpointDatabase } from './database.js'
 import { readTopologySummary } from '../discovery.js'
 
@@ -72,6 +73,243 @@ function publicNode(row) {
   }
 }
 
+// --- MEM-03: refs normalizadas y rechazo de secretos en el camino de escritura ---
+//
+// Reglas fijas del change:
+// - La validacion de refs se aplica a toda escritura que pasa por `recordNode`,
+//   con una unica exencion: la procedencia resuelta por el runtime es 'runtime'.
+// - El rechazo de secretos es incondicional. Nunca repite el valor detectado.
+// - La raiz del proyecto se deriva de `context.projectRoot` o de la ubicacion de
+//   la DB (`.ancletorc` hacia arriba), NUNCA de `process.cwd()`. No se importa
+//   `working-context.js` para no crear un ciclo (ese modulo ya importa este).
+
+const REF_KINDS = new Set(['spec', 'change', 'path', 'commit', 'workitem'])
+
+const SECRET_PATTERNS = [
+  /\bsk-[A-Za-z0-9_-]{8,}/,
+  /\bghp_[A-Za-z0-9]{8,}/,
+  /\bAKIA[0-9A-Z]{12,}/,
+  /authorization\s*:\s*bearer\s+\S+/i,
+  /\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD)\s*=\s*[^\s"'`]+/i,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/
+]
+
+function looksLikeSecret(text) {
+  if (!text) return false
+  return SECRET_PATTERNS.some((re) => re.test(text))
+}
+
+function normalizeHeading(text) {
+  return String(text).trim().replace(/\s+/g, ' ')
+}
+
+function canonicalHeading(text) {
+  return normalizeHeading(text)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/`/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function parseRef(raw) {
+  if (raw.startsWith('spec:')) {
+    const value = raw.slice('spec:'.length)
+    const hash = value.indexOf('#')
+    if (hash <= 0 || hash === value.length - 1) return null
+    const capability = value.slice(0, hash).trim()
+    const heading = value.slice(hash + 1).trim()
+    if (!capability || !heading || /[\\/]/.test(capability) || capability.includes('..')) return null
+    return { kind: 'spec', capability, heading, raw }
+  }
+  if (raw.startsWith('change:')) {
+    const slug = raw.slice('change:'.length).trim()
+    if (!slug || /[\s\\/]/.test(slug) || slug.includes('..')) return null
+    return { kind: 'change', slug, raw }
+  }
+  if (raw.startsWith('path:')) {
+    const value = raw.slice('path:'.length).trim()
+    if (!value) return null
+    return { kind: 'path', value, raw }
+  }
+  if (raw.startsWith('commit:')) {
+    const sha = raw.slice('commit:'.length).trim()
+    if (!/^[0-9a-f]{7,40}$/i.test(sha)) return null
+    return { kind: 'commit', sha, raw }
+  }
+  if (raw.startsWith('workitem:')) {
+    const rest = raw.slice('workitem:'.length)
+    const sep = rest.indexOf(':')
+    if (sep <= 0 || sep === rest.length - 1) return null
+    return { kind: 'workitem', tracker: rest.slice(0, sep), key: rest.slice(sep + 1), raw }
+  }
+  return null
+}
+
+// El bloque empieza en una linea `refs:` al inicio de linea y termina antes de la
+// primera linea en blanco o de texto no indentado. Una linea indentada que no es
+// item de lista, un item con gramatica invalida o un segundo bloque `refs:` se
+// reportan como `error`: fail-closed, nunca se ignora (un segundo bloque dejaria
+// refs sin validar).
+function refsBlockEnd(lines, start) {
+  let end = start + 1
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.trim() === '') return i
+    if (/^\s/.test(line)) {
+      end = i + 1
+      continue
+    }
+    return i
+  }
+  return end
+}
+
+function parseRefsBlock(content) {
+  const lines = String(content).split(/\r?\n/)
+  const starts = []
+  for (let i = 0; i < lines.length; i++) {
+    if (/^refs:\s*$/.test(lines[i])) starts.push(i)
+  }
+  if (starts.length === 0) return null
+  const start = starts[0]
+  const end = refsBlockEnd(lines, start)
+  if (starts.length > 1) return { refs: [], error: null, blocks: starts.length, start, end }
+
+  const refs = []
+  for (let i = start + 1; i < end; i++) {
+    const line = lines[i]
+    const item = /^\s*-\s+(.*)$/.exec(line)
+    if (item) {
+      const raw = item[1].trim()
+      const ref = raw ? parseRef(raw) : null
+      if (!ref) return { refs, error: line.trim(), start, end }
+      refs.push(ref)
+      continue
+    }
+    return { refs, error: line.trim(), start, end }
+  }
+  return { refs, error: null, start, end }
+}
+
+// El bloque proactivo muestra solo la prosa previa al primer `refs:`: ese bloque
+// es provenance para resolucion bajo demanda y todo lo que sigue al bloque (el
+// parser lo considera terminal) no es prosa validada. Recortar por el `start`
+// elimina tambien los bloques `refs:` adicionales sin logica extra.
+function renderRuleContent(content) {
+  const parsed = parseRefsBlock(content)
+  if (!parsed) return content
+  const lines = String(content).split(/\r?\n/)
+  return lines.slice(0, parsed.start).join('\n').trimEnd()
+}
+
+export function resolveProjectRoot(context, dbPath) {
+  const fromContext = context && typeof context.projectRoot === 'string' ? context.projectRoot.trim() : ''
+  if (fromContext) return fromContext
+  if (!dbPath) return null
+  const candidate = dirname(dirname(dbPath))
+  for (let dir = candidate; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, '.ancletorc'))) return dir
+    const parent = dirname(dir)
+    if (parent === dir) break
+  }
+  if (existsSync(join(candidate, '.ancleto'))) return candidate
+  return null
+}
+
+function resolveSpecRef(ref, root, prefix) {
+  const specPath = join(root, 'aspec', 'specs', ref.capability, 'spec.md')
+  if (!existsSync(specPath)) {
+    throw new Error(`${prefix} referencia un spec inexistente: "${ref.raw}"`)
+  }
+  const headings = readFileSync(specPath, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => /^###\s+Requirement:\s*(.*)$/.exec(line))
+    .filter(Boolean)
+    .map((match) => match[1])
+
+  // Un heading exacto no cortocircuita la unicidad: se recolectan todos los
+  // bloques que matcheen por forma exacta o canonizada, deduplicados por
+  // identidad de bloque (un heading exacto tambien canoniza a si mismo). La
+  // ambiguedad se reporta, nunca se resuelve eligiendo el primero.
+  const target = canonicalHeading(ref.heading)
+  const matches = headings.filter(
+    (h) => normalizeHeading(h) === normalizeHeading(ref.heading) || canonicalHeading(h) === target
+  )
+  if (matches.length === 1) return
+  if (matches.length === 0) throw new Error(`${prefix} referencia un spec inexistente: "${ref.raw}"`)
+  throw new Error(`${prefix} referencia un spec ambiguo (${matches.length} coincidencias): "${ref.raw}"`)
+}
+
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function resolveChangeRef(ref, root, prefix) {
+  const matches = []
+  const active = join(root, 'aspec', 'changes', ref.slug)
+  if (existsSync(active) && statSync(active).isDirectory()) matches.push(active)
+
+  const archiveDir = join(root, 'aspec', 'changes', 'archive')
+  if (existsSync(archiveDir)) {
+    // El nombre archivado es exactamente `YYYY-MM-DD-<slug>`: un sufijo suelto
+    // resolveria al archive de otro change (`export-import` -> `...-cross-machine-export-import`).
+    const archivedName = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-${escapeRegExp(ref.slug)}$`)
+    for (const name of readdirSync(archiveDir)) {
+      if (!archivedName.test(name)) continue
+      const full = join(archiveDir, name)
+      if (statSync(full).isDirectory()) matches.push(full)
+    }
+  }
+
+  if (matches.length === 0) throw new Error(`${prefix} referencia un change inexistente: "${ref.raw}"`)
+  if (matches.length > 1) throw new Error(`${prefix} referencia un change ambiguo (${matches.length} coincidencias): "${ref.raw}"`)
+}
+
+function resolvePathRef(ref, root, prefix) {
+  const rawPath = ref.value.replace(/:\d+$/, '')
+  if (!rawPath || isAbsolute(rawPath) || /^[A-Za-z]:/.test(rawPath)) {
+    throw new Error(`${prefix} declara un path absoluto prohibido: "${ref.raw}"`)
+  }
+  const segments = rawPath.split(/[\\/]+/).filter(Boolean)
+  if (segments.includes('..')) throw new Error(`${prefix} declara un path con ../: "${ref.raw}"`)
+  const full = join(root, rawPath)
+  if (!existsSync(full) || !statSync(full).isFile()) {
+    throw new Error(`${prefix} declara un path inexistente: "${ref.raw}"`)
+  }
+}
+
+function validateRefsForWrite({ memory_key, type, content, projectRoot }) {
+  const prefix = `refs: la ${type} "${memory_key}"`
+  const parsed = parseRefsBlock(content)
+  if (!parsed) throw new Error(`${prefix} requiere un bloque refs: con al menos una referencia`)
+  if (parsed.blocks) {
+    throw new Error(`${prefix} declara ${parsed.blocks} bloques refs: y se permite exactamente uno`)
+  }
+  if (parsed.error) throw new Error(`${prefix} tiene una ref invalida en el bloque refs: "${parsed.error}"`)
+  if (parsed.refs.length === 0) throw new Error(`${prefix} tiene un bloque refs: vacio`)
+  if (!projectRoot) throw new Error(`${prefix} no puede resolver refs: no se encontro la raiz del proyecto`)
+
+  for (const ref of parsed.refs) {
+    if (!REF_KINDS.has(ref.kind)) throw new Error(`${prefix} usa un prefijo de ref desconocido: "${ref.raw}"`)
+    if (ref.kind === 'spec') resolveSpecRef(ref, projectRoot, prefix)
+    else if (ref.kind === 'change') resolveChangeRef(ref, projectRoot, prefix)
+    else if (ref.kind === 'path') resolvePathRef(ref, projectRoot, prefix)
+  }
+
+  const hasSpec = parsed.refs.some((r) => r.kind === 'spec')
+  const hasChange = parsed.refs.some((r) => r.kind === 'change')
+  const hasPath = parsed.refs.some((r) => r.kind === 'path')
+  if (type === 'decision' && !hasSpec && !hasChange) {
+    throw new Error(`${prefix} requiere al menos una ref spec:<cap>#<heading> o change:<slug>`)
+  }
+  if (type === 'rule' && !hasPath && !hasSpec && !hasChange) {
+    throw new Error(`${prefix} requiere al menos una ref path:, spec: o change:`)
+  }
+}
+
 export function formatTopologyBlock(topo) {
   if (!topo) return null
   const entries = Object.entries(topo.tree_summary)
@@ -85,20 +323,20 @@ export function defaultMemoryDbPath(cwd = process.cwd()) {
 }
 
 export function createMemoryEngine(dbPath = defaultMemoryDbPath()) {
-  return buildEngine(openDatabase(dbPath))
+  return buildEngine(openDatabase(dbPath), dbPath)
 }
 
 // Apertura read-only: sin migraciones ni escrituras. Pensada para inspeccionar
 // la memoria sin tocar el WAL ni modificar archivos.
 export function createReadonlyMemoryEngine(dbPath = defaultMemoryDbPath()) {
-  return buildReadonlyEngine(openDatabase(dbPath, { migrate: false, readonly: true }))
+  return buildReadonlyEngine(openDatabase(dbPath, { migrate: false, readonly: true }), dbPath)
 }
 
 // Misma superficie que el engine de escritura. `merge` solo puede planificar:
 // una corrida real se rechaza antes de tocar la conexion read-only, y el plan
 // sale de la validacion compartida (`validateMerge`), identico al de escritura.
-function buildReadonlyEngine(db) {
-  const engine = buildEngine(db)
+function buildReadonlyEngine(db, dbPath) {
+  const engine = buildEngine(db, dbPath)
   return {
     ...engine,
     merge({ target, sources, dryRun = false } = {}) {
@@ -108,7 +346,7 @@ function buildReadonlyEngine(db) {
   }
 }
 
-function buildEngine(db) {
+function buildEngine(db, dbPath) {
 
   const findActive = db.prepare(`SELECT id, type FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
   const findActiveRow = db.prepare(`SELECT id, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
@@ -147,7 +385,7 @@ function buildEngine(db) {
     let block = `<ProjectMemoryRules>\n${UNTRUSTED_LABEL}`
     let includedCount = 0
     for (const r of rows) {
-      const line = `- [${r.memory_key}] ${r.content}`
+      const line = `- [${r.memory_key}] ${renderRuleContent(r.content)}`
       const candidate = `${block}\n${line}`
       if (candidate.length > maxChars) break
       block = candidate
@@ -197,14 +435,14 @@ function buildEngine(db) {
     return []
   }
 
-  // Procedencia de escritura (runtime-owned, solo auditoria): `source` se resuelve
-  // exclusivamente desde `context.source || 'runtime'` y NUNCA desde `input` (un
-  // `source` forjado en los args del caller se ignora, igual que `id`/`status`/
-  // `confidence`). Vocabulario: `mcp:ancleto-memory` (tools MCP), `cli:import`
-  // (import del CLI), `runtime` (default programatico), `agent:<rol>` (solo si el
-  // runtime confiable lo provee, nunca el caller). Frontera: la procedencia es
-  // descriptiva; el motor NO la usa para autorizar ni denegar escrituras (sin
-  // canal de identidad autenticado no hay enforcement).
+  // Procedencia de escritura (runtime-owned): `source` se resuelve exclusivamente
+  // desde `context.source || 'runtime'` y NUNCA desde `input` (un `source` forjado
+  // en los args del caller se ignora, igual que `id`/`status`/`confidence`).
+  // Vocabulario: `mcp:ancleto-memory` (tools MCP), `cli:import` (import del CLI),
+  // `runtime` (default programatico y fixtures), `agent:<rol>` (solo si el runtime
+  // confiable lo provee, nunca el caller). La procedencia decide una unica cosa:
+  // si la escritura pasa por la validacion de refs. La exencion es el valor exacto
+  // 'runtime'; cualquier otro valor se valida (fail-closed).
   function recordNode(input, context = {}) {
     const memory_key = String(input.memory_key || '').trim()
     const type = input.type
@@ -219,6 +457,22 @@ function buildEngine(db) {
     const source = String(context.source || 'runtime')
     const confidence = Math.min(Math.max(Number(context.confidence ?? 1), 0), 1)
     const created_at = String(input.createdAt || new Date().toISOString())
+
+    // Validacion antes de abrir la transaccion: un rechazo no escribe ni supersede.
+    if (looksLikeSecret(content)) {
+      throw new Error(`contenido rechazado en "${memory_key}": parece contener una credencial`)
+    }
+    if (looksLikeSecret(justification)) {
+      throw new Error(`justificacion rechazada en "${memory_key}": parece contener una credencial`)
+    }
+    if (source !== 'runtime') {
+      validateRefsForWrite({
+        memory_key,
+        type,
+        content,
+        projectRoot: resolveProjectRoot(context, dbPath)
+      })
+    }
 
     db.exec('BEGIN IMMEDIATE')
     let prev = null

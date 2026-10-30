@@ -78,24 +78,19 @@ Ask once (runtime question tool when available): "Archive N changes?" — "Archi
 
 Process in the determined order:
 
-a. **Sync specs** if delta specs exist and the resolution says so: apply the delta to `aspec/specs/<capability>/spec.md` (ADDED adds; MODIFIED updates preserving unmentioned scenarios; REMOVED deletes; RENAMED renames via `FROM:`/`TO:`). Track sync.
-b. **Archive**: create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), move to `aspec/changes/archive/YYYY-MM-DD-<name>/`. If the target exists, fail that change (record the error) but continue.
-c. **Track outcomes**: success, failed (with error), skipped.
+a. **Preflight promotions** before touching the change: apply the promotion gate to the blocks under `## Decisiones` of its `proposal.md` (shape defined in `agents/spec-writer.md`; reference it, do not restate it here). A block without its own `memory_key` and `Estado: aprobado` is not a candidate, and only `decision` is promoted (never a `rule`). Any key/refs/`Estado` violation, a session candidate (transcript, task state, session summary), or two blocks sharing a `memory_key` with different content or refs, rejects that change's batch: record it as failed with a per-block report of its location, do not sync its specs, do not move it, and continue with the rest of the batch.
+b. **Sync specs** if delta specs exist and the resolution says so: apply the delta to `aspec/specs/<capability>/spec.md` (ADDED adds; MODIFIED updates preserving unmentioned scenarios; REMOVED deletes; RENAMED renames via `FROM:`/`TO:`). Track sync.
+c. **Archive**: create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), move to `aspec/changes/archive/YYYY-MM-DD-<name>/`. If the target exists, fail that change (record the error) but continue.
+d. **Track outcomes**: success, failed (with error), skipped.
 
-### 9. Record lessons
+### 9. Promote approved decisions per change
 
-Per resolved conflict and durable lesson:
+Apply the archive promotion gate to each change archived in phase 8:
 
-- Resolutions/decisions (which change won, why, evidence) → `recordDecision`:
-  ```
-  recordDecision({ memory_key: "<kebab-topic>", content: "<resolution>", justification: "<codebase evidence>" })
-  ```
-- Standing rules discovered (e.g., "these two capabilities must evolve together") → `recordRule`:
-  ```
-  recordRule({ memory_key: "<kebab-topic>", content: "<the rule>", justification: "<evidence>" })
-  ```
+1. With valid candidates, delegate `@memory-keeper` once in Promotion mode for that change. It writes one `recordDecision` per approved block with `content` of 1–3 sentences plus the `refs:` block.
+2. If a write fails after the move, report that change as **archived, memory pending** with the `memory_key` and the reason; this is the only post-move failure mode. Never report it as memorized.
 
-Record only what saves future investigation; never workflow meta. If nothing meets the bar, record nothing and say so.
+**Aggregation:** if no selected change has candidates, the batch makes **zero `@memory-keeper` delegations**. Per-change pending memory does not block the rest of the batch.
 
 ### 10. Display summary
 
@@ -105,7 +100,8 @@ Record only what saves future investigation; never workflow meta. If nothing mee
 Archived N changes: <change-1> -> archive/YYYY-MM-DD-<change-1>/
 Skipped M: <change-2> (incomplete; user declined)
 Spec sync: N delta specs synced, M conflicts resolved
-**Memories recorded:** <list, or "None">
+**Memories promoted:** <list, or "None">
+**Memory pending:** <change -> memory_key — reason, or "None">
 ```
 
 ## Guardrails
@@ -117,4 +113,6 @@ Spec sync: N delta specs synced, M conflicts resolved
 - Show per-change status before one batch confirmation.
 - Track and report all outcomes (success/skip/fail).
 - Archive target: current date (`YYYY-MM-DD-<name>`); if it exists, fail that change but continue others.
+- Promotion per change only uses `recordDecision`; it never invents a `memory_key` and never promotes a `rule` from `## Decisiones`.
+- Zero candidates across the batch ⇒ zero `@memory-keeper` delegations.
 - `recordRule`/`recordDecision` accept only `memory_key`, `content`, `justification`, `scope`. Never send `source`, `confidence`, `status` or `id` — the runtime manages those.

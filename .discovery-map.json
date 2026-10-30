@@ -1,11 +1,11 @@
 {
-  "last_updated": "2026-10-29T19:10:53.105Z",
-  "total_files": 704,
+  "last_updated": "2026-10-30T15:49:32.346Z",
+  "total_files": 711,
   "tree_summary": {
     ".github": 1,
     ".opencode": 66,
     "agents": 10,
-    "aspec": 150,
+    "aspec": 156,
     "audit logs": 9,
     "commands": 16,
     "docs": 21,
@@ -28,6 +28,7 @@
     "PRODUCT.md",
     "README.md",
     "eslint.config.js",
+    "opencode.json",
     "optimizacion-de-tokens.md",
     "package-lock.json",
     "package.json"

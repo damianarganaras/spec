@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-29T19:20:00Z",
+  "generatedAt": "2026-10-30T15:53:12Z",
   "docs": {
-    "decisions.md": ["src", "agents", "aspec", "package.json", "README.md", "AGENTS.md", "templates", "commands", "skills", "CHANGELOG.md", "optimizacion-de-tokens.md", "DESIGN-memory-engine-v0.2.0.md", "eslint.config.js", ".gitattributes", ".gitignore", "test", "aspec"],
-    "index.md": ["package.json", "src", "agents", "aspec", "commands", "skills", "AGENTS.md", "profiles", "README.md", "CHANGELOG.md", ".ancletorc", ".opencode", "optimizacion-de-tokens.md", ".discovery-map.json", ".gitattributes"],
-    "integrations.md": ["package.json", "src", "agents", "README.md", ".github", "profiles", "eslint.config.js", "CHANGELOG.md", "aspec", ".gitattributes", ".gitignore"],
-    "inventory.md": ["package.json", ".discovery-map.json", ".github", "aspec", "profiles", "eslint.config.js", ".ancletorc", ".opencode", "optimizacion-de-tokens.md", "src", "test", "README.md", "agents", "commands", "skills", "templates", ".ancleto"],
-    "overview.md": ["package.json", "src", "README.md", "AGENTS.md", "agents", "commands", "skills", "templates", "aspec", "test", "profiles", "eslint.config.js", "CHANGELOG.md", ".discovery-map.json", "optimizacion-de-tokens.md", ".gitattributes", ".gitignore", ".ancleto"],
-    "setup.md": ["package.json", "README.md", "AGENTS.md", "templates", "aspec", "test", ".github", "profiles", "eslint.config.js", ".opencode", ".ancletorc", "PRODUCT.md", "src", ".gitattributes", ".gitignore", "agents", ".ancleto"],
-    "units/_map.md": ["src", "agents", "commands", "skills", "templates", "test", "aspec", "profiles", "eslint.config.js", "optimizacion-de-tokens.md", "README.md", "package.json"],
-    "units/cli-install.md": ["src", "agents", "aspec", "test", "templates", "README.md", "profiles", "CHANGELOG.md", "package.json", ".gitattributes", ".gitignore"],
-    "units/discovery-engine.md": ["src", "test", "README.md", ".opencode", "optimizacion-de-tokens.md", "aspec", "package.json"],
-    "units/memory-engine.md": ["src", "DESIGN-memory-engine-v0.2.0.md", "test", "README.md", "aspec", "agents", "package.json"],
-    "unknowns.md": ["README.md", "PRODUCT.md", "package.json", "src", "test", "aspec", "profiles", "CHANGELOG.md", ".ancletorc", "optimizacion-de-tokens.md", ".discovery-map.json", ".opencode", ".gitattributes", ".gitignore", "agents", ".ancleto"]
+    "decisions.md": ["src", "agents", "aspec", "package.json", "README.md", "AGENTS.md", "templates", "commands", "skills", "CHANGELOG.md", "optimizacion-de-tokens.md", "DESIGN-memory-engine-v0.2.0.md", "eslint.config.js", ".gitattributes", ".gitignore", "test", "opencode.json"],
+    "index.md": ["package.json", "src", "agents", "aspec", "commands", "skills", "AGENTS.md", "profiles", "README.md", "CHANGELOG.md", ".ancletorc", ".opencode", "optimizacion-de-tokens.md", ".discovery-map.json", ".gitattributes", "opencode.json"],
+    "integrations.md": ["package.json", "src", "agents", "README.md", ".github", "profiles", "eslint.config.js", "CHANGELOG.md", "aspec", ".gitattributes", ".gitignore", "opencode.json"],
+    "inventory.md": ["package.json", ".discovery-map.json", ".github", "aspec", "profiles", "eslint.config.js", ".ancletorc", ".opencode", "optimizacion-de-tokens.md", "src", "test", "README.md", "agents", "commands", "skills", "templates", ".ancleto", "opencode.json", "CHANGELOG.md"],
+    "overview.md": ["package.json", "src", "README.md", "AGENTS.md", "agents", "commands", "skills", "templates", "aspec", "test", "profiles", "eslint.config.js", "CHANGELOG.md", ".discovery-map.json", "optimizacion-de-tokens.md", ".gitattributes", ".gitignore", ".ancleto", "opencode.json"],
+    "setup.md": ["package.json", "README.md", "AGENTS.md", "templates", "aspec", "test", ".github", "profiles", "eslint.config.js", ".opencode", ".ancletorc", "PRODUCT.md", "src", ".gitattributes", ".gitignore", "agents", ".ancleto", "opencode.json"],
+    "units/_map.md": ["src", "agents", "commands", "skills", "templates", "test", "aspec", "profiles", "eslint.config.js", "optimizacion-de-tokens.md", "README.md", "package.json", "opencode.json", "CHANGELOG.md"],
+    "units/cli-install.md": ["src", "agents", "aspec", "test", "templates", "README.md", "profiles", "CHANGELOG.md", "package.json", ".gitattributes", ".gitignore", "skills", "opencode.json"],
+    "units/discovery-engine.md": ["src", "test", "README.md", ".opencode", "optimizacion-de-tokens.md", "aspec", "package.json", "opencode.json", ".discovery-map.json"],
+    "units/memory-engine.md": ["src", "DESIGN-memory-engine-v0.2.0.md", "test", "README.md", "aspec", "agents", "package.json", "skills", "CHANGELOG.md"],
+    "unknowns.md": ["README.md", "PRODUCT.md", "package.json", "src", "test", "aspec", "profiles", "CHANGELOG.md", ".ancletorc", "optimizacion-de-tokens.md", ".discovery-map.json", ".opencode", ".gitattributes", ".gitignore", "agents", ".ancleto", "opencode.json", "skills"]
   }
 }

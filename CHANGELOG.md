@@ -2,6 +2,22 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.17.0] - 2026-10-30
+
+### Added
+- **Modo Promotion en `@memory-keeper`**: al archivar promueve sólo las decisiones de `proposal ## Decisiones` con `memory_key` propia y `Estado: aprobado`, con preflight del lote; sin candidatos no escribe ni delega, y corre después del merge de specs. Gate en `ancleto-archive`, `ancleto-bulk-archive` y `ancleto-verify`.
+- **Resolutores `change:` / `spec:` / `path:`** con unicidad y **ambigüedad reportada**; `change:` queda anclado a `YYYY-MM-DD-<slug>`.
+
+### Changed
+- **Refs normalizadas dentro de `content`** en `recordNode`, con validación **fail-closed** y exención única `context.source === 'runtime'`; `cli:import` queda fuera del camino de escritura y conserva LWW.
+- **`<ProjectMemoryRules>`** renderiza sólo la prosa de la regla, sin el bloque `refs:`.
+- Backfill de las cinco decisiones únicas de los `design.md` históricos.
+- Specs sincronizadas: `memory-engine`, `memory-ops` y `prompt-contracts`.
+- `opencode.json` con override de modelo por agente.
+
+### Security
+- Rechazo de credenciales sin eco del valor.
+
 ## [0.16.2] - 2026-10-29
 
 ### Added

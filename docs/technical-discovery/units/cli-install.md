@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, entorno de máquina, sonda de invocabilidad de herramientas, superficie de shell por agente, stats failures, affected y las ops de memoria del CLI (snapshot, merge, doctor read-only, refresh on-write)"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates, commands como skills, wizard, MCP, portabilidad, entorno de máquina, sonda de invocabilidad de herramientas, superficie de shell por agente, stats failures, affected, las ops de memoria del CLI (snapshot, merge, doctor read-only, refresh on-write) y la promoción al archivar"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -18,10 +18,11 @@ covers:
   - memory merge
   - memory doctor read-only
   - memory import refresh on-write
+  - promoción al archivar
   - permisos de shell por agente
 sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js"]
-generatedAt: 2026-10-29T19:20:00Z
-pluginVersion: 0.16.0
+generatedAt: 2026-10-30T15:53:12Z
+pluginVersion: 0.16.2
 skillVersion: '2.3'
 ---
 
@@ -55,7 +56,8 @@ Evidencia: `package.json`, `src/cli/index.js`.
 **Escrituras de memoria del CLI**:
 
 - `memory import <archivo>` (`memoryImport`) tras `engine.importNodes(json)` invoca
-  `refreshWorkingContextOnWrite(engine, projectRoot)` dentro de un `try/catch` aislado.
+  `refreshWorkingContextOnWrite(engine, projectRoot)` dentro de un `try/catch` aislado. El
+  import **no** pasa por `recordNode`: conserva LWW y **no** valida refs.
 - `memory snapshot --out <archivo.db> [--force] [--json]` (`memorySnapshot`) exige `--out`,
   comprueba que exista `.ancleto/memory.db` y delega en `snapshotDatabase`; imprime
   `{ out, bytes }` o un resumen legible. **No** toca la fuente ni el working-context.
@@ -76,9 +78,33 @@ El refresh es **compare-based** y reusa la conexión abierta: reescribe
 (normalización CRLF/espacios/salto final). En `import`, si falla, la importación igual se
 considera exitosa y el fallo se reporta por stderr.
 
+**Escritura MCP**: el server fija `source: 'mcp:ancleto-memory'` y `projectRoot` al crear los
+handlers (`src/core/memory/mcp-server.js:13-17`); por eso las escrituras MCP pasan por la
+validación fail-closed de refs de `recordNode` (salvo procedencia `runtime`). El CLI no
+reimplementa esa validación: solo el import la evita por usar `importNodes`.
+
 Evidencia: `src/cli/index.js` (`memoryImport`, `memorySnapshot`, `memoryMerge`,
 `memoryDoctorCmd`, `requiredMemoryFlag`), `src/core/memory/snapshot.js`,
-`src/core/memory/working-context.js`, `aspec/specs/memory-ops/spec.md`.
+`src/core/memory/working-context.js`, `src/core/memory/engine.js`,
+`aspec/specs/memory-ops/spec.md`, `aspec/specs/memory-engine/spec.md`.
+
+## Promoción al archivar (delegación del CLI/skill)
+
+El CLI no promueve memoria por sí mismo: la promoción es un contrato de cierre que vive en la
+skill y en los agentes, y escribe a través del MCP/engine:
+
+1. `skills/ancleto-archive/SKILL.md` hace el **preflight del lote** (`## Decisiones` con
+   `memory_key` propia y `Estado: aprobado`, refs resolubles, sin `path:` dentro del change,
+   sin candidatos de sesión). Cualquier violación ⇒ **cero escrituras** y el change no se mueve.
+2. Sin candidatos ⇒ **cero escrituras y cero delegación**.
+3. Con candidatos, el orquestador delega **una** pasada de `@memory-keeper` en modo Promotion;
+   ella escribe un `recordDecision` por bloque (nunca `recordRule`).
+4. La promoción corre **después** de que `@documenter` termina el merge de specs y **nunca en
+   paralelo**, para que `spec:` resuelva contra la fuente de verdad.
+
+Evidencia: `skills/ancleto-archive/SKILL.md:51-70`,
+`agents/memory-keeper.md:80-97`, `agents/orchestrator.md:192`, `agents/orchestrator.md:326`,
+`aspec/specs/memory-engine/spec.md` (requirement "Promoción al archivar…").
 
 ## Modelo único de destinos por host (`AGENT_TARGETS`)
 
@@ -411,6 +437,8 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
   `ComSpec` para que el veredicto sea de la herramienta y no del runtime.
 - **Errores no bloqueantes**: binarios ausentes (MCP/git/gh/az), assets no soportados,
   divergencias de frontmatter y exclusiones no garantizadas se omiten con warning a stderr.
+- **`opencode.json` no se publica**: el override de modelos es config del checkout, no del
+  paquete (`package.json` → `files`).
 - `ancleto --version` lee `package.json` en runtime (no hardcodeado).
 
 ## Paths clave
@@ -421,16 +449,16 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`; dueño único de la transformación. |
 | `src/core/machine-env.js` | Exporta `machineEnvPath`, `detectMachineFacts`, `renderMachineEnv`, `writeMachineEnv`, `ensureMachineEnvExclusion`, `materializeMachineEnv`, `checkMachineEnvTracked` y la constante `TOOL_PROBE_TIMEOUT_MS`; la sonda de invocabilidad es **interna** (`findExecutables`, `spawnProbe`, `probeExecutable`, `isBatchShim`, `comspecCommand`, `firstLine`, `fallbackFor`). Dueño único del entorno local. |
 | `src/core/memory/snapshot.js` | `snapshotDatabase`; dueño único de la copia binaria consistente. |
+| `src/core/memory/engine.js` | `recordNode` (validación de refs y rechazo de secretos), `validateRefsForWrite`, `resolveSpecRef`/`resolveChangeRef`/`resolvePathRef`, `renderRuleContent`, `importNodes` (fuera de la validación). |
+| `src/core/memory/mcp-server.js` | Fija `source: 'mcp:ancleto-memory'` y `projectRoot` para las escrituras MCP. |
 | `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext` (MCP), `refreshWorkingContextOnWrite` (CLI, compare-based), `checkWorkingContextFreshness`, `normalizeBlock`, `readWorkingContextFile`, `resolveMemoryProjectRoot` (día-cero). |
+| `skills/ancleto-archive/SKILL.md` | Gate de promoción al archivar (preflight, cero candidatos, `recordDecision`). |
+| `agents/memory-keeper.md` | Modo Promotion. |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
+| `opencode.json` | Override local de `agent.model` para 9 subagentes; no se publica. |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED (incl. `validation-commands`)/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable; en agents el frontmatter se adapta por host, en skills se copia. |
-| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js` | Guardas del CLI, del adaptador, de contenido (incluye T01/T05/T22/T12/T13 del checkpoint de contrato y `## Decisiones`), del working-context, del entorno de máquina, del reporte de fallos y del contrato de PR-1. |
-| `README.md`, `agents/orchestrator.md` | Contrato operativo y sección de entorno de máquina. |
-| `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/` | Change archivado con proposal, design, tasks y delta spec. |
-| `aspec/changes/archive/2026-10-25-machine-environment-block/` | Change archivado del entorno de máquina. |
-| `aspec/changes/archive/2026-10-25-session-failure-report/` | Change archivado del reporte de fallos. |
-| `aspec/changes/archive/2026-10-26-orchestrator-session-start/` | Change archivado del intake de sesión, el techo de lecturas y el aviso de overflow accionable. |
-| `aspec/changes/archive/2026-10-28-reingenieria-memoria-first/` | Change archivado de PR-1: snapshot, doctor read-only y merge (publicado en `0.16.0`). |
-| `aspec/changes/decisiones-y-contrato-checkpoint/` | Change activo (PR-2) de checkpoint de contrato y `## Decisiones`: toca `agents/orchestrator.md`, `agents/spec-writer.md`, seis `skills/**` y `test/content-guards.test.js`; sin cambios en `src/**`. |
+| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js` | Guardas del CLI, del adaptador, de contenido, del working-context, del entorno de máquina, del reporte de fallos y del contrato de PR-1. |
+| `aspec/changes/archive/2026-10-29-decisiones-y-contrato-checkpoint/` | Change archivado de PR-2 (checkpoint de contrato y `## Decisiones`). |
+| `aspec/changes/archive/2026-10-30-mem-03-promocion-decisiones-refs/` | Change archivado de MEM-03 (refs obligatorias y promoción al archivar). |
 | `agents/technical-discovery.md` | Allowlist de `bash` de dos literales (`ancleto discovery --check`, `git status --short`) sobre `'*': deny`. |

@@ -34,10 +34,9 @@ Read every present artifact — they constrain what you write:
 
 - `proposal.md` — what & why
 - `specs/<capability>/spec.md` — delta requirements
-- `design.md` — how
 - `tasks.md` — implementation checklist
 
-If `context.md` exists, read it as background (Work Item title, description, acceptance criteria); it is NOT an artifact and MUST NOT be copied into output.
+If a legacy `design.md` or `context.md` exists, read it as optional background (design intent, and Work Item title/description/acceptance criteria respectively); neither is an artifact of the new flow and neither MUST be copied into output.
 
 ### 3. Consolidate what changed
 
@@ -55,7 +54,7 @@ Each change has exactly one owning artifact:
 | What changed | Owning artifact |
 |---|---|
 | Requirement / specified behavior | `specs/<capability>/spec.md` (`## MODIFIED Requirements`) |
-| Design decision | `design.md` |
+| Design decision | `proposal.md ## Decisiones` |
 | Scope | `proposal.md` |
 | New work | `tasks.md` |
 
@@ -63,7 +62,7 @@ Apply the **minimal** edit to each owning artifact and **preserve everything not
 
 - **specs/**: use `## MODIFIED Requirements`, adding or editing scenarios only. Do NOT copy existing scenarios; preserve requirements the delta does not mention.
 - **tasks.md**: add new tasks at the end of their phase; preserve `- [x]` marks; do NOT reorder existing tasks.
-- **proposal.md / design.md**: edit the affected section; leave the rest intact.
+- **proposal.md**: edit the affected section (including `## Decisiones`); leave the rest intact. A legacy `design.md` is read-only background and is not edited.
 
 The merge MUST be idempotent: running twice with the same change yields the same result.
 

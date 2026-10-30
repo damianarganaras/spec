@@ -82,7 +82,8 @@ If an approved aspec change exists, validate against:
 
 - relevant delta specs under `aspec/changes/{change-name}/specs/`
 - `tasks.md`
-- `design.md` when needed for mocks or technical assumptions
+
+A legacy `design.md` may be read as optional background for mocks or technical assumptions when present; it is never a precondition.
 
 Treat the change's delta specs as the primary verification target for active aspec work. Read source-of-truth specs in `aspec/specs/` after the delta specs, and only when relevant to the affected capability.
 

@@ -2,6 +2,16 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.17.1] - 2026-10-30
+
+### Changed
+- **`design.md` y `context.md` retirados del flujo de cambio nuevo**: los generadores ya no los emiten; las decisiones de diseño durables viven en `proposal.md ## Decisiones`.
+- Consumidores los tratan como legado opcional; `archive` ya no elimina `context.md` y mueve el change sin modificarlo, dejando intactos los changes legados ya archivados.
+- Content guards impiden re-emitirlos; specs `artifact-update` y `prompt-contracts` actualizadas.
+
+### Removed
+- Generación de `design.md` y `context.md` en el alta de un change.
+
 ## [0.17.0] - 2026-10-30
 
 ### Added

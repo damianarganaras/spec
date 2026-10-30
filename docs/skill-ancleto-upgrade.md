@@ -34,7 +34,7 @@ estricto en 8 pasos:
    `CONFIG_CHANGES[]`, `DEPENDENCY_CHANGES[]`, `UNSURE_MATCHES[]`, con confianza
    `high|medium|low`.
 6. **Crear el change aspec** — scaffold del directorio en `aspec/changes/`.
-7. **Escribir los artefactos** — `proposal.md`, `specs/`, `tasks.md`, `design.md`.
+7. **Escribir los artefactos** — `proposal.md`, `specs/`, `tasks.md`.
 8. **Mostrar resumen final** — cobertura del escaneo, patterns usados, breaking changes.
 
 ## Ejemplos de Invocación
@@ -53,11 +53,11 @@ El skill genera automáticamente un Change aspec dentro de
 `aspec/changes/{LIBRARIA}-migration/`. Estos artefactos contienen todo lo necesario
 para escalar el esfuerzo de la migración:
 
-1. **proposal.md** — qué, por qué y cómo vamos a migrar, versiones y dependencias afectadas.
+1. **proposal.md** — qué, por qué y cómo vamos a migrar, versiones y dependencias afectadas;
+   las decisiones de diseño durables quedan en `## Decisiones`.
 2. **tasks.md** — checklist faseado (6 fases) detallando archivo por archivo qué hay que
    modificar en código, tests y configuraciones.
 3. **specs/...** — especificación técnica de la migración para la auditoría de arquitectura.
-4. **design.md** — diseño y estrategia.
 
 Una vez que el skill arroja este resultado, todo se reduce a seguir el plan. Revisá el
 contenido propuesto de aspec y luego invocá:
@@ -91,12 +91,8 @@ aspec/changes/
     │   ├── Archivos afectados críticos
     │   ├── Dependencias que cambian
     │   ├── Estimación de esfuerzo
-    │   └── Riesgos identificados
-    ├── design.md
-    │   ├── Breaking Changes identificados
-    │   ├── Estrategia de mitigación
-    │   ├── Validaciones necesarias
-    │   └── Secuencia recomendada
+    │   ├── Riesgos identificados
+    │   └── Decisiones de diseño
     ├── specs/node22.md
     │   └── Especificación técnica de la migración
     └── tasks.md

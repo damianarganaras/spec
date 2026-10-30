@@ -47,10 +47,10 @@ explore → new/propose/ff → continue* → update? → apply → verify → ar
 |---|---|
 | Directory missing → nothing to continue | `ancleto-new` (or propose/ff) |
 | `proposal.md` missing | `ancleto-continue` |
-| `specs/` or `design.md` missing | `ancleto-continue` |
+| `specs/` missing | `ancleto-continue` |
 | `tasks.md` missing | `ancleto-continue` |
 | All artifacts present, tasks unchecked | `ancleto-apply` |
-| A definition changed (main spec, scope, design) | `ancleto-update` |
+| A definition changed (main spec, scope, design decision) | `ancleto-update` |
 | All tasks checked | `ancleto-verify`, then `ancleto-archive` |
 | Several changes complete | `ancleto-bulk-archive` |
 

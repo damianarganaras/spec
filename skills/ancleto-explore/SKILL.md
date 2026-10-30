@@ -14,7 +14,7 @@ metadata:
 
 Enter explore mode. Think deeply. Visualize freely. Follow the conversation.
 
-**IMPORTANT: Explore mode is for thinking, not implementing.** Read files, search code, investigate the codebase, but NEVER write code or implement features. If asked to implement, remind the user to exit explore mode and create a change proposal. You MAY draft aspec artifacts (proposals, designs, specs) if asked.
+**IMPORTANT: Explore mode is for thinking, not implementing.** Read files, search code, investigate the codebase, but NEVER write code or implement features. If asked to implement, remind the user to exit explore mode and create a change proposal. You MAY draft aspec artifacts (proposals, specs) if asked.
 
 **A stance, not a workflow**: no fixed steps, sequence, or mandatory outputs — a thinking partner.
 
@@ -71,9 +71,9 @@ Think freely. When insights crystallize, offer "Want me to create a proposal?" �
 
 ### A change exists
 
-1. **Read artifacts** — `proposal.md`, `design.md`, `tasks.md`, `specs/`.
+1. **Read artifacts** — `proposal.md`, `tasks.md`, `specs/`.
 2. **Reference them naturally**.
-3. **Offer to capture decisions**: new/changed requirement → `specs/`; design decision → `design.md`; scope change → `proposal.md`; new work → `tasks.md`.
+3. **Offer to capture decisions**: new/changed requirement → `specs/`; design decision → `proposal.md ## Decisiones`; scope change → `proposal.md`; new work → `tasks.md`.
 4. **The user decides** — offer and move on; don't pressure or auto-capture.
 
 ## Ending Discovery

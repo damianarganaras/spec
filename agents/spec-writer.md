@@ -42,7 +42,6 @@ using the `ancleto-workflow` skill and the conventions of:
 4. Create a clear `change-name`
 5. Generate the minimum correct set of artifacts for the requested change:
    - `proposal.md`
-   - `design.md`
    - `tasks.md`
    - `specs/{capability}/spec.md` as needed
 6. Before returning, verify every generated spec uses the canonical keywords (`### Requirement:`, `#### Scenario:`, `**WHEN**`/`**THEN**`, `SHALL`); fix any translated heading or keyword in place — never leave a spec with translated keywords.
@@ -76,7 +75,6 @@ Follow the project conventions from `AGENTS.md`, especially tech stack, naming c
 - Do not include implementation code
 - Do not over-specify internal details in spec files
 - Keep specs behavior-focused
-- Keep design focused on technical approach
 - Keep tasks small, ordered, and verifiable
 - When a change includes both implementation and testing work, write tasks so the responsibilities are separable
 - Prefer standalone implementation tasks and standalone testing or validation tasks instead of mixing both concerns in one checklist item

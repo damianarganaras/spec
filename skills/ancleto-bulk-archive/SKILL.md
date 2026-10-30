@@ -36,7 +36,7 @@ Ask the user to choose (runtime question tool with multi-select when available):
 
 Read per change:
 
-a. **Artifacts** — which of `proposal.md`, `design.md`, `tasks.md`, `specs/` exist under `aspec/changes/<name>/`.
+a. **Artifacts** — which of `proposal.md`, `tasks.md`, `specs/` exist under `aspec/changes/<name>/`.
 b. **Tasks** — count `- [ ]` vs `- [x]`; if no tasks file, note "No tasks".
 c. **Delta specs** — list capability specs under `specs/`, extracting `### Requirement: <name>` lines.
 
@@ -80,7 +80,7 @@ Process in the determined order:
 
 a. **Preflight promotions** before touching the change: apply the promotion gate to the blocks under `## Decisiones` of its `proposal.md` (shape defined in `agents/spec-writer.md`; reference it, do not restate it here). A block without its own `memory_key` and `Estado: aprobado` is not a candidate, and only `decision` is promoted (never a `rule`). Any key/refs/`Estado` violation, a session candidate (transcript, task state, session summary), or two blocks sharing a `memory_key` with different content or refs, rejects that change's batch: record it as failed with a per-block report of its location, do not sync its specs, do not move it, and continue with the rest of the batch.
 b. **Sync specs** if delta specs exist and the resolution says so: apply the delta to `aspec/specs/<capability>/spec.md` (ADDED adds; MODIFIED updates preserving unmentioned scenarios; REMOVED deletes; RENAMED renames via `FROM:`/`TO:`). Track sync.
-c. **Archive**: create `aspec/changes/archive/` if missing, delete scaffold-only files (`context.md`), move to `aspec/changes/archive/YYYY-MM-DD-<name>/`. If the target exists, fail that change (record the error) but continue.
+c. **Archive**: create `aspec/changes/archive/` if missing, move to `aspec/changes/archive/YYYY-MM-DD-<name>/` without modifying the directory. If the target exists, fail that change (record the error) but continue.
 d. **Track outcomes**: success, failed (with error), skipped.
 
 ### 9. Promote approved decisions per change

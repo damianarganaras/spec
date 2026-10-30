@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, la validación de refs, la promoción al archivar, el working-context (día-cero), el refresh on-write (MCP y CLI), la procedencia source, las ops export/import/gc, snapshot, merge, el doctor read-only, el aviso de overflow y su consumo por el orquestador"
 covers: [motor de memoria, tools, refs normalizadas, validación fail-closed, rechazo de secretos, promoción al archivar, working-context, día-cero, procedencia source, export/import/gc, snapshot consistente, merge por supersesión, doctor read-only, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
 sources: ["src/core/memory/**"]
-generatedAt: 2026-10-30T15:53:12Z
-pluginVersion: 0.16.2
+generatedAt: 2026-10-30T19:54:29Z
+pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
 

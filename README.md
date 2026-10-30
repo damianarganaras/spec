@@ -279,7 +279,7 @@ La configuración se preserva en `.ancletorc` (raíz del proyecto) y `.ancleto-t
 
 ### Idioma de los artifacts
 
-El contenido de `proposal.md`, `design.md`, `tasks.md` y `specs/` se escribe en el idioma de tu conversación (`auto`, el default) o en el código que fijes con `--lang`:
+El contenido de `proposal.md`, `tasks.md` y `specs/` se escribe en el idioma de tu conversación (`auto`, el default) o en el código que fijes con `--lang`:
 
 ```bash
 ancleto init --lang auto   # detecta el idioma de tus primeros mensajes y lo guarda

@@ -20,9 +20,11 @@ Verify an implementation against its change artifacts. No external binaries.
 
 ### 1. Load change artifacts
 
-Read under `aspec/changes/<name>/`: `tasks.md` (required), plus `proposal.md`, `design.md`, `specs/` when present.
+Read under `aspec/changes/<name>/`: `tasks.md` (required), plus `proposal.md` and `specs/` when present. A legacy `design.md` is optional background, never required.
 
 ### 2. Completeness
+
+**Boundary:** completeness is measured against `tasks.md` and `specs/`. A `design.md` from an earlier version is legacy and optional; its absence is never a gap and never blocks completion.
 
 **Tasks:** parse checkboxes (`- [ ]` incomplete vs `- [x]` complete) and count. Each incomplete → CRITICAL: "Complete task: `<description>`" or "Mark as done if already implemented".
 
@@ -42,7 +44,7 @@ A non-canonical spec cannot be matched for coverage or merged reliably, so repor
 
 ### 4. Coherence
 
-**Design:** if `design.md` exists, extract key decisions ("Decision:", "Approach:", "Architecture:") and verify adherence. Contradiction → WARNING: "Design decision not followed: `<decision>`" + "Update implementation or revise design.md". If absent, note "No design.md to verify against".
+**Legacy design (optional):** a `design.md` is legacy and optional; it is never a required dimension. If one exists, extract key decisions ("Decision:", "Approach:", "Architecture:") and verify adherence. Contradiction → WARNING: "Design decision not followed: `<decision>`" + "Update implementation or revise `proposal.md ## Decisiones`". If absent, that is the expected state for a new change and is not reported as a gap.
 
 **Patterns:** review new code against project patterns (naming, dirs, style). Significant deviation → SUGGESTION: "Code pattern deviation: `<details>`" + "Consider following project pattern: `<example>`".
 
@@ -73,7 +75,7 @@ Every write carries a normalized `refs:` block; the engine rejects a capture wri
 **Issues by priority**, each with a specific recommendation:
 
 1. **CRITICAL** (block archive): incomplete tasks, missing requirement implementations.
-2. **WARNING** (should fix): spec/design divergences, missing scenario coverage.
+2. **WARNING** (should fix): spec divergences, missing scenario coverage, and legacy design contradictions when a legacy `design.md` is present.
 3. **SUGGESTION** (nice to fix): pattern inconsistencies, minor improvements.
 
 **Assessment:** CRITICAL → "X critical issue(s) found. Fix before archiving."; warnings only → "No critical issues. Y warning(s) to consider. Ready for archive (with noted improvements)."; clean → "All checks passed. Ready for archive." Note memories recorded in step 5 (or "No findings recorded").
@@ -88,9 +90,9 @@ Every write carries a normalized `refs:` block; the engine rejects a capture wri
 
 ## Graceful Degradation
 
-- Only `tasks.md` → task completion, skip spec/design.
-- Tasks + specs → completeness + correctness, skip design.
-- Full artifacts → all three dimensions.
+- Only `tasks.md` → task completion; note that no delta specs exist.
+- Tasks + specs → completeness + correctness; a legacy `design.md` is optional and never a required dimension.
+- Full artifacts → all three dimensions; a legacy `design.md`, when present, is read opportunistically and never required.
 - Always note skipped checks and why.
 
 ## Guardrails

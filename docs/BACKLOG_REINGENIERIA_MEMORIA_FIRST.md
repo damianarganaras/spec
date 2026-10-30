@@ -352,6 +352,25 @@ no 18.
 (`.gitignore:6`) y **no** es duplicación manual. Después quitar `design.md` de
 `agents/spec-writer.md:45` y escribir el guard que lo prohíbe.
 
+### 4.5b PR-4b — CH-02c: backfill de decisiones desde design.md archivados (opción B)
+
+**Objetivo.** Recuperar las decisiones durables que quedaron en los `design.md` archivados y
+llevarlas a memoria, sin reabrir el flujo retirado ni tocar los archivos históricos. Se ejecuta
+**después** de archivar PR-4/CH-02b, cuando el archive ya contiene los `design.md` definitivos.
+
+**Alcance (opción B).**
+
+- **Sólo lee** los **27** `design.md` bajo `aspec/changes/archive/`. No los borra, no los migra y
+  **no los reescribe**: son registro histórico y quedan exactamente como están.
+- Escribe en memoria con `recordDecision`, cada entrada con `refs: change:<slug>` del change
+  archivado. **Requiere el OK explícito del usuario** para las escrituras de memoria: nunca
+  backfillea de forma automática.
+- Sólo captura las decisiones que pasan el **test de candidatos de §5.7**. Si el `design.md`
+  original no tenía `Descartado` ni `Justificación`, esos campos **no se fabrican**: se registra
+  únicamente lo que el original dice.
+- `context.md` es un **no-problema**: **0** existen en el archive, así que no hay nada que
+  backfillear por ese lado.
+
 ### 4.6 PR-5 — `CH-03`: conformidad sin delta + test
 
 **Objetivo.** Distinguir dos caminos:

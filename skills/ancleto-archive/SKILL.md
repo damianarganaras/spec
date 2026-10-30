@@ -62,7 +62,7 @@ Run this while the change is still in place, before moving anything. The shape o
 Create `aspec/changes/archive/` if absent. Target: `YYYY-MM-DD-<change-name>` (current date).
 
 - **Target exists**: fail, suggesting a rename or different date.
-- **Otherwise**: delete scaffold-only files (e.g., `aspec/changes/<name>/context.md` — never preserved), then move the change directory to `aspec/changes/archive/YYYY-MM-DD-<name>/`.
+- **Otherwise**: move the change directory to `aspec/changes/archive/YYYY-MM-DD-<name>/` without modifying it.
 
 ### 6. Promote approved decisions into persistent memory
 
@@ -92,7 +92,7 @@ If warnings applied (incomplete tasks, skipped sync, stale seed), show an "Archi
 - Don't block archiving on warnings — inform and confirm.
 - Seed freshness follows the `LOCKED: seed-freshness` rule in `AGENTS.md`.
 - If the target archive directory exists, fail instead of overwriting.
-- Delete scaffold-only files (`context.md`) before moving; never archive them.
+- Move the change directory without modifying it; never delete files inside it before or after the move.
 - Promotion only uses `recordDecision`; it never invents a `memory_key`, never derives one from the change, and never promotes a `rule` from `## Decisiones`.
 - Zero candidates ⇒ zero writes and zero `@memory-keeper` spawn.
 - `recordRule`/`recordDecision` accept only `memory_key`, `content`, `justification`, `scope`. Never send `source`, `confidence`, `status` or `id` — the runtime manages those.

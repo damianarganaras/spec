@@ -26,12 +26,11 @@ Read `aspec/changes/<name>/` and check files in this fixed dependency order:
 
 1. `proposal.md` — what & why
 2. `specs/` — delta requirements (at least one `spec.md` inside; skip only if the change specifies no behavior)
-3. `design.md` — how
-4. `tasks.md` — implementation checklist
+3. `tasks.md` — implementation checklist
 
 The first absent item (or, for `specs/`, one with no `spec.md`) is next.
 
-- **All four present**: congratulate the user, show status, suggest "All artifacts created! You can now implement this change with `ancleto-apply` or archive it with `ancleto-archive`." STOP.
+- **All three present**: congratulate the user, show status, suggest "All artifacts created! You can now implement this change with `ancleto-apply` or archive it with `ancleto-archive`." STOP.
 - **Change directory missing**: report it and stop.
 
 ### 2. Load context files
@@ -44,18 +43,17 @@ Draft the missing artifact using the same templates as `ancleto-propose`:
 
 - **proposal.md** (first): problem statement, proposed change, scope, risks, and `## Decisiones` — one entry per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`, or the single-line form `decisión | alternativa descartada | por qué | fuente/evidencia`; reuse the shape defined in the Decisions section of `@spec-writer`. With Work Item context, use its title/description as the problem statement, acceptance criteria as the requirements basis, and include `## Related Work Item`: `**#{id}** — {title} ({type}) · Project: {project}`.
 - **specs/\<capability\>/spec.md**: one spec file per capability touched, with `## ADDED Requirements` / `#### Scenario:` blocks in WHEN/THEN form.
-- **design.md**: approach, architecture, validation.
 - **tasks.md**: phased `- [ ]` checklist.
 
 Verify the file exists on disk.
 
 ### 4. Show progress and stop
 
-Report which artifact was created, progress (N/4), and what is unlocked next, then: "Run `ancleto-continue` to create the next artifact." Create ONE artifact per invocation, then STOP.
+Report which artifact was created, progress (N/3), and what is unlocked next, then: "Run `ancleto-continue` to create the next artifact." Create ONE artifact per invocation, then STOP.
 
 ## Guardrails
 
-- Create ONE artifact per invocation, in order (proposal → specs → design → tasks); never skip.
+- Create ONE artifact per invocation, in order (proposal → specs → tasks); never skip.
 - Read existing artifacts before creating the next.
 - If context is unclear, ask before creating.
 - Verify the artifact exists before reporting progress.

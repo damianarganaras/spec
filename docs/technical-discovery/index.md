@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-10-30T15:53:12Z
-pluginVersion: 0.16.2
+generatedAt: 2026-10-30T19:54:29Z
+pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
 
@@ -11,10 +11,10 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto` / alias `aspec`).
 No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base: pack Repomix
-(`--compress`, tier resuelto `minimo`, 699 archivos, ~17.319 tokens), `package.json`
-(`0.16.2`), tag anotado `v0.16.2` en `main`, HEAD `90dba0d` en `development` (1 commit por
-delante del commit de release `6f80293`), `.discovery-map.json` (`total_files: 711`) y lectura
-puntual de los archivos citados en cada documento, incluidos `agents/`, `skills/` y `aspec/`
+(`--compress`, tier resuelto `minimo`, 703 archivos, ~17.319 tokens), `package.json`
+(`0.17.0`), tag anotado `v0.17.0` en `main` (`cdc18d5`), HEAD `a506b54` en `development`
+(retiro de `design.md`/`context.md`, commiteado), `.discovery-map.json` (`total_files: 715`) y lectura puntual de
+los archivos citados en cada documento, incluidos `agents/`, `skills/`, `docs/` y `aspec/`
 (fuera del pack por el tier).
 
 ## Ruteo por pregunta
@@ -37,6 +37,7 @@ puntual de los archivos citados en cada documento, incluidos `agents/`, `skills/
 | Pipeline de throughput del ciclo SDD (paralelización `@documenter` ∥ `@memory-keeper`, Validation Ledger, memoria en un paso) | `decisions.md`, `units/cli-install.md` |
 | **Checkpoint de contrato** tras `@spec-writer` (siete campos, <1 pantalla, sin enumerar documentos; la aprobación autoriza solo implementar; enmienda ante cambio de alcance/riesgo/arquitectura) | `decisions.md`, `overview.md` |
 | **Sección `## Decisiones` del proposal** (seis campos o línea equivalente, shape único en `@spec-writer`, se completa también durante la implementación) | `decisions.md`, `units/_map.md` |
+| **Set de artifacts de un change** (solo `proposal.md`, `tasks.md`, `specs/`; `design.md`/`context.md` retirados sin sucesor; legacy opcional, nunca precondición; archivar mueve sin borrar) | `decisions.md`, `overview.md` |
 | Working-context día-cero, refresh on-write (MCP/CLI), staleness advisory y **render de reglas sin el bloque `refs:`** | `units/memory-engine.md`, `overview.md` |
 | **Arranque de sesión del orquestador**: intake de sesión (changes activos + `git status --short` delegado), techo de lecturas (3 archivos + exenciones), allowlist de `bash` de `@technical-discovery` | `decisions.md`, `overview.md`, `units/_map.md` |
 | **`<ContextOverflowWarning>`**: qué emite, quién lo consume y qué guía residual sigue en `PRODUCT.md`/templates | `units/memory-engine.md`, `decisions.md` |
@@ -52,10 +53,12 @@ puntual de los archivos citados en cada documento, incluidos `agents/`, `skills/
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local,
   entorno de máquina derivado y control de costo por tier. **8 hosts**: opencode (default),
   claude, vscode, antigravity, cursor, roo, copilot y commandcode.
-- **Versión observada**: `0.16.2` (`package.json`); tag **anotado** `v0.16.2` en `main`
-  (`6e90903`); HEAD `90dba0d` (`feat(memory): require refs on new nodes and promote decisions
-  on archive`) está en `development`, 1 commit por delante del commit de release `6f80293`.
-  Árbol de trabajo limpio en esta regeneración.
+- **Versión observada**: `0.17.0` (`package.json`); tag **anotado** `v0.17.0` en `main`
+  (`cdc18d5`, "Merge development into main for v0.17.0"); HEAD `a506b54`
+  (`feat(change-artifacts): retirar design.md y context.md del flujo nuevo`) en `development`.
+  Árbol de trabajo **limpio** salvo los artefactos derivados del propio discovery
+  (`.discovery-map.json` y `docs/technical-discovery/.discovery-state.json`); el retiro está
+  commiteado y archivado, pero **no** publicado.
 - **Tier resuelto**: `minimo` vía `.opencode/.ancleto-tier`; decide modelos de los agents y el
   pack (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, **sin token budget**; solo
   `gratis` fija 50k).
@@ -117,12 +120,18 @@ puntual de los archivos citados en cada documento, incluidos `agents/`, `skills/
   `opencode.json`, `package.json`.
 - **`AGENTS.md`**: **cuatro** bloques `LOCKED` de reglas compartidas (`validation-commands`,
   `memory-boundary`, `artifacts-language`, `seed-freshness`) + `test-block`.
+- **Set de artifacts**: el flujo nuevo produce **tres** artifacts (`proposal.md`, `tasks.md`,
+  `specs/`); `design.md` y `context.md` se retiraron **sin sucesor** y una decisión durable va a
+  `proposal.md ## Decisiones`. El retiro ya está mergeado en `aspec/specs/artifact-update` y
+  `aspec/specs/prompt-contracts`; los changes anteriores que sí tuvieron `design.md` lo
+  conservan intacto en el archive. Detalle: `decisions.md` (regla 47).
 - **Ciclo SDD**: 16 comandos `/cleto-*` y 21 skills nativas; `aspec/` tiene **19 specs fuente**,
-  **1 change activo** (`ancleto-vscode-extension`) y **31 archivados** (el último,
-  `2026-10-30-mem-03-promocion-decisiones-refs`).
+  **1 change activo** (`ancleto-vscode-extension`) y **32 archivados** (el último,
+  `2026-10-30-retire-design-and-context-artifacts`, cuyo delta ya está mergeado en
+  `aspec/specs/`).
 - **Este checkout**: `.ancletorc` y `.opencode/` existen (gitignored, no versionados).
-  Persiste `.ancleto/memory.db` y **`.ancleto/machine-env.md`** (generado el 2026-10-29 con
-  `ancleto: 0.16.2`).
+  Persiste `.ancleto/memory.db` y **`.ancleto/machine-env.md`** (generado el 2026-10-30 con
+  `ancleto: 0.17.0`).
 - **Rama de trabajo**: `development`; `main` declarada protegida en `AGENTS.md` (no se verificó
   protección real en el remoto).
 - **Sin backlog raíz**: `BACKLOG.md` no existe; las deudas que el seed anterior citaba por

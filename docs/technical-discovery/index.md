@@ -2,7 +2,7 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-10-30T19:34:51Z
+generatedAt: 2026-10-30T19:54:29Z
 pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
@@ -12,8 +12,8 @@ skillVersion: '2.3'
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto` / alias `aspec`).
 No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base: pack Repomix
 (`--compress`, tier resuelto `minimo`, 703 archivos, ~17.319 tokens), `package.json`
-(`0.17.0`), tag anotado `v0.17.0` en `main` (`cdc18d5`), HEAD `b283ff2` en `development`
-(`chore(release): v0.17.0`), `.discovery-map.json` (`total_files: 715`) y lectura puntual de
+(`0.17.0`), tag anotado `v0.17.0` en `main` (`cdc18d5`), HEAD `a506b54` en `development`
+(retiro de `design.md`/`context.md`, commiteado), `.discovery-map.json` (`total_files: 715`) y lectura puntual de
 los archivos citados en cada documento, incluidos `agents/`, `skills/`, `docs/` y `aspec/`
 (fuera del pack por el tier).
 
@@ -54,9 +54,11 @@ los archivos citados en cada documento, incluidos `agents/`, `skills/`, `docs/` 
   entorno de máquina derivado y control de costo por tier. **8 hosts**: opencode (default),
   claude, vscode, antigravity, cursor, roo, copilot y commandcode.
 - **Versión observada**: `0.17.0` (`package.json`); tag **anotado** `v0.17.0` en `main`
-  (`cdc18d5`, "Merge development into main for v0.17.0"); HEAD `b283ff2`
-  (`chore(release): v0.17.0`) en `development`. Árbol de trabajo **sucio**: el retiro de
-  `design.md`/`context.md` está implementado pero **sin commitear**.
+  (`cdc18d5`, "Merge development into main for v0.17.0"); HEAD `a506b54`
+  (`feat(change-artifacts): retirar design.md y context.md del flujo nuevo`) en `development`.
+  Árbol de trabajo **limpio** salvo los artefactos derivados del propio discovery
+  (`.discovery-map.json` y `docs/technical-discovery/.discovery-state.json`); el retiro está
+  commiteado y archivado, pero **no** publicado.
 - **Tier resuelto**: `minimo` vía `.opencode/.ancleto-tier`; decide modelos de los agents y el
   pack (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, **sin token budget**; solo
   `gratis` fija 50k).
@@ -120,11 +122,13 @@ los archivos citados en cada documento, incluidos `agents/`, `skills/`, `docs/` 
   `memory-boundary`, `artifacts-language`, `seed-freshness`) + `test-block`.
 - **Set de artifacts**: el flujo nuevo produce **tres** artifacts (`proposal.md`, `tasks.md`,
   `specs/`); `design.md` y `context.md` se retiraron **sin sucesor** y una decisión durable va a
-  `proposal.md ## Decisiones`. Changes archivados conservan sus `design.md`/`context.md` legacy
-  intactos. Detalle: `decisions.md` (regla 47).
+  `proposal.md ## Decisiones`. El retiro ya está mergeado en `aspec/specs/artifact-update` y
+  `aspec/specs/prompt-contracts`; los changes anteriores que sí tuvieron `design.md` lo
+  conservan intacto en el archive. Detalle: `decisions.md` (regla 47).
 - **Ciclo SDD**: 16 comandos `/cleto-*` y 21 skills nativas; `aspec/` tiene **19 specs fuente**,
-  **2 changes activos** (`ancleto-vscode-extension` y `retire-design-and-context-artifacts`) y
-  **31 archivados** (el último, `2026-10-30-mem-03-promocion-decisiones-refs`).
+  **1 change activo** (`ancleto-vscode-extension`) y **32 archivados** (el último,
+  `2026-10-30-retire-design-and-context-artifacts`, cuyo delta ya está mergeado en
+  `aspec/specs/`).
 - **Este checkout**: `.ancletorc` y `.opencode/` existen (gitignored, no versionados).
   Persiste `.ancleto/memory.db` y **`.ancleto/machine-env.md`** (generado el 2026-10-30 con
   `ancleto: 0.17.0`).

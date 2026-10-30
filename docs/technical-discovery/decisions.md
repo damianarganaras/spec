@@ -2,7 +2,7 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-30T19:34:51Z
+generatedAt: 2026-10-30T19:54:29Z
 pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
@@ -185,10 +185,8 @@ skillVersion: '2.3'
       `design.md` **no** se crea ni se actualiza. Detecta drift entre delta specs y specs
       principales y pregunta el modo de escritura (in-place vs `rev2`). Evidencia:
       `skills/ancleto-update/SKILL.md` (`### 4`), `docs/skill-ancleto-update.md`,
-      `aspec/changes/retire-design-and-context-artifacts/specs/artifact-update/spec.md`.
-      **Conflicto registrado**: el spec fuente `aspec/specs/artifact-update/spec.md` (líneas 16 y 33)
-      todavía mapea "decisión de diseño → `design.md`" porque el delta del retiro **aún no se
-      mergeó**; ver `unknowns.md`.
+      `aspec/specs/artifact-update/spec.md` (fuente de verdad ya mergeada: "decisión de diseño →
+      `proposal.md ## Decisiones`"; `design.md` nunca se crea ni se actualiza).
 25. **Affected-set determinístico por grafo de imports (`throughput-pipeline`).** El conjunto
       afectado es la **clausura transitiva de dependientes** sobre el grafo de imports, sembrada
       por los `task-owned files` e incluyendo siempre los archivos tocados; es **determinístico**,
@@ -440,7 +438,7 @@ skillVersion: '2.3'
       (`package.json:10-17`). Es configuración del checkout, no contrato del producto.
 
 47. **Retiro de `design.md` y `context.md` sin artifact sucesor
-      (`retire-design-and-context-artifacts`, change **activo**).** El flujo nuevo produce
+      (`retire-design-and-context-artifacts`, archivado el 2026-10-30).** El flujo nuevo produce
       **solo** `proposal.md`, `tasks.md` y `specs/`; ningún generador emite `design.md` ni
       `context.md`. Una decisión durable se registra en `proposal.md ## Decisiones` (shape en
       `agents/spec-writer.md`). Los consumidores (`@coder`, `@tester`, `@reviewer`, `@documenter`,
@@ -449,14 +447,18 @@ skillVersion: '2.3'
       completitud. `ancleto-verify` declara la frontera de completitud en `tasks.md` + `specs/`.
       El archive (`ancleto-archive`, `ancleto-onboard`, `ancleto-bulk-archive`) **mueve el
       directorio sin modificarlo**: ya no borra `context.md`, y los artifacts de changes
-      archivados no se eliminan, migran ni reescriben. Evidencia:
-      `aspec/changes/retire-design-and-context-artifacts/proposal.md` (`## Decisiones`) y
-      `specs/prompt-contracts/spec.md`; `agents/spec-writer.md`, `agents/{orchestrator,coder,tester,reviewer,documenter}.md`,
+      archivados no se eliminan, migran ni reescriben. El delta ya está mergeado en el spec
+      fuente: `aspec/specs/artifact-update/spec.md` mapea diseño → `proposal.md ## Decisiones` y
+      `aspec/specs/prompt-contracts/spec.md` incorpora el requirement "Retiro de `design.md` y
+      `context.md` sin artifact sucesor" (4 escenarios). Evidencia:
+      `aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/proposal.md`
+      (`## Decisiones`), `aspec/specs/{artifact-update,prompt-contracts}/spec.md`,
+      `agents/spec-writer.md`, `agents/{orchestrator,coder,tester,reviewer,documenter}.md`,
       `skills/ancleto-{apply,verify,archive,bulk-archive,continue,update,workflow,propose,ff,new,onboard,explore,upgrade}/SKILL.md`,
       `skills/ancleto-upgrade/references/templates.md`, `docs/skill-ancleto-update.md`,
       `docs/skill-ancleto-upgrade.md`, `README.md`; guard único `test/content-guards.test.js`.
-      **Estado del árbol**: implementado en el working tree pero **sin commitear**; el change
-      tampoco está archivado.
+      **Estado**: commiteado en `development` (`a506b54`) y archivado; **no** publicado (no hubo
+      bump ni entrada en `CHANGELOG.md`).
 
 ## Seed incremental (contrato del discovery)
 
@@ -465,12 +467,11 @@ skillVersion: '2.3'
   - `minor` → cambios no materiales (el agente trabaja y lo anota, no ofrece regenerar).
   - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
     raíz nuevo (o un archivo material como `package.json`).
-- En esta corrida el reporte fue `STALE` / `impact: material`, con
-  `materialReasons: ["archivo material modificado: package.json"]` y `changedAreas` que incluye
-  `agents`, `skills`, `docs`, `README.md`, `test` y `aspec`. El bump `0.16.2`→`0.17.0` explica
-  la clasificación material (detección por lista de archivos, no por contrato); el cambio de
-  comportamiento real de esta corrida es el **retiro de `design.md`/`context.md`**
-  (`retire-design-and-context-artifacts`, activo), más el release `0.17.0` de MEM-03.
+- En esta corrida el reporte fue `STALE` / `impact: minor`: 11 `affectedDocs`, `changedAreas`
+  `[".ancleto", "aspec"]` y `materialReasons: []`. La causa es el archive del retiro de
+  `design.md`/`context.md` (que sacó su carpeta de `aspec/changes/` y movió el delta a
+  `aspec/specs/`), no un cambio de runtime; la regeneración se hizo porque el seed anterior
+  afirmaba que ese delta seguía sin mergear.
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **solo** esos
   documentos. El mapeo vive en `seed-map.json`; sin ese archivo la regeneración es completa.
 - **`affectedDocs` (seed) ≠ `affected-set` (change).** `ancleto discovery --check` devuelve
@@ -496,13 +497,13 @@ skillVersion: '2.3'
 
 ## Riesgos, deuda y acoplamiento
 
-- **MEM-03 ya está publicado como `0.17.0`; el retiro de `design.md`/`context.md` no.** El
-  release `b283ff2` (`chore(release): v0.17.0`) y el tag **anotado** `v0.17.0` en `main`
-  (`cdc18d5`, "Merge development into main for v0.17.0") cubren MEM-03 y `CHANGELOG.md` lo
-  detalla. En cambio, las modificaciones del retiro (`agents/**`, `skills/**`, `docs/skill-*.md`,
-  `README.md`, `test/content-guards.test.js`) están **sin commitear** en `development` y el
-  change sigue activo: el seed describe el working tree, no el artefacto publicado. Evidencia:
-  `git status --short`, `git show --stat HEAD`, `git tag`, `CHANGELOG.md`.
+- **MEM-03 publicado como `0.17.0`; el retiro de `design.md`/`context.md` está commiteado pero
+  no publicado.** El release `b283ff2` (`chore(release): v0.17.0`) y el tag **anotado**
+  `v0.17.0` en `main` (`cdc18d5`, "Merge development into main for v0.17.0") cubren MEM-03 y
+  `CHANGELOG.md` lo detalla. El retiro entró después, en `a506b54` sobre `development`, y el
+  change quedó archivado sin bump de versión ni entrada en `CHANGELOG.md`: el paquete publicado
+  sigue siendo el de `0.17.0` sin el retiro. Evidencia: `git log`, `git tag`, `CHANGELOG.md`,
+  `package.json`.
 - **Pack comprimido y sesgado a código.** El tier resuelto (`minimo`) ignora `test/**`,
   `docs/**` y `**/*.md`; Repomix además respeta `.gitignore` (`.opencode/`, `.ancletorc`,
   `.ancleto/`, `/documentation`). Por eso `agents/`, `commands/`, `skills/`, `templates/`,
@@ -525,14 +526,14 @@ skillVersion: '2.3'
   son obligatorios, la aprobación autoriza solo implementar, archive y merge siguen separados y
   los guards de `test/content-guards.test.js` lo anclan por comportamiento. Evidencia:
   `agents/orchestrator.md`, `aspec/changes/archive/2026-10-29-decisiones-y-contrato-checkpoint/`.
-- **Retiro de artifacts: spec fuente y código divergen hasta el archive.** El delta del change
-  activo (`specs/artifact-update`, `specs/prompt-contracts`) y los agents/skills ya implementan el
-  retiro, pero el **spec fuente** `aspec/specs/artifact-update/spec.md` conserva la clasificación
-  vieja (`decisión de diseño → design.md`) y `aspec/specs/prompt-contracts/spec.md` aún no tiene el
-  Requirement de retiro. Mientras el change no se archive/mergee, cualquier lectura del spec fuente
-  contradice al código. Mitigación: tratar el delta del change como contrato vigente y mergear
-  antes de prometer el estado publicado. Evidencia:
-  `aspec/changes/retire-design-and-context-artifacts/specs/**`, `aspec/specs/artifact-update/spec.md`.
+- **Retiro de artifacts: spec fuente y código ya convergen.** Con el archive del 2026-10-30 el
+  delta se mergeó: `aspec/specs/artifact-update/spec.md` clasifica la decisión de diseño hacia
+  `proposal.md ## Decisiones` y declara `design.md` como nunca creado ni actualizado, y
+  `aspec/specs/prompt-contracts/spec.md` incorpora el requirement de retiro. El riesgo residual
+  es de **distribución**, no de contrato: el paquete npm `0.17.0` publicado no incluye el retiro;
+  quien instale desde el registry obtiene el flujo anterior hasta el próximo release. Evidencia:
+  `aspec/specs/artifact-update/spec.md`, `aspec/specs/prompt-contracts/spec.md`,
+  `aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/`.
 - **Guard del retiro acotado por sección, no global.** `test/content-guards.test.js` prohíbe
   `design.md`/`context.md` solo en las superficies y slices que declaran el set/orden de artifacts,
   y exige un control positivo de que la lectura legacy sigue viva en `continue`, `update`, `coder`,
@@ -657,9 +658,9 @@ skillVersion: '2.3'
   (CRLF, espacios finales, salto final); cambios cosméticos mayores podrían disparar
   `desactualizado` aunque el contenido sea equivalente. Riesgo aceptado: se prefiere reportar.
 - **Versión y publicación.** `package.json` marca `0.17.0`; el tag `v0.17.0` es **anotado** y
-  vive en `main` (`cdc18d5`, merge del release); `development` HEAD `b283ff2` es el commit de
-  release. El retiro de `design.md`/`context.md` sigue **sin commitear ni publicar**. Evidencia:
-  `package.json`, `git tag`, `git log`, `git status --short`.
+  vive en `main` (`cdc18d5`, merge del release); `development` HEAD `a506b54` es el commit del
+  retiro de `design.md`/`context.md`, un commit por delante de `main` y **sin publicar**.
+  Evidencia: `package.json`, `git tag`, `git log`, `git status --short`.
 - **Docs de producto desalineados.** `PRODUCT.md` declara 12 commands y 18 skills (hoy 16 y 21),
   no menciona `machine-env`, `stats failures`, `memory snapshot`, `memory merge` ni el retiro, y
   conserva la guía residual de `searchMemory`; `README.md` sigue describiendo `memory doctor` como
@@ -678,8 +679,9 @@ skillVersion: '2.3'
   fallos; (h) intake de sesión, techo de lecturas y aviso de overflow accionable; (i) PR-1
   memoria-first (snapshot, doctor read-only, merge), publicado en `0.16.0`; (j) PR-2 (checkpoint
   de contrato y `## Decisiones`), publicado en `0.16.2`; (k) MEM-03 (refs obligatorias y
-  promoción al archivar), publicado en `0.17.0`. **Pendiente de publicar**: `retire-design-and-context-artifacts`
-  (activo, sin commitear). Evidencia: `CHANGELOG.md`, `aspec/changes/`,
+  promoción al archivar), publicado en `0.17.0`; (l) retiro de `design.md`/`context.md`,
+  commiteado en `development` (`a506b54`) y archivado, **pendiente de publicar** (sin bump ni
+  entrada en `CHANGELOG.md`). Evidencia: `CHANGELOG.md`, `aspec/changes/`,
   `package.json`, `git log`.
 
 ## Decisiones registradas en memoria del repo

@@ -2,7 +2,7 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-10-30T19:34:51Z
+generatedAt: 2026-10-30T19:54:29Z
 pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---

@@ -4,7 +4,7 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y el presupuesto por tier"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js"]
-generatedAt: 2026-10-30T19:34:51Z
+generatedAt: 2026-10-30T19:54:29Z
 pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
@@ -112,10 +112,10 @@ objetivo de verificación del tester.
    clasifica `impact`: `material` si cambió un archivo material (`package.json`, configs de
    runtime, `index.html`, `src/main|index.*`), apareció/desapareció un área raíz o un archivo
    material; si no, `minor`; si no hay cambios atribuibles, `none`. **La detección es por
-   lista de archivos, no por contrato.** En esta corrida el reporte fue `material` con
-   `materialReasons: ["archivo material modificado: package.json"]` y 11 `affectedDocs`; la
-   causa directa es el bump `0.16.2`→`0.17.0`, mientras que el cambio de comportamiento
-   (retiro de `design.md`/`context.md`) vive en `agents/**`, `skills/**`, `docs/**` y `test/**`.
+   lista de archivos, no por contrato.** En esta corrida el reporte fue `STALE` / `minor`
+   (`changedAreas: [".ancleto", "aspec"]`, `materialReasons: []`, 11 `affectedDocs`); la causa es
+   el archive del retiro de `design.md`/`context.md`, que movió su carpeta de `aspec/changes/` y
+   mergeó el delta en `aspec/specs/`.
 4. `readSeedMap` + `affectedDocsFor` cruzan áreas cambiadas con `seed-map.json` para acotar la
    regeneración a `affectedDocs` (documentos del **seed**; no confundir con el `affected-set`
    del change). Sin `seed-map.json` la regeneración es completa.

@@ -2,7 +2,7 @@
 node: unknowns
 kind: unknowns
 read_when: "límites de evidencia: qué no se pudo verificar en este seed"
-generatedAt: 2026-10-30T19:34:51Z
+generatedAt: 2026-10-30T19:54:29Z
 pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
@@ -24,18 +24,20 @@ skillVersion: '2.3'
   de `aspec/` se describen por lectura puntual; el próximo `--check` puede no detectar cambios
   dentro de esas áreas si el pack sigue ignorándolas.
 - **Retiro de `design.md`/`context.md`: verificado por lectura, fuera del pack.** El cambio de
-  comportamiento de esta corrida vive **enteramente** en superficies que el tier `minimo` excluye:
-  `agents/*.md` (6), `skills/**` (14 archivos), `docs/skill-ancleto-{update,upgrade}.md`,
-  `README.md` y `test/content-guards.test.js`. Se verificó con `git diff` contra `b283ff2` y por
-  lectura del change activo (`proposal.md` + `specs/artifact-update` + `specs/prompt-contracts`).
-  **No** se ejecutaron `npm test` ni `npm run lint`; los guards nuevos (incluidas las mutaciones
-  scratch) se describen por lectura. El cambio **no** está commiteado ni archivado.
-- **Conflicto spec fuente vs implementación (retiro).** `aspec/specs/artifact-update/spec.md`
-  (líneas 16 y 33) todavía clasifica "decisión de diseño → `design.md`"; el delta del change activo
-  dice "→ `proposal.md ## Decisiones`" y el código ya lo implementa. `aspec/specs/prompt-contracts/spec.md`
-  aún no contiene el Requirement de retiro (solo una mención de que el checkpoint no depende de
-  `design.md`). Mientras no se archive/mergee, el seed marca esta divergencia como **conflictiva**
-  y cita el delta como contrato vigente. No se editó ningún spec (fuera de alcance del seed).
+  comportamiento vive **enteramente** en superficies que el tier `minimo` excluye:
+  `agents/*.md`, `skills/**`, `docs/skill-ancleto-{update,upgrade}.md`, `README.md` y
+  `test/content-guards.test.js`. Se verificó por lectura del change ya archivado
+  (`aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/`) y de los specs
+  fuente mergeados (`aspec/specs/artifact-update/spec.md`, `aspec/specs/prompt-contracts/spec.md`),
+  más `git log` (`a506b54`). **No** se ejecutaron `npm test` ni `npm run lint`; los guards se
+  describen por lectura. El cambio está **commiteado y archivado**.
+- **Retiro mergeado: ya no hay conflicto spec fuente vs implementación.** El spec fuente
+  `aspec/specs/artifact-update/spec.md` clasifica "decisión de diseño → `proposal.md ##
+  Decisiones`" y declara que `design.md` NO se crea ni actualiza; `aspec/specs/prompt-contracts/
+  spec.md` contiene el requirement "Retiro de `design.md` y `context.md` sin artifact sucesor"
+  (4 escenarios: generadores, consumidores, lectura legacy y archive). Queda como **desconocido**
+  si el paquete npm publicado (`0.17.0`) ya incluye el retiro: no se consultó el registry en esta
+  corrida y `package.json` no cambió de versión.
 - **`content-guards` acota el predicado por sección.** Los guards negativos no son un grep global:
   `RETIRED_ARTIFACT_GENERATORS`, `NO_DESIGN_MD_SLICERS` y `NO_CONTEXT_MD_SURFACES` cubren solo las
   secciones que declaran el set/orden de artifacts, y `LEGACY_READ_SLICES` exige el control
@@ -61,10 +63,12 @@ skillVersion: '2.3'
   del reporte y del valor de `.opencode/.ancleto-tier`.
 - **Versión y tag.** `package.json` marca **`0.17.0`**; el tag anotado `v0.17.0` vive en `main`
   (`cdc18d5`, "Merge development into main for v0.17.0") y **no es ancestro** de `development`;
-  `git describe --tags` resuelve `v0.16.0-9-gb283ff2`. `development` HEAD `b283ff2`
-  (`chore(release): v0.17.0`) es el padre del commit de merge tagueado. El **retiro** de
-  `design.md`/`context.md` está en el working tree, **no** en HEAD ni en el tag. No se verificó si
-  el Release de GitHub quedó asociado al tag.
+  `git describe --tags` resuelve `v0.16.0-10-ga506b54`. `development` HEAD `a506b54`
+  ("retirar design.md y context.md del flujo nuevo") es hijo de `b283ff2`
+  (`chore(release): v0.17.0`), el commit de
+  release que sí está en el tag. El retiro está **commiteado en `development`**, pero **no** en
+  `main`, en el tag ni en el paquete publicado. No se verificó si el Release de GitHub quedó
+  asociado al tag `v0.17.0`.
 - **MEM-03 verificado por lectura, no por ejecución.** La gramática, la resolución y el rechazo
   se leyeron en `src/core/memory/engine.js` (`parseRefsBlock`, `resolveSpecRef`,
   `resolveChangeRef`, `resolvePathRef`, `validateRefsForWrite`, `recordNode`) y en
@@ -149,14 +153,15 @@ skillVersion: '2.3'
   `2026-10-29-decisiones-y-contrato-checkpoint` y
   `2026-10-30-mem-03-promocion-decisiones-refs` están en `aspec/changes/archive/`; sus specs
   fuente viven en `aspec/specs/`.
-- **PR-1 sin `design.md`.** El proposal declara explícitamente que el enfoque técnico vive en el
-  proposal y en el delta de `memory-ops`; no hay `design.md` que leer.
+- **PR-1 sin `design.md`.** El proposal declara explícitamente que el enfoque técnico vive en
+  el proposal y en el delta de `memory-ops`; ese change archivado
+  (`2026-10-28-reingenieria-memoria-first`) nunca tuvo `design.md`. Los changes anteriores al
+  retiro que sí lo tuvieron conservan su archivo intacto en el archive.
 - **`optimizacion-de-tokens.md` es análisis, no contrato.** Mide costo (su encabezado habla de
   tier `normal`; hoy el checkout resuelve `minimo`) y deja la promesa "optimizador de tokens"
   como decisión pendiente; sus cifras no se re-verificaron.
-- **`aspec/`**: 19 specs fuente + **2 changes activos** (`ancleto-vscode-extension` y
-  `retire-design-and-context-artifacts`) + 31 archivados (el último,
-  `2026-10-30-mem-03-promocion-decisiones-refs`). No se analizó el
+- **`aspec/`**: 19 specs fuente + **1 change activo** (`ancleto-vscode-extension`) + 32
+  archivados (el último, `2026-10-30-retire-design-and-context-artifacts`). No se analizó el
   contenido completo de cada spec más allá de las capabilities afectadas (`memory-engine`,
   `memory-ops`, `machine-environment`, `session-failure-report`, `prompt-contracts`, `review`,
   `agent-install-routing`).
@@ -171,12 +176,12 @@ skillVersion: '2.3'
   promoción al archivar, y conserva la guía residual de `searchMemory`; `README.md` sigue
   describiendo `memory doctor` como "reconstruye el índice FTS5 y fusiona el WAL", que ya no es
   el comportamiento por defecto (aunque su sección de idioma ya no incluye `design.md`).
-  `CHANGELOG.md` llega a `0.17.0` e incluye MEM-03, pero **no** menciona el retiro (uncommitted).
-  El seed refleja el estado observado; no se editaron esos archivos.
+  `CHANGELOG.md` llega a `0.17.0` e incluye MEM-03, pero **no** menciona el retiro (commiteado
+  sin release). El seed refleja el estado observado; no se editaron esos archivos.
 - **Validación final del seed**: `ancleto discovery --check` es state-only. En esta corrida
   devolvió `state: READY`, `impact: none`, `recommendedAction: continue`, con `missingDocs: []` y
   `affectedDocs: []`. Confirma que los documentos requeridos existen y que las fuentes no
   cambiaron desde el pack; **no** valida la exactitud semántica de cada afirmación. El reporte
-  muestra `seedMapPresent: false` aunque `seed-map.json` existe y es JSON válido: el CLI solo
-  calcula ese campo en la rama `STALE` (`src/cli/index.js`, `checkDiscovery`), no es una ausencia
-  real.
+  puede mostrar `seedMapPresent: false` aunque `seed-map.json` existe y es JSON válido: el CLI
+  solo calcula ese campo en la rama `STALE` (`src/cli/index.js`, `checkDiscovery`), no es una
+  ausencia real.

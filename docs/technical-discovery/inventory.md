@@ -2,7 +2,7 @@
 node: inventory
 kind: inventory
 read_when: "cobertura del repositorio por directorios y globs, y qué queda fuera"
-generatedAt: 2026-10-30T19:34:51Z
+generatedAt: 2026-10-30T19:54:29Z
 pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
@@ -10,7 +10,7 @@ skillVersion: '2.3'
 # Inventario (orientación)
 
 Cobertura por directorio/glob, no auditoría archivo por archivo. Conteos de
-`.discovery-map.json` (`total_files: 715`, `last_updated: 2026-10-30T19:34:41.228Z`;
+`.discovery-map.json` (`total_files: 715`, `last_updated: 2026-10-30T19:49:56.875Z`;
 `tree_summary` por directorio de primer nivel).
 
 | Área | Contenido | Archivos |
@@ -22,7 +22,7 @@ Cobertura por directorio/glob, no auditoría archivo por archivo. Conteos de
 | `skills/*/SKILL.md` (+ references) | 21 directorios de skills (~35 archivos; incluye `ancleto-update`, `ancleto-review`, `ancleto-technical-discovery`, `ancleto-workflow`, `triage-clarifier` y `ancleto-archive` con el gate de promoción). Los generadores emiten `proposal`/`tasks`/`specs` (sin `design.md`/`context.md`); el archive mueve sin borrar. | 35 |
 | `templates/` | `AGENTS.md` (bloques `LOCKED` canónicos, incl. `validation-commands`) y `PRODUCT.md`; **sin** valores de máquina. | 2 |
 | `profiles/test/` | Overlay del perfil test: tester/reviewer ampliados, comandos `cleto-test-*`, `AGENTS.md` con bloque LOCKED. | 8 |
-| `aspec/` | `config.yaml` + `specs/` (**19 capacidades**, incl. `memory-ops`, `memory-engine`, `machine-environment`, `session-failure-report`) + **2 changes activos** (`ancleto-vscode-extension`, `retire-design-and-context-artifacts`) + `changes/archive/` (31, el último `2026-10-30-mem-03-promocion-decisiones-refs`). El delta del retiro **no** está mergeado en `specs/artifact-update` ni `specs/prompt-contracts`. | 160 |
+| `aspec/` | `config.yaml` + `specs/` (**19 capacidades**, incl. `memory-ops`, `memory-engine`, `machine-environment`, `session-failure-report`) + **1 change activo** (`ancleto-vscode-extension`) + `changes/archive/` (32, el último `2026-10-30-retire-design-and-context-artifacts`). El delta del retiro ya está **mergeado** en `specs/artifact-update` y `specs/prompt-contracts`. | 160 |
 | `test/**` | 15 archivos `*.test.js` (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`, `memory-engine`, `memory-fixtures`, `memory-pr1-contract`, `stats-failures`, `tier-models`, `working-context`) + `fixtures/{seed,golden}.json`. `content-guards` incorpora los guards negativos de `design.md`/`context.md` y los controles positivos de lectura legacy. | 17 |
 | `docs/**` | Documentación del framework + relevamiento (`.md`) + este seed; excluida del pack por el tier. | 21 |
 | `documentation/**` | Material legado `lnx-cli/` + guías; **gitignored**. El mapa lo cuenta porque recorre el disco, pero el pack lo excluye por `.gitignore`. | 340 |

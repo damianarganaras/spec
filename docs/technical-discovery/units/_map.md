@@ -2,7 +2,7 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-10-30T19:34:51Z
+generatedAt: 2026-10-30T19:54:29Z
 pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
@@ -49,8 +49,8 @@ skillVersion: '2.3'
 | Linter | Flat config ESLint con 4 reglas sobre `src/` y `test/`. | `eslint.config.js` | — |
 | **Checkpoint de contrato** | Tras `@spec-writer`, el orquestador presenta el contrato del cambio (intención, alcance, Requirement, riesgos, decisión de arquitectura si aplica, validación prevista, paths autorizados) en menos de una pantalla; la aprobación autoriza solo implementación y una enmienda es obligatoria si cambian alcance, riesgo o arquitectura. | `agents/orchestrator.md` | — |
 | **Decisiones del change** | `## Decisiones` en `proposal.md`: shape de seis campos (o línea equivalente) definido **una sola vez** por `@spec-writer`; los generadores del proposal emiten la sección, es el **destino canónico de una decisión de diseño** y se completa también durante la implementación. | `agents/spec-writer.md`, `skills/ancleto-{propose,ff,continue,new,onboard}/SKILL.md`, `skills/ancleto-upgrade/references/templates.md` | — |
-| **Retiro de `design.md`/`context.md`** | Change activo: el set nuevo es `proposal.md` + `tasks.md` + `specs/`; ningún generador emite los retirados; los consumidores los leen solo como legacy opcional; `verify` mide completitud contra `tasks.md` + `specs/`; el archive mueve el directorio sin modificarlo. El delta no está mergeado en `aspec/specs/`. | `aspec/changes/retire-design-and-context-artifacts/`, `agents/*.md`, `skills/**`, `test/content-guards.test.js` | — |
-| Specs del repo | Configuración aspec, **19 specs fuente** y changes (**2 activos**: `ancleto-vscode-extension` y `retire-design-and-context-artifacts`; + 31 archivados), incl. `machine-environment` (8 requirements / 53 scenarios), `session-failure-report`, `memory-ops` (13 requirements, PR-1) y `memory-engine` (refs fail-closed, resolución, rechazo de secretos, render sin `refs:` y promoción al archivar). El spec fuente `artifact-update` todavía mapea diseño → `design.md` (delta pendiente). | `aspec/config.yaml`, `aspec/specs/**`, `aspec/changes/**` | — |
+| **Retiro de `design.md`/`context.md`** | Archivado (2026-10-30): el set nuevo es `proposal.md` + `tasks.md` + `specs/`; ningún generador emite los retirados; los consumidores los leen solo como legacy opcional; `verify` mide completitud contra `tasks.md` + `specs/`; el archive mueve el directorio sin modificarlo. El delta ya está mergeado en `aspec/specs/`. | `aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/`, `agents/*.md`, `skills/**`, `aspec/specs/{artifact-update,prompt-contracts}/spec.md`, `test/content-guards.test.js` | — |
+| Specs del repo | Configuración aspec, **19 specs fuente** y changes (**1 activo**: `ancleto-vscode-extension`; + 32 archivados), incl. `machine-environment` (8 requirements / 53 scenarios), `session-failure-report`, `memory-ops` (13 requirements, PR-1) y `memory-engine` (refs fail-closed, resolución, rechazo de secretos, render sin `refs:` y promoción al archivar). El spec fuente `artifact-update` mapea diseño → `proposal.md ## Decisiones` y `prompt-contracts` contiene el requirement de retiro. | `aspec/config.yaml`, `aspec/specs/**`, `aspec/changes/**` | — |
 | Tests | Suite `node --test` (15 archivos; incluye `memory-fixtures`/`memory-pr1-contract`, `machine-env`, `stats-failures`, el assert del aviso de overflow en `memory-engine` y los guards de `content-guards`, con predicados negativos de `design.md`/`context.md` y controles positivos de lectura legacy) + fixtures `test/fixtures/{seed,golden}.json`. No re-ejecutada en esta regeneración. | `test/*.test.js` | — |
 | Análisis de tokens | Barrido de costo de tokens y matriz de decisión de "token-economy"; no runtime. | `optimizacion-de-tokens.md` | — |
 

@@ -21,7 +21,7 @@ covers:
   - promoción al archivar
   - permisos de shell por agente
 sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js"]
-generatedAt: 2026-10-30T19:34:51Z
+generatedAt: 2026-10-30T19:54:29Z
 pluginVersion: 0.17.0
 skillVersion: '2.3'
 ---
@@ -105,7 +105,9 @@ skill y en los agentes, y escribe a través del MCP/engine:
 El paso de archive **mueve el directorio sin modificarlo**: desde el retiro de
 `design.md`/`context.md` ya no borra `context.md` ni ningún scaffold legacy; los artifacts de un
 change archivado se preservan intactos. Evidencia: `skills/ancleto-archive/SKILL.md`,
-`aspec/changes/retire-design-and-context-artifacts/specs/prompt-contracts/spec.md`.
+`aspec/specs/prompt-contracts/spec.md` (requirement "Retiro de `design.md` y `context.md` sin
+artifact sucesor"),
+`aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/`.
 
 Evidencia: `skills/ancleto-archive/SKILL.md:51-70`,
 `agents/memory-keeper.md:80-97`, `agents/orchestrator.md:192`, `agents/orchestrator.md:326`,

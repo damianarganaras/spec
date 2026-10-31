@@ -21,8 +21,8 @@ covers:
   - promoción al archivar
   - permisos de shell por agente
 sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js"]
-generatedAt: 2026-10-30T19:54:29Z
-pluginVersion: 0.17.0
+generatedAt: 2026-10-31T00:24:30Z
+pluginVersion: 0.17.1
 skillVersion: '2.3'
 ---
 

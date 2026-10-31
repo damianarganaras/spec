@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-30T19:54:29Z
-pluginVersion: 0.17.0
+generatedAt: 2026-10-31T00:24:30Z
+pluginVersion: 0.17.1
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.17.0` (`package.json`); el tag `v0.17.0` es **anotado** y vive en `main` (`cdc18d5`, merge del release). `development` HEAD `a506b54` agrega el retiro de `design.md`/`context.md`: está commiteado pero **sin publicar** (mismo `0.17.0`). | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.17.1` (`package.json`); el tag `v0.17.1` es **anotado** y vive en `main` (`cda4cb6`, merge de `development`). El paquete `0.17.1` incluye el retiro de `design.md`/`context.md` (`CHANGELOG.md`). | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log`, `CHANGELOG.md` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |

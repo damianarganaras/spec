@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-10-30T19:54:29Z
-pluginVersion: 0.17.0
+generatedAt: 2026-10-31T00:24:30Z
+pluginVersion: 0.17.1
 skillVersion: '2.3'
 ---
 
@@ -40,7 +40,7 @@ CLI monolítica en ESM, sin framework externo. Capas:
 | Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (refs fail-closed en `recordNode`, rechazo de secretos, search/record/export/import/gc/**merge**, `formatTopologyBlock`, procedencia `source`, aviso de overflow), `snapshot` (**copia consistente con historial**), `tools`, `mcp-server`, `doctor` (**read-only por defecto**), `working-context` (render compartido; refresh on-write CLI compare-based y staleness advisory). |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 16 commands, 21 skills, 2 templates + perfil `test`). |
 | Contratos de prompt | `agents/*.md` | Normativa del pipeline: intake de sesión, techo de lecturas, trigger de Recall, contrato de validación, **checkpoint de contrato** tras `@spec-writer`, sección `## Decisiones` del proposal, **retiro de `design.md`/`context.md`** (lectura legacy opcional, nunca precondición) y **promoción al archivar**. Los mirrors `.opencode/agents/*.md` se regeneran, no se editan a mano. |
-| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 1 change activo (`ancleto-vscode-extension`) + `changes/archive/` (32). El delta del retiro ya está **mergeado** en `aspec/specs/`. |
+| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 1 change activo (`ancleto-vscode-extension`) + `changes/archive/` (33; el último, `2026-10-30-backfill-archived-design-decisions`, sólo artifacts). El delta del retiro está **mergeado** en `aspec/specs/` y publicado en `0.17.1`. |
 | Config del host opencode | `opencode.json` (raíz) | Override de `agent.model` para 9 subagentes; **no** se publica en el paquete. |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
 | Tests | `test/*.test.js` | Suite `node --test` (15 archivos; no re-ejecutada en esta regeneración). |
@@ -232,21 +232,18 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 
 ## Estado del repositorio
 
-Versión `0.17.0` en rama `development`; tag **anotado** `v0.17.0` en `main` (`cdc18d5`, "Merge
-development into main for v0.17.0"); HEAD `a506b54` (`feat(change-artifacts): retirar design.md y
-context.md del flujo nuevo`). `CHANGELOG.md` cubre hasta `0.17.0` (MEM-03: refs obligatorias,
-promoción al archivar, resolutores y `opencode.json`). El **retiro de `design.md`/`context.md`**
-está **commiteado** en `development` (`a506b54`) y su change **archivado** en
-`aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/`; el árbol de trabajo
-queda limpio salvo los artefactos derivados del discovery (`.discovery-map.json` y
-`.discovery-state.json`), y el retiro **no** está publicado (sin bump ni entrada en
-`CHANGELOG.md`). Dogfooding histórico: el framework
-fue inicializado sobre este repo; este checkout **sí materializa `.ancletorc` y `.opencode/`**
-(ambos gitignored, no versionados) y persiste `AGENTS.md`, `PRODUCT.md`, `aspec/` y
-`.ancleto/memory.db`. El tier resuelto es **`minimo`** vía `.opencode/.ancleto-tier`.
-**`.ancleto/machine-env.md` ya existe** (generado el 2026-10-30 con `ancleto: 0.17.0`) y los
-mirrors `.opencode/` están regenerados. Queda **un solo change activo**
-(`ancleto-vscode-extension`); el más reciente archivado es
-`2026-10-30-retire-design-and-context-artifacts`. Evidencia: `.gitignore`,
+Versión `0.17.1` en rama `development` (HEAD `975aa03`, `chore(release): v0.17.1`); tag **anotado**
+`v0.17.1` en `main` (`cda4cb6`, merge de `development`). `CHANGELOG.md` cubre hasta `0.17.1`
+e incluye el **retiro de `design.md`/`context.md`**, que queda así **publicado** (antes viajaba
+sólo en `development`). Dogfooding histórico: el framework fue inicializado sobre este repo;
+este checkout **sí materializa `.ancletorc` y `.opencode/`** (ambos gitignored, no versionados)
+y persiste `AGENTS.md`, `PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier resuelto es
+**`minimo`** vía `.opencode/.ancleto-tier`. **`.ancleto/machine-env.md` ya existe** (generado el
+2026-10-30 con `ancleto: 0.17.1`) y los mirrors `.opencode/` están regenerados. Queda **un solo
+change activo** (`ancleto-vscode-extension`); el más reciente archivado es
+`2026-10-30-backfill-archived-design-decisions` (PR-4b: backfill de decisiones desde `design.md`
+históricos hacia memoria; **sólo artifacts, sin cambio de código ni de producto**). El árbol de
+trabajo tiene `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` modificado, el archive de backfill
+**untracked** y los artefactos derivados del discovery. Evidencia: `.gitignore`,
 `.discovery-map.json`, `ancleto discovery --check`, `git log`, `git status --short`,
-`aspec/changes/`.
+`aspec/changes/`, `CHANGELOG.md`.

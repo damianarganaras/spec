@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-10-30T19:54:29Z
-pluginVersion: 0.17.0
+generatedAt: 2026-10-31T00:24:30Z
+pluginVersion: 0.17.1
 skillVersion: '2.3'
 ---
 
@@ -11,11 +11,11 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto` / alias `aspec`).
 No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base: pack Repomix
-(`--compress`, tier resuelto `minimo`, 703 archivos, ~17.319 tokens), `package.json`
-(`0.17.0`), tag anotado `v0.17.0` en `main` (`cdc18d5`), HEAD `a506b54` en `development`
-(retiro de `design.md`/`context.md`, commiteado), `.discovery-map.json` (`total_files: 715`) y lectura puntual de
-los archivos citados en cada documento, incluidos `agents/`, `skills/`, `docs/` y `aspec/`
-(fuera del pack por el tier).
+(`--compress`, tier resuelto `minimo`, 705 archivos, ~17.319 tokens), `package.json`
+(`0.17.1`), tag anotado `v0.17.1` en `main` (`cda4cb6`, merge de `development`), HEAD
+`975aa03` en `development` (`chore(release): v0.17.1`), `.discovery-map.json`
+(`total_files: 717`) y lectura puntual de los archivos citados en cada documento, incluidos
+`agents/`, `skills/`, `docs/` y `aspec/` (fuera del pack por el tier).
 
 ## Ruteo por pregunta
 
@@ -53,12 +53,13 @@ los archivos citados en cada documento, incluidos `agents/`, `skills/`, `docs/` 
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local,
   entorno de máquina derivado y control de costo por tier. **8 hosts**: opencode (default),
   claude, vscode, antigravity, cursor, roo, copilot y commandcode.
-- **Versión observada**: `0.17.0` (`package.json`); tag **anotado** `v0.17.0` en `main`
-  (`cdc18d5`, "Merge development into main for v0.17.0"); HEAD `a506b54`
-  (`feat(change-artifacts): retirar design.md y context.md del flujo nuevo`) en `development`.
-  Árbol de trabajo **limpio** salvo los artefactos derivados del propio discovery
-  (`.discovery-map.json` y `docs/technical-discovery/.discovery-state.json`); el retiro está
-  commiteado y archivado, pero **no** publicado.
+- **Versión observada**: `0.17.1` (`package.json`); tag **anotado** `v0.17.1` en `main`
+  (`cda4cb6`, merge de `development`); HEAD `975aa03` (`chore(release): v0.17.1`) en
+  `development`. El **retiro de `design.md`/`context.md`** quedó publicado en `0.17.1`
+  (`CHANGELOG.md`). Árbol de trabajo con cambios: `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`
+  modificado, el archive de `2026-10-30-backfill-archived-design-decisions` **untracked** y los
+  artefactos derivados del discovery (`.discovery-map.json`,
+  `docs/technical-discovery/.discovery-state.json`).
 - **Tier resuelto**: `minimo` vía `.opencode/.ancleto-tier`; decide modelos de los agents y el
   pack (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, **sin token budget**; solo
   `gratis` fija 50k).
@@ -122,20 +123,21 @@ los archivos citados en cada documento, incluidos `agents/`, `skills/`, `docs/` 
   `memory-boundary`, `artifacts-language`, `seed-freshness`) + `test-block`.
 - **Set de artifacts**: el flujo nuevo produce **tres** artifacts (`proposal.md`, `tasks.md`,
   `specs/`); `design.md` y `context.md` se retiraron **sin sucesor** y una decisión durable va a
-  `proposal.md ## Decisiones`. El retiro ya está mergeado en `aspec/specs/artifact-update` y
-  `aspec/specs/prompt-contracts`; los changes anteriores que sí tuvieron `design.md` lo
-  conservan intacto en el archive. Detalle: `decisions.md` (regla 47).
+  `proposal.md ## Decisiones`. El retiro está **publicado en `0.17.1`**; los changes anteriores
+  que sí tuvieron `design.md` lo conservan intacto en el archive. Detalle: `decisions.md`
+  (regla 47).
 - **Ciclo SDD**: 16 comandos `/cleto-*` y 21 skills nativas; `aspec/` tiene **19 specs fuente**,
-  **1 change activo** (`ancleto-vscode-extension`) y **32 archivados** (el último,
-  `2026-10-30-retire-design-and-context-artifacts`, cuyo delta ya está mergeado en
-  `aspec/specs/`).
+  **1 change activo** (`ancleto-vscode-extension`) y **33 archivados** (el último,
+  `2026-10-30-backfill-archived-design-decisions`, backfill de decisiones a memoria: **sólo
+  artifacts, sin cambio de producto**).
 - **Este checkout**: `.ancletorc` y `.opencode/` existen (gitignored, no versionados).
   Persiste `.ancleto/memory.db` y **`.ancleto/machine-env.md`** (generado el 2026-10-30 con
-  `ancleto: 0.17.0`).
+  `ancleto: 0.17.1`).
 - **Rama de trabajo**: `development`; `main` declarada protegida en `AGENTS.md` (no se verificó
   protección real en el remoto).
-- **Sin backlog raíz**: `BACKLOG.md` no existe; las deudas que el seed anterior citaba por
-  ítem no son verificables en el repo (ver `unknowns.md`).
+- **Sin backlog raíz**: `BACKLOG.md` no existe. El backlog P0 de la reingeniería de memoria
+  vive en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (modificado en este checkout; PR-4b =
+  el change de backfill archivado). Ver `unknowns.md`.
 - **Doc de análisis raíz**: `optimizacion-de-tokens.md` (no es runtime; mide costo de tokens y
   deja una decisión abierta sobre la promesa "optimizador de tokens").
 - **No material para el seed**: `audit logs/` (untracked) y `documentation/` (legado

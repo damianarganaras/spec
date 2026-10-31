@@ -2,6 +2,13 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.17.2] - 2026-10-30
+
+### Changed
+- **Backfill de decisiones archivadas**: se archivó el change que inventarió los `design.md` históricos y promovió sus cinco decisiones únicas a la memoria del repositorio; sin delta spec ni cambio de código.
+- **Technical seed regenerado** sobre el estado final y de vuelta en `READY`.
+- **Backlog memoria-first**: altas de `CH-11` (regla de severidad de `cleto-review` a su spec) y `MEM-07` (gramática de `change:` sin prefijo de fecha).
+
 ## [0.17.1] - 2026-10-30
 
 ### Changed

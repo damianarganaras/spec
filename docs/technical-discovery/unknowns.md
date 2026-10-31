@@ -2,15 +2,15 @@
 node: unknowns
 kind: unknowns
 read_when: "límites de evidencia: qué no se pudo verificar en este seed"
-generatedAt: 2026-10-30T19:54:29Z
-pluginVersion: 0.17.0
+generatedAt: 2026-10-31T00:24:30Z
+pluginVersion: 0.17.1
 skillVersion: '2.3'
 ---
 
 # Límites de evidencia
 
 - **Pack comprimido (tree-sitter).** El pack usado contiene firmas de funciones, no cuerpos ni
-  valores de constantes (703 fuentes, ~17.319 tokens, tier `minimo`). Las descripciones de flujo
+  valores de constantes (705 fuentes, ~17.319 tokens, tier `minimo`). Las descripciones de flujo
   de `src/**` provienen de firmas + `README.md` + `CHANGELOG.md` + specs de `aspec/` + lectura
   puntual de los archivos citados (en particular
   `src/core/memory/{engine,tools,mcp-server,working-context,snapshot,doctor}.js`,
@@ -30,14 +30,15 @@ skillVersion: '2.3'
   (`aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/`) y de los specs
   fuente mergeados (`aspec/specs/artifact-update/spec.md`, `aspec/specs/prompt-contracts/spec.md`),
   más `git log` (`a506b54`). **No** se ejecutaron `npm test` ni `npm run lint`; los guards se
-  describen por lectura. El cambio está **commiteado y archivado**.
-- **Retiro mergeado: ya no hay conflicto spec fuente vs implementación.** El spec fuente
-  `aspec/specs/artifact-update/spec.md` clasifica "decisión de diseño → `proposal.md ##
-  Decisiones`" y declara que `design.md` NO se crea ni actualiza; `aspec/specs/prompt-contracts/
-  spec.md` contiene el requirement "Retiro de `design.md` y `context.md` sin artifact sucesor"
-  (4 escenarios: generadores, consumidores, lectura legacy y archive). Queda como **desconocido**
-  si el paquete npm publicado (`0.17.0`) ya incluye el retiro: no se consultó el registry en esta
-  corrida y `package.json` no cambió de versión.
+  describen por lectura. El cambio está **commiteado, archivado y publicado en `0.17.1`**
+  (`CHANGELOG.md`; tag anotado `v0.17.1`).
+- **Retiro publicado: ya no hay conflicto spec fuente vs implementación ni brecha de
+  distribución.** El spec fuente `aspec/specs/artifact-update/spec.md` clasifica "decisión de
+  diseño → `proposal.md ## Decisiones`" y declara que `design.md` NO se crea ni actualiza;
+  `aspec/specs/prompt-contracts/spec.md` contiene el requirement "Retiro de `design.md` y
+  `context.md` sin artifact sucesor" (4 escenarios). `CHANGELOG.md` registra el retiro en
+  `0.17.1`. **No** se consultó el registry npm en esta corrida: que el tarball contenga el
+  retiro se deriva del `CHANGELOG.md` y del tag, no de una verificación del paquete publicado.
 - **`content-guards` acota el predicado por sección.** Los guards negativos no son un grep global:
   `RETIRED_ARTIFACT_GENERATORS`, `NO_DESIGN_MD_SLICERS` y `NO_CONTEXT_MD_SURFACES` cubren solo las
   secciones que declaran el set/orden de artifacts, y `LEGACY_READ_SLICES` exige el control
@@ -53,22 +54,22 @@ skillVersion: '2.3'
 - **`package-lock.json`: falso positivo del check.** El reporte puede marcarlo como "área raíz
   eliminada", pero el archivo **existe** y está en `config.exclude` (lockfiles), por lo que no
   se hashea. No es una desaparición real. Mismo criterio para `yarn.lock`/`pnpm-lock.yaml`.
-- **`BACKLOG.md` no existe.** Las deudas que el seed anterior citaba por ítem (guía residual de
-  `searchMemory`, protección de rama, detección material por archivo, comandos denegados fuera
-  de medición) no tienen ahora **fuente canónica** en el repo; se conservan como observaciones
-  de código, no como ítems con estado (abierto/cerrado) verificable.
+- **`BACKLOG.md` no existe; el backlog P0 de memoria sí.** `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`
+  existe (y aparece modificado en el árbol de trabajo): allí vive el plan PR-1…PR-5/PR-4b, no un
+  `BACKLOG.md` raíz. Las demás deudas que el seed cita por ítem (guía residual de `searchMemory`,
+  protección de rama, detección material por archivo, comandos denegados fuera de medición)
+  siguen como observaciones de código, sin ítem con estado verificable.
 - **`.ancletorc` presente pero no leído.** Existe (gitignored); por contrato de la skill no se
   lee directamente: su contenido se consume solo resuelto vía `ancleto discovery --check`
   (`config.outputDir`, `config.tier`, `config.exclude`). El **tier resuelto `minimo`** proviene
   del reporte y del valor de `.opencode/.ancleto-tier`.
-- **Versión y tag.** `package.json` marca **`0.17.0`**; el tag anotado `v0.17.0` vive en `main`
-  (`cdc18d5`, "Merge development into main for v0.17.0") y **no es ancestro** de `development`;
-  `git describe --tags` resuelve `v0.16.0-10-ga506b54`. `development` HEAD `a506b54`
-  ("retirar design.md y context.md del flujo nuevo") es hijo de `b283ff2`
-  (`chore(release): v0.17.0`), el commit de
-  release que sí está en el tag. El retiro está **commiteado en `development`**, pero **no** en
-  `main`, en el tag ni en el paquete publicado. No se verificó si el Release de GitHub quedó
-  asociado al tag `v0.17.0`.
+- **Versión y tag.** `package.json` marca **`0.17.1`**; el tag anotado `v0.17.1` vive en `main`
+  (`cda4cb6`, merge de `development`) y **no es ancestro** de `development`;
+  `git describe --tags` resuelve `v0.16.0-12-g975aa03`. `development` HEAD `975aa03`
+  (`chore(release): v0.17.1`) contiene el retiro (`a506b54`) y el tag lo incorpora por el merge.
+  El archive de `2026-10-30-backfill-archived-design-decisions` está **untracked** en este
+  checkout. No se verificó si el Release de GitHub quedó asociado al tag `v0.17.1` ni se
+  consultó el registry npm.
 - **MEM-03 verificado por lectura, no por ejecución.** La gramática, la resolución y el rechazo
   se leyeron en `src/core/memory/engine.js` (`parseRefsBlock`, `resolveSpecRef`,
   `resolveChangeRef`, `resolvePathRef`, `validateRefsForWrite`, `recordNode`) y en
@@ -80,6 +81,11 @@ skillVersion: '2.3'
   requirement en `aspec/specs/memory-engine/spec.md`. **No** se archivó un change real con
   decisiones aprobadas, no se probó el preflight con un lote inválido ni el caso "archivado con
   memoria pendiente". No se abrió `.ancleto/memory.db` para comprobar nodos promovidos.
+- **Backfill PR-4b: leído, sin verificación de la DB.** El archive
+  `2026-10-30-backfill-archived-design-decisions` declara 5 decisiones recuperadas de 27
+  `design.md` históricos y su promoción al archivar; **no** cambia código, tests ni assets de
+  producto. Está untracked en este checkout y no se abrió `.ancleto/memory.db` para verificar los
+  nodos ni sus refs.
 - **`importNodes` fuera de refs: verificado por lectura.** Se confirmó que el import no pasa
   por `recordNode` y que la spec lo exime de la validación. No se importó un JSON con nodos sin
   refs para observar el LWW.
@@ -110,8 +116,8 @@ skillVersion: '2.3'
   leyeron los títulos de los requirements de refs, resolución, secretos, render sin `refs:` y
   promoción, más algunos escenarios citados; no se recorrió cada escenario ni se correlacionó
   uno a uno con `test/memory-engine.test.js`.
-- **Harness golden M01–M10.** Se verificó la existencia de `test/fixtures/seed.json` y
-  `test/fixtures/golden.json`, de `test/memory-fixtures.test.js` y
+- **Harness golden M01–M10.** Se verificó la existencia de `test/fixtures/memory/seed.json` y
+  `test/fixtures/memory/golden.json`, de `test/memory-fixtures.test.js` y
   `test/memory-pr1-contract.test.js`, y la mención del harness en el proposal y en el requirement
   "Harness de regresión golden M01-M10". **No** se inspeccionó el contenido de `golden.json` ni
   se corrieron las consultas de referencia.
@@ -160,28 +166,27 @@ skillVersion: '2.3'
 - **`optimizacion-de-tokens.md` es análisis, no contrato.** Mide costo (su encabezado habla de
   tier `normal`; hoy el checkout resuelve `minimo`) y deja la promesa "optimizador de tokens"
   como decisión pendiente; sus cifras no se re-verificaron.
-- **`aspec/`**: 19 specs fuente + **1 change activo** (`ancleto-vscode-extension`) + 32
-  archivados (el último, `2026-10-30-retire-design-and-context-artifacts`). No se analizó el
-  contenido completo de cada spec más allá de las capabilities afectadas (`memory-engine`,
-  `memory-ops`, `machine-environment`, `session-failure-report`, `prompt-contracts`, `review`,
-  `agent-install-routing`).
+- **`aspec/`**: 19 specs fuente + **1 change activo** (`ancleto-vscode-extension`) + 33
+  archivados (el último, `2026-10-30-backfill-archived-design-decisions`, untracked y sólo
+  artifacts). No se analizó el contenido completo de cada spec más allá de las capabilities
+  afectadas (`memory-engine`, `memory-ops`, `machine-environment`, `session-failure-report`,
+  `prompt-contracts`, `review`, `agent-install-routing`).
 - **Memoria del repo**: la sección de decisiones registradas proviene de una regeneración
   anterior vía `ancleto memory list`; en esta corrida **no se abrió** `.ancleto/memory.db`, así
   que esas entradas no se re-consultaron ni se detectaron nodos nuevos o superseded.
 - **`seed-map.json`** se mantiene a mano en esta regeneración; mapea cada documento a áreas de
   primer nivel (o archivos raíz). No se conserva `sourcesSha` en los dossiers: no fue emitido
   por el CLI para estos globs.
-- **Docs de producto desalineados.** `PRODUCT.md` declara 12 commands y 18 skills (hoy 16 y 21),
-  no menciona `machine-env`, `stats failures`, `memory snapshot`, `memory merge` ni la
-  promoción al archivar, y conserva la guía residual de `searchMemory`; `README.md` sigue
-  describiendo `memory doctor` como "reconstruye el índice FTS5 y fusiona el WAL", que ya no es
-  el comportamiento por defecto (aunque su sección de idioma ya no incluye `design.md`).
-  `CHANGELOG.md` llega a `0.17.0` e incluye MEM-03, pero **no** menciona el retiro (commiteado
-  sin release). El seed refleja el estado observado; no se editaron esos archivos.
-- **Validación final del seed**: `ancleto discovery --check` es state-only. En esta corrida
-  devolvió `state: READY`, `impact: none`, `recommendedAction: continue`, con `missingDocs: []` y
-  `affectedDocs: []`. Confirma que los documentos requeridos existen y que las fuentes no
-  cambiaron desde el pack; **no** valida la exactitud semántica de cada afirmación. El reporte
-  puede mostrar `seedMapPresent: false` aunque `seed-map.json` existe y es JSON válido: el CLI
-  solo calcula ese campo en la rama `STALE` (`src/cli/index.js`, `checkDiscovery`), no es una
-  ausencia real.
+- **Docs de producto parcialmente desalineados.** `PRODUCT.md` declara 12 commands y 18 skills
+  (hoy 16 y 21), no menciona `machine-env`, `stats failures`, `memory snapshot`, `memory merge`
+  ni la promoción al archivar, y conserva la guía residual de `searchMemory`; `README.md` ya
+  describe `memory doctor` read-only por defecto, con `--rebuild` como único camino de
+  escritura. `CHANGELOG.md` llega a `0.17.1` e incluye MEM-03 y el retiro. El seed refleja el
+  estado observado; no se editaron esos archivos.
+- **Validación del seed**: `ancleto discovery --check` es state-only. El reporte que originó esta
+  generación fue `STALE` / `impact: material` (11 `affectedDocs`,
+  `materialReasons: ["archivo material modificado: package.json"]`). La validación de cierre
+  confirma que los 8 documentos requeridos existen y que las fuentes no cambiaron desde el pack;
+  **no** valida la exactitud semántica de cada afirmación. El reporte puede mostrar
+  `seedMapPresent: false` aunque `seed-map.json` existe y es JSON válido: el CLI solo calcula ese
+  campo en la rama `STALE` (`src/cli/index.js`, `checkDiscovery`), no es una ausencia real.

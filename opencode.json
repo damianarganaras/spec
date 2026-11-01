@@ -9,6 +9,7 @@
     "memory-keeper": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
     "context-resolver": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
     "technical-discovery": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
-    "technical-seed-writer": { "model": "commandcode/deepseek/deepseek-v4.1-flash" }
+    "technical-seed-writer": { "model": "commandcode/deepseek/deepseek-v4.1-flash" },
+    "orchestrator": { "model": "commandcode/deepseek/deepseek-v4.1-flash" }
   }
 }

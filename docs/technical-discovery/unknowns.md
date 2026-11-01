@@ -2,15 +2,15 @@
 node: unknowns
 kind: unknowns
 read_when: "límites de evidencia: qué no se pudo verificar en este seed"
-generatedAt: 2026-10-31T00:24:30Z
-pluginVersion: 0.17.1
+generatedAt: 2026-11-01T02:38:20Z
+pluginVersion: 0.17.2
 skillVersion: '2.3'
 ---
 
 # Límites de evidencia
 
 - **Pack comprimido (tree-sitter).** El pack usado contiene firmas de funciones, no cuerpos ni
-  valores de constantes (705 fuentes, ~17.319 tokens, tier `minimo`). Las descripciones de flujo
+  valores de constantes (709 fuentes, ~17.669 tokens, tier `minimo`). Las descripciones de flujo
   de `src/**` provienen de firmas + `README.md` + `CHANGELOG.md` + specs de `aspec/` + lectura
   puntual de los archivos citados (en particular
   `src/core/memory/{engine,tools,mcp-server,working-context,snapshot,doctor}.js`,
@@ -63,19 +63,26 @@ skillVersion: '2.3'
   lee directamente: su contenido se consume solo resuelto vía `ancleto discovery --check`
   (`config.outputDir`, `config.tier`, `config.exclude`). El **tier resuelto `minimo`** proviene
   del reporte y del valor de `.opencode/.ancleto-tier`.
-- **Versión y tag.** `package.json` marca **`0.17.1`**; el tag anotado `v0.17.1` vive en `main`
-  (`cda4cb6`, merge de `development`) y **no es ancestro** de `development`;
-  `git describe --tags` resuelve `v0.16.0-12-g975aa03`. `development` HEAD `975aa03`
-  (`chore(release): v0.17.1`) contiene el retiro (`a506b54`) y el tag lo incorpora por el merge.
-  El archive de `2026-10-30-backfill-archived-design-decisions` está **untracked** en este
-  checkout. No se verificó si el Release de GitHub quedó asociado al tag `v0.17.1` ni se
-  consultó el registry npm.
+- **Versión y tag.** `package.json` marca **`0.17.2`**; la release es `fc6d2cb`
+  (`chore(release): 0.17.2`) y el tag anotado `v0.17.2` vive en `main` (`2129395`, merge de
+  `development`) y **no es ancestro** de `development`; `git describe --tags` resuelve
+  `v0.16.0-17-g6574426`. `development` HEAD `6574426` contiene MEM-04 (`cd23ec6`), su archive
+  (`1fa6377`) y la guía de modelos de `AGENTS.md`, que **no** están en el tag `v0.17.2`. El
+  archive de backfill ya está commiteado. No se verificó si el Release de GitHub quedó asociado
+  al tag `v0.17.2` ni se consultó el registry npm.
 - **MEM-03 verificado por lectura, no por ejecución.** La gramática, la resolución y el rechazo
   se leyeron en `src/core/memory/engine.js` (`parseRefsBlock`, `resolveSpecRef`,
   `resolveChangeRef`, `resolvePathRef`, `validateRefsForWrite`, `recordNode`) y en
   `aspec/specs/memory-engine/spec.md`. **No** se ejecutó una escritura real con refs, ni se
   probó un rechazo por ambigüedad de heading, un `change:` archivado o un `path:` inexistente.
   Tampoco se corrió `npm test`.
+- **MEM-04 verificado por lectura, no por ejecución.** El check `Refs de nodos activos` y
+  `inspectRefs` se leyeron en `src/core/memory/doctor.js` y `src/core/memory/engine.js`, y el
+  contrato en `aspec/specs/memory-ops/spec.md`. **No** se ejecutó `memory doctor` contra una base
+  real con refs rotas/ambiguas, no se probó la omisión por raíz no derivable, no se observó el
+  `detail` con `commit:`/`workitem:` y no se verificó que el check no toque el WAL. La
+  indentación opcional de los items se confirmó por lectura del parser y del spec, no por un
+  caso de escritura real.
 - **Promoción al archivar verificada por lectura, no por ejecución.** El gate se leyó en
   `skills/ancleto-archive/SKILL.md`, `agents/memory-keeper.md` y `agents/orchestrator.md`, y el
   requirement en `aspec/specs/memory-engine/spec.md`. **No** se archivó un change real con
@@ -84,20 +91,28 @@ skillVersion: '2.3'
 - **Backfill PR-4b: leído, sin verificación de la DB.** El archive
   `2026-10-30-backfill-archived-design-decisions` declara 5 decisiones recuperadas de 27
   `design.md` históricos y su promoción al archivar; **no** cambia código, tests ni assets de
-  producto. Está untracked en este checkout y no se abrió `.ancleto/memory.db` para verificar los
-  nodos ni sus refs.
+  producto. Ya está commiteado y no se abrió `.ancleto/memory.db` para verificar los nodos ni sus
+  refs.
+- **Deuda declarada de MEM-04 (backlog `§5.2`), no observada en ejecución.** `inspectRefs` no
+  captura errores de I/O (`readFileSync`/`readdirSync`/`statSync` pueden lanzar y abortar el
+  doctor); el conteo de `commit:`/`workitem:` como no verificables sólo se agrega al `detail` sin
+  rotas; y `agents/memory-keeper.md:87-94` no aclara que la indentación de los items es opcional.
+  Son deudas declaradas, no fallas observadas. Evidencia:
+  `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (`### 5.2`).
 - **`importNodes` fuera de refs: verificado por lectura.** Se confirmó que el import no pasa
   por `recordNode` y que la spec lo exime de la validación. No se importó un JSON con nodos sin
   refs para observar el LWW.
 - **Rechazo de secretos: verificado por lectura.** Los patrones y el orden (antes de la
-  transacción) se leyeron en `engine.js:88-100` y `engine.js:461-467`; no se intentó una
+  transacción) se leyeron en `engine.js:97-115` y `engine.js:559-564`; no se intentó una
   escritura con una credencial real ni se verificó que el mensaje no la repita en ejecución.
 - **Render sin `refs:`: verificado por lectura.** `renderRuleContent` y su uso en
-  `buildWorkingContext` se leyeron en `engine.js:197-206` y `engine.js:388`; no se generó un
+  `buildWorkingContext` se leyeron en `engine.js:202-207`; no se generó un
   working-context real con una regla que tenga refs.
-- **`opencode.json` no se publica: verificado por lectura.** Se comparó el archivo raíz
-  (`opencode.json:1-14`) con `package.json` → `files` (`package.json:10-17`). No se ejecutó
-  `npm pack` para inspeccionar el tarball.
+- **`opencode.json` no se publica: verificado por lectura.** Se comparó el archivo raíz con
+  `package.json` → `files`. El baseline commiteado cubre 9 subagentes; el árbol de trabajo tiene
+  **sin commitear** el mapeo `agent.orchestrator.model` y `agents/spec-writer.md` tiene una línea
+  `model:` de probe, también sin commitear. No se ejecutó `npm pack` para inspeccionar el
+  tarball ni se verificó el modelo efectivo en las tres superficies del runtime.
 - **Snapshot: no ejecutado.** El comportamiento se describe por lectura de
   `src/core/memory/snapshot.js`, del wrapper `memorySnapshot` y de los escenarios de
   `aspec/specs/memory-ops/spec.md`; no se generó un snapshot real ni se probó una restauración.
@@ -105,14 +120,16 @@ skillVersion: '2.3'
   tiene comando.
 - **`memory doctor` read-only: no ejecutado contra una base real.** Se describe por lectura de
   `src/core/memory/doctor.js` y `memoryDoctorCmd`. No se verificó empíricamente que el modo
-  default no toque el WAL ni que el conteo de `memory_fts_docsize` detecte un trigger removido.
+  default no toque el WAL, que el conteo de `memory_fts_docsize` detecte un trigger removido ni
+  que el check `Refs de nodos activos` reporte correctamente rotas, ambigüedades y omisión por
+  raíz no derivable.
 - **`memory merge`: no ejecutado.** La validación y la transacción se describen por lectura de
   `validateMerge`/`merge` y del wrapper CLI. No se probó un merge real, un rollback por source
   desactivada ni el camino de refresh fallido (exit ≠ 0 con merge ya aplicado).
-- **Spec `memory-ops`: 13 Requirements verificados por encabezados.** Se leyeron los títulos de
-  los 13 Requirements y los nombres de escenarios de snapshot/doctor/merge; **no** se leyó el
+- **Spec `memory-ops`: 16 Requirements verificados por encabezados.** Se leyeron los títulos de
+  los 16 Requirements y los nombres de escenarios de snapshot/doctor/merge/refs; **no** se leyó el
   cuerpo completo de cada escenario ni se validó su cobertura contra los tests.
-- **Spec `memory-engine`: requirements nuevos verificados por encabezados y prosa puntual.** Se
+- **Spec `memory-engine`: 21 Requirements verificados por encabezados y prosa puntual.** Se
   leyeron los títulos de los requirements de refs, resolución, secretos, render sin `refs:` y
   promoción, más algunos escenarios citados; no se recorrió cada escenario ni se correlacionó
   uno a uno con `test/memory-engine.test.js`.
@@ -123,7 +140,8 @@ skillVersion: '2.3'
   se corrieron las consultas de referencia.
 - **Tests**: la suite tiene **15 archivos** + 2 fixtures, pero **no se re-ejecutó** en esta
   regeneración (la validación del seed es state-only y el tier excluye `test/**` del pack). La
-  cifra en verde no se verificó.
+  cobertura de `Refs de nodos activos` se leyó en `test/memory-fixtures.test.js` y la de la ayuda
+  del CLI en `test/cli.test.js`; la cifra en verde no se verificó.
 - **`ancleto stats failures` no se ejecutó.** La clasificación y el contrato de privacidad se
   describen desde `src/cli/index.js` (`statsFailuresCommand`, `failureBucketsQuery`,
   `maskSensitive`, `skeletonCommand`) y `aspec/specs/session-failure-report/spec.md`; no se
@@ -166,10 +184,10 @@ skillVersion: '2.3'
 - **`optimizacion-de-tokens.md` es análisis, no contrato.** Mide costo (su encabezado habla de
   tier `normal`; hoy el checkout resuelve `minimo`) y deja la promesa "optimizador de tokens"
   como decisión pendiente; sus cifras no se re-verificaron.
-- **`aspec/`**: 19 specs fuente + **1 change activo** (`ancleto-vscode-extension`) + 33
-  archivados (el último, `2026-10-30-backfill-archived-design-decisions`, untracked y sólo
-  artifacts). No se analizó el contenido completo de cada spec más allá de las capabilities
-  afectadas (`memory-engine`, `memory-ops`, `machine-environment`, `session-failure-report`,
+- **`aspec/`**: 19 specs fuente + **1 change activo** (`ancleto-vscode-extension`) + 34
+  archivados (el último, `2026-10-31-mem-04-doctor-referencias-no-resueltas`, commiteado). No se
+  analizó el contenido completo de cada spec más allá de las capabilities afectadas
+  (`memory-engine`, `memory-ops`, `machine-environment`, `session-failure-report`,
   `prompt-contracts`, `review`, `agent-install-routing`).
 - **Memoria del repo**: la sección de decisiones registradas proviene de una regeneración
   anterior vía `ancleto memory list`; en esta corrida **no se abrió** `.ancleto/memory.db`, así
@@ -181,12 +199,13 @@ skillVersion: '2.3'
   (hoy 16 y 21), no menciona `machine-env`, `stats failures`, `memory snapshot`, `memory merge`
   ni la promoción al archivar, y conserva la guía residual de `searchMemory`; `README.md` ya
   describe `memory doctor` read-only por defecto, con `--rebuild` como único camino de
-  escritura. `CHANGELOG.md` llega a `0.17.1` e incluye MEM-03 y el retiro. El seed refleja el
-  estado observado; no se editaron esos archivos.
+  escritura. `CHANGELOG.md` llega a `0.17.2` e incluye MEM-03 y el retiro, pero **no** MEM-04
+  (posterior al tag). El seed refleja el estado observado; no se editaron esos archivos.
 - **Validación del seed**: `ancleto discovery --check` es state-only. El reporte que originó esta
   generación fue `STALE` / `impact: material` (11 `affectedDocs`,
-  `materialReasons: ["archivo material modificado: package.json"]`). La validación de cierre
-  confirma que los 8 documentos requeridos existen y que las fuentes no cambiaron desde el pack;
-  **no** valida la exactitud semántica de cada afirmación. El reporte puede mostrar
-  `seedMapPresent: false` aunque `seed-map.json` existe y es JSON válido: el CLI solo calcula ese
-  campo en la rama `STALE` (`src/cli/index.js`, `checkDiscovery`), no es una ausencia real.
+  `materialReasons: ["archivo material modificado: package.json"]`, bump a `0.17.2`). La
+  validación de cierre confirma que los 8 documentos requeridos existen y que las fuentes no
+  cambiaron desde el pack; **no** valida la exactitud semántica de cada afirmación. El reporte
+  puede mostrar `seedMapPresent: false` aunque `seed-map.json` existe y es JSON válido: el CLI
+  no calcula ese campo en todas las ramas (la corrida de cierre `READY` lo devolvió `false`), no
+  es una ausencia real (`src/cli/index.js`, `checkDiscovery`).

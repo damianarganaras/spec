@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y el presupuesto por tier"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js"]
-generatedAt: 2026-10-31T00:24:30Z
-pluginVersion: 0.17.1
+generatedAt: 2026-11-01T02:38:20Z
+pluginVersion: 0.17.2
 skillVersion: '2.3'
 ---
 
@@ -35,7 +35,7 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
 - `writeDiscoveryMap(rootDir)`: escribe `.discovery-map.json` en la raíz del repo.
 - `readTopologySummary(cwd)`: valida y lee el resumen para inyectarlo en el working context.
 - El mapa se regenera al correr `ancleto discovery` (no en `--check`). En esta corrida:
-  `total_files: 717` (`last_updated: 2026-10-31T00:22:40.025Z`); `tree_summary` incluye
+  `total_files: 721` (`last_updated: 2026-11-01T01:31:45.321Z`); `tree_summary` incluye
   `documentation` 340 y `audit logs` 9 porque el mapa recorre el disco y no aplica `.gitignore`.
   El `total_files` **no** coincide con el número de archivos del pack: el mapa cuenta el disco
   y el pack aplica los ignores del tier y `.gitignore`.
@@ -47,7 +47,7 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
   `minimo` + budget 50000).
 - `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
   En este checkout existe `.opencode/.ancleto-tier` con valor **`minimo`**, por lo que el tier
-  resuelto es `minimo` y el pack de esta corrida quedó en **705 archivos / ~17.319 tokens**
+  resuelto es `minimo` y el pack de esta corrida quedó en **709 archivos / ~17.669 tokens**
   (sin budget que lo limite). El conteo de tokens depende de la compresión efectiva de Repomix
   y **no es comparable entre corridas**.
 - `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
@@ -65,7 +65,8 @@ grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier�
   elección y tiene prioridad sobre lo persistido en `.ancletorc`.
 - Tier `minimo`: un único modelo `opencode-go/deepseek-v4.1-flash` para los 10 agents. El
   checkout además tiene `opencode.json` en la raíz, que overridea el modelo de 9 subagentes
-  del host opencode a `commandcode/deepseek/deepseek-v4.1-flash`; ese archivo no se publica.
+  del host opencode a `commandcode/deepseek/deepseek-v4.1-flash` (baseline commiteado; el
+  árbol de trabajo agrega sin commitear el orquestador); ese archivo no se publica.
 
 ## Affected-set por grafo de imports — `src/core/affected-set.js`
 
@@ -113,10 +114,12 @@ objetivo de verificación del tester.
    runtime, `index.html`, `src/main|index.*`), apareció/desapareció un área raíz o un archivo
     material; si no, `minor`; si no hay cambios atribuibles, `none`. **La detección es por
     lista de archivos, no por contrato.** En esta corrida el reporte fue `STALE` / `material`
-    (`changedAreas: [".ancleto", ".ancletorc", ".opencode", "CHANGELOG.md", "aspec",
-    "package.json"]`, `materialReasons: ["archivo material modificado: package.json"]`, 11
-    `affectedDocs`); la causa es el bump `0.17.1` más el archive del backfill de decisiones
-    (sólo artifacts) y la reinstalación del host.
+    (`changedAreas: [".ancleto", ".opencode", "CHANGELOG.md", "agents", "aspec", "docs",
+    "opencode.json", "package.json", "src", "test"]`,
+    `materialReasons: ["archivo material modificado: package.json"]`, 11 `affectedDocs`); la
+    causa es el bump `0.17.2` (con su entrada en `CHANGELOG.md` y las altas `CH-11`/`MEM-07` del
+    backlog), el check de refs de MEM-04 (`src/core/memory/doctor.js`, `engine.js`), la guía de
+    modelos de `AGENTS.md` y el archivo de config local `opencode.json` (cambio sin commitear).
 4. `readSeedMap` + `affectedDocsFor` cruzan áreas cambiadas con `seed-map.json` para acotar la
    regeneración a `affectedDocs` (documentos del **seed**; no confundir con el `affected-set`
    del change). Sin `seed-map.json` la regeneración es completa.
@@ -148,7 +151,7 @@ objetivo de verificación del tester.
 | `src/core/tier-models.js` | Modelos por tier y resolución gratis. |
 | `opencode.json` | Override local de `agent.model` para 9 subagentes; fuera del paquete publicado. |
 | `src/cli/index.js` | `checkDiscovery`, `runRepomix`, `packDiscovery`, `affectedCommand`, `computeSources`, `computeImpact`, `readSeedMap`, `affectedDocsFor`. |
-| `.discovery-map.json` | Mapa topológico regenerado por la corrida del pack (717 archivos). |
+| `.discovery-map.json` | Mapa topológico regenerado por la corrida del pack (721 archivos). |
 | `docs/technical-discovery/.discovery-state.json` | Estado de hashes y `packTokens` que consume `--check`. |
 | `docs/technical-discovery/seed-map.json` | Documento del seed → áreas de evidencia (lo escribe la skill). |
 | `aspec/specs/prompt-contracts/spec.md` | Contrato del affected-set y taxonomía de 4 categorías. |

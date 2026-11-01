@@ -148,17 +148,18 @@ function parseRef(raw) {
   return null
 }
 
-// El bloque empieza en una linea `refs:` al inicio de linea y termina antes de la
-// primera linea en blanco o de texto no indentado. Una linea indentada que no es
-// item de lista, un item con gramatica invalida o un segundo bloque `refs:` se
-// reportan como `error`: fail-closed, nunca se ignora (un segundo bloque dejaria
-// refs sin validar).
+// El bloque empieza en una linea `refs:` al inicio de linea. Continua por cada item
+// de lista (`- ` con cualquier indentacion, incluida ninguna) y por cada linea
+// indentada, y termina antes de la primera linea en blanco o de la primera linea no
+// indentada que no es item. Una linea indentada que no es item de lista, un item con
+// gramatica invalida o un segundo bloque `refs:` se reportan como `error`:
+// fail-closed, nunca se ignora (un segundo bloque dejaria refs sin validar).
 function refsBlockEnd(lines, start) {
   let end = start + 1
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i]
     if (line.trim() === '') return i
-    if (/^\s/.test(line)) {
+    if (/^-\s+/.test(line) || /^\s/.test(line)) {
       end = i + 1
       continue
     }
@@ -219,10 +220,14 @@ export function resolveProjectRoot(context, dbPath) {
   return null
 }
 
-function resolveSpecRef(ref, root, prefix) {
+// Resultado estructurado por ref: `{ ok: true }` o `{ ok: false, reason, ... }`.
+// `message` es el fragmento sin prefijo que `validateRefsForWrite` lanza tal cual,
+// de modo que escritura y doctor comparten una unica resolucion y los mensajes
+// actuales de escritura quedan intactos.
+function resolveSpecRef(ref, root) {
   const specPath = join(root, 'aspec', 'specs', ref.capability, 'spec.md')
   if (!existsSync(specPath)) {
-    throw new Error(`${prefix} referencia un spec inexistente: "${ref.raw}"`)
+    return { ok: false, reason: 'inexistente', message: `referencia un spec inexistente: "${ref.raw}"` }
   }
   const headings = readFileSync(specPath, 'utf8')
     .split(/\r?\n/)
@@ -238,16 +243,23 @@ function resolveSpecRef(ref, root, prefix) {
   const matches = headings.filter(
     (h) => normalizeHeading(h) === normalizeHeading(ref.heading) || canonicalHeading(h) === target
   )
-  if (matches.length === 1) return
-  if (matches.length === 0) throw new Error(`${prefix} referencia un spec inexistente: "${ref.raw}"`)
-  throw new Error(`${prefix} referencia un spec ambiguo (${matches.length} coincidencias): "${ref.raw}"`)
+  if (matches.length === 1) return { ok: true }
+  if (matches.length === 0) {
+    return { ok: false, reason: 'inexistente', message: `referencia un spec inexistente: "${ref.raw}"` }
+  }
+  return {
+    ok: false,
+    reason: 'ambiguo',
+    matches: matches.length,
+    message: `referencia un spec ambiguo (${matches.length} coincidencias): "${ref.raw}"`
+  }
 }
 
 function escapeRegExp(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function resolveChangeRef(ref, root, prefix) {
+function resolveChangeRef(ref, root) {
   const matches = []
   const active = join(root, 'aspec', 'changes', ref.slug)
   if (existsSync(active) && statSync(active).isDirectory()) matches.push(active)
@@ -264,21 +276,59 @@ function resolveChangeRef(ref, root, prefix) {
     }
   }
 
-  if (matches.length === 0) throw new Error(`${prefix} referencia un change inexistente: "${ref.raw}"`)
-  if (matches.length > 1) throw new Error(`${prefix} referencia un change ambiguo (${matches.length} coincidencias): "${ref.raw}"`)
+  if (matches.length === 0) {
+    return { ok: false, reason: 'inexistente', message: `referencia un change inexistente: "${ref.raw}"` }
+  }
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      reason: 'ambiguo',
+      matches: matches.length,
+      message: `referencia un change ambiguo (${matches.length} coincidencias): "${ref.raw}"`
+    }
+  }
+  return { ok: true }
 }
 
-function resolvePathRef(ref, root, prefix) {
+function resolvePathRef(ref, root) {
   const rawPath = ref.value.replace(/:\d+$/, '')
   if (!rawPath || isAbsolute(rawPath) || /^[A-Za-z]:/.test(rawPath)) {
-    throw new Error(`${prefix} declara un path absoluto prohibido: "${ref.raw}"`)
+    return {
+      ok: false,
+      reason: 'inválido',
+      cause: 'path absoluto',
+      message: `declara un path absoluto prohibido: "${ref.raw}"`
+    }
   }
   const segments = rawPath.split(/[\\/]+/).filter(Boolean)
-  if (segments.includes('..')) throw new Error(`${prefix} declara un path con ../: "${ref.raw}"`)
+  if (segments.includes('..')) {
+    return {
+      ok: false,
+      reason: 'inválido',
+      cause: 'path ../',
+      message: `declara un path con ../: "${ref.raw}"`
+    }
+  }
   const full = join(root, rawPath)
   if (!existsSync(full) || !statSync(full).isFile()) {
-    throw new Error(`${prefix} declara un path inexistente: "${ref.raw}"`)
+    return { ok: false, reason: 'inexistente', message: `declara un path inexistente: "${ref.raw}"` }
   }
+  return { ok: true }
+}
+
+// Unica resolucion para spec/change/path. `commit:` y `workitem:` no tienen
+// resolvedor local: nunca llegan aca.
+function resolveRefResult(ref, root) {
+  if (ref.kind === 'spec') return resolveSpecRef(ref, root)
+  if (ref.kind === 'change') return resolveChangeRef(ref, root)
+  if (ref.kind === 'path') return resolvePathRef(ref, root)
+  return { ok: true }
+}
+
+function refFailureReason(result) {
+  if (result.reason === 'ambiguo') return `ambiguo (${result.matches} coincidencias)`
+  if (result.reason === 'inválido') return `inválido (${result.cause})`
+  return 'inexistente'
 }
 
 function validateRefsForWrite({ memory_key, type, content, projectRoot }) {
@@ -294,9 +344,9 @@ function validateRefsForWrite({ memory_key, type, content, projectRoot }) {
 
   for (const ref of parsed.refs) {
     if (!REF_KINDS.has(ref.kind)) throw new Error(`${prefix} usa un prefijo de ref desconocido: "${ref.raw}"`)
-    if (ref.kind === 'spec') resolveSpecRef(ref, projectRoot, prefix)
-    else if (ref.kind === 'change') resolveChangeRef(ref, projectRoot, prefix)
-    else if (ref.kind === 'path') resolvePathRef(ref, projectRoot, prefix)
+    if (ref.kind === 'commit' || ref.kind === 'workitem') continue
+    const result = resolveRefResult(ref, projectRoot)
+    if (!result.ok) throw new Error(`${prefix} ${result.message}`)
   }
 
   const hasSpec = parsed.refs.some((r) => r.kind === 'spec')
@@ -307,6 +357,53 @@ function validateRefsForWrite({ memory_key, type, content, projectRoot }) {
   }
   if (type === 'rule' && !hasPath && !hasSpec && !hasChange) {
     throw new Error(`${prefix} requiere al menos una ref path:, spec: o change:`)
+  }
+}
+
+// Auditoria read-only y pura de refs para `memory doctor`: no abre conexiones ni
+// escribe. Recibe los nodos activos (`memory_key`, `content`) y la raiz del
+// proyecto. Con raiz nula no resuelve, pero informa `needsRoot` para que el doctor
+// distinga "no hay refs que verificar" de "no se pudo derivar la raiz".
+export function inspectRefs({ nodes = [], projectRoot = null } = {}) {
+  const list = Array.isArray(nodes) ? nodes : []
+  const unresolved = []
+  let verified = 0
+  let verifiable = 0
+  let unverifiable = 0
+
+  for (const node of list) {
+    const memory_key = String(node.memory_key)
+    const parsed = parseRefsBlock(node.content)
+    if (!parsed) continue
+    // Mas de un bloque `refs:`: el doctor lo reporta, la escritura lo rechaza
+    // con su propio mensaje. Un bloque vacio aporta 0 refs y no es falla.
+    if (parsed.blocks) {
+      unresolved.push({ memory_key, ref: 'refs:', reason: 'inválido (gramática)' })
+      continue
+    }
+    if (parsed.error) {
+      unresolved.push({ memory_key, ref: parsed.error, reason: 'inválido (gramática)' })
+      continue
+    }
+    for (const ref of parsed.refs) {
+      if (ref.kind === 'commit' || ref.kind === 'workitem') {
+        unverifiable++
+        continue
+      }
+      verifiable++
+      if (!projectRoot) continue
+      const result = resolveRefResult(ref, projectRoot)
+      if (result.ok) verified++
+      else unresolved.push({ memory_key, ref: ref.raw, reason: refFailureReason(result) })
+    }
+  }
+
+  return {
+    nodes: list.length,
+    verified,
+    unresolved,
+    unverifiable,
+    needsRoot: verifiable > 0 && !projectRoot
   }
 }
 

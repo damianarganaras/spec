@@ -678,7 +678,7 @@ describe('memory doctor (v0.3.0 item 4)', () => {
 
       const result = memoryDoctor(dbPath)
       assert.equal(result.healthy, true)
-      assert.equal(result.checks.length, 4)
+      assert.equal(result.checks.length, 5)
       assert.ok(result.checks.every((c) => c.ok))
       const walCheck = result.checks.find((c) => c.name === 'Checkpoint WAL')
       assert.ok(walCheck && walCheck.ok)
@@ -705,7 +705,7 @@ describe('memory doctor (v0.3.0 item 4)', () => {
       for (const key of ['checks', 'healthy', 'rebuilt']) {
         assert.ok(key in result, `el reporte debe exponer ${key}`)
       }
-      assert.equal(result.checks.length, 4, 'los cuatro checks se conservan')
+      assert.equal(result.checks.length, 5, 'los cinco checks se conservan')
       for (const check of result.checks) {
         assert.equal(typeof check.name, 'string', 'cada check expone name')
         assert.equal(typeof check.ok, 'boolean', `${check.name}: ok debe ser booleano`)
@@ -1705,6 +1705,8 @@ describe('MEM-03 — refs fail-closed (engine)', () => {
 
   const CAPTURE = { source: 'mcp:ancleto-memory' }
   const block = (text, refs) => `${text}\n\nrefs:\n${refs.map((r) => `  - ${r}`).join('\n')}`
+  // Enmienda B: items de lista sin indentacion, que el contrato declara equivalentes.
+  const flatBlock = (text, refs) => `${text}\n\nrefs:\n${refs.map((r) => `- ${r}`).join('\n')}`
 
   function seedChange(root, name, archived = false) {
     const base = archived
@@ -2091,5 +2093,130 @@ describe('MEM-03 — refs fail-closed (engine)', () => {
     const serialized = JSON.stringify(memoryTools.map((t) => t.inputSchema))
     assert.doesNotMatch(serialized, /refs/)
     assert.doesNotMatch(serialized, /source|confidence|status/)
+  })
+
+  // Enmienda B: el bloque refs: continua por item de lista aunque no este indentado.
+  // El delta `memory-engine` exige que ambas formas se parseen identicamente.
+
+  it('6.1 (Enmienda B) — refs: con items sin indentar resolubles se acepta y persiste', () => {
+    withRefsEngine(({ eng, root, rawAt }) => {
+      seedFile(root, 'test/ref-fixture.test.js')
+      const content = flatBlock('regla anclada sin indentacion', ['path:test/ref-fixture.test.js'])
+
+      const result = eng.recordNode(
+        { memory_key: 'refs-flat-ok', type: 'rule', scope: 'project', content },
+        CAPTURE
+      )
+      assert.equal(result.node.memory_key, 'refs-flat-ok')
+
+      const [active] = rawAt(
+        `SELECT content FROM memory_nodes WHERE memory_key = 'refs-flat-ok' AND status = 'active'`
+      )
+      assert.ok(active, 'el nodo con refs sin indentar se persiste')
+      assert.match(active.content, /^- path:test\/ref-fixture\.test\.js$/m, 'la ref sin indentar se conserva')
+    })
+  })
+
+  it('6.2 (Enmienda B) — un item sin indentar que no resuelve se rechaza nombrando la ref ofensora', () => {
+    withRefsEngine(({ eng, rawAt }) => {
+      const before = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c
+      const content = flatBlock('decision sin indentacion', ['change:ghost-flat'])
+
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-flat-ghost', type: 'decision', content }, CAPTURE),
+        (err) => {
+          assert.match(err.message, /refs-flat-ghost/, 'nombra la memory_key')
+          assert.match(err.message, /change:ghost-flat/, 'nombra la ref ofensora, no "bloque vacio"')
+          assert.match(err.message, /inexistente/, 'reporta el motivo real')
+          assert.doesNotMatch(err.message, /vacio/, 'no es un bloque vacio')
+          return true
+        }
+      )
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c, before, 'el rechazo no escribe')
+    })
+  })
+
+  it('6.3 (Enmienda B) — los items indentados siguen parseandose y validandose igual', () => {
+    withRefsEngine(({ eng, root, rawAt }) => {
+      seedFile(root, 'test/ref-fixture.test.js')
+      const content = block('regla anclada con indentacion', ['path:test/ref-fixture.test.js'])
+
+      const result = eng.recordNode(
+        { memory_key: 'refs-indent-ok', type: 'rule', scope: 'project', content },
+        CAPTURE
+      )
+      assert.equal(result.node.memory_key, 'refs-indent-ok')
+
+      const [active] = rawAt(
+        `SELECT content FROM memory_nodes WHERE memory_key = 'refs-indent-ok' AND status = 'active'`
+      )
+      assert.ok(active, 'el nodo con refs indentar se persiste')
+      assert.match(active.content, /^ {2}- path:test\/ref-fixture\.test\.js$/m)
+    })
+  })
+
+  it('6.4 (Enmienda B) — el bloque termina en la primera linea en blanco', () => {
+    withRefsEngine(({ eng, root, rawAt }) => {
+      seedFile(root, 'test/ref-fixture.test.js')
+      // El segundo item, tras la linea en blanco, queda fuera del bloque: si se
+      // parseara, el path ../ haria fallar la escritura.
+      const content = 'regla\n\nrefs:\n- path:test/ref-fixture.test.js\n\n- path:../fuera.js'
+
+      const result = eng.recordNode(
+        { memory_key: 'refs-flat-blank', type: 'rule', scope: 'project', content },
+        CAPTURE
+      )
+      assert.equal(result.node.memory_key, 'refs-flat-blank', 'la prosa posterior no se interpreta como refs')
+
+      const [active] = rawAt(
+        `SELECT content FROM memory_nodes WHERE memory_key = 'refs-flat-blank' AND status = 'active'`
+      )
+      assert.ok(active.content.includes('- path:test/ref-fixture.test.js'), 'la primera ref entra al bloque')
+    })
+  })
+
+  it('6.5 (Enmienda B) — una linea no-item dentro del bloque es invalida y no se ignora', () => {
+    withRefsEngine(({ eng, rawAt }) => {
+      const before = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c
+      const content = 'regla\n\nrefs:\n- path:test/ref-fixture.test.js\n  prosa que no es item'
+
+      assert.throws(
+        () => eng.recordNode({ memory_key: 'refs-flat-text', type: 'rule', content }, CAPTURE),
+        (err) => {
+          assert.match(err.message, /refs-flat-text/, 'nombra la memory_key')
+          assert.match(err.message, /ref invalida/, 'la linea no-item se reporta invalida')
+          assert.match(err.message, /prosa que no es item/, 'nombra la linea ofensora')
+          assert.doesNotMatch(err.message, /vacio/, 'no es un bloque vacio')
+          return true
+        }
+      )
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c, before, 'el rechazo no escribe')
+    })
+  })
+
+  // Guarda G6: una linea no-item SIN indentar cierra el bloque; la prosa posterior
+  // no se interpreta como ref y la escritura resuelve solo con el item.
+  // Mutacion: `if (line.trim() !== '') { end = i + 1; continue }`, que incluye la
+  // prosa dentro del bloque y la valida como ref invalida.
+  it('G6 - una linea no-item sin indentar cierra el bloque y no es ref', () => {
+    withRefsEngine(({ eng, root, rawAt }) => {
+      seedFile(root, 'test/ref-fixture.test.js')
+      const content = 'regla anclada\n\nrefs:\n- path:test/ref-fixture.test.js\nprosa sin indentar que no es una ref'
+
+      const result = eng.recordNode(
+        { memory_key: 'refs-flat-prose-close', type: 'rule', scope: 'project', content },
+        CAPTURE
+      )
+      assert.equal(result.node.memory_key, 'refs-flat-prose-close', 'la escritura resuelve con el item')
+
+      const [active] = rawAt(
+        `SELECT content FROM memory_nodes WHERE memory_key = 'refs-flat-prose-close' AND status = 'active'`
+      )
+      assert.ok(active, 'el nodo se persiste')
+      assert.ok(
+        active.content.includes('prosa sin indentar que no es una ref'),
+        'la prosa se conserva pero no se interpreta como ref'
+      )
+    })
   })
 })

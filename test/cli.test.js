@@ -1656,6 +1656,18 @@ describe('CLI memory import refresca el working-context', () => {
   })
 })
 
+// Guarda (Fase 7): la ayuda de `memory doctor` enumera el quinto check. Aserto
+// estrecho sobre la mencion, no sobre la oracion completa.
+describe('CLI memory doctor (MEM-04)', () => {
+  it('la ayuda menciona el check "refs de nodos activos"', () => {
+    withDir((dir) => {
+      const r = run(['--help'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /refs de nodos activos/i)
+    })
+  })
+})
+
 describe('CLI directiva de compresión host-scoped (token-budget)', () => {
   const CAVEMAN_MCP = JSON.stringify({
     mcp: { caveman: { type: 'local', enabled: true, command: ['caveman-mcp'] } }

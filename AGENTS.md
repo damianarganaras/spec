@@ -101,6 +101,36 @@ continuá y registralo.
 - `ancleto`: Descubrimiento técnico e inicialización.
 - `cleto-*`: Comandos del ciclo de vida del cambio en el IDE (proposal, specs, design, tasks, archive).
 
+## Cambiar el modelo de los agentes
+
+El `model:` del frontmatter de los agentes existe en tres superficies y hay que mirarlas todas
+antes de tocarlo:
+
+- `agents/*.md` — fuente canónica y **publicada en el paquete**; no es donde se cambia el modelo
+  de una máquina concreta.
+- `.opencode/agents/*.md` — mirror que regenera `ancleto upgrade`; **no se edita a mano**.
+- `~/.config/opencode/agents/*.md` — instalación **global** del CLI. En este setup es la copia que
+  el runtime carga: repuntar sólo el mirror del proyecto no cambia el modelo de los subagentes.
+
+`opencode.json` → `agent.<nombre>.model` sí aplica al agente **primario** (así el orquestador puede
+correr en un modelo distinto del que dice su mirror), pero **no** alcanza a los subagentes.
+
+Un tier aplicado por `ancleto install` / `ancleto update` reescribe las líneas `model:`;
+`ancleto upgrade` no aplica tier.
+
+Verificación antes y después, en las tres superficies:
+
+```
+Select-String -Path <directorio>/*.md -Pattern '^model:'
+```
+
+`ancleto check` reporta `frontmatter diverge del adaptador` cuando un mirror se apartó de su
+fuente: es la señal de que alguien editó a mano y falta regenerar con `ancleto upgrade`.
+
+Si el modelo está bien en las tres superficies y el proveedor igual responde
+`Insufficient account funds`, el problema es la cuenta del proveedor, no la configuración: no sigas
+editando archivos.
+
 <!-- LOCKED: test-block -->
 Contexto gestionado por @ancleto/spec — no editar: se re-aplica en cada actualizacion.
 <!-- /LOCKED: test-block -->

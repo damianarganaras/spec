@@ -113,8 +113,10 @@
 - [x] 5.4 Registrar `Format: not-configured` y typecheck no aplica.
 - [x] 5.5 Confirmar que `aspec/specs/memory-engine/spec.md` no se modificó y que no hubo
       escrituras en `.ancleto/memory.db`.
-- [ ] 5.6 Al archivar, sincronizar el delta con `aspec/specs/memory-ops/spec.md` sin editar la
-      spec principal durante la implementación.
+- [x] 5.6 Al archivar, sincronizar el delta con `aspec/specs/memory-ops/spec.md` sin editar la
+      spec principal durante la implementación. (hecho en el archive 2026-10-31: MODIFIED de
+      read-only y `--rebuild` + ADDED de refs no resueltas mergeados; `aspec specs check --json`
+      → `ok: true`, `nonCanonical: []`)
 
 ## Fase 6 — Enmienda B: parser de refs sin indentación
 
@@ -142,8 +144,9 @@
       cambia qué caso se acepta y qué mensaje aparece.
 - [x] 6.9 (enmienda, read-only) Re-medir el `detail` de `memory doctor` sobre el repo real y
       registrar 66 refs verificadas en vez de 48, sin escribir en `.ancleto/memory.db`.
-- [ ] 6.10 (enmienda) Al archivar, sincronizar los deltas de `memory-ops` y `memory-engine` con sus
-      specs principales; `aspec/specs/**` no se toca durante la implementación.
+- [x] 6.10 (enmienda) Al archivar, sincronizar los deltas de `memory-ops` y `memory-engine` con sus
+      specs principales; `aspec/specs/**` no se toca durante la implementación. (hecho en el
+      archive 2026-10-31 para ambas capabilities)
 
 ## Fase 7 — Ajuste final (delta vs código)
 

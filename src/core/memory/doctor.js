@@ -1,5 +1,8 @@
 import { statSync } from 'node:fs'
 import { openDatabase, checkpointDatabase } from './database.js'
+import { inspectRefs, resolveProjectRoot } from './engine.js'
+
+const REFS_CHECK_NAME = 'Refs de nodos activos'
 
 // Estado observable del WAL sin ejecutar checkpoint ni ningun pragma mutante:
 // solo se mira el tamano del archivo `-wal` que ya existe en disco.
@@ -21,15 +24,17 @@ export function memoryDoctor(dbPath, { rebuild = false } = {}) {
 
     const hasSchema = db.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE name = 'memory_nodes'`).get().n > 0
     if (!hasSchema) {
-      // Error path: los cuatro nombres se conservan y cada check no ejecutable
+      // Error path: los cinco nombres se conservan y cada check no ejecutable
       // se reporta como falla con su motivo (nunca se omite del array).
       const detail = 'esquema no inicializado'
+      const notVerifiable = { ok: false, detail: `no verificable: ${detail}` }
       return {
         checks: [
           { name: 'Integridad DB', ok: false, detail },
-          { name: 'Indice FTS5', ok: false, detail: `no verificable: ${detail}` },
-          { name: 'Reglas activas (unicidad)', ok: false, detail: `no verificable: ${detail}` },
-          { name: 'Checkpoint WAL', ok: false, detail: `no verificable: ${detail}` }
+          { name: 'Indice FTS5', ...notVerifiable },
+          { name: 'Reglas activas (unicidad)', ...notVerifiable },
+          { name: REFS_CHECK_NAME, ...notVerifiable },
+          { name: 'Checkpoint WAL', ...notVerifiable }
         ],
         healthy: false,
         rebuilt: false
@@ -106,6 +111,33 @@ export function memoryDoctor(dbPath, { rebuild = false } = {}) {
       ok: dups.length === 0,
       detail: dups.length === 0 ? 'una sola activa por memory_key' : dups.map((d) => `${d.memory_key} x${d.n}`).join(', ')
     })
+
+    // Refs de nodos activos: solo lectura (specs, listado de changes, existsSync);
+    // comparte parser y resolucion con el camino de escritura. La raiz se deriva
+    // igual que en escritura, nunca de process.cwd().
+    const activeNodes = db.prepare(`SELECT memory_key, content FROM memory_nodes WHERE status = 'active' ORDER BY memory_key`).all()
+    const refs = inspectRefs({ nodes: activeNodes, projectRoot: resolveProjectRoot(null, dbPath) })
+    let refsCheck
+    if (refs.needsRoot && refs.unresolved.length === 0) {
+      refsCheck = {
+        ok: true,
+        skipped: true,
+        detail: 'omitido: no se pudo derivar la raiz del proyecto con refs que verificar'
+      }
+    } else if (refs.unresolved.length > 0) {
+      const entries = refs.unresolved.map((u) => `"${u.memory_key}" -> ${u.ref} (${u.reason})`).join('; ')
+      refsCheck = {
+        ok: false,
+        detail: `${refs.unresolved.length} refs no resuelven: ${entries}`
+      }
+    } else {
+      const extra = refs.unverifiable > 0 ? `; ${refs.unverifiable} no verificables (commit/workitem)` : ''
+      refsCheck = {
+        ok: true,
+        detail: `${refs.verified} refs verificadas en ${refs.nodes} nodos activos; 0 no resuelven${extra}`
+      }
+    }
+    checks.push({ name: REFS_CHECK_NAME, ...refsCheck })
 
     if (rebuild) {
       const checkpointed = checkpointDatabase(db)

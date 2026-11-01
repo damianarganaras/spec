@@ -430,6 +430,21 @@ las de semántica pura y con consumidor comprobado: merge de specs con `--dry-ru
 (`mergeLocked` **no** es merge de deltas — V2 línea 532), selección de tests focalizados cuando la
 cobertura sea confiable, e intake read-only fresco.
 
+### 5.2 Deuda declarada de MEM-04 (no aplicada en el primer corte)
+
+- **`inspectRefs` no captura errores de I/O.** `readFileSync`/`readdirSync`/`statSync` pueden lanzar
+  (`EACCES`, race entre `existsSync` y la lectura) y abortan `doctor` entero en vez de reportar. Requiere
+  decidir si entra como `inválido (<causa>)` o con un motivo propio en la taxonomía de `memory-ops`, más
+  su escenario. **Disparador:** el primer fallo real de lectura, o el cierre de MEM-04.
+- **Conteo de no verificables cuando hay rotas.** El delta define el conteo de `commit:`/`workitem:` sólo
+  para el `detail` sin rotas (`specs/memory-ops/spec.md`, párrafo del `detail` sin rotas); con rotas la
+  información se pierde. Hoy son 0 refs de esos tipos. **Disparador:** la primera ref `commit:` o
+  `workitem:` real, o un cambio de contrato explícito.
+- **`agents/memory-keeper.md:87-94`** muestra un bloque `refs:` sólo con items indentados y no aclara que
+  la indentación es opcional. La aclaración va en la superficie de prompt **referenciando**
+  `aspec/specs/memory-engine` (fuente única), sin re-enunciar la regla. **Disparador:** el próximo cambio
+  que toque ese archivo.
+
 ---
 
 ## 6. P2 — condicional, después de P1

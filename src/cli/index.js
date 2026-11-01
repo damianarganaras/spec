@@ -87,7 +87,8 @@ Uso:
                                    Imprime/escribe el bloque <ProjectMemoryRules> (reglas activas)
   ancleto memory list [--type X] [--scope X] [--all] [--json]
                                     Lista los nodos de memoria (read-only, no toca la DB)
-ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FTS5, unicidad)
+ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FTS5, unicidad,
+                                     refs de nodos activos, checkpoint WAL)
                                      y reconstruye el indice FTS5 con --rebuild
   ancleto memory export [--out <archivo>]  Exporta nodos activos a JSON (stdout o archivo)
   ancleto memory import <archivo>          Importa nodos desde JSON (upsert por memory_key, idempotente)

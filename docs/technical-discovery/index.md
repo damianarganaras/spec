@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-10-31T00:24:30Z
-pluginVersion: 0.17.1
+generatedAt: 2026-11-01T02:38:20Z
+pluginVersion: 0.17.2
 skillVersion: '2.3'
 ---
 
@@ -11,11 +11,12 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto` / alias `aspec`).
 No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base: pack Repomix
-(`--compress`, tier resuelto `minimo`, 705 archivos, ~17.319 tokens), `package.json`
-(`0.17.1`), tag anotado `v0.17.1` en `main` (`cda4cb6`, merge de `development`), HEAD
-`975aa03` en `development` (`chore(release): v0.17.1`), `.discovery-map.json`
-(`total_files: 717`) y lectura puntual de los archivos citados en cada documento, incluidos
-`agents/`, `skills/`, `docs/` y `aspec/` (fuera del pack por el tier).
+(`--compress`, tier resuelto `minimo`, 709 archivos, ~17.669 tokens), `package.json`
+(`0.17.2`), release `fc6d2cb` (`chore(release): 0.17.2`), tag anotado `v0.17.2` en `main`
+(`2129395`, merge de `development`; **no** es ancestro de HEAD), HEAD `6574426` en
+`development` (`docs(agents): documenta donde se cambia el modelo de los agentes`),
+`.discovery-map.json` (`total_files: 721`) y lectura puntual de los archivos citados en cada
+documento, incluidos `agents/`, `skills/`, `docs/` y `aspec/` (fuera del pack por el tier).
 
 ## Ruteo por pregunta
 
@@ -28,8 +29,9 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 | Catálogo de unidades (módulos, agents, skills, commands) con propósito y entry point | `units/_map.md` |
 | **Entorno de máquina**: `.ancleto/machine-env.md`, shell/EOL/tooling, **sonda de invocabilidad** (disponibilidad = resoluble e invocable), exclusión local sin tocar `.gitignore`, entrega a subagentes | `setup.md`, `decisions.md`, `units/cli-install.md` |
 | **Rutas por host (`AGENT_TARGETS`), adaptación de frontmatter (incl. Command Code), commands como skills, MCP de host, merge de templates y bloques LOCKED, portabilidad** | `units/cli-install.md` |
-| Motor de memoria persistente (SQLite + FTS5, tools del LLM, working-context, procedencia `source`), **refs normalizadas y validación fail-closed**, **promoción al archivar**, **export/import/gc**, **snapshot**, **merge**, **refresh on-write CLI**, **doctor estrictamente read-only** | `units/memory-engine.md` |
-| **Reglas de escritura de memoria**: bloque `refs:` obligatorio, gramática cerrada (`spec:`/`change:`/`path:`/`commit:`/`workitem:`), resolución y ambigüedad, exención `runtime`, rechazo de secretos | `units/memory-engine.md`, `decisions.md` |
+| Motor de memoria persistente (SQLite + FTS5, tools del LLM, working-context, procedencia `source`), **refs normalizadas y validación fail-closed**, **promoción al archivar**, **export/import/gc**, **snapshot**, **merge**, **refresh on-write CLI**, **doctor estrictamente read-only con cinco checks** | `units/memory-engine.md` |
+| **`memory doctor` de cinco checks** (`Integridad DB`, `Indice FTS5`, `Reglas activas (unicidad)`, `Refs de nodos activos`, `Checkpoint WAL`) y auditoría read-only de refs `spec:`/`change:`/`path:` | `units/memory-engine.md`, `decisions.md` |
+| **Reglas de escritura de memoria**: bloque `refs:` obligatorio, gramática cerrada (`spec:`/`change:`/`path:`/`commit:`/`workitem:`), **items indentados o no**, resolución y ambigüedad, exención `runtime`, rechazo de secretos | `units/memory-engine.md`, `decisions.md` |
 | **Promoción de decisiones al archivar** (`proposal ## Decisiones` aprobadas, preflight, cero candidatos ⇒ cero escrituras, orden respecto del merge de specs) | `decisions.md`, `units/memory-engine.md`, `units/cli-install.md` |
 | Discovery, empaquetado Repomix, impacto del seed, **affected-set determinístico (grafo de imports, `ancleto affected`)** y tiers de tokens | `units/discovery-engine.md` |
 | CLI: `init`/`install`/`update`/`upgrade`, wizard TTY, migración legacy, MCP, `stats failures` | `units/cli-install.md` |
@@ -41,7 +43,8 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 | Working-context día-cero, refresh on-write (MCP/CLI), staleness advisory y **render de reglas sin el bloque `refs:`** | `units/memory-engine.md`, `overview.md` |
 | **Arranque de sesión del orquestador**: intake de sesión (changes activos + `git status --short` delegado), techo de lecturas (3 archivos + exenciones), allowlist de `bash` de `@technical-discovery` | `decisions.md`, `overview.md`, `units/_map.md` |
 | **`<ContextOverflowWarning>`**: qué emite, quién lo consume y qué guía residual sigue en `PRODUCT.md`/templates | `units/memory-engine.md`, `decisions.md` |
-| **`opencode.json` de la raíz**: override de `agent.model` para los 9 subagentes, fuera del paquete publicado | `setup.md`, `decisions.md`, `inventory.md` |
+| **`opencode.json` de la raíz**: override de `agent.model` para 9 subagentes (baseline commiteado), fuera del paquete publicado; el checkout tiene un mapeo local sin commitear para el orquestador | `setup.md`, `decisions.md`, `inventory.md` |
+| **Cambiar el `model:` de los agentes**: tres superficies (canónica `agents/*.md`, mirror `.opencode/agents/*`, global `~/.config/opencode/agents/*`), precedencia de `opencode.json` solo sobre el agente primario y verificación con `Select-String` | `setup.md`, `decisions.md`, `units/cli-install.md` |
 | Análisis de costo de tokens y decisión pendiente de "token-economy" | `optimizacion-de-tokens.md` (raíz) |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -53,13 +56,14 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local,
   entorno de máquina derivado y control de costo por tier. **8 hosts**: opencode (default),
   claude, vscode, antigravity, cursor, roo, copilot y commandcode.
-- **Versión observada**: `0.17.1` (`package.json`); tag **anotado** `v0.17.1` en `main`
-  (`cda4cb6`, merge de `development`); HEAD `975aa03` (`chore(release): v0.17.1`) en
-  `development`. El **retiro de `design.md`/`context.md`** quedó publicado en `0.17.1`
-  (`CHANGELOG.md`). Árbol de trabajo con cambios: `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`
-  modificado, el archive de `2026-10-30-backfill-archived-design-decisions` **untracked** y los
-  artefactos derivados del discovery (`.discovery-map.json`,
-  `docs/technical-discovery/.discovery-state.json`).
+- **Versión observada**: `0.17.2` (`package.json`); release `fc6d2cb` (`chore(release): 0.17.2`)
+  y tag **anotado** `v0.17.2` en `main` (`2129395`, merge de `development`; **no** es ancestro
+  de HEAD). HEAD `6574426` en `development`. **MEM-04** (`memory doctor` con refs) y la guía de
+  modelos de `AGENTS.md` quedaron en `development` **después** del tag `v0.17.2`: no están en
+  ese release. Árbol de trabajo con **dos cambios transitorios sin commitear**:
+  `agents/spec-writer.md` (línea `model:` de un probe) y `opencode.json` (mapeo local del
+  orquestador); ninguno es estado del producto. Además, artefactos derivados del discovery
+  (`.discovery-map.json`, `docs/technical-discovery/.discovery-state.json`).
 - **Tier resuelto**: `minimo` vía `.opencode/.ancleto-tier`; decide modelos de los agents y el
   pack (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, **sin token budget**; solo
   `gratis` fija 50k).
@@ -75,8 +79,10 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
   `memory export|import|gc|snapshot|merge|context|list|doctor` sobre `.ancleto/memory.db`.
   `source` es procedencia runtime-owned. **Toda escritura que pasa por `recordNode` valida
   refs normalizadas de forma fail-closed**, salvo `source === 'runtime'`; `cli:import` queda
-  fuera porque usa `importNodes` (LWW). `<ProjectMemoryRules>` renderiza solo la prosa de cada
-  regla, sin el bloque `refs:`. Detalle: `units/memory-engine.md`.
+  fuera porque usa `importNodes` (LWW). Los items del bloque `refs:` pueden ir **indentados o
+  no**. `<ProjectMemoryRules>` renderiza solo la prosa de cada regla, sin el bloque `refs:`.
+  **`memory doctor` audita cinco checks en read-only**, incluido `Refs de nodos activos` con
+  `inspectRefs` (mismo parser y resolución que la escritura). Detalle: `units/memory-engine.md`.
 - **Promoción al archivar**: solo decisiones de `proposal ## Decisiones` con `memory_key`
   propia y `Estado: aprobado`; preflight del lote antes de escribir; sin candidatos ⇒ cero
   escrituras y cero delegación; corre **después** del merge de specs y nunca en paralelo.
@@ -115,29 +121,33 @@ No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base
 - **Reporte de fallos**: `ancleto stats failures` lee en solo lectura los tool parts de opencode,
   clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y
   enmascara secretos y rutas. Spec `aspec/specs/session-failure-report/spec.md`.
-- **`opencode.json` (raíz)**: override de `agent.model` a
-  `commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes (no incluye el orquestador). No
-  forma parte del paquete publicado: `package.json` → `files` no lo lista. Evidencia:
-  `opencode.json`, `package.json`.
+- **`opencode.json` (raíz)**: baseline commiteado con override de `agent.model` a
+  `commandcode/deepseek/deepseek-v4.1-flash` para **9 subagentes** (sin orquestador). El
+  checkout agrega **sin commitear** un mapeo para `orchestrator`; es config local del host, no
+  estado del producto. No forma parte del paquete publicado: `package.json` → `files` no lo
+  lista. Evidencia: `opencode.json`, `package.json`.
 - **`AGENTS.md`**: **cuatro** bloques `LOCKED` de reglas compartidas (`validation-commands`,
-  `memory-boundary`, `artifacts-language`, `seed-freshness`) + `test-block`.
+  `memory-boundary`, `artifacts-language`, `seed-freshness`) + `test-block`, y la sección
+  **`## Cambiar el modelo de los agentes`** (tres superficies del `model:`, precedencia de
+  `opencode.json` sobre el agente primario y verificación con `Select-String`). Detalle:
+  `setup.md`, `decisions.md` (regla 50).
 - **Set de artifacts**: el flujo nuevo produce **tres** artifacts (`proposal.md`, `tasks.md`,
   `specs/`); `design.md` y `context.md` se retiraron **sin sucesor** y una decisión durable va a
   `proposal.md ## Decisiones`. El retiro está **publicado en `0.17.1`**; los changes anteriores
   que sí tuvieron `design.md` lo conservan intacto en el archive. Detalle: `decisions.md`
   (regla 47).
 - **Ciclo SDD**: 16 comandos `/cleto-*` y 21 skills nativas; `aspec/` tiene **19 specs fuente**,
-  **1 change activo** (`ancleto-vscode-extension`) y **33 archivados** (el último,
-  `2026-10-30-backfill-archived-design-decisions`, backfill de decisiones a memoria: **sólo
-  artifacts, sin cambio de producto**).
+  **1 change activo** (`ancleto-vscode-extension`) y **34 archivados** (el último,
+  `2026-10-31-mem-04-doctor-referencias-no-resueltas`: `memory doctor` reporta refs no
+  resueltas de nodos activos).
 - **Este checkout**: `.ancletorc` y `.opencode/` existen (gitignored, no versionados).
   Persiste `.ancleto/memory.db` y **`.ancleto/machine-env.md`** (generado el 2026-10-30 con
-  `ancleto: 0.17.1`).
+  `ancleto: 0.17.1`; el artefacto todavía declara esa versión).
 - **Rama de trabajo**: `development`; `main` declarada protegida en `AGENTS.md` (no se verificó
   protección real en el remoto).
 - **Sin backlog raíz**: `BACKLOG.md` no existe. El backlog P0 de la reingeniería de memoria
-  vive en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (modificado en este checkout; PR-4b =
-  el change de backfill archivado). Ver `unknowns.md`.
+  vive en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (con altas de `CH-11` y `MEM-07` en
+  `0.17.2`; `§5.2` declara tres deudas de MEM-04). Ver `unknowns.md`.
 - **Doc de análisis raíz**: `optimizacion-de-tokens.md` (no es runtime; mide costo de tokens y
   deja una decisión abierta sobre la promesa "optimizador de tokens").
 - **No material para el seed**: `audit logs/` (untracked) y `documentation/` (legado

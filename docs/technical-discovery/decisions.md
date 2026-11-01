@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-10-31T00:24:30Z
-pluginVersion: 0.17.1
+generatedAt: 2026-11-01T02:38:20Z
+pluginVersion: 0.17.2
 skillVersion: '2.3'
 ---
 
@@ -323,21 +323,28 @@ skillVersion: '2.3'
       lugar, un `.bak` remanente no invalida la copia. Sin `overwrite`/`--force` un destino
       existente es error. Evidencia: `src/core/memory/snapshot.js`,
       `aspec/specs/memory-ops/spec.md` (requirement "Snapshot consistente de la base de memoria").
-37. **`memory doctor` es estrictamente read-only por defecto (PR-1).** Abre la base con
+37. **`memory doctor` es estrictamente read-only por defecto (PR-1 + MEM-04).** Abre la base con
       `openDatabase(dbPath, { migrate: false, readonly: true })`: sin checkpoint, sin DDL y sin
-      `INSERT` sobre FTS. Los cuatro nombres de check se conservan (`Integridad DB`,
-      `Indice FTS5`, `Reglas activas (unicidad)`, `Checkpoint WAL`).
+      `INSERT` sobre FTS. Los **cinco** nombres de check se conservan, en orden (`Integridad DB`,
+      `Indice FTS5`, `Reglas activas (unicidad)`, **`Refs de nodos activos`**, `Checkpoint WAL`).
       `Indice FTS5` tiene **tres estados**: índice ausente ⇒ **falla** (nunca `skipped`, baja
       `healthy`); tabla sombra `memory_fts_docsize` no consultable ⇒ **omitido** (no baja
       `healthy`, caso p. ej. FTS5 con `columnsize=0`); si no, compara `count(*)` de la sombra
       contra `memory_nodes` (el `count(*)` de `memory_fts` no sirve porque external-content lo
-      resuelve contra `memory_nodes`). `Checkpoint WAL` reporta el tamaño observable del `-wal`
-      sin checkpointear. El integrity-check completo (INSERT de control) y la reconstrucción
-      quedan **solo** en `--rebuild`, el único camino que abre en escritura. Un error de apertura
-      conserva los cuatro nombres y marca cada check no ejecutable como falla. Evidencia:
-      `src/core/memory/doctor.js`, `src/cli/index.js` (`memoryDoctorCmd`),
-      `aspec/specs/memory-ops/spec.md` (requirements "`memory doctor` estrictamente read-only" y
-      "Reparación explícita con `memory doctor --rebuild`").
+      resuelve contra `memory_nodes`). **`Refs de nodos activos`** audita con `inspectRefs`, en
+      read-only y sin escritura: cada ref `spec:`/`change:`/`path:` de un nodo activo que no
+      resuelve es falla (`ok: false`, `healthy: false`, exit ≠ 0) con `"<memory_key>" -> <ref>
+      (<motivo>)`; `commit:`/`workitem:` no se resuelven y se cuentan aparte como no
+      verificables. Se omite sólo si hay refs que verificar, no hay defecto detectable sin raíz y
+      la raíz no se puede derivar; sin refs verificables no requiere raíz. `Checkpoint WAL`
+      reporta el tamaño observable del `-wal` sin checkpointear. El integrity-check completo
+      (INSERT de control) y la reconstrucción quedan **solo** en `--rebuild`, el único camino que
+      abre en escritura. Un error de apertura conserva los cinco nombres y marca cada check no
+      ejecutable como falla. Evidencia: `src/core/memory/doctor.js`,
+      `src/core/memory/engine.js` (`inspectRefs`), `src/cli/index.js` (`memoryDoctorCmd`),
+      `aspec/specs/memory-ops/spec.md` (requirements "`memory doctor` estrictamente read-only",
+      "Reparación explícita con `memory doctor --rebuild`" y "Diagnóstico de refs no resueltas en
+      nodos activos").
 38. **Merge de nodos por supersesión, sin tabla nueva (PR-1).** `engine.merge({ target,
       sources, dryRun })` consolida duplicados supersediendo cada source **activa** hacia un
       target **activo**, reutilizando el statement `supersede` y el patrón transaccional de
@@ -382,35 +389,39 @@ skillVersion: '2.3'
      `agents/orchestrator.md`, `skills/ancleto-{propose,new,ff,continue,onboard}/SKILL.md`,
      `skills/ancleto-upgrade/references/templates.md`.
 41. **Refs normalizadas dentro de `content` y validación fail-closed en `recordNode`
-     (`MEM-03`, commit `90dba0d`).** No hay tabla ni columna nueva: las refs viajan en el propio
-     `content` como un bloque `refs:` (línea `refs:` + lista con guion) y se resuelven sobre el
-     texto indexado. Gramática cerrada: `spec:<cap>#<heading>`, `change:<slug>`,
-     `path:<repo-relative>`, `commit:<sha>` y `workitem:<tracker>:<key>` (`engine.js:86-149`).
-     `validateRefsForWrite` corre **antes** de la transacción (`engine.js:284-311`,
-     `engine.js:461-475`): exige exactamente un bloque, al menos una ref, y falla cerrado ante
+     (`MEM-03`, commit `90dba0d`; gramática ampliada por `MEM-04`).** No hay tabla ni columna
+     nueva: las refs viajan en el propio `content` como un bloque `refs:` (línea `refs:` + lista
+     con guion) y se resuelven sobre el texto indexado. Gramática cerrada: `spec:<cap>#<heading>`,
+     `change:<slug>`, `path:<repo-relative>`, `commit:<sha>` y `workitem:<tracker>:<key>`
+     (`engine.js:117-149`). Los items pueden ir **indentados o no**; el bloque termina en la
+     primera línea en blanco o en la primera línea no indentada que no es item, y una línea
+     no-item dentro del bloque es inválida (`refsBlockEnd`, `engine.js:151-196`).
+     `validateRefsForWrite` corre **antes** de la transacción (`engine.js:334-361`,
+     `engine.js:565-572`): exige exactamente un bloque, al menos una ref, y falla cerrado ante
      gramática inválida, prefijo desconocido, `path:` absoluto o con `../`, ref irresoluble o
      ref ambigua. Una `decision` exige al menos `spec:` o `change:`; una `rule` exige al menos
-     `path:`, `spec:` o `change:` (`engine.js:302-310`). La **única exención** es
-     `context.source === 'runtime'` (`engine.js:468`). Los nodos existentes sin refs no se
+     `path:`, `spec:` o `change:` (`engine.js:352-360`). La **única exención** es
+     `context.source === 'runtime'` (`engine.js:565`). Los nodos existentes sin refs no se
      revalidan ni se backfillean. `importNodes` **no** pasa por `recordNode`: conserva su LWW y
-     no valida refs (`engine.js:540-570`; `aspec/specs/memory-engine/spec.md`).
+     no valida refs (`engine.js:637-680`; `aspec/specs/memory-engine/spec.md`). `inspectRefs`
+     (`engine.js:367-405`) reutiliza parser y resolución para la auditoría read-only del doctor.
 42. **Resolución de refs: `change:` exacto, `spec:` por heading canónico, `path:` relativo
      existente.** `change:<slug>` busca el change activo y un archive anclado exacto
      `YYYY-MM-DD-<slug>` (no un sufijo suelto), y reporta ambigüedad si hay más de un match
-     (`engine.js:250-269`). `spec:<cap>#<heading>` lee
+     (`engine.js:262-291`). `spec:<cap>#<heading>` lee
      `aspec/specs/<capability>/spec.md`, compara headings `### Requirement:` por forma exacta y
      canonizada (trim, minúsculas, sin diacríticos, sin backticks/`**`), deduplica por bloque y
-     **reporta ambigüedad** en vez de elegir el primero (`engine.js:222-244`). `path:` debe ser
-     relativo (rechaza absolutos y `..`), existir y ser archivo (`engine.js:271-282`).
+     **reporta ambigüedad** en vez de elegir el primero (`engine.js:227-256`). `path:` debe ser
+     relativo (rechaza absolutos y `..`), existir y ser archivo (`engine.js:293-317`).
      `commit:` y `workitem:` se validan por gramática; el motor no resuelve su existencia.
 43. **Rechazo de secretos en el camino de escritura, sin eco del valor.** `recordNode` inspecciona
      `content` y `justification` con `looksLikeSecret` antes de abrir la transacción y rechaza
      claves tipo `sk-`, `ghp_`, `AKIA`, `Authorization: Bearer`, `*TOKEN/SECRET/PASSWORD=...` y
-     bloques `BEGIN ... PRIVATE KEY` (`engine.js:88-100`, `engine.js:461-467`). El error nombra
+     bloques `BEGIN ... PRIVATE KEY` (`engine.js:97-115`, `engine.js:559-564`). El error nombra
      la `memory_key` y el campo, **nunca** repite el valor detectado.
 44. **Render proactivo sin el bloque `refs:`.** `buildWorkingContext` sigue inyectando solo
      `rule` activas; por cada regla usa `renderRuleContent(content)`, que recorta desde la línea
-     `refs:` hasta el final del bloque (`engine.js:197-206`, `engine.js:385-393`). El `content`
+     `refs:` hasta el final del bloque (`engine.js:202-207`). El `content`
      **almacenado** queda intacto con sus refs: solo cambia la vista proactiva. Las refs no
      consumen el presupuesto `maxChars` del bloque. Una regla sin `refs:` se renderiza igual que
      antes (`aspec/specs/memory-engine/spec.md`, requirement "Render del bloque proactivo sin el
@@ -431,11 +442,13 @@ skillVersion: '2.3'
      termina el merge de specs y **nunca en paralelo**, para que `spec:` resuelva contra la
      fuente de verdad; si no hubo sync, la pasada igual corre y una `spec:` no resoluble se
      rechaza fail-closed (`agents/orchestrator.md:192`, `agents/orchestrator.md:326`).
-46. **`opencode.json` en la raíz: override local del host, fuera del paquete.** El archivo fija
-     `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes y **no** incluye
-     al orquestador (`opencode.json:1-14`). `package.json` → `files` lista `agents`, `commands`,
-     `skills`, `templates`, `profiles` y `src`; `opencode.json` **no** se publica
-      (`package.json:10-17`). Es configuración del checkout, no contrato del producto.
+46. **`opencode.json` en la raíz: override local del host, fuera del paquete.** El **baseline
+     commiteado** fija `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes
+     y **no** incluye al orquestador. El árbol de trabajo agrega **sin commitear** el mapeo
+     `agent.orchestrator.model`; es un probe local de configuración, no estado del producto.
+     `package.json` → `files` lista `agents`, `commands`, `skills`, `templates`, `profiles` y
+     `src`; `opencode.json` **no** se publica. Es configuración del checkout, no contrato del
+     producto.
 
 47. **Retiro de `design.md` y `context.md` sin artifact sucesor
       (`retire-design-and-context-artifacts`, archivado el 2026-10-30).** El flujo nuevo produce
@@ -459,6 +472,38 @@ skillVersion: '2.3'
       `docs/skill-ancleto-upgrade.md`, `README.md`; guard único `test/content-guards.test.js`.
       **Estado**: commiteado en `development` (`a506b54`) y **publicado en `0.17.1`**
       (`CHANGELOG.md`; tag anotado `v0.17.1` en `main`, `cda4cb6`).
+48. **MEM-04 reutiliza el camino de escritura; no crea comando ni tabla.** El diagnóstico de
+      refs es un **check del doctor** (`Refs de nodos activos`), no un subcomando nuevo: no se
+      agrega `memory maintenance`, no se crea la tabla `memory_refs` y no hay un segundo parser
+      ni un segundo resolvedor. `inspectRefs({ nodes, projectRoot })` es **read-only y pura**
+      (sin conexiones ni escritura), recibe los nodos activos y la raíz, y reutiliza
+      `parseRefsBlock` + `resolveRefResult`; `validateRefsForWrite` conserva sus mensajes.
+      `commit:`/`workitem:` no se verifican en este corte; se excluyen de las rotas y sólo se
+      cuentan aparte en el `detail` sin rotas. El check se omite (`skipped: true`) sólo bajo las
+      tres condiciones del requirement y nunca baja `healthy` ni el exit code. Evidencia:
+      `src/core/memory/engine.js` (`inspectRefs`), `src/core/memory/doctor.js`,
+      `aspec/specs/memory-ops/spec.md` ("Diagnóstico de refs no resueltas en nodos activos"),
+      `aspec/changes/archive/2026-10-31-mem-04-doctor-referencias-no-resueltas/`.
+49. **Gramática de refs: indentación opcional y bloque terminal.** Los items del bloque `refs:`
+      pueden ir **indentados o no**; ambas formas se parsean igual. El bloque empieza en una
+      línea `refs:` y continúa por cada item (`- ` con cualquier indentación) y por cada línea
+      indentada; termina en la primera línea en blanco o en la primera línea no indentada que no
+      es item. Una línea no-item dentro del bloque es inválida; un bloque repetido también. En
+      escritura, `validateRefsForWrite` **lanza** (fail-closed); en el doctor, `inspectRefs`
+      **reporta** la falla sin abortar. Un bloque vacío no aporta refs y no es falla. Evidencia:
+      `src/core/memory/engine.js` (`refsBlockEnd`, `parseRefsBlock`),
+      `aspec/specs/memory-engine/spec.md` (gramática de refs).
+50. **Modelo de agentes: tres superficies y precedencia limitada.** El `model:` del frontmatter
+      existe en `agents/*.md` (fuente canónica y publicada), `.opencode/agents/*.md` (mirror que
+      regenera `ancleto upgrade`, nunca se edita a mano) y `~/.config/opencode/agents/*.md`
+      (instalación global que carga el runtime en este setup). `opencode.json` →
+      `agent.<nombre>.model` aplica al agente **primario** (permite que el orquestador corra en
+      otro modelo), pero **no** alcanza a los subagentes. Un tier aplicado por `ancleto install` /
+      `ancleto update` reescribe las líneas `model:`; `ancleto upgrade` **no** aplica tier. La
+      verificación es `Select-String -Path <directorio>/*.md -Pattern '^model:'` en las tres
+      superficies, y `ancleto check` reporta `frontmatter diverge del adaptador` cuando un mirror
+      se apartó de su fuente. Evidencia: `AGENTS.md` ("## Cambiar el modelo de los agentes"),
+      `src/cli/index.js` (`applyTier`, `checkAgentsFrontmatter`).
 
 ## Seed incremental (contrato del discovery)
 
@@ -468,12 +513,14 @@ skillVersion: '2.3'
   - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
     raíz nuevo (o un archivo material como `package.json`).
 - En esta corrida el reporte fue `STALE` / `impact: material`: los 11 `affectedDocs`,
-  `changedAreas` `[".ancleto", ".ancletorc", ".opencode", "CHANGELOG.md", "aspec",
-  "package.json"]` y `materialReasons: ["archivo material modificado: package.json"]`. La causa
-  es el bump `0.17.1` (publicado y con entrada en `CHANGELOG.md`) más el archive de
-  `2026-10-30-backfill-archived-design-decisions` (housekeeping de artifacts: no cambia código,
-  tests ni assets de producto); `.ancletorc`/`.opencode` son el manifiesto y la instalación local
-  del host (ambos gitignored) y `.ancleto` es la memoria más el `machine-env` regenerado.
+  `changedAreas` `[".ancleto", ".opencode", "CHANGELOG.md", "agents", "aspec", "docs",
+  "opencode.json", "package.json", "src", "test"]` y
+  `materialReasons: ["archivo material modificado: package.json"]`. La causa es el bump
+  `0.17.2` (publicado y con entrada en `CHANGELOG.md`, incluidas las altas `CH-11`/`MEM-07` del
+  backlog) más el check de refs de MEM-04 (`src/core/memory/doctor.js`, `engine.js`), la guía de
+  modelos de `AGENTS.md` y el cambio local sin commitear de `opencode.json`; `.ancletorc` no
+  figura como área cambiada en esta corrida y `.opencode`/`.ancleto` son la instalación local y
+  los artefactos derivados.
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **solo** esos
   documentos; con `impact: material` se regenera el seed completo. El mapeo vive en
   `seed-map.json`; sin ese archivo la regeneración es completa.
@@ -491,8 +538,8 @@ skillVersion: '2.3'
 - **Detección material por área, no por contrato**: `package.json` es material por lista de
   archivos, así que **cualquier** bump de versión —incluso sin cambio de comportamiento— marca
   `impact: material` y lista los documentos asociados. En esta corrida la razón material fue el
-  bump `0.17.0`→`0.17.1`; el backfill archivado (markdown en `aspec/`, `docs/` y `agents/`) no
-  es, por sí solo, una razón material.
+  bump `0.17.1`→`0.17.2`; el código de MEM-04, la guía de `AGENTS.md` y el cambio local de
+  `opencode.json` no son, por sí solos, razones materiales por contrato.
 - `EXPECTED_DOCS` del CLI = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`,
   `integrations`, `decisions`, `unknowns`, `units/_map`).
 - Evidencia: `README.md`, `src/cli/index.js` (`checkDiscovery`, `computeImpact`,
@@ -500,13 +547,20 @@ skillVersion: '2.3'
 
 ## Riesgos, deuda y acoplamiento
 
-- **MEM-03 publicado como `0.17.0`; el retiro de `design.md`/`context.md` publicado como
-  `0.17.1`.** El release `b283ff2` (`chore(release): v0.17.0`) y el tag **anotado**
-  `v0.17.0` en `main` (`cdc18d5`, "Merge development into main for v0.17.0") cubren MEM-03 y
-  `CHANGELOG.md` lo detalla. El retiro entró después, en `a506b54` sobre `development`, y quedó
-  publicado en `0.17.1` (`975aa03`, `chore(release): v0.17.1`; tag **anotado** `v0.17.1` en
-  `main`, `cda4cb6`, merge de `development`), con su propia entrada en `CHANGELOG.md`.
-  Evidencia: `git log`, `git tag`, `CHANGELOG.md`, `package.json`.
+- **MEM-03 `0.17.0`, retiro de artifacts `0.17.1`, release `0.17.2`; MEM-04 queda fuera de ese
+  tag.** El release `fc6d2cb` (`chore(release): 0.17.2`) y el tag **anotado** `v0.17.2` en
+  `main` (`2129395`, merge de `development`) publican el backfill y el seed regenerado.
+  **MEM-04** (`cd23ec6`), su archive (`1fa6377`) y la guía de modelos de `AGENTS.md` (`6574426`)
+  entraron **después** del tag y viven sólo en `development`: no están en `0.17.2`. El retiro de
+  `design.md`/`context.md` sigue publicado desde `0.17.1`. Evidencia: `git log`, `git tag`,
+  `CHANGELOG.md`, `package.json`.
+- **Tres superficies del `model:` y probes locales.** Cambiar el modelo de un agente exige
+  revisar `agents/*.md` (canónica), `.opencode/agents/*` (mirror) y `~/.config/opencode/agents/*`
+  (global); `opencode.json` sólo alcanza al agente primario. Un cambio aislado en el mirror o en
+  `opencode.json` no repunta a los subagentes. En este checkout hay **dos cambios sin commitear**
+  que son probes transitorios, no estado del producto: la línea `model:` de
+  `agents/spec-writer.md` y el mapeo `agent.orchestrator.model` de `opencode.json`. Evidencia:
+  `AGENTS.md`, `agents/spec-writer.md`, `opencode.json`, `git diff`.
 - **Pack comprimido y sesgado a código.** El tier resuelto (`minimo`) ignora `test/**`,
   `docs/**` y `**/*.md`; Repomix además respeta `.gitignore` (`.opencode/`, `.ancletorc`,
   `.ancleto/`, `/documentation`). Por eso `agents/`, `commands/`, `skills/`, `templates/`,
@@ -607,8 +661,20 @@ skillVersion: '2.3'
 - **Doctor read-only no verifica todo.** El integrity-check completo de FTS5 escribe y queda solo
   para `--rebuild`; en read-only la alineación se aproxima con la tabla sombra. Un FTS5 creado
   con `columnsize=0` deja el check **omitido** (no falla), y una corrupción interna sin
-  desalineación de filas puede pasar. Evidencia: `src/core/memory/doctor.js`,
-  `aspec/specs/memory-ops/spec.md`.
+  desalineación de filas puede pasar. El check de refs sólo resuelve `spec:`/`change:`/`path:`
+  contra el filesystem; `commit:`/`workitem:` no se verifican y el `path:` se valida de forma
+  léxica (sin `realpath` ni containment de symlinks). Evidencia: `src/core/memory/doctor.js`,
+  `src/core/memory/engine.js`, `aspec/specs/memory-ops/spec.md`.
+- **Deuda declarada de MEM-04 (backlog `§5.2`).** Tres bordes no cubiertos en el primer corte:
+  (a) `inspectRefs` no captura errores de I/O (`readFileSync`/`readdirSync`/`statSync` pueden
+  lanzar y abortar el doctor) y falta decidir si entran como `inválido (<causa>)` o con motivo
+  propio; (b) el conteo de `commit:`/`workitem:` como no verificables sólo aparece en el `detail`
+  sin rotas, así que con rotas esa información se pierde; (c) `agents/memory-keeper.md:87-94`
+  muestra un bloque `refs:` sólo con items indentados y no aclara que la indentación es
+  opcional (la aclaración va referenciando `aspec/specs/memory-engine`). Disparadores: primer
+  fallo real de I/O, primera ref `commit:`/`workitem:` real y próximo cambio de ese archivo.
+  Evidencia: `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (`### 5.2`), `src/core/memory/engine.js`,
+  `agents/memory-keeper.md`.
 - **Merge es irreversible por CLI.** No crea nodos ni transfiere contenido: enlaza cada source
   al target (`superseded_by`). Deshacerlo requiere un snapshot previo o reescribir los nodos. El
   `type` debe coincidir y las sources deben estar activas; un merge con `--dry-run` es el único
@@ -660,31 +726,36 @@ skillVersion: '2.3'
 - **Staleness advisory puede dar falsos positivos triviales.** La normalización es acotada
   (CRLF, espacios finales, salto final); cambios cosméticos mayores podrían disparar
   `desactualizado` aunque el contenido sea equivalente. Riesgo aceptado: se prefiere reportar.
-- **Versión y publicación.** `package.json` marca `0.17.1`; el tag `v0.17.1` es **anotado** y
-  vive en `main` (`cda4cb6`, merge de `development`); `development` HEAD `975aa03` es el commit
-  de release `chore(release): v0.17.1` y **no es ancestro** del tag (el tag cuelga del merge).
-  Evidencia: `package.json`, `git tag`, `git log`, `git status --short`.
+- **Versión y publicación.** `package.json` marca `0.17.2`; la release es `fc6d2cb`
+  (`chore(release): 0.17.2`) y el tag **anotado** `v0.17.2` vive en `main` (`2129395`, merge de
+  `development`), **fuera** de la ascendencia de HEAD. `development` HEAD `6574426` está 17
+  commits después de `v0.16.0`; `git describe --tags` da `v0.16.0-17-g6574426` porque `v0.17.1`
+  y `v0.17.2` cuelgan de merges de `main`, no de `development`. **MEM-04** y la guía de modelos
+  quedaron después del tag. Evidencia: `package.json`, `git tag`, `git log`,
+  `git describe --tags`.
 - **Docs de producto desalineados.** `PRODUCT.md` declara 12 commands y 18 skills (hoy 16 y 21),
-  no menciona `machine-env`, `stats failures`, `memory snapshot`, `memory merge` ni el retiro, y
-  conserva la guía residual de `searchMemory`; `README.md` ya describe `memory doctor`
-  read-only por defecto con `--rebuild` como único camino de escritura. `CHANGELOG.md` cubre
-  `0.17.1` e incluye MEM-03 y el retiro. El seed refleja el estado observado.
-  Evidencia: `PRODUCT.md`, `README.md`, `CHANGELOG.md`, `commands/`, `skills/`,
-  `src/core/memory/doctor.js`.
+  no menciona `machine-env`, `stats failures`, `memory snapshot`, `memory merge`, el check de
+  refs ni el retiro, y conserva la guía residual de `searchMemory`; `README.md` ya describe
+  `memory doctor` read-only por defecto con `--rebuild` como único camino de escritura.
+  `CHANGELOG.md` cubre `0.17.2` e incluye MEM-03 y el retiro, pero **no** MEM-04 (posterior al
+  tag). El seed refleja el estado observado. Evidencia: `PRODUCT.md`, `README.md`,
+  `CHANGELOG.md`, `commands/`, `skills/`, `src/core/memory/doctor.js`.
 - **Sin backlog raíz.** `BACKLOG.md` no existe. El backlog P0 de la reingeniería de memoria vive
-  en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (PR-4b/CH-02c corresponde al backfill
-  archivado); las demás deudas que el seed citaba por ítem (guía residual de `searchMemory`,
-  protección de rama, detección material por archivo, comandos denegados fuera de medición)
-  siguen como observaciones sin ítem canónico.
-- **Deuda resuelta hasta 0.17.1**: (a) contrato de validaciones declarativo; (b) dedupe de reglas
+  en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (con `CH-11`/`MEM-07` altas en `0.17.2` y
+  `§5.2` de deuda MEM-04); las demás deudas que el seed citaba por ítem (guía residual de
+  `searchMemory`, protección de rama, detección material por archivo, comandos denegados fuera de
+  medición) siguen como observaciones sin ítem canónico.
+- **Deuda resuelta hasta 0.17.2 (MEM-04 aún sin release)**: (a) contrato de validaciones
+  declarativo; (b) dedupe de reglas
   y día-cero del working-context; (c) `PRODUCT.md` declara `## Project Commands`; (d) pipeline de
   cierre; (e) refresh on-write CLI y staleness advisory; (f) entorno de máquina; (g) reporte de
   fallos; (h) intake de sesión, techo de lecturas y aviso de overflow accionable; (i) PR-1
   memoria-first (snapshot, doctor read-only, merge), publicado en `0.16.0`; (j) PR-2 (checkpoint
   de contrato y `## Decisiones`), publicado en `0.16.2`; (k) MEM-03 (refs obligatorias y
   promoción al archivar), publicado en `0.17.0`; (l) retiro de `design.md`/`context.md`,
-  publicado en `0.17.1`. Evidencia: `CHANGELOG.md`, `aspec/changes/`,
-  `package.json`, `git log`.
+  publicado en `0.17.1`; (m) MEM-04 (check de refs del doctor y gramática con indentación
+  opcional), en `development` **después** del tag `v0.17.2`. Evidencia: `CHANGELOG.md`,
+  `aspec/changes/`, `package.json`, `git log`.
 
 ## Decisiones registradas en memoria del repo
 

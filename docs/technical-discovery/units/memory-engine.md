@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, la validación de refs, la promoción al archivar, el working-context (día-cero), el refresh on-write (MCP y CLI), la procedencia source, las ops export/import/gc, snapshot, merge, el doctor read-only, el aviso de overflow y su consumo por el orquestador"
-covers: [motor de memoria, tools, refs normalizadas, validación fail-closed, rechazo de secretos, promoción al archivar, working-context, día-cero, procedencia source, export/import/gc, snapshot consistente, merge por supersesión, doctor read-only, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
+read_when: "cómo funciona la memoria persistente, las tools del LLM, la validación de refs, la promoción al archivar, el working-context (día-cero), el refresh on-write (MCP y CLI), la procedencia source, las ops export/import/gc, snapshot, merge, el doctor read-only con cinco checks (incl. auditoría de refs), el aviso de overflow y su consumo por el orquestador"
+covers: [motor de memoria, tools, refs normalizadas, validación fail-closed, indentación de refs, rechazo de secretos, promoción al archivar, working-context, día-cero, procedencia source, export/import/gc, snapshot consistente, merge por supersesión, doctor read-only, auditoría de refs, inspectRefs, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
 sources: ["src/core/memory/**"]
-generatedAt: 2026-10-31T00:24:30Z
-pluginVersion: 0.17.1
+generatedAt: 2026-11-01T02:38:20Z
+pluginVersion: 0.17.2
 skillVersion: '2.3'
 ---
 
@@ -18,9 +18,12 @@ Retener reglas y decisiones del proyecto entre sesiones de IA, en una base SQLit
 tools MCP del LLM, subcomandos CLI (ops de mantenimiento, snapshot, merge y chequeo de
 integridad), el working-context inyectado al system prompt y el doctor. Desde `MEM-03`, el
 camino de escritura `recordNode` es también el punto único de **validación de refs** y
-**rechazo de secretos**. Evidencia: `README.md`, `DESIGN-memory-engine-v0.2.0.md`,
-`aspec/specs/memory-ops/spec.md`, `aspec/specs/memory-engine/spec.md`,
-`aspec/changes/archive/2026-10-30-mem-03-promocion-decisiones-refs/`.
+**rechazo de secretos**. Desde `MEM-04`, `memory doctor` agrega un check read-only que audita
+esas mismas refs con `inspectRefs`, sin un segundo parser ni un segundo resolvedor. Evidencia:
+`README.md`, `DESIGN-memory-engine-v0.2.0.md`, `aspec/specs/memory-ops/spec.md`,
+`aspec/specs/memory-engine/spec.md`,
+`aspec/changes/archive/2026-10-30-mem-03-promocion-decisiones-refs/`,
+`aspec/changes/archive/2026-10-31-mem-04-doctor-referencias-no-resueltas/`.
 
 ## Recorrido relevante
 
@@ -46,11 +49,11 @@ camino de escritura `recordNode` es también el punto único de **validación de
 | Archivo | Rol |
 |---|---|
 | `src/core/memory/database.js` | Abre la DB (`openDatabase`, con opción `readonly`), PRAGMAs (`WAL`, `foreign_keys`, `busy_timeout=5000`), migraciones idempotentes, FTS5 external-content, triggers, `checkpointDatabase` (merge del WAL). |
-| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext`, `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode` (procedencia `source`, validación de refs, rechazo de secretos), `parseRefsBlock`/`validateRefsForWrite`/`renderRuleContent`, `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, **`validateMerge`/`merge`**, `sanitizePaths`, `checkpoint`, `close`. Presupuesto del bloque: `CHARS_PER_TOKEN = 4`, `MAX_TOKENS = 2000`. |
+| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext`, `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode` (procedencia `source`, validación de refs, rechazo de secretos), `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`, **`inspectRefs`** (auditoría read-only y pura para el doctor), `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, **`validateMerge`/`merge`**, `sanitizePaths`, `checkpoint`, `close`. Presupuesto del bloque: `CHARS_PER_TOKEN = 4`, `MAX_TOKENS = 2000`. |
 | `src/core/memory/snapshot.js` | **Dueño único de la copia binaria**: `realpathish`/`sameFile` (identidad de archivo), `vacuumInto` (`VACUUM INTO` con destino vinculado), `verifySnapshot` (`quick_check`), `replaceDestination` (temporal + backup/restore en Windows) y `snapshotDatabase(dbPath, outPath, { overwrite })`. |
 | `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de las 3 tools) y `createMemoryToolkit`; tras `recordNode`, evalúa `shouldRefreshWorkingContext(result)` y, si aplica, llama `writeWorkingContext(engine, projectRoot)` dentro de un `try/catch`. |
 | `src/core/memory/mcp-server.js` | `createMemoryServer`/`serveMemoryMcp`: servidor MCP stdio sin dependencias; fija la procedencia real `{ source: 'mcp:ancleto-memory', projectRoot }` (líneas 13-17), maneja JSON-RPC, `handle`, `respond`, `fail`. |
-| `src/core/memory/doctor.js` | `memoryDoctor(dbPath, { rebuild })`: **read-only por defecto** (`openDatabase(..., { migrate: false, readonly: true })`); cuatro checks con nombres estables; `--rebuild` es el único camino de escritura. |
+| `src/core/memory/doctor.js` | `memoryDoctor(dbPath, { rebuild })`: **read-only por defecto** (`openDatabase(..., { migrate: false, readonly: true })`); **cinco checks con nombres estables**, en orden: `Integridad DB`, `Indice FTS5`, `Reglas activas (unicidad)`, `Refs de nodos activos`, `Checkpoint WAL`; `--rebuild` es el único camino de escritura. |
 | `src/core/memory/working-context.js` | Render único (`renderWorkingContextBlock`) + persistencia (`writeWorkingContext`, `writeWorkingContextBlock`), trigger MCP (`shouldRefreshWorkingContext`), refresh on-write CLI compare-based (`refreshWorkingContextOnWrite`), chequeo de staleness advisory (`checkWorkingContextFreshness`), normalización acotada (`normalizeBlock`, `readWorkingContextFile`), resolución de raíz (`resolveMemoryProjectRoot`, `workingContextPath`); día-cero sin DB desde la topología. |
 
 ## Refs normalizadas y validación fail-closed (`MEM-03`, commit `90dba0d`)
@@ -60,39 +63,45 @@ bloque `refs:` y se resuelven sobre el texto indexado. Evidencia:
 `aspec/specs/memory-engine/spec.md` (requirement "Refs normalizadas materializadas en el
 contenido del nodo").
 
-- **Gramática cerrada** (`src/core/memory/engine.js:86-149`): una línea `refs:` al inicio de
+- **Gramática cerrada** (`src/core/memory/engine.js:117-149`): una línea `refs:` al inicio de
   línea seguida de una lista con guion. Prefijos admitidos: `spec:<cap>#<heading>`,
   `change:<slug>`, `path:<repo-relative>`, `commit:<sha>` (7–40 hex) y
   `workitem:<tracker>:<key>`.
-- **Bloque único y terminal** (`engine.js:151-195`): el bloque termina en la primera línea en
-  blanco o de texto no indentado. Un segundo bloque `refs:`, una línea indentada que no es item,
-  un item con gramática inválida o un prefijo desconocido se reportan como error; nunca se
-  ignoran (fail-closed).
-- **Validación previa a la transacción** (`engine.js:284-311`, invocada en
-  `engine.js:461-475`): exige exactamente un bloque con al menos una ref. Una `decision` exige
-  al menos `spec:` o `change:`; una `rule` exige al menos `path:`, `spec:` o `change:`
-  (`engine.js:302-310`). Un rechazo **no escribe ni supersede**.
+- **Bloque único y terminal** (`engine.js:151-196`, `refsBlockEnd`): el bloque empieza en la
+  línea `refs:` y continúa por cada **item de lista (`- `) con cualquier indentación, incluida
+  ninguna**, y por cada línea indentada; termina antes de la primera línea en blanco o de la
+  primera línea **no indentada que no es item**. Una línea no-item dentro del bloque es
+  inválida, igual que un item con gramática inválida, un prefijo desconocido o un segundo bloque
+  `refs:`; nunca se ignoran (fail-closed).
+- **Validación previa a la transacción** (`engine.js:334-361`, invocada en `engine.js:565-572`):
+  exige exactamente un bloque con al menos una ref. Una `decision` exige al menos `spec:` o
+  `change:`; una `rule` exige al menos `path:`, `spec:` o `change:` (`engine.js:352-360`). Un
+  rechazo **no escribe ni supersede**.
 - **Resolución contra el repo**:
   - `change:<slug>` busca el change activo y un archive anclado exacto
     `YYYY-MM-DD-<slug>` (no un sufijo suelto) y reporta ambigüedad si hay más de un match
-    (`engine.js:250-269`).
+    (`engine.js:262-291`).
   - `spec:<cap>#<heading>` lee `aspec/specs/<capability>/spec.md`, compara headings
     `### Requirement:` por forma exacta y canonizada (trim, minúsculas, sin diacríticos, sin
     backticks/`**`), deduplica por bloque y **reporta ambigüedad** en vez de elegir el primero
-    (`engine.js:222-244`).
+    (`engine.js:227-256`).
   - `path:` debe ser relativo (rechaza absolutos y `..`), existir y ser archivo
-    (`engine.js:271-282`).
+    (`engine.js:293-317`).
   - `commit:` y `workitem:` se validan por gramática; el motor **no** resuelve su existencia.
 - **Exención única**: la validación de refs se salta solo cuando la procedencia resuelta es
-  exactamente `runtime` (`engine.js:468`). Toda otra procedencia (`mcp:ancleto-memory`,
+  exactamente `runtime` (`engine.js:565`). Toda otra procedencia (`mcp:ancleto-memory`,
   `agent:<rol>`, etc.) se valida fail-closed.
 - **Sin backfill**: los nodos activos escritos antes de `MEM-03`, sin refs, no se revalidan ni
   se reescriben.
+- **`inspectRefs` comparte parser y resolución**: `inspectRefs({ nodes, projectRoot })` es una
+  auditoría **read-only y pura** (no abre conexiones ni escribe) que reutiliza `parseRefsBlock`
+  y `resolveRefResult`; `validateRefsForWrite` sigue lanzando con los mismos mensajes. Un bloque
+  repetido se reporta como ref inválida `refs:`; un bloque vacío aporta 0 refs y no es falla.
 - **`importNodes` queda fuera**: no pasa por `recordNode`, no valida refs y conserva su LWW
-  (`engine.js:540-570`; escenario "El import no aplica la validación de refs").
+  (`engine.js:637-680`; escenario "El import no aplica la validación de refs").
 - **Raíz del proyecto**: `resolveProjectRoot(context, dbPath)` usa `context.projectRoot` o
   sube desde la ubicación de la DB buscando `.ancletorc`; **nunca** `process.cwd()`
-  (`engine.js:208-220`).
+  (`engine.js:209-221`).
 
 ## Rechazo de secretos en el camino de escritura
 
@@ -213,36 +222,53 @@ Expuestas como subcomandos del grupo `memory`:
 Evidencia: `src/core/memory/snapshot.js`, `src/core/memory/database.js` (`openDatabase`),
 `src/cli/index.js` (`memorySnapshot`), `aspec/specs/memory-ops/spec.md`.
 
-## `memory doctor` estrictamente read-only (PR-1)
+## `memory doctor` estrictamente read-only (PR-1 + MEM-04)
 
 - **Modo por defecto**: `openDatabase(dbPath, { migrate: false, readonly: true })`. No ejecuta
   checkpoint, DDL ni `INSERT` sobre FTS: sirve para auditar la base (o una copia dudosa) sin
   reescribir el WAL.
-- **Cuatro checks con nombres estables**: `Integridad DB` (`PRAGMA quick_check`),
+- **Cinco checks con nombres estables, en orden**: `Integridad DB` (`PRAGMA quick_check`),
   `Indice FTS5`, `Reglas activas (unicidad)` (duplicados de `memory_key` entre activos),
-  `Checkpoint WAL`.
+  **`Refs de nodos activos`** y `Checkpoint WAL`. La ayuda del CLI enumera los cinco.
 - **`Indice FTS5` en tres estados**: (1) el índice `memory_fts` no existe ⇒ **falla** (nunca
   `skipped`; la búsqueda está rota aunque `memory_nodes` exista); (2) la tabla sombra
   `memory_fts_docsize` no es consultable ⇒ **omitido** (no baja `healthy` ni el exit code; p. ej.
   FTS5 con `columnsize=0`); (3) si es consultable, compara `count(*)` de la sombra contra
   `memory_nodes`. El `count(*)` de `memory_fts` **no** sirve: al ser external-content, FTS5 lo
   resuelve contra `memory_nodes` y contaría nodos sin indexar.
+- **`Refs de nodos activos` (`MEM-04`)**: lee los nodos activos y ejecuta
+  `inspectRefs({ nodes, projectRoot })`. Es **read-only** (sólo lee `aspec/specs/**/spec.md`,
+  lista `aspec/changes/**` y usa `existsSync`/`statSync`), comparte parser y resolución con
+  `validateRefsForWrite` y nunca aborta ante una ref rota: completa el reporte con todas.
+  - Cada ref `spec:`/`change:`/`path:` que no resuelve ⇒ `ok: false`, `healthy: false` y exit
+    code ≠ 0, con entradas `"<memory_key>" -> <ref textual> (<motivo>)` ordenadas por
+    `memory_key` y, a igual clave, por orden de aparición.
+  - Motivos acotados: `inexistente`, `ambiguo (<n> coincidencias)` (no elige) e
+    `inválido (<causa>)` (gramática, `path:` absoluto, `../` o bloque `refs:` repetido).
+  - `commit:` y `workitem:` **no** se resuelven: se excluyen de las rotas y su conteo aparte
+    como no verificables aparece **sólo** en el `detail` sin rotas.
+  - Se omite (`ok: true`, `skipped: true`) **sólo** si hay refs que verificar, no hay defecto
+    detectable sin raíz y la raíz no se puede derivar. Si no hay refs `spec:`/`change:`/`path:`
+    (base vacía, nodos sin bloque o sólo `commit:`/`workitem:`), no requiere raíz y no se omite.
+  - Sin refs no es falla: `detail` dice `0 refs verificadas` y el conteo de nodos activos.
 - **`Checkpoint WAL` read-only**: reporta el estado observable del archivo `-wal` (existencia y
   bytes) **sin** ejecutar checkpoint; el check se marca omitido.
 - **`--rebuild` es el único camino de escritura**: ejecuta
   `INSERT INTO memory_fts(memory_fts) VALUES('rebuild')`, corre el integrity-check completo
   (`INSERT ... VALUES('integrity-check', 1)`) y checkpointea el WAL (`checkpointDatabase`).
-  Vuelve a reportar los cuatro checks.
-- **Error path**: los cuatro nombres se conservan y cada check no ejecutable se reporta como
-  falla con su motivo (nunca se omite del array).
+  Vuelve a reportar los cinco checks; el check de refs corre también en este modo.
+- **Error path**: los cinco nombres se conservan y cada check no ejecutable se reporta como
+  falla con su motivo (nunca se omite del array). Con esquema no inicializado, el check de refs
+  lleva `detail` `no verificable: esquema no inicializado`.
 - **Advisory adicional**: `memoryDoctorCmd` agrega `Working-context: <ok|ausente|desactualizado>`
   con `checkWorkingContextFreshness` sobre un engine read-only; no altera el exit code, que
   sigue midiendo la integridad de la DB. Si no hay `.ancleto/memory.db`, el comando sale con 0
   y un mensaje.
 
-Evidencia: `src/core/memory/doctor.js`, `src/cli/index.js` (`memoryDoctorCmd`),
-`aspec/specs/memory-ops/spec.md` (requirements "`memory doctor` estrictamente read-only" y
-"Reparación explícita con `memory doctor --rebuild`").
+Evidencia: `src/core/memory/doctor.js`, `src/core/memory/engine.js` (`inspectRefs`),
+`src/cli/index.js` (`memoryDoctorCmd`), `aspec/specs/memory-ops/spec.md` (requirements
+"`memory doctor` estrictamente read-only", "Reparación explícita con
+`memory doctor --rebuild`" y "Diagnóstico de refs no resueltas en nodos activos").
 
 ## Merge por supersesión (PR-1)
 
@@ -445,9 +471,9 @@ memoria y no tocan la DB. Evidencia: `src/core/machine-env.js`,
 - **Una sola activa por `memory_key`** (supersesión atómica; índice único parcial).
 - **SSOT del runtime**: `source`/`confidence`/`status`/`id` fuera de los JSON Schema;
   `additionalProperties: false` y args forjados ignorados (anti prompt-injection).
-- **Refs obligatorias en `recordNode`**: bloque único, gramática cerrada y resolución
-  fail-closed; la única exención es `source === 'runtime'`. `importNodes` queda fuera y no
-  valida refs.
+- **Refs obligatorias en `recordNode`**: bloque único, gramática cerrada (items indentados o
+  no) y resolución fail-closed; la única exención es `source === 'runtime'`. `importNodes` queda
+  fuera y no valida refs. `inspectRefs` reutiliza el mismo parser y resolución, en read-only.
 - **Secretos rechazados sin eco**: `content` y `justification` se inspeccionan antes de la
   transacción; el valor detectado nunca se repite.
 - **Render proactivo solo con prosa**: `renderRuleContent` recorta el bloque `refs:` sin tocar
@@ -464,7 +490,8 @@ memoria y no tocan la DB. Evidencia: `src/core/machine-env.js`,
 - **Read-only significa sin escritura**: `createReadonlyMemoryEngine` no migra ni toca el WAL;
   lo usan `memory list`, el advisory de `memory doctor` y `memory merge --dry-run`.
 - **Doctor no muta por defecto** y **`--rebuild` es el único camino que escribe**; el chequeo
-  completo de FTS5 no se puede hacer en read-only.
+  completo de FTS5 no se puede hacer en read-only. El check de refs también es read-only y nunca
+  promete verificar `commit:`/`workitem:`.
 - **Snapshot no comparte código de escritura con el motor**: fuente read-only + `VACUUM INTO` +
   `quick_check` + reemplazo con backup/restore; nunca `fs.copyFile`.
 - **Merge no crea nodos, no transfiere contenido y no cambia el schema**: solo enlaza sources
@@ -481,9 +508,9 @@ memoria y no tocan la DB. Evidencia: `src/core/machine-env.js`,
 | Path | Rol |
 |---|---|
 | `src/core/memory/database.js` | Conexión (con opción `readonly`), PRAGMAs, migraciones, FTS5. |
-| `src/core/memory/engine.js` | `buildWorkingContext` (incluye el `<ContextOverflowWarning>` y el render sin `refs:`), `searchMemory`, `recordNode` (procedencia, refs, secretos), `parseRefsBlock`/`validateRefsForWrite`/`renderRuleContent`/`resolveSpecRef`/`resolveChangeRef`/`resolvePathRef`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `validateMerge`/`merge`, `sanitizePaths`. |
+| `src/core/memory/engine.js` | `buildWorkingContext` (incluye el `<ContextOverflowWarning>` y el render sin `refs:`), `searchMemory`, `recordNode` (procedencia, refs, secretos), `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`/`inspectRefs`/`resolveSpecRef`/`resolveChangeRef`/`resolvePathRef`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `validateMerge`/`merge`, `sanitizePaths`. |
 | `src/core/memory/snapshot.js` | `snapshotDatabase`, `vacuumInto`, `verifySnapshot`, `replaceDestination`, `realpathish`/`sameFile`. |
-| `src/core/memory/doctor.js` | `memoryDoctor` read-only, `observeWal`, checks `Integridad DB`/`Indice FTS5`/`Reglas activas (unicidad)`/`Checkpoint WAL`, rebuild explícito. |
+| `src/core/memory/doctor.js` | `memoryDoctor` read-only, `observeWal`, checks `Integridad DB`/`Indice FTS5`/`Reglas activas (unicidad)`/`Refs de nodos activos`/`Checkpoint WAL`, rebuild explícito. |
 | `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext` (MCP), `refreshWorkingContextOnWrite` (CLI), `checkWorkingContextFreshness`, `normalizeBlock`, `readWorkingContextFile`, `resolveMemoryProjectRoot`, `workingContextPath`. |
 | `src/core/memory/tools.js` | `createMemoryToolHandlers`, `createMemoryToolkit`, refresh on-write MCP filtrado. |
 | `src/core/memory/mcp-server.js` | Transporte MCP stdio; fija `source: 'mcp:ancleto-memory'` y `projectRoot`. |
@@ -491,9 +518,10 @@ memoria y no tocan la DB. Evidencia: `src/core/machine-env.js`,
 | `skills/ancleto-archive/SKILL.md` | Gate de promoción: preflight del lote, cero candidatos ⇒ cero escrituras, una pasada de `@memory-keeper`. |
 | `agents/memory-keeper.md` | Modo Promotion: preflight, un `recordDecision` por bloque, `content` + `refs:`, rechazo de credenciales. |
 | `agents/orchestrator.md` | Consumidor del `<ContextOverflowWarning>`, presupuesto de Automatic Record y orden de la promoción (después del merge de specs). |
-| `aspec/specs/memory-ops/spec.md` | Contrato de **13 Requirements**: export/import/gc, snapshot, doctor read-only, `--rebuild`, merge, CLI de snapshot/merge y harness golden M01–M10. |
-| `aspec/specs/memory-engine/spec.md` | Contrato de refs (gramática, validación, resolución, secretos, render sin `refs:`), promoción al archivar, día-cero, refresh on-write MCP/CLI, staleness advisory y aviso de overflow. |
+| `aspec/specs/memory-ops/spec.md` | Contrato de **16 Requirements**: export/import/gc, snapshot, doctor read-only con cinco checks, `--rebuild`, merge, CLI de snapshot/merge, harness golden M01–M10, promoción/backfill y **diagnóstico de refs no resueltas en nodos activos**. |
+| `aspec/specs/memory-engine/spec.md` | Contrato de refs (gramática con indentación opcional, validación, resolución, secretos, render sin `refs:`), promoción al archivar, día-cero, refresh on-write MCP/CLI, staleness advisory y aviso de overflow. |
 | `aspec/changes/archive/2026-10-30-mem-03-promocion-decisiones-refs/` | Change archivado de `MEM-03` (refs obligatorias y promoción al archivar). |
+| `aspec/changes/archive/2026-10-31-mem-04-doctor-referencias-no-resueltas/` | Change archivado de `MEM-04` (`inspectRefs`, check `Refs de nodos activos`, gramática de refs con indentación opcional). |
 | `aspec/changes/archive/2026-10-28-reingenieria-memoria-first/` | Change archivado de PR-1 (proposal, tasks y delta de `memory-ops`; sin `design.md` por decisión del programa). |
 | `aspec/changes/archive/2026-10-26-orchestrator-session-start/` | Change archivado del aviso de overflow (delta de `memory-engine` y `prompt-contracts`). |
 | `aspec/changes/archive/2026-10-17-memory-cli-writes-refresh-working-context/` | Change archivado con proposal/design/tasks y delta de spec. |

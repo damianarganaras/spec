@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-10-31T00:24:30Z
-pluginVersion: 0.17.1
+generatedAt: 2026-11-01T02:38:20Z
+pluginVersion: 0.17.2
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.17.1` (`package.json`); el tag `v0.17.1` es **anotado** y vive en `main` (`cda4cb6`, merge de `development`). El paquete `0.17.1` incluye el retiro de `design.md`/`context.md` (`CHANGELOG.md`). | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log`, `CHANGELOG.md` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.17.2` (`package.json`); el tag `v0.17.2` es **anotado** y vive en `main` (`2129395`, merge de `development`; no es ancestro de HEAD). El paquete `0.17.2` incluye el retiro de `design.md`/`context.md` (`CHANGELOG.md`); **MEM-04** y la guía de modelos de `AGENTS.md` quedaron después del tag, sólo en `development`. | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log`, `CHANGELOG.md` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -49,10 +49,11 @@ host. `ancleto check` valida que el frontmatter instalado coincida con la salida
 
 ## Configuración del host opencode (raíz del repo)
 
-`opencode.json` es configuración **del checkout**, no del paquete: fija `agent.model =
-commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes (no incluye al orquestador) y
-`package.json` → `files` no lo publica. Es una integración local con el host opencode, no un
-contrato de producto. Evidencia: `opencode.json`, `package.json`.
+`opencode.json` es configuración **del checkout**, no del paquete: el baseline commiteado fija
+`agent.model = commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes (sin orquestador) y
+`package.json` → `files` no lo publica. El árbol de trabajo agrega **sin commitear** un mapeo
+`agent.orchestrator.model`; es un probe local del host, no un contrato de producto. Evidencia:
+`opencode.json`, `package.json`.
 
 ## Entorno de máquina (integración local con git)
 
@@ -86,8 +87,10 @@ Las operaciones de memoria son **locales y sincrónicas**:
   destino con `renameSync` del runtime (`node:fs`). No invoca herramientas externas.
 - `memory merge` usa el mismo motor transaccional. No escribe archivos; el CLI refresca el
   working-context derivado.
-- `memory doctor` usa `PRAGMA quick_check` y la tabla sombra `memory_fts_docsize`; no hay
-  chequeo remoto.
+- `memory doctor` usa `PRAGMA quick_check`, la tabla sombra `memory_fts_docsize` y, en el check
+  `Refs de nodos activos`, sólo lectura local de `aspec/specs/**/spec.md` y listado de
+  `aspec/changes/**` con `existsSync`/`statSync`; no hay chequeo remoto ni escritura. Las refs
+  `commit:`/`workitem:` no se resuelven contra ningún servicio.
 - La validación de refs (`MEM-03`) resuelve `spec:`/`change:`/`path:` contra el **filesystem
   local** del repo (`aspec/specs`, `aspec/changes`, paths relativos); no hay servicio externo
   ni tabla nueva. `commit:` y `workitem:` solo se validan por gramática.
@@ -128,7 +131,7 @@ Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-ro
 |---|---|---|
 | **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Solo opencode. Es la fuente de la compuerta de medición del default de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
 | **`ancleto stats failures`** | Reporte **read-only** de tool parts fallidos de opencode: clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y enmascara secretos/rutas. No imprime `output` ni `state.error`. Es la medición de la mejora de `machine-env`. | `src/cli/index.js` (`statsFailuresCommand`), `aspec/specs/session-failure-report/spec.md` |
-| **Working-context advisory** | `ancleto memory doctor` expone `Working-context: <estado>` tras los cuatro checks de integridad. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
+| **Working-context advisory** | `ancleto memory doctor` expone `Working-context: <estado>` tras los cinco checks de integridad/refs. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
 
 ## Azure DevOps (opcional, apagado)
 

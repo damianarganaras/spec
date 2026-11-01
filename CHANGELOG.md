@@ -2,6 +2,14 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.1] - 2026-11-01
+
+### Changed
+- **Discovery map sincronizado** con el seed técnico regenerado en la 0.18.0.
+- **Agente orquestador mapeado** en el mapa de modelos de agentes de `opencode.json`.
+
+Sin cambios de código ni de contrato.
+
 ## [0.18.0] - 2026-10-31
 
 ### Added

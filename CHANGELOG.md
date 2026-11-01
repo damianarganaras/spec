@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.0] - 2026-10-31
+
+### Added
+- **Quinto check de `memory doctor` (`Refs de nodos activos`)**: reporta refs `spec:` / `change:` / `path:` no resueltas, read-only, con el `memory_key` y la ref textual del nodo afectado.
+
+### Changed
+- **`refs:` sin indentación obligatoria**: los items de `refs:` pueden ir sin indentar.
+- Ayuda del CLI y `AGENTS.md` actualizados, incluida la sección de cambio de modelo de agentes.
+
 ## [0.17.2] - 2026-10-30
 
 ### Changed

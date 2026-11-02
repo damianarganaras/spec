@@ -78,17 +78,27 @@ function publicNode(row) {
 
 const PREVIEW_MAX_CHARS = 240
 
-// Preview por defecto: colapsa el content a una linea y lo recorta a 239
-// caracteres mas `…`. `content_truncated` es true exactamente cuando hubo recorte.
+// Preview por defecto: prefijo literal de 239 caracteres mas `…`. No colapsa
+// whitespace: la preview conserva el content tal cual hasta el corte.
+// `content_truncated` es true exactamente cuando el content excede 240 caracteres.
 function previewNode(row) {
-  const collapsed = String(row.content).replace(/\s+/g, ' ').trim()
-  const truncated = collapsed.length > PREVIEW_MAX_CHARS
+  const content = String(row.content)
+  const truncated = content.length > PREVIEW_MAX_CHARS
+  let preview = content
+  if (truncated) {
+    let cut = content.slice(0, PREVIEW_MAX_CHARS - 1)
+    const last = cut.charCodeAt(cut.length - 1)
+    // No partir un par sustituto: si el corte cae en el high surrogate de un
+    // emoji, se recorta un code unit mas antes de agregar la elipsis.
+    if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1)
+    preview = `${cut}…`
+  }
   return {
     memory_key: row.memory_key,
     type: row.type,
     scope: row.scope,
     created_at: row.created_at,
-    preview: truncated ? `${collapsed.slice(0, PREVIEW_MAX_CHARS - 1)}…` : collapsed,
+    preview,
     content_truncated: truncated
   }
 }
@@ -802,6 +812,15 @@ function buildEngine(db, dbPath) {
       }
       requiredIndex.set(key, requiredRows.length)
       requiredRows.push(row)
+    }
+
+    // Una requerida nunca se descarta en silencio: si el limit efectivo no alcanza
+    // para todas, la llamada falla nombrando las que quedan fuera.
+    if (requiredKeys.length > lim) {
+      const overflow = requiredKeys.slice(lim)
+      throw new Error(
+        `required: ${overflow.length} memory_key no entran en el limit ${lim}: ${overflow.map((key) => `"${key}"`).join(', ')}`
+      )
     }
 
     // Sin terminos FTS: solo las requeridas (o [] sin requeridas).

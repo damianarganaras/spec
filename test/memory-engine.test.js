@@ -316,6 +316,27 @@ describe('searchMemory — desempate determinista (memory-search-order-tiebreak)
     })
   })
 
+  it('el fallback OR-prefijo no se ejecuta sobre un hit de la pass 1', () => {
+    withSearchEngine((eng, dbPath) => {
+      eng.recordNode({ memory_key: 'guard-and', type: 'rule', scope: 'project', content: 'cache invalidation' })
+      eng.recordNode({ memory_key: 'guard-prefix', type: 'rule', scope: 'project', content: 'cacheable invalidationado' })
+
+      // premisa: la pass 1 (AND) matchea solo X; el OR-prefijo agregaria Y
+      const strict = rawAt(dbPath,
+        `SELECT memory_key FROM memory_fts JOIN memory_nodes n ON n.rowid = memory_fts.rowid WHERE memory_fts MATCH ?`,
+        '"cache" "invalidation"')
+      assert.deepEqual(strict.map((r) => r.memory_key), ['guard-and'])
+      const loose = rawAt(dbPath,
+        `SELECT memory_key FROM memory_fts JOIN memory_nodes n ON n.rowid = memory_fts.rowid WHERE memory_fts MATCH ?`,
+        '"cache"* OR "invalidation"*')
+      assert.equal(loose.some((r) => r.memory_key === 'guard-prefix'), true)
+
+      const result = eng.searchMemory({ query: 'cache invalidation', limit: 50 })
+      assert.equal(result.some((r) => r.memory_key === 'guard-prefix'), false, 'sin el guard, Y entra por el fallback')
+      assert.equal(result.some((r) => r.memory_key === 'guard-and'), true)
+    })
+  })
+
   it('sin truncamiento (matches <= limit) devuelve el mismo conjunto completo', () => {
     withSearchEngine((eng, dbPath) => {
       const content = 'zqsetreg contenido de regresion'
@@ -600,6 +621,10 @@ describe('buildWorkingContext — truncamiento (v0.3.0 item 2)', () => {
       assert.match(block, /Context truncated due to size limits\. (\d+) rules omitted/)
       assert.match(block, /@memory-keeper/)
       assert.match(block, /Recall/)
+      assert.ok(
+        block.includes('Delegate one Recall to @memory-keeper with the task topic before delegating any other stage.'),
+        'el aviso nombra el topic de la tarea'
+      )
       assert.doesNotMatch(block, /searchMemory/, 'el aviso no debe nombrar una capacidad ajena al agente')
     })
   })
@@ -2860,18 +2885,23 @@ describe('searchMemory — recall task-aware (MEM-05)', () => {
     }
   }
 
-  it('T07 (preview): content > 240 se colapsa a una linea, recorta a 240 con … y no expone content', () => {
+  it('T07 (preview): content > 240 se recorta como prefijo literal a 240 con … y no expone content', () => {
     withRecallEngine((eng) => {
       const long = `previewlongo\n\n   ${'x'.repeat(300)}`
       const boundary = `previewborde ${'y'.repeat(227)}` // exactamente 240 chars
+      const over = `previewover ${'z'.repeat(229)}` // exactamente 241 chars
+      const emoji = `previewemoji ${'a'.repeat(225)}😀${'b'.repeat(20)}`
       eng.recordNode({ memory_key: 'prev-long', type: 'rule', scope: 'project', content: long })
       eng.recordNode({ memory_key: 'prev-boundary', type: 'rule', scope: 'project', content: boundary })
+      eng.recordNode({ memory_key: 'prev-over', type: 'rule', scope: 'project', content: over })
+      eng.recordNode({ memory_key: 'prev-emoji', type: 'rule', scope: 'project', content: emoji })
 
       const [row] = eng.searchMemory({ query: 'previewlongo' })
       assert.equal(row.memory_key, 'prev-long')
       assert.equal(row.preview.length, 240, 'el preview ocupa como maximo 240 chars, el … incluido')
       assert.equal(row.preview.endsWith('…'), true)
-      assert.equal(row.preview.includes('\n'), false, 'el preview colapsa el content a una sola linea')
+      assert.equal(row.preview.includes('\n'), true, 'el preview conserva los saltos de linea del content')
+      assert.equal(row.preview, `${long.slice(0, 239)}…`)
       assert.equal(row.content_truncated, true)
       assert.equal('content' in row, false, 'el modo preview no incluye el content completo')
 
@@ -2879,6 +2909,16 @@ describe('searchMemory — recall task-aware (MEM-05)', () => {
       assert.equal(exact.content_truncated, false, 'un content de exactamente 240 chars no se marca truncado')
       assert.equal(exact.preview.length, 240)
       assert.equal(exact.preview, boundary)
+
+      const [cut] = eng.searchMemory({ query: 'previewover' })
+      assert.equal(cut.content_truncated, true, 'un content de 241 chars se marca truncado')
+      assert.equal(cut.preview.length, 240)
+      assert.equal(cut.preview, `${over.slice(0, 239)}…`)
+
+      const [pair] = eng.searchMemory({ query: 'previewemoji' })
+      assert.equal(pair.content_truncated, true)
+      assert.equal(pair.preview, `previewemoji ${'a'.repeat(225)}…`, 'no parte el par sustituto del emoji')
+      assert.doesNotMatch(pair.preview, /[\uD800-\uDBFF]$/)
     })
   })
 
@@ -2915,7 +2955,7 @@ describe('searchMemory — recall task-aware (MEM-05)', () => {
   })
 
   it('required se promueve al frente en el orden declarado y sin terminos FTS devuelve solo las requeridas', () => {
-    withRecallEngine((eng) => {
+    withRecallEngine((eng, _root, dbPath) => {
       const term = 'zqrequired'
       const filler = 'filler '.repeat(20)
       eng.recordNode({ memory_key: 'req-a', type: 'rule', scope: 'project', content: `${term} ${filler}` })
@@ -2929,7 +2969,15 @@ describe('searchMemory — recall task-aware (MEM-05)', () => {
         'las requeridas van primero en el orden declarado, aunque el bm25 las deje ultimas'
       )
       assert.equal(page.some((r) => r.memory_key === 'req-hit'), true)
-      assert.equal('required' in eng.listNodes().find((n) => n.memory_key === 'req-b'), false, 'required no se persiste ni se expone')
+
+      const db = openDatabase(dbPath)
+      try {
+        const columns = db.prepare('PRAGMA table_info(memory_nodes)').all().map((c) => c.name)
+        assert.equal(columns.includes('required'), false, 'required no es una columna del schema')
+        assert.equal(columns.includes('pinned'), false, 'pinned no es una columna del schema')
+      } finally {
+        db.close()
+      }
 
       const withoutTerms = eng.searchMemory({ query: 'como de la el', required: ['req-b'] })
       assert.deepEqual(withoutTerms.map((r) => r.memory_key), ['req-b'], 'sin terminos FTS devuelve solo la requerida')
@@ -2967,6 +3015,27 @@ describe('searchMemory — recall task-aware (MEM-05)', () => {
     })
   })
 
+  it('required que excede el limit falla nombrando las keys que no entran', () => {
+    withRecallEngine((eng) => {
+      const keys = ['req-lim-a', 'req-lim-b', 'req-lim-c']
+      for (const key of keys) {
+        eng.recordNode({ memory_key: key, type: 'rule', scope: 'project', content: `zqreqlim ${key}` })
+      }
+
+      assert.throws(
+        () => eng.searchMemory({ query: 'zqreqlim', required: keys, limit: 1 }),
+        (err) => /req-lim-b/.test(err.message) && /req-lim-c/.test(err.message) && !/req-lim-a/.test(err.message),
+        'con query, nombra solo las que exceden el limit'
+      )
+      assert.throws(
+        () => eng.searchMemory({ query: 'como de la el', required: keys, limit: 1 }),
+        (err) => /req-lim-b/.test(err.message) && /req-lim-c/.test(err.message),
+        'sin terminos FTS tambien falla en vez de descartarlas'
+      )
+      assert.equal(eng.searchMemory({ query: 'zqreqlim', required: keys, limit: 3 }).length, 3)
+    })
+  })
+
   it('el limit por defecto es 5 y se conserva el clamp [1, 50]', () => {
     withRecallEngine((eng) => {
       for (let i = 1; i <= 7; i++) {
@@ -2982,10 +3051,18 @@ describe('searchMemory — recall task-aware (MEM-05)', () => {
     withRecallEngine((eng, root) => {
       const critical = `PALABRA_CRITICA ${'c'.repeat(650)}`
       eng.recordNode({ memory_key: 'crit-required', type: 'rule', scope: 'project', content: critical, createdAt: '2026-01-02T00:00:00.000Z' })
+      // Competidor con mejor scope y anclaje declarado: sin el tier `required` iria primero.
+      const anchored = `COMPETIDOR_ANCLADO ${'a'.repeat(150)}\n\nrefs:\n  - path:src/core/memory/engine.js`
+      eng.recordNode({ memory_key: 'task-anchored', type: 'rule', scope: 'task', content: anchored, createdAt: '2026-01-04T00:00:00.000Z' })
       eng.recordNode({ memory_key: 'bulk-omitted', type: 'rule', scope: 'project', content: 'B'.repeat(1600), createdAt: '2026-01-03T00:00:00.000Z' })
 
-      const block = eng.buildWorkingContext('project', 500, root, { required: ['crit-required'] })
+      const block = eng.buildWorkingContext('task', 500, root, { required: ['crit-required'] })
       assert.ok(block.includes(`- [crit-required] ${critical}`), 'la requerida se inyecta completa y primera')
+      assert.ok(block.includes('- [task-anchored]'), 'el competidor de mejor scope y anclaje compite por el presupuesto')
+      assert.ok(
+        block.indexOf('[crit-required]') < block.indexOf('[task-anchored]'),
+        'la requerida gana al competidor anclado de scope task'
+      )
       assert.equal(block.includes('B'.repeat(1600)), false, 'la no requerida queda fuera del presupuesto')
       assert.ok(block.indexOf('[crit-required]') < block.indexOf('Omitted:'))
       assert.doesNotMatch(block, /Omitted: [^\n]*crit-required/, 'la requerida no se lista como omitida')

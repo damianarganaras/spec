@@ -29,7 +29,7 @@ Same as `ancleto-new` step 1: use in-session Work Item context if available (rec
 Call the memory tool once with a semantic query describing the change:
 
 ```
-searchMemory({ query })
+searchMemory({ query, expand: true })
 ```
 
 Use the result as read-only background; if empty or unavailable, continue silently without blocking.

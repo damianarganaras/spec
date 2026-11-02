@@ -32,7 +32,7 @@ Fast-forward artifact creation: generate everything needed to start implementati
 Call the memory tool once with a semantic query describing the change:
 
 ```
-searchMemory({ query })
+searchMemory({ query, expand: true })
 ```
 
 Use the result as read-only background; if empty, continue silently.

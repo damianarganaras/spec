@@ -97,6 +97,8 @@ ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FT
                                    Copia consistente de la memoria (incluye historial; --force sobrescribe)
   ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]
                                    Supersede cada source activa hacia el target (sin crear nodos)
+  ancleto memory consolidate [--dry-run] [--apply] [--json]
+                                   Agrupa duplicados exactos y supersede los no canonicos
   ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE
                                         expone searchMemory, recordRule y recordDecision
   ancleto check                         Verifica integridad de archivos instalados vs manifiesto
@@ -2496,6 +2498,65 @@ async function memoryMerge(flags) {
   }
 }
 
+// `--dry-run` es el default (usa la conexion read-only); `--apply` es el unico
+// camino que escribe. El refresco del bloque derivado replica el patron de
+// `memory merge`: la raiz se deriva del directorio de la DB, no de process.cwd().
+async function memoryConsolidate(flags) {
+  const apply = flags.includes('--apply')
+  if (apply && flags.includes('--dry-run')) {
+    console.error('ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--json]')
+    process.exitCode = 1
+    return
+  }
+  const dryRun = !apply
+  const asJson = flags.includes('--json')
+  const dbPath = defaultMemoryDbPath()
+  if (!(await exists(dbPath))) {
+    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    return
+  }
+  const engine = dryRun ? createReadonlyMemoryEngine(dbPath) : createMemoryEngine(dbPath)
+  try {
+    let result
+    try {
+      result = engine.consolidate({ dryRun })
+    } catch (err) {
+      console.error(`ancleto: consolidate rechazado: ${err.message}`)
+      process.exitCode = 1
+      return
+    }
+    if (!dryRun) {
+      const projectRoot = resolveMemoryProjectRoot(dbPath)
+      try {
+        refreshWorkingContextOnWrite(engine, projectRoot)
+      } catch (err) {
+        const ctxPath = workingContextPath(projectRoot)
+        console.error(`ancleto: la consolidacion SI se aplico en la base (${result.superseded.length} nodo(s) superseded), pero el bloque derivado ${ctxPath} quedo desactualizado: ${err.message}`)
+        console.error(`ancleto: regenera el bloque con: ancleto memory context --out ${ctxPath}`)
+        process.exitCode = 1
+        return
+      }
+    }
+    if (asJson) {
+      console.log(JSON.stringify(result))
+      return
+    }
+    const action = dryRun ? 'a superseder' : 'superseded'
+    console.log(`ancleto: consolidate ${dryRun ? '--dry-run' : 'OK'} -> ${result.exactGroups.length} grupo(s) exacto(s), ${result.superseded.length} nodo(s) ${action}`)
+    for (const group of result.exactGroups) {
+      console.log(`  ${group.type}: ${group.canonical} <- ${group.superseded.join(', ')} (${group.refs} refs)`)
+    }
+    if (result.nearDuplicates.length > 0) {
+      console.log('  near-duplicates:')
+      for (const pair of result.nearDuplicates) {
+        console.log(`    ${pair.a} ~ ${pair.b} (${pair.score})`)
+      }
+    }
+  } finally {
+    engine.close()
+  }
+}
+
 async function memoryCmd(args) {
   const [sub, ...flags] = args
   if (sub === 'context') {
@@ -2530,6 +2591,10 @@ async function memoryCmd(args) {
     await memoryMerge(flags)
     return
   }
+  if (sub === 'consolidate') {
+    await memoryConsolidate(flags)
+    return
+  }
   console.error(`ancleto: subcomando de memory desconocido: ${sub || '(ninguno)'}`)
   console.error('ancleto: uso: ancleto memory context [--scope X] [--out file]')
   console.error('ancleto: uso: ancleto memory list [--type X] [--scope X] [--all] [--json]')
@@ -2539,6 +2604,7 @@ async function memoryCmd(args) {
   console.error('ancleto: uso: ancleto memory gc [--dry-run] [--days <n>]')
   console.error('ancleto: uso: ancleto memory snapshot --out <archivo.db> [--force] [--json]')
   console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]')
+  console.error('ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--json]')
   process.exit(1)
 }
 

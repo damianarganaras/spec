@@ -209,6 +209,65 @@ function renderRuleContent(content) {
   return lines.slice(0, parsed.start).join('\n').trimEnd()
 }
 
+// Duplicado exacto: se compara la prosa (sin el bloque `refs:`, que es provenance)
+// normalizada. No se quitan backticks ni negritas: eso es propio de los headings.
+function normalizeContent(content) {
+  return renderRuleContent(content)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function declaredRefCount(content) {
+  const parsed = parseRefsBlock(content)
+  if (!parsed || parsed.blocks || parsed.error) return 0
+  return parsed.refs.length
+}
+
+// Scope mas amplio primero (project > feature > task); cualquier otro scope al final.
+const CONSOLIDATE_SCOPE_RANK = { project: 0, feature: 1, task: 2 }
+
+function consolidationScopeRank(scope) {
+  return CONSOLIDATE_SCOPE_RANK[scope] ?? 9
+}
+
+// Comparacion lexicografica sin locale, para que el resultado no dependa del ICU.
+function compareKeys(a, b) {
+  if (a === b) return 0
+  return a < b ? -1 : 1
+}
+
+// Jaccard sobre tokens deduplicados separados por whitespace (sin stopwords ni filtro de longitud).
+function similarityTokens(text) {
+  return new Set(String(text).toLowerCase().split(/\s+/).filter(Boolean))
+}
+
+function jaccardScore(a, b) {
+  const left = similarityTokens(a)
+  const right = similarityTokens(b)
+  if (left.size === 0 || right.size === 0) return 0
+  let intersection = 0
+  for (const token of left) {
+    if (right.has(token)) intersection++
+  }
+  const union = left.size + right.size - intersection
+  return union === 0 ? 0 : intersection / union
+}
+
+// Orden total del canonico: refs > created_at > scope > longitud > tipo > memory_key.
+function compareCanonical(a, b) {
+  if (a.refs !== b.refs) return b.refs - a.refs
+  if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1
+  const byScope = consolidationScopeRank(a.scope) - consolidationScopeRank(b.scope)
+  if (byScope !== 0) return byScope
+  if (a.content.length !== b.content.length) return b.content.length - a.content.length
+  const byType = (a.type === 'rule' ? 0 : 1) - (b.type === 'rule' ? 0 : 1)
+  if (byType !== 0) return byType
+  return compareKeys(a.memory_key, b.memory_key)
+}
+
 const ANCHOR_REF_KINDS = new Set(['spec', 'change', 'path'])
 
 // Anclaje declarado: solo se parsea el bloque `refs:` del content. No se resuelve
@@ -533,6 +592,10 @@ function buildReadonlyEngine(db, dbPath) {
     merge({ target, sources, dryRun = false } = {}) {
       if (!dryRun) throw new Error('merge: la conexion es read-only')
       return engine.merge({ target, sources, dryRun: true })
+    },
+    consolidate({ dryRun = true } = {}) {
+      if (dryRun === false) throw new Error('consolidate: la conexion es read-only')
+      return engine.consolidate({ dryRun: true })
     }
   }
 }
@@ -558,6 +621,10 @@ function buildEngine(db, dbPath) {
   const gcDelete = db.prepare(
     `DELETE FROM memory_nodes WHERE status = 'superseded' AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' days')`
   )
+  const listActiveForConsolidate = db.prepare(
+    `SELECT id, memory_key, type, scope, content, created_at FROM memory_nodes WHERE status = 'active'`
+  )
+  const findActiveById = db.prepare(`SELECT id FROM memory_nodes WHERE id = ? AND status = 'active'`)
 
   function buildWorkingContext(scope, maxTokens = MAX_TOKENS, cwd = process.cwd()) {
     const scopes = SCOPE_HIERARCHY[scope] || [scope]
@@ -926,9 +993,100 @@ function buildEngine(db, dbPath) {
     return { dryRun: false, ...plan }
   }
 
+  // Consolida duplicados exactos: agrupa activos por `type` + content normalizado
+  // (sin cruzar `type`, para no superseder una rule con una decision) y elige un
+  // canonico por el orden total de `compareCanonical`. El dry-run es el default y
+  // no abre transaccion. `--apply` supersede los no canonicos en una unica
+  // transaccion; los near-duplicates solo se reportan y nunca se tocan.
+  function consolidate({ dryRun = true } = {}) {
+    const nodes = listActiveForConsolidate.all().map((row) => ({
+      ...row,
+      refs: declaredRefCount(row.content),
+      normalized: normalizeContent(row.content)
+    }))
+
+    const buckets = new Map()
+    for (const node of nodes) {
+      // Un content sin prosa (solo `refs:`) no es un duplicado: su provenance
+      // distinta no debe colapsar.
+      if (!node.normalized) continue
+      const key = `${node.type}\u0000${node.normalized}`
+      const bucket = buckets.get(key)
+      if (bucket) bucket.push(node)
+      else buckets.set(key, [node])
+    }
+
+    const plans = []
+    for (const members of buckets.values()) {
+      if (members.length < 2) continue
+      const ordered = [...members].sort(compareCanonical)
+      plans.push({ canonical: ordered[0], superseded: ordered.slice(1) })
+    }
+    plans.sort((a, b) => {
+      const byType = compareKeys(a.canonical.type, b.canonical.type)
+      if (byType !== 0) return byType
+      return compareKeys(a.canonical.memory_key, b.canonical.memory_key)
+    })
+
+    const exactGroups = plans.map(({ canonical, superseded }) => ({
+      type: canonical.type,
+      canonical: canonical.memory_key,
+      superseded: superseded.map((node) => node.memory_key),
+      refs: canonical.refs
+    }))
+    const supersededKeys = plans.flatMap(({ superseded }) => superseded.map((node) => node.memory_key))
+
+    const nearDuplicates = []
+    const nearOrder = nodes.filter((node) => node.normalized).sort((a, b) => compareKeys(a.memory_key, b.memory_key))
+    for (let i = 0; i < nearOrder.length; i++) {
+      for (let j = i + 1; j < nearOrder.length; j++) {
+        const a = nearOrder[i]
+        const b = nearOrder[j]
+        if (a.type !== b.type || a.scope !== b.scope) continue
+        if (a.normalized === b.normalized) continue
+        const score = jaccardScore(a.normalized, b.normalized)
+        if (score < 0.6) continue
+        nearDuplicates.push({
+          a: a.memory_key,
+          b: b.memory_key,
+          score: Math.round(score * 10000) / 10000
+        })
+      }
+    }
+    nearDuplicates.sort((x, y) => {
+      if (y.score !== x.score) return y.score - x.score
+      const byA = compareKeys(x.a, y.a)
+      if (byA !== 0) return byA
+      return compareKeys(x.b, y.b)
+    })
+
+    const report = { dryRun: !!dryRun, exactGroups, superseded: supersededKeys, nearDuplicates }
+    if (dryRun || plans.length === 0) return report
+
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const { canonical, superseded } of plans) {
+        if (!findActiveById.get(canonical.id)) {
+          throw new Error(`consolidate: el canonico "${canonical.memory_key}" dejo de estar activo durante la transaccion`)
+        }
+        for (const node of superseded) {
+          const result = supersede.run(canonical.id, node.id)
+          if (Number(result.changes || 0) !== 1) {
+            throw new Error(`consolidate: el nodo "${node.memory_key}" dejo de estar activo durante la transaccion`)
+          }
+        }
+      }
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw err
+    }
+    return report
+  }
+
   function close() {
     db.close()
   }
 
-  return { buildWorkingContext, searchMemory, recordNode, listNodes, exportActive, importNodes, gcSuperseded, merge, checkpoint, close }
+  return { buildWorkingContext, searchMemory, recordNode, listNodes, exportActive, importNodes, gcSuperseded, merge, consolidate, checkpoint, close }
 }

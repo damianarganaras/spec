@@ -401,7 +401,7 @@ archiva OK, más el guard que exige citar `Requirement:` cuando no hay delta.
 
 | ID | Ítem | Qué incluye | Dependencia | Notas de superficie |
 |---|---|---|---|---|
-| **MEM-04** | Refs resolver | Resolver `change:` contra change activo **y** `archive/YYYY-MM-DD-<slug>` con unicidad (si hay >1 coincidencia, no elige al azar). Resolver `spec:` por **path + heading canónico**, no por FTS. `path:` normalizado al repo, sin `../` ni symlinks fuera. `commit:` y `workitem:` opcionales. Fallback: leer el Requirement por path+heading o índice aparte. | PR-3 | `src/core/memory/engine.js`, lector de refs, `test/memory-engine.test.js`, `aspec/specs/memory-engine/spec.md`. Tests T09, T29. |
+| **MEM-04** ✅ | Refs resolver | Resolver `change:` contra change activo **y** `archive/YYYY-MM-DD-<slug>` con unicidad (si hay >1 coincidencia, no elige al azar). Resolver `spec:` por **path + heading canónico**, no por FTS. `path:` normalizado al repo, sin `../` ni symlinks fuera. `commit:` y `workitem:` opcionales. Fallback: leer el Requirement por path+heading o índice aparte. | PR-3 | `src/core/memory/engine.js`, lector de refs, `test/memory-engine.test.js`, `aspec/specs/memory-engine/spec.md`. Tests T09, T29.<br>Cerrado en 0.18.x: `resolveNodeRefs` expone la ubicación repo-relativa de cada ref (`change:` activo o archivado, `spec:` con heading real, `path:` normalizado) en `mem-04b-resolver-referencias-navegables`. |
 | **MEM-05** | Recall task-aware | Orden total: requerido → match de ref → scope específico → bm25 ASC → `memory_key` lexicográfico. Previsualización de 3–5 candidatos, expandible a pedido. Sin truncar invariantes: si no entra, error diagnóstico con `memory_key` y ruta. **Dos presupuestos separados**: `working-context` (8.000 chars = `MAX_TOKENS 2000 × 4`, `engine.js:8-9`) vs guard `ProjectMemoryRules` (≤5 reglas / ≤1.500 B). No son la misma superficie. | PR-3, MEM-04 | `src/core/memory/engine.js`, `src/core/memory/working-context.js`, `searchMemory`. Tests T07, T28 + golden M01–M10. |
 | **CH-06** | CLI determinístico | Ver §5.1 (partida "existe hoy" vs "cambio nuevo"). | P0 cerrado | `src/cli/index.js`, capa de status/affected, tests CLI. |
 | **CH-07** | Cache / tools / modelos | Sólo **post-baseline**. A/B de prefijos estables, remover schemas sólo donde el host realmente los omite, medir cache facturado, experimentar modelos por rol si la calidad es equivalente. Si el host no expone métrica: reportar `not-supported`, no extrapolar. | CH-00 baseline | Adaptador de host + config de agents. |
@@ -585,6 +585,10 @@ memoria viva (V2 línea 381):
 
 Criterio de aceptación del recall: para cada caso fixture, devolver la key esperada y una referencia
 resoluble **dentro de los primeros 3 resultados**, o abstenerse si la fuente falta.
+
+Estado tras `mem-04b-resolver-referencias-navegables`: M04, M05 y M06 están **activas** y corren con
+`expected.mode: "refs"` contra `test/fixtures/memory/refs-root/`, resolviendo la ubicación de la ref
+del nodo recuperado; M01 y M07 siguen activas y M02, M03, M08, M09 y M10 quedan diferidas.
 
 ### 9.4 PRs propios (no se foldan dentro de otro PR)
 

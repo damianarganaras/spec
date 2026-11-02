@@ -480,6 +480,10 @@ commit:<git-sha>
 workitem:<tracker>:<external-key>
 ```
 
+`change:<stable-change-slug>` SHALL escribirse con el slug del change **tal como se nombra el
+change**, sin el prefijo `YYYY-MM-DD-`. El prefijo de fecha lo aporta únicamente el nombre del
+directorio archivado (`aspec/changes/archive/YYYY-MM-DD-<slug>`) y NO SHALL incluirse en la ref.
+
 `commit:` y `workitem:` son opcionales. Las refs NO SHALL materializarse en una tabla ni en una
 columna nueva: NO SHALL crearse `memory_refs` ni una migración de schema. La consulta inversa por
 `spec:` o `change:` SHALL resolverse sobre el texto indexado de `content`. El bloque `refs:` es el
@@ -532,6 +536,21 @@ fail-closed y NO se re-enuncia acá.
   item de lista
 - **THEN** esa línea se reporta como inválida
 - **AND** no se ignora ni se trata como continuación válida del bloque
+
+#### Scenario: El slug canónico de `change:` resuelve
+
+- **WHEN** se escribe un nodo con `change:<stable-change-slug>` y el slug corresponde al nombre del
+  change, activo o archivado, sin el prefijo de fecha
+- **THEN** la ref resuelve y la escritura se acepta
+- **AND** la ref no incluye el prefijo `YYYY-MM-DD-`
+
+#### Scenario: El slug con prefijo de fecha no resuelve
+
+- **WHEN** se escribe un nodo con `change:<YYYY-MM-DD-slug>` incluyendo el prefijo de fecha en la
+  ref
+- **THEN** la escritura se rechaza nombrando la `memory_key` y la ref
+- **AND** la resolución reporta el change como inexistente, porque el prefijo de fecha sólo lo
+  aporta el nombre del directorio archivado
 
 ### Requirement: Validación fail-closed de refs en el camino único de escritura
 

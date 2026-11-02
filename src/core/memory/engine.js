@@ -14,6 +14,9 @@ const SCOPE_HIERARCHY = {
   task: ['task', 'feature', 'project']
 }
 
+const SCOPE_RANK = { task: 0, feature: 1, project: 2 }
+const MAX_OMITTED_KEYS = 40
+
 const PUBLIC_COLUMNS = 'n.memory_key, n.type, n.scope, n.content, n.justification, n.created_at'
 const GC_DEFAULT_DAYS = 30
 
@@ -204,6 +207,39 @@ function renderRuleContent(content) {
   if (!parsed) return content
   const lines = String(content).split(/\r?\n/)
   return lines.slice(0, parsed.start).join('\n').trimEnd()
+}
+
+const ANCHOR_REF_KINDS = new Set(['spec', 'change', 'path'])
+
+// Anclaje declarado: solo se parsea el bloque `refs:` del content. No se resuelve
+// ninguna ref ni se toca el filesystem. Un bloque ausente, vacio, invalido o
+// multiple no ancla (fail-closed).
+function declaresAnchor(content) {
+  const parsed = parseRefsBlock(content)
+  if (!parsed || parsed.blocks || parsed.error) return false
+  return parsed.refs.some((ref) => ANCHOR_REF_KINDS.has(ref.kind))
+}
+
+function scopeRank(scope) {
+  return SCOPE_RANK[scope] ?? 9
+}
+
+// El aviso entra en un presupuesto de caracteres: se listan las claves omitidas
+// en orden de inyeccion hasta el tope de 40 mientras entren; las no listadas se
+// cuentan en `+N`. Si ni el aviso minimo entra, se omite el aviso para no
+// exceder el presupuesto.
+function formatOverflowWarning(omitted, omittedKeys, budgetChars) {
+  const maxKeys = Math.min(MAX_OMITTED_KEYS, omittedKeys.length)
+  for (let count = maxKeys; count >= 0; count--) {
+    const listed = omittedKeys.slice(0, count)
+    const remaining = omitted - count
+    const parts = [...listed]
+    if (remaining > 0) parts.push(`+${remaining}`)
+    const manifest = parts.length > 0 ? ` Omitted: ${parts.join(', ')}.` : ''
+    const warning = `\n<ContextOverflowWarning>Context truncated due to size limits. ${omitted} rules omitted.${manifest} Delegate one Recall to @memory-keeper with the task topic before delegating any other stage.</ContextOverflowWarning>`
+    if (warning.length <= budgetChars) return warning
+  }
+  return ''
 }
 
 export function resolveProjectRoot(context, dbPath) {
@@ -528,31 +564,52 @@ function buildEngine(db, dbPath) {
     const placeholders = scopes.map(() => '?').join(', ')
     const rows = db.prepare(
       `SELECT ${PUBLIC_COLUMNS} FROM memory_nodes n
-       WHERE type = 'rule' AND status = 'active' AND scope IN (${placeholders})
-       ORDER BY CASE n.scope WHEN 'task' THEN 0 WHEN 'feature' THEN 1 WHEN 'project' THEN 2 ELSE 9 END, n.created_at DESC, n.rowid DESC`
+       WHERE type = 'rule' AND status = 'active' AND scope IN (${placeholders})`
     ).all(...scopes)
 
     const topoBlock = formatTopologyBlock(readTopologySummary(cwd))
 
     if (rows.length === 0) return topoBlock
 
+    // Orden determinista y total: jerarquia de scope, anclaje declarado, recencia
+    // y memory_key como desempate final. El anclaje no es expresable en SQL.
+    rows.sort((a, b) => {
+      const byScope = scopeRank(a.scope) - scopeRank(b.scope)
+      if (byScope !== 0) return byScope
+      const byAnchor = Number(declaresAnchor(b.content)) - Number(declaresAnchor(a.content))
+      if (byAnchor !== 0) return byAnchor
+      if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1
+      if (a.memory_key === b.memory_key) return 0
+      return a.memory_key < b.memory_key ? -1 : 1
+    })
+
     const maxChars = Number(maxTokens) * CHARS_PER_TOKEN
-    let block = `<ProjectMemoryRules>\n${UNTRUSTED_LABEL}`
+    const wrapperOpen = `<ProjectMemoryRules>\n${UNTRUSTED_LABEL}`
+    const wrapperClose = '\n</ProjectMemoryRules>'
+    const structuralFloor = `${wrapperOpen}${wrapperClose}`
+    if (!Number.isFinite(maxChars) || maxChars <= structuralFloor.length) {
+      return topoBlock ? `${topoBlock}\n${structuralFloor}` : structuralFloor
+    }
+
+    const reserve = Math.min(1500, Math.floor(maxChars * 0.15))
+    let block = wrapperOpen
     let includedCount = 0
     for (const r of rows) {
       const line = `- [${r.memory_key}] ${renderRuleContent(r.content)}`
-      const candidate = `${block}\n${line}`
-      if (candidate.length > maxChars) break
-      block = candidate
+      if (block.length + 1 + line.length + wrapperClose.length > maxChars - reserve) break
+      block += `\n${line}`
       includedCount++
     }
 
     const omitted = rows.length - includedCount
     if (omitted > 0) {
-      block += `\n<ContextOverflowWarning>Context truncated due to size limits. ${omitted} rules omitted. Delegate one Recall to @memory-keeper with the task topic before delegating any other stage.</ContextOverflowWarning>`
+      const omittedKeys = rows.slice(includedCount).map((r) => r.memory_key)
+      const budget = maxChars - block.length - wrapperClose.length
+      const warning = formatOverflowWarning(omitted, omittedKeys, budget)
+      if (warning) block += warning
       console.warn(`ancleto: ${omitted} reglas omitidas por limite de tamano (scope "${scope}")`)
     }
-    const memoryBlock = `${block}\n</ProjectMemoryRules>`
+    const memoryBlock = `${block}${wrapperClose}`
     return topoBlock ? `${topoBlock}\n${memoryBlock}` : memoryBlock
   }
 

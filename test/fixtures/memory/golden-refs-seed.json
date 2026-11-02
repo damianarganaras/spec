@@ -1,0 +1,26 @@
+[
+  {
+    "memory_key": "validation-commands-spec-ref",
+    "type": "rule",
+    "content": "La política de validaciones declarativa por proyecto indica qué spec referencia la regla de validación declarativa: prompt-contracts.\n\nrefs:\n- spec:prompt-contracts#Política de validaciones declarativa por proyecto",
+    "justification": "La regla de validación declarativa tiene su fuente normativa en un spec del repositorio.",
+    "scope": "project",
+    "createdAt": "2026-02-01T10:00:00.000Z"
+  },
+  {
+    "memory_key": "snapshot-contract-change-ref",
+    "type": "decision",
+    "content": "El change reingenieria-memoria-first respondió qué change introdujo el contrato de snapshot y su restauración consistente.\n\nrefs:\n- change:reingenieria-memoria-first",
+    "justification": "El contrato de snapshot nació en ese change archivado.",
+    "scope": "project",
+    "createdAt": "2026-02-02T10:00:00.000Z"
+  },
+  {
+    "memory_key": "bash-permissions-superseded",
+    "type": "decision",
+    "content": "Qué decisión supersede la regla vieja de permisos de bash: la decisión permisos-bash reemplaza la regla anterior.\n\nrefs:\n- change:permisos-bash",
+    "justification": "La decisión nueva reemplaza la regla vieja de permisos de bash.",
+    "scope": "project",
+    "createdAt": "2026-02-03T10:00:00.000Z"
+  }
+]

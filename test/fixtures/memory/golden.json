@@ -24,20 +24,51 @@
   {
     "id": "M04",
     "query": "¿Qué spec referencia la regla de validación declarativa?",
-    "status": "deferred",
-    "blocker": "MEM-04 (resolver de refs spec:/change:)"
+    "status": "active",
+    "expected": {
+      "mode": "refs",
+      "k": 3,
+      "memory_keys": ["validation-commands-spec-ref"],
+      "refs": [
+        {
+          "kind": "spec",
+          "path": "aspec/specs/prompt-contracts/spec.md",
+          "heading": "Política de validaciones declarativa por proyecto"
+        }
+      ]
+    }
   },
   {
     "id": "M05",
     "query": "¿Qué change introdujo el contrato de snapshot?",
-    "status": "deferred",
-    "blocker": "MEM-04 (resolver de refs spec:/change:)"
+    "status": "active",
+    "expected": {
+      "mode": "refs",
+      "k": 3,
+      "memory_keys": ["snapshot-contract-change-ref"],
+      "refs": [
+        {
+          "kind": "change",
+          "path": "aspec/changes/archive/2026-10-28-reingenieria-memoria-first"
+        }
+      ]
+    }
   },
   {
     "id": "M06",
     "query": "¿Qué decisión supersede la regla vieja de permisos de bash?",
-    "status": "deferred",
-    "blocker": "MEM-04 (resolver de refs spec:/change:)"
+    "status": "active",
+    "expected": {
+      "mode": "refs",
+      "k": 3,
+      "memory_keys": ["bash-permissions-superseded"],
+      "refs": [
+        {
+          "kind": "change",
+          "reason": "ambiguo (2 coincidencias)"
+        }
+      ]
+    }
   },
   {
     "id": "M07",

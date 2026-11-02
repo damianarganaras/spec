@@ -2,44 +2,54 @@
 node: inventory
 kind: inventory
 read_when: "cobertura del repositorio por directorios y globs, y qué queda fuera"
-generatedAt: 2026-11-01T02:38:20Z
-pluginVersion: 0.17.2
+generatedAt: 2026-11-02T12:11:50Z
+pluginVersion: 0.18.2
 skillVersion: '2.3'
 ---
 
 # Inventario (orientación)
 
 Cobertura por directorio/glob, no auditoría archivo por archivo. Conteos de
-`.discovery-map.json` (`total_files: 721`, `last_updated: 2026-11-01T01:31:45.321Z`;
+`.discovery-map.json` (`total_files: 734`, `last_updated: 2026-11-02T12:09:33.588Z`;
 `tree_summary` por directorio de primer nivel).
 
 | Área | Contenido | Archivos |
 |---|---|---|
 | `src/cli/**` | `index.js` (entry point y todos los subcomandos, incl. `affected`, `stats failures`, `memory snapshot`/`merge`, refresh on-write y advisory), `ui.js` (wizard/menús). | 2 |
-| `src/core/**` | `discovery.js`, `affected-set.js` (grafo de imports), `machine-env.js` (entorno local), `repomix-tier.js`, `tier-models.js`, `adapters/frontmatter.js`, `memory/{database,engine,snapshot,doctor,tools,mcp-server,working-context}.js`. | 13 |
+| `src/core/**` | `discovery.js`, `affected-set.js` (grafo de imports), `machine-env.js` (entorno local), `repomix-tier.js`, `tier-models.js`, `adapters/frontmatter.js`, `memory/{database,engine,snapshot,doctor,tools,mcp-server,working-context}.js`. `engine.js` incluye `resolveNodeRefs` (MEM-04b, sin commitear). | 15 |
 | `agents/*.md` | 10 subagentes instalables; todos con la instrucción canónica de leer `.ancleto/machine-env.md`; `orchestrator.md` con `## Machine Environment`, `## Session Intake`, techo de lecturas (3 archivos + exención de hasta 5 archivos nombrados por el usuario por mensaje), trigger de Recall y orden de promoción al archivar; `technical-discovery.md` con allowlist de `bash` de **dos literales** (`ancleto discovery --check`, `git status --short`) sobre `'*': deny`. | 10 |
 | `commands/*.md` | 16 comandos (`/cleto-*` del ciclo + review/security + transplant + update). | 16 |
 | `skills/*/SKILL.md` (+ references) | 21 directorios de skills (~35 archivos; incluye `ancleto-update`, `ancleto-review`, `ancleto-technical-discovery`, `ancleto-workflow`, `triage-clarifier` y `ancleto-archive` con el gate de promoción). Los generadores emiten `proposal`/`tasks`/`specs` (sin `design.md`/`context.md`); el archive mueve sin borrar. | 35 |
 | `templates/` | `AGENTS.md` (bloques `LOCKED` canónicos, incl. `validation-commands`) y `PRODUCT.md`; **sin** valores de máquina. | 2 |
 | `profiles/test/` | Overlay del perfil test: tester/reviewer ampliados, comandos `cleto-test-*`, `AGENTS.md` con bloque LOCKED. | 8 |
-| `aspec/` | `config.yaml` + `specs/` (**19 capacidades**, incl. `memory-ops`, `memory-engine`, `machine-environment`, `session-failure-report`) + **1 change activo** (`ancleto-vscode-extension`) + `changes/archive/` (34, el último `2026-10-31-mem-04-doctor-referencias-no-resueltas`). El delta del retiro ya está **mergeado** en `specs/artifact-update` y `specs/prompt-contracts` y **publicado en `0.17.1`**. | 166 |
-| `test/**` | 15 archivos `*.test.js` (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`, `memory-engine`, `memory-fixtures`, `memory-pr1-contract`, `stats-failures`, `tier-models`, `working-context`) + `fixtures/{seed,golden}.json`. `memory-fixtures` cubre el check de refs del doctor y `cli` que la ayuda lo enumere; `content-guards` incorpora los guards negativos de `design.md`/`context.md` y los controles positivos de lectura legacy. | 17 |
+| `aspec/` | `config.yaml` + `specs/` (**19 capacidades**, incl. `memory-ops`, `memory-engine`, `machine-environment`, `session-failure-report`) + **2 changes activos** (`ancleto-vscode-extension` y `mem-04b-resolver-referencias-navegables`) + `changes/archive/` (**35**, el último `2026-11-01-clarificaciones-spec-severidad-y-refs`). El delta del retiro está **mergeado** en `specs/artifact-update` y `specs/prompt-contracts` y **publicado desde `0.17.1`**. MEM-04 se publicó en `0.18.0`. | 174 |
+| `test/**` | 15 archivos `*.test.js` (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`, `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`, `memory-engine`, `memory-fixtures`, `memory-pr1-contract`, `stats-failures`, `tier-models`, `working-context`) + **tres fixtures** (`seed.json`, `golden.json`, `golden-refs-seed.json`) + el root `fixtures/memory/refs-root/` (4 archivos). `memory-fixtures` cubre el check de refs del doctor, el resolver y el modo `refs` de M04/M05/M06; `cli` que la ayuda enumere el check; `content-guards` conserva los guards negativos de `design.md`/`context.md` y los controles de lectura legacy. | 22 |
 | `docs/**` | Documentación del framework + relevamiento (`.md`) + este seed; excluida del pack por el tier. | 21 |
 | `documentation/**` | Material legado `lnx-cli/` + guías; **gitignored**. El mapa lo cuenta porque recorre el disco, pero el pack lo excluye por `.gitignore`. | 340 |
 | `audit logs/**` | 9 `.txt` de auditorías de sesiones (untracked). Entran al pack pero **no** son evidencia del producto ni área material del seed. | 9 |
 | `.opencode/**` | Instalación local del host (incluye `.ancleto-tier` = `minimo` y los mirrors `.opencode/agents/*.md`, que se regeneran); gitignored. | 66 |
 | `.github/workflows/**` | `publish.yml` (publicación a npm + Release + gate de lint). | 1 |
 | `eslint.config.js` | Flat config del linter (4 reglas sobre `src/` y `test/`). | 1 |
-| Raíz | `package.json` (`0.17.2`), `opencode.json` (override de modelos para 9 subagentes; el árbol de trabajo agrega sin commitear el orquestador), `README.md` (artifacts-language sin `design.md`; `memory doctor` read-only), `CHANGELOG.md` (hasta `0.17.2`), `DESIGN-memory-engine-v0.2.0.md`, `optimizacion-de-tokens.md` (análisis, no runtime), `LICENSE` (MIT), `AGENTS.md` (incl. `## Cambiar el modelo de los agentes`), `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `package-lock.json`, `.ancletorc` (gitignored). **No existe `BACKLOG.md`**; el backlog P0 de memoria vive en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (con `§5.2` de deuda MEM-04). | 15 |
+| Raíz | `package.json` (`0.18.2`), `opencode.json` (override de modelos para los 10 subagentes, incl. orquestador), `README.md`, `CHANGELOG.md` (hasta `0.18.2`), `DESIGN-memory-engine-v0.2.0.md`, `optimizacion-de-tokens.md` (análisis, no runtime), `LICENSE` (MIT), `AGENTS.md` (incl. `## Cambiar el modelo de los agentes`), `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `package-lock.json`, `.ancletorc` (gitignored). **No existe `BACKLOG.md`**; el backlog P0 de memoria vive en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (CH-11/MEM-07 cerrados; `§5.2` con deuda de `inspectRefs`). | 15 |
 
 ## Fuera del árbol versionado (gitignored, puede no existir)
 
 `.ancletorc`, `.opencode/**` (instalación local del host), `.ancleto/**` (memoria y artefactos
 locales) y `/documentation` están en `.gitignore`. En este checkout `.ancletorc` y `.opencode/`
 **sí existen**; persisten `.ancleto/memory.db`, `.ancleto/working-context.md` y
-**`.ancleto/machine-env.md`** (generado el 2026-10-30 con `ancleto: 0.17.1`). El tier del
+**`.ancleto/machine-env.md`** (generado el 2026-11-01 con `ancleto: 0.18.0`). El tier del
 proyecto vive en `.opencode/.ancleto-tier` (`minimo`). `audit logs/` **no** está en
 `.gitignore`: es untracked y se excluye solo del commit por no agregarse.
+
+## Cambios abiertos en el árbol de trabajo
+
+El change `mem-04b-resolver-referencias-navegables` está **implementado y verificado pero sin
+commitear**: `src/core/memory/engine.js`, `test/memory-engine.test.js`,
+`test/memory-fixtures.test.js`, `test/fixtures/memory/golden.json`,
+`test/fixtures/memory/golden-refs-seed.json`, `test/fixtures/memory/refs-root/`,
+`aspec/changes/mem-04b-*` y `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`. También aparecen
+modificados `.discovery-map.json` y `docs/technical-discovery/.discovery-state.json` por la
+regeneración. Evidencia: `git status --short`.
 
 ## Destinos por host (no presentes en este repo)
 
@@ -55,18 +65,19 @@ la topología) + `test/**`, `docs/**`, `**/*.md` (tier) + `**/*.test.*`, `**/*.s
 `**/__tests__/**`, imágenes (`png/jpg/svg/ico`), `public`, lockfiles (`package-lock.json`,
 `yarn.lock`, `pnpm-lock.yaml`). Además, Repomix respeta `.gitignore` (`.opencode/`, `.ancletorc`,
 `.ancleto/`, `/documentation`). `minimo` **no** fija token budget (solo `gratis`: 50k); el pack
-de esta corrida fue de **709 archivos, ~17.669 tokens**. `audit logs/` no está excluido y por eso
+de esta corrida fue de **722 archivos, ~17.790 tokens**. `audit logs/` no está excluido y por eso
 aparece en el pack; no se usa como evidencia. El conteo del pack difiere del `total_files` del
-mapa (721) porque el mapa recorre el disco y el pack aplica los ignores del tier y `.gitignore`.
+mapa (734) porque el mapa recorre el disco y el pack aplica los ignores del tier y `.gitignore`.
 
 ## Cobertura conceptual
 
 - Arquitectura y entry points: `overview.md`.
 - Flujos críticos: `units/memory-engine.md`, `units/discovery-engine.md`, `units/cli-install.md`.
 - Escritura de memoria y refs: `units/memory-engine.md`, `decisions.md`.
+- Resolver de refs navegables (MEM-04b): `units/memory-engine.md`, `decisions.md`.
 - Promoción al archivar: `decisions.md`, `units/memory-engine.md`, `units/cli-install.md`.
-- Mantenimiento de memoria (snapshot, merge, doctor read-only con cinco checks): `units/memory-engine.md`,
-  `decisions.md`.
+- Mantenimiento de memoria (snapshot, merge, doctor read-only con cinco checks):
+  `units/memory-engine.md`, `decisions.md`.
 - Scope de review y grafo de imports (`affected-set`): `units/discovery-engine.md`.
 - Entorno de máquina y exclusión local: `setup.md`, `decisions.md`, `units/cli-install.md`.
 - Cambio de modelo de agentes (tres superficies y precedencia): `setup.md`, `decisions.md`,

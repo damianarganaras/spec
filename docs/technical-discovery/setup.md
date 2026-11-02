@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-11-01T02:38:20Z
-pluginVersion: 0.17.2
+generatedAt: 2026-11-02T12:11:50Z
+pluginVersion: 0.18.2
 skillVersion: '2.3'
 ---
 
@@ -72,6 +72,15 @@ parser y resolución que la escritura); `commit:`/`workitem:` no se resuelven y 
 aparte como no verificables. Evidencia: `src/core/memory/doctor.js`,
 `aspec/specs/memory-ops/spec.md`.
 
+**Resolver de refs de recall (`MEM-04b`)**: `resolveNodeRefs({ content, projectRoot })` es
+una API read-only del engine, **no un subcomando**. Devuelve `{ refs, error, blocks, needsRoot }`
+y, por ref, `raw`, `kind`, `verifiable` y `ok`/`path`/`heading`/`reason`/`matches` según
+corresponda. `change:` devuelve el directorio repo-relativo; `spec:` devuelve el `spec.md` y el
+heading real; `path:` se normaliza (separadores `/`, sin `:línea`) antes de verificar existencia;
+`commit:`/`workitem:` quedan `verifiable: false`. Sin raíz, devuelve `needsRoot: true` y
+`reason: 'sin raíz'` por ref verificable. Evidencia: `src/core/memory/engine.js`,
+`aspec/changes/mem-04b-resolver-referencias-navegables/specs/memory-engine/spec.md`.
+
 **Ops nuevas de memoria** (`PR-1`, archivado `2026-10-28-reingenieria-memoria-first`):
 `memory snapshot` exige `--out` y rechaza sobrescribir sin `--force`; produce una copia con
 historial (`superseded` + `superseded_by`) y no modifica la fuente. `memory merge` requiere
@@ -91,22 +100,21 @@ escribe la base ni el working-context). Evidencia: `src/cli/index.js`
   skills). **No editar a mano durante el seed**; se consume resuelto desde
   `ancleto discovery --check`. En este checkout `.ancletorc` **existe** (gitignored, no
   versionado); el contrato de contenido se describe por código, no por lectura directa.
-- **`opencode.json`** (raíz): configuración del host opencode versionada en el repo. El
-  **baseline commiteado** fija `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para
-  **9 subagentes** (`coder`, `spec-writer`, `tester`, `reviewer`, `documenter`,
-  `memory-keeper`, `context-resolver`, `technical-discovery`, `technical-seed-writer`); **no**
-  incluye al orquestador. El checkout agrega **sin commitear** una entrada para `orchestrator`
-  (probe local de configuración; no es estado del producto). Es un override local del host:
-  **no** forma parte del paquete publicado (`package.json` → `files` lista `agents`, `commands`,
-  `skills`, `templates`, `profiles`, `src`). Evidencia: `opencode.json`, `package.json`.
+- **`opencode.json`** (raíz): configuración del host opencode versionada en el repo. Fija
+  `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los **10 subagentes**
+  (`coder`, `spec-writer`, `tester`, `reviewer`, `documenter`, `memory-keeper`,
+  `context-resolver`, `technical-discovery`, `technical-seed-writer`, `orchestrator`). El
+  orquestador se incorporó en `0.18.1`. Es un override local del host: **no** forma parte del
+  paquete publicado (`package.json` → `files` lista `agents`, `commands`, `skills`, `templates`,
+  `profiles`, `src`). Evidencia: `opencode.json`, `package.json`, `CHANGELOG.md` (`0.18.1`).
 - **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/reviewer ampliados
   (planning/generation/healing/coverage), comandos `cleto-test-*`, estructura `testspec/` y
   bloque LOCKED de convenciones Playwright; instalable con cualquier host.
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
   En este checkout `.opencode/.ancleto-tier` contiene **`minimo`**, por lo que el tier resuelto
   es `minimo` (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, **sin token budget**; el
-  pack de esta corrida quedó en 709 archivos / ~17.669 tokens). El tier decide modelos de los
-  agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
+  pack de esta corrida quedó en **722 archivos / ~17.790 tokens**). El tier decide modelos de
+  los agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
   `.opencode/.ancleto-tier`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`,
@@ -169,11 +177,11 @@ por presupuesto agotado también. Un fallo real se publica como sufijo aditivo
 inconcluso no lleva sufijo. La versión observada nunca se renderiza. Evidencia:
 `src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
 
-**Estado en este checkout**: el artefacto **existe** (generado el 2026-10-30): `win32` /
+**Estado en este checkout**: el artefacto **existe** (generado el 2026-11-01): `win32` /
 `10.0.26200` / `x64`, shell `Windows PowerShell 5.1` (`shell_source: PSModulePath`), EOL `lf`
 (`eol_source: gitattributes`), `rg` **no disponible** (fallback: `Select-String`),
 `node`/`npm`/`git`/`python` **disponibles** —resolubles **e invocables** según la sonda; el
-artefacto declara disponibilidad, no versión—, `ancleto: 0.17.1`. La exclusión local está
+artefacto declara disponibilidad, no versión—, `ancleto: 0.18.0`. La exclusión local está
 escrita en `info/exclude`. Evidencia: `.ancleto/machine-env.md`.
 
 ## Permisos de shell por agente
@@ -235,16 +243,16 @@ El contrato es **declarativo** (change archivado `2026-10-14-contrato-validacion
 - **Suite**: 15 archivos (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`,
   `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`,
   `memory-engine`, **`memory-fixtures`**, **`memory-pr1-contract`**, `stats-failures`,
-  `tier-models`, `working-context`), con fixtures en `test/fixtures/memory/` (`seed.json` en
-  formato `exportActive()`, `golden.json` M01–M10). `memory-fixtures` cubre el check
-  `Refs de nodos activos` (orden de los cinco checks, rotas, ambigüedad, raíz no derivable) y
-  `cli` verifica que la ayuda enumere ese check. `content-guards` asierta **behavior**
-  (keywords y salvaguardas), no la redacción literal; desde el retiro incluye guards
-  **negativos** de `design.md`/`context.md` acotados por sección, controles positivos de
-  lectura legacy y mutaciones scratch. La cifra en verde **no se re-ejecutó** en esta
-  regeneración (la validación del seed es state-only). Evidencia: `test/`,
-  `aspec/specs/memory-ops/spec.md`, `aspec/specs/machine-environment/spec.md`,
-  `aspec/specs/session-failure-report/spec.md`.
+  `tier-models`, `working-context`) y **tres fixtures** en `test/fixtures/memory/`:
+  `seed.json` (formato `exportActive()`), `golden.json` (M01–M10) y
+  `golden-refs-seed.json` (tres nodos con `refs:` para M04/M05/M06), más el root versionado
+  `refs-root/`. `memory-fixtures` cubre el check `Refs de nodos activos`, el resolver y el
+  modo `refs` del harness; `cli` verifica que la ayuda enumere el check. `content-guards`
+  asierta **behavior** (keywords y salvaguardas), no la redacción literal. El change MEM-04b
+  declara en `tasks.md` la suite en **727 tests (723 ok, 4 skip preexistentes)**; esta
+  regeneración del seed es state-only y **no** re-ejecutó la suite. Evidencia: `test/`,
+  `aspec/changes/mem-04b-resolver-referencias-navegables/tasks.md`,
+  `aspec/specs/memory-ops/spec.md`.
 - **CI**: `.github/workflows/publish.yml` corre `npm ci` + `npm run lint` + `node --test
   test/*.test.js` y publica a npm al pushear un tag `v*` (o `workflow_dispatch`), con canary
   no bloqueante y creación del Release. El lint bloquea el publish. Evidencia:
@@ -276,11 +284,10 @@ Select-String -Path <directorio>/*.md -Pattern '^model:'
 `ancleto check` reporta `frontmatter diverge del adaptador` cuando un mirror se apartó de su
 fuente: es la señal de que alguien editó a mano y falta regenerar con `ancleto upgrade`. Si el
 modelo está bien en las tres superficies y el proveedor responde `Insufficient account funds`,
-el problema es la cuenta, no la configuración. **En este checkout** hay dos cambios locales sin
-commitear que son probes transitorios, no estado del producto: la línea `model:` de
-`agents/spec-writer.md` y el mapeo `agent.orchestrator.model` de `opencode.json`. Evidencia:
-`AGENTS.md`, `agents/*.md`, `opencode.json`, `src/cli/index.js` (`applyTier`,
-`checkAgentsFrontmatter`).
+el problema es la cuenta, no la configuración. **En este checkout** `opencode.json` ya incluye
+al orquestador (commiteado en `0.18.1`) y no hay probes locales pendientes en ese archivo; el
+único cambio de trabajo abierto es `mem-04b` (engine, tests y fixtures). Evidencia: `AGENTS.md`,
+`agents/*.md`, `opencode.json`, `src/cli/index.js` (`applyTier`, `checkAgentsFrontmatter`).
 
 ## Convenciones de trabajo
 

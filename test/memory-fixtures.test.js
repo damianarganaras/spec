@@ -4,8 +4,9 @@ import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
-import { createMemoryEngine, createReadonlyMemoryEngine, resolveProjectRoot } from '../src/core/memory/engine.js'
+import { createMemoryEngine, createReadonlyMemoryEngine, resolveNodeRefs, resolveProjectRoot } from '../src/core/memory/engine.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
 
 // Reingenieria memoria-first / PR-1 — Fase 1.
@@ -25,7 +26,7 @@ const FIXTURE_KEYS = [
 const GOLDEN_IDS = ['M01', 'M02', 'M03', 'M04', 'M05', 'M06', 'M07', 'M08', 'M09', 'M10']
 
 // Allowlist explicita: si el set diferido de golden.json cambia, el harness falla.
-const DEFERRED_ALLOWLIST = ['M02', 'M03', 'M04', 'M05', 'M06', 'M08', 'M09', 'M10']
+const DEFERRED_ALLOWLIST = ['M02', 'M03', 'M08', 'M09', 'M10']
 
 const EXPORT_KEYS = ['content', 'createdAt', 'justification', 'memory_key', 'scope', 'type']
 
@@ -49,11 +50,12 @@ function sidecarState(dbPath) {
   )
 }
 
-function createFixture() {
+function createFixture({ extraSeeds = [] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'ancleto-memfix-'))
   const dbPath = join(dir, '.ancleto', 'memory.db')
   const engine = createMemoryEngine(dbPath)
   const summary = engine.importNodes(loadFixture('seed.json'))
+  for (const name of extraSeeds) engine.importNodes(loadFixture(name))
   let closed = false
   return {
     dir,
@@ -94,13 +96,19 @@ function readState(dbPath) {
   }
 }
 
-function goldenOutcome(engine, entry) {
+function goldenOutcome(engine, entry, refsRoot) {
   const results = engine.searchMemory({ query: entry.query, limit: 10 })
   if (entry.expected.mode === 'topK') {
     return { id: entry.id, mode: 'topK', keys: results.slice(0, entry.expected.k).map((r) => r.memory_key) }
   }
   if (entry.expected.mode === 'abstain') {
     return { id: entry.id, mode: 'abstain', keys: results.map((r) => r.memory_key) }
+  }
+  if (entry.expected.mode === 'refs') {
+    const top = results.slice(0, entry.expected.k)
+    const node = top.find((r) => entry.expected.memory_keys.includes(r.memory_key))
+    const refs = node ? resolveNodeRefs({ content: node.content, projectRoot: refsRoot }).refs : []
+    return { id: entry.id, mode: 'refs', keys: top.map((r) => r.memory_key), refs }
   }
   throw new Error(`${entry.id}: modo expected desconocido "${entry.expected.mode}"`)
 }
@@ -109,8 +117,8 @@ function activeGoldenOutcomes(engine, entries = loadFixture('golden.json')) {
   return entries.filter((e) => e.status === 'active').map((e) => goldenOutcome(engine, e))
 }
 
-function assertGoldenEntry(engine, entry) {
-  const outcome = goldenOutcome(engine, entry)
+function assertGoldenEntry(engine, entry, refsRoot) {
+  const outcome = goldenOutcome(engine, entry, refsRoot)
   if (outcome.mode === 'topK') {
     for (const key of entry.expected.memory_keys) {
       assert.ok(
@@ -118,6 +126,34 @@ function assertGoldenEntry(engine, entry) {
         `${entry.id}: "${key}" no aparece en el top-${entry.expected.k} (${outcome.keys.join(', ') || 'vacio'})`
       )
     }
+    return
+  }
+  if (outcome.mode === 'refs') {
+    for (const key of entry.expected.memory_keys) {
+      assert.ok(
+        outcome.keys.includes(key),
+        `${entry.id}: "${key}" no aparece en el top-${entry.expected.k} (${outcome.keys.join(', ') || 'vacio'})`
+      )
+    }
+    entry.expected.refs.forEach((expectedRef, index) => {
+      const resolved = outcome.refs[index]
+      assert.ok(
+        resolved,
+        `${entry.id}: falta la ref resuelta ${index} (${outcome.refs.length} refs: ${JSON.stringify(outcome.refs)})`
+      )
+      assert.equal(resolved.kind, expectedRef.kind, `${entry.id}: kind de la ref ${index}`)
+      if (expectedRef.path !== undefined) {
+        assert.equal(resolved.path, expectedRef.path, `${entry.id}: path de la ref ${index}`)
+      }
+      if (expectedRef.heading !== undefined) {
+        assert.equal(resolved.heading, expectedRef.heading, `${entry.id}: heading de la ref ${index}`)
+      }
+      if (expectedRef.reason !== undefined) {
+        assert.equal(resolved.reason, expectedRef.reason, `${entry.id}: reason de la ref ${index}`)
+        assert.equal('path' in resolved, false, `${entry.id}: la ref ${index} no debe resolver path al rechazar`)
+        assert.equal('heading' in resolved, false, `${entry.id}: la ref ${index} no debe resolver heading al rechazar`)
+      }
+    })
     return
   }
   assert.equal(
@@ -150,7 +186,7 @@ describe('fixtures de memoria', () => {
 })
 
 describe('harness golden M01–M10', () => {
-  it('declara diez ids, dos activas y el set diferido del allowlist', () => {
+  it('declara diez ids, cinco activas y el set diferido del allowlist', () => {
     const entries = loadFixture('golden.json')
     assert.equal(entries.length, 10)
     assert.deepEqual(entries.map((e) => e.id).sort(), GOLDEN_IDS)
@@ -173,15 +209,29 @@ describe('harness golden M01–M10', () => {
     )
     assert.deepEqual(
       entries.filter((e) => e.status === 'active').map((e) => e.id).sort(),
-      ['M01', 'M07']
+      ['M01', 'M04', 'M05', 'M06', 'M07']
     )
   })
 
   it('M01 y M07 producen su expected contra la fixture congelada', () => {
     const fx = createFixture()
     try {
-      for (const entry of loadFixture('golden.json').filter((e) => e.status === 'active')) {
+      for (const entry of loadFixture('golden.json').filter((e) => ['M01', 'M07'].includes(e.id))) {
         assertGoldenEntry(fx.engine, entry)
+      }
+    } finally {
+      fx.cleanup()
+    }
+  })
+
+  it('M04, M05 y M06 exponen la ubicación de sus refs contra refs-root', () => {
+    const fx = createFixture({ extraSeeds: ['golden-refs-seed.json'] })
+    try {
+      const refsRoot = fileURLToPath(new URL('./fixtures/memory/refs-root/', import.meta.url))
+      // M01 y M07 se reevaluan con el seed de refs presente: el seed no altera su ranking.
+      const ids = ['M01', 'M04', 'M05', 'M06', 'M07']
+      for (const entry of loadFixture('golden.json').filter((e) => ids.includes(e.id))) {
+        assertGoldenEntry(fx.engine, entry, refsRoot)
       }
     } finally {
       fx.cleanup()

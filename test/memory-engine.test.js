@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDatabase } from '../src/core/memory/database.js'
-import { createMemoryEngine, defaultMemoryDbPath, resolveProjectRoot } from '../src/core/memory/engine.js'
+import { createMemoryEngine, defaultMemoryDbPath, resolveNodeRefs, resolveProjectRoot } from '../src/core/memory/engine.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
 import { memoryTools, createMemoryToolkit } from '../src/core/memory/tools.js'
 import { resolveMemoryProjectRoot } from '../src/core/memory/working-context.js'
@@ -1676,60 +1676,63 @@ describe('memory merge (CLI)', () => {
   })
 })
 
+// Helpers compartidos por los tests de refs del camino de escritura (MEM-03) y
+// del resolver read-only (MEM-04b). Cada fixture es un repo temporal real.
+function withRefsEngine(fn) {
+  const root = mkdtempSync(join(tmpdir(), 'ancleto-refs-'))
+  const refsDbPath = join(root, '.ancleto', 'memory.db')
+  const eng = createMemoryEngine(refsDbPath)
+  const rawAt = (sql, ...params) => {
+    const db = openDatabase(refsDbPath)
+    try {
+      return db.prepare(sql).all(...params)
+    } finally {
+      db.close()
+    }
+  }
+  try {
+    return fn({ eng, root, rawAt })
+  } finally {
+    eng.close()
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+    } catch {
+      // best effort: en Windows los handles de WAL pueden tardar en liberarse
+    }
+  }
+}
+
+const block = (text, refs) => `${text}\n\nrefs:\n${refs.map((r) => `  - ${r}`).join('\n')}`
+// Enmienda B: items de lista sin indentacion, que el contrato declara equivalentes.
+const flatBlock = (text, refs) => `${text}\n\nrefs:\n${refs.map((r) => `- ${r}`).join('\n')}`
+
+function seedChange(root, name, archived = false) {
+  const base = archived
+    ? join(root, 'aspec', 'changes', 'archive')
+    : join(root, 'aspec', 'changes')
+  const full = join(base, name)
+  mkdirSync(full, { recursive: true })
+  return full
+}
+
+function seedFile(root, rel) {
+  const full = join(root, rel)
+  mkdirSync(dirname(full), { recursive: true })
+  writeFileSync(full, '// fixture\n')
+  return full
+}
+
+function seedSpec(root, capability, headings) {
+  const full = join(root, 'aspec', 'specs', capability, 'spec.md')
+  mkdirSync(dirname(full), { recursive: true })
+  writeFileSync(full, headings.map((h) => `### Requirement: ${h}\n`).join('\n'))
+  return full
+}
+
 // MEM-03: refs fail-closed y rechazo de secretos. Todos los asserts son
 // predicates de comportamiento sobre el engine, no literales de oracion (D-B).
 describe('MEM-03 — refs fail-closed (engine)', () => {
-  function withRefsEngine(fn) {
-    const root = mkdtempSync(join(tmpdir(), 'ancleto-refs-'))
-    const refsDbPath = join(root, '.ancleto', 'memory.db')
-    const eng = createMemoryEngine(refsDbPath)
-    const rawAt = (sql, ...params) => {
-      const db = openDatabase(refsDbPath)
-      try {
-        return db.prepare(sql).all(...params)
-      } finally {
-        db.close()
-      }
-    }
-    try {
-      return fn({ eng, root, rawAt })
-    } finally {
-      eng.close()
-      try {
-        rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
-      } catch {
-        // best effort: en Windows los handles de WAL pueden tardar en liberarse
-      }
-    }
-  }
-
   const CAPTURE = { source: 'mcp:ancleto-memory' }
-  const block = (text, refs) => `${text}\n\nrefs:\n${refs.map((r) => `  - ${r}`).join('\n')}`
-  // Enmienda B: items de lista sin indentacion, que el contrato declara equivalentes.
-  const flatBlock = (text, refs) => `${text}\n\nrefs:\n${refs.map((r) => `- ${r}`).join('\n')}`
-
-  function seedChange(root, name, archived = false) {
-    const base = archived
-      ? join(root, 'aspec', 'changes', 'archive')
-      : join(root, 'aspec', 'changes')
-    const full = join(base, name)
-    mkdirSync(full, { recursive: true })
-    return full
-  }
-
-  function seedFile(root, rel) {
-    const full = join(root, rel)
-    mkdirSync(dirname(full), { recursive: true })
-    writeFileSync(full, '// fixture\n')
-    return full
-  }
-
-  function seedSpec(root, capability, headings) {
-    const full = join(root, 'aspec', 'specs', capability, 'spec.md')
-    mkdirSync(dirname(full), { recursive: true })
-    writeFileSync(full, headings.map((h) => `### Requirement: ${h}\n`).join('\n'))
-    return full
-  }
 
   it('T05: una decision con refs resolubles escrita por una superficie de captura queda activa', () => {
     withRefsEngine(({ eng, root, rawAt }) => {
@@ -2217,6 +2220,198 @@ describe('MEM-03 — refs fail-closed (engine)', () => {
         active.content.includes('prosa sin indentar que no es una ref'),
         'la prosa se conserva pero no se interpreta como ref'
       )
+    })
+  })
+})
+
+// MEM-04b: resolver read-only de refs de recall. Reutiliza parseRefsBlock y
+// resolveRefResult a traves de resolveNodeRefs: no hay parser ni resolvedor
+// paralelo, y cada test opera sobre un repo temporal real.
+describe('MEM-04b — resolver de refs navegables (engine)', () => {
+  it('change: archivado unico expone su directorio repo-relativo', () => {
+    withRefsEngine(({ root }) => {
+      seedChange(root, '2026-01-01-arch-fixture', true)
+
+      const out = resolveNodeRefs({ content: block('prosa', ['change:arch-fixture']), projectRoot: root })
+
+      assert.deepEqual(out.refs, [
+        {
+          raw: 'change:arch-fixture',
+          kind: 'change',
+          verifiable: true,
+          ok: true,
+          path: 'aspec/changes/archive/2026-01-01-arch-fixture'
+        }
+      ])
+      assert.equal(out.needsRoot, false)
+    })
+  })
+
+  it('change: activo expone su directorio repo-relativo', () => {
+    withRefsEngine(({ root }) => {
+      seedChange(root, 'ref-active')
+
+      const [ref] = resolveNodeRefs({ content: block('prosa', ['change:ref-active']), projectRoot: root }).refs
+
+      assert.equal(ref.ok, true)
+      assert.equal(ref.path, 'aspec/changes/ref-active')
+    })
+  })
+
+  it('change: ambiguo no elige y reporta las coincidencias', () => {
+    withRefsEngine(({ root }) => {
+      seedChange(root, '2026-02-01-dup-slug', true)
+      seedChange(root, '2026-03-01-dup-slug', true)
+
+      const [ref] = resolveNodeRefs({ content: block('prosa', ['change:dup-slug']), projectRoot: root }).refs
+
+      assert.equal(ref.ok, false)
+      assert.equal(ref.reason, 'ambiguo (2 coincidencias)')
+      assert.equal(ref.matches, 2)
+      assert.equal('path' in ref, false)
+    })
+  })
+
+  it('spec: exacto y canonico exponen el path y el heading real', () => {
+    withRefsEngine(({ root }) => {
+      seedSpec(root, 'cap-canon', ['Política de validaciones declarativa por proyecto'])
+
+      const out = resolveNodeRefs({
+        content: block('prosa', [
+          'spec:cap-canon#Política de validaciones declarativa por proyecto',
+          'spec:cap-canon#POLITICA DE VALIDACIONES DECLARATIVA POR PROYECTO'
+        ]),
+        projectRoot: root
+      })
+
+      assert.equal(out.refs.length, 2)
+      for (const ref of out.refs) {
+        assert.equal(ref.ok, true)
+        assert.equal(ref.path, 'aspec/specs/cap-canon/spec.md')
+        assert.equal(ref.heading, 'Política de validaciones declarativa por proyecto')
+      }
+    })
+  })
+
+  it('spec: ambiguo no elige ni devuelve path o heading', () => {
+    withRefsEngine(({ root }) => {
+      seedSpec(root, 'cap-amb', ['Alcance del bloque', 'alcance del bloque'])
+
+      const [ref] = resolveNodeRefs({
+        content: block('prosa', ['spec:cap-amb#Alcance del bloque']),
+        projectRoot: root
+      }).refs
+
+      assert.equal(ref.ok, false)
+      assert.equal(ref.reason, 'ambiguo (2 coincidencias)')
+      assert.equal(ref.matches, 2)
+      assert.equal('path' in ref, false)
+      assert.equal('heading' in ref, false)
+    })
+  })
+
+  it('path: normaliza separadores, segmentos redundantes y quita el sufijo :linea', () => {
+    withRefsEngine(({ root }) => {
+      seedFile(root, 'docs/note.md')
+
+      const [forward] = resolveNodeRefs({ content: block('prosa', ['path:./docs//note.md:12']), projectRoot: root }).refs
+      assert.equal(forward.ok, true)
+      assert.equal(forward.path, 'docs/note.md')
+
+      const [backslash] = resolveNodeRefs({
+        content: block('prosa', ['path:docs\\\\note.md:12']),
+        projectRoot: root
+      }).refs
+      assert.equal(backslash.ok, true)
+      assert.equal(backslash.path, 'docs/note.md')
+    })
+  })
+
+  it('path: absoluto y con ../ se reportan invalidos', () => {
+    withRefsEngine(({ root }) => {
+      const out = resolveNodeRefs({
+        content: block('prosa', ['path:/etc/passwd', 'path:../escape.txt']),
+        projectRoot: root
+      })
+
+      assert.equal(out.refs.length, 2)
+      for (const ref of out.refs) {
+        assert.equal(ref.ok, false)
+        assert.match(ref.reason, /^inválido \(/)
+        assert.equal('path' in ref, false)
+      }
+    })
+  })
+
+  it('commit: y workitem: no son verificables ni llevan ubicacion', () => {
+    withRefsEngine(({ root }) => {
+      const out = resolveNodeRefs({
+        content: block('prosa', ['commit:abcdef1', 'workitem:ado:1234']),
+        projectRoot: root
+      })
+
+      assert.deepEqual(out.refs, [
+        { raw: 'commit:abcdef1', kind: 'commit', verifiable: false },
+        { raw: 'workitem:ado:1234', kind: 'workitem', verifiable: false }
+      ])
+      for (const ref of out.refs) {
+        assert.equal('ok' in ref, false)
+        assert.equal('path' in ref, false)
+      }
+    })
+  })
+
+  it('sin projectRoot marca needsRoot sin reportar fallas y omite refs no verificables', () => {
+    const withVerifiable = resolveNodeRefs({ content: block('prosa', ['change:ref-active']) })
+    assert.equal(withVerifiable.needsRoot, true)
+    assert.deepEqual(withVerifiable.refs, [
+      { raw: 'change:ref-active', kind: 'change', verifiable: true, ok: false, reason: 'sin raíz' }
+    ])
+
+    const onlyCommit = resolveNodeRefs({ content: block('prosa', ['commit:abcdef1']) })
+    assert.equal(onlyCommit.needsRoot, false)
+  })
+
+  it('gramatica invalida y bloque repetido no lanzan y se reportan en error/blocks', () => {
+    const invalid = resolveNodeRefs({ content: 'prosa\n\nrefs:\n- not-a-ref' })
+    assert.deepEqual(invalid, { refs: [], error: '- not-a-ref', blocks: 0, needsRoot: false })
+
+    const repeated = resolveNodeRefs({ content: 'prosa\n\nrefs:\n- change:a\n\nrefs:\n- change:b' })
+    assert.deepEqual(repeated, { refs: [], error: null, blocks: 2, needsRoot: false })
+  })
+
+  it('cero coincidencias en una ref no aborta las demas del nodo', () => {
+    withRefsEngine(({ root }) => {
+      seedChange(root, 'ref-active')
+
+      const out = resolveNodeRefs({
+        content: block('prosa', ['change:ghost', 'change:ref-active']),
+        projectRoot: root
+      })
+
+      assert.equal(out.refs.length, 2)
+      assert.equal(out.refs[0].ok, false)
+      assert.equal(out.refs[0].reason, 'inexistente')
+      assert.equal(out.refs[1].ok, true)
+      assert.equal(out.refs[1].path, 'aspec/changes/ref-active')
+    })
+  })
+
+  it('un error de lectura se reporta por ref y no aborta las demas', () => {
+    withRefsEngine(({ root }) => {
+      // Un spec.md que es directorio: readFileSync lanza EISDIR (deterministico).
+      mkdirSync(join(root, 'aspec', 'specs', 'cap-dir', 'spec.md'), { recursive: true })
+      seedFile(root, 'docs/note.md')
+
+      const out = resolveNodeRefs({
+        content: block('prosa', ['spec:cap-dir#Un heading', 'path:docs/note.md']),
+        projectRoot: root
+      })
+
+      assert.equal(out.refs[0].ok, false)
+      assert.equal(out.refs[0].reason, 'inválido (lectura no disponible: EISDIR)')
+      assert.equal(out.refs[1].ok, true)
+      assert.equal(out.refs[1].path, 'docs/note.md')
     })
   })
 })

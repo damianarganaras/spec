@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { dirname, isAbsolute, join } from 'node:path'
+import { dirname, isAbsolute, join, relative } from 'node:path'
 import { openDatabase, checkpointDatabase } from './database.js'
 import { readTopologySummary } from '../discovery.js'
 
@@ -243,7 +243,13 @@ function resolveSpecRef(ref, root) {
   const matches = headings.filter(
     (h) => normalizeHeading(h) === normalizeHeading(ref.heading) || canonicalHeading(h) === target
   )
-  if (matches.length === 1) return { ok: true }
+  if (matches.length === 1) {
+    return {
+      ok: true,
+      path: ['aspec', 'specs', ref.capability, 'spec.md'].join('/'),
+      heading: matches[0]
+    }
+  }
   if (matches.length === 0) {
     return { ok: false, reason: 'inexistente', message: `referencia un spec inexistente: "${ref.raw}"` }
   }
@@ -287,7 +293,7 @@ function resolveChangeRef(ref, root) {
       message: `referencia un change ambiguo (${matches.length} coincidencias): "${ref.raw}"`
     }
   }
-  return { ok: true }
+  return { ok: true, path: relative(root, matches[0]).split('\\').join('/') }
 }
 
 function resolvePathRef(ref, root) {
@@ -309,11 +315,12 @@ function resolvePathRef(ref, root) {
       message: `declara un path con ../: "${ref.raw}"`
     }
   }
-  const full = join(root, rawPath)
+  const normalized = segments.filter((segment) => segment !== '.').join('/')
+  const full = join(root, normalized)
   if (!existsSync(full) || !statSync(full).isFile()) {
     return { ok: false, reason: 'inexistente', message: `declara un path inexistente: "${ref.raw}"` }
   }
-  return { ok: true }
+  return { ok: true, path: normalized }
 }
 
 // Unica resolucion para spec/change/path. `commit:` y `workitem:` no tienen
@@ -329,6 +336,57 @@ function refFailureReason(result) {
   if (result.reason === 'ambiguo') return `ambiguo (${result.matches} coincidencias)`
   if (result.reason === 'inválido') return `inválido (${result.cause})`
   return 'inexistente'
+}
+
+// Guard de I/O exclusivo del resolver de recall: una lectura que falla no aborta
+// el nodo ni las demas refs. La escritura y el doctor conservan su camino.
+function safeResolveRefResult(ref, root) {
+  try {
+    return resolveRefResult(ref, root)
+  } catch (error) {
+    const code = (error && error.code) ? error.code : 'desconocido'
+    return {
+      ok: false,
+      reason: 'inválido',
+      cause: `lectura no disponible: ${code}`,
+      message: `referencia con lectura no disponible: "${ref.raw}"`
+    }
+  }
+}
+
+// Resolver read-only de recall: parsea el bloque `refs:` del content de un nodo
+// y expone la ubicacion resuelta de cada ref, en el orden declarado. Reutiliza
+// el parser y la resolucion del camino de escritura; no abre la DB ni escribe.
+export function resolveNodeRefs({ content = '', projectRoot = null } = {}) {
+  const parsed = parseRefsBlock(content)
+  if (!parsed) return { refs: [], error: null, blocks: 0, needsRoot: false }
+  if (parsed.blocks) return { refs: [], error: null, blocks: parsed.blocks, needsRoot: false }
+  if (parsed.error) return { refs: [], error: parsed.error, blocks: 0, needsRoot: false }
+
+  const refs = []
+  let needsRoot = false
+  for (const ref of parsed.refs) {
+    if (ref.kind === 'commit' || ref.kind === 'workitem') {
+      refs.push({ raw: ref.raw, kind: ref.kind, verifiable: false })
+      continue
+    }
+    if (!projectRoot) {
+      needsRoot = true
+      refs.push({ raw: ref.raw, kind: ref.kind, verifiable: true, ok: false, reason: 'sin raíz' })
+      continue
+    }
+    const result = safeResolveRefResult(ref, projectRoot)
+    if (result.ok) {
+      const entry = { raw: ref.raw, kind: ref.kind, verifiable: true, ok: true, path: result.path }
+      if (result.heading) entry.heading = result.heading
+      refs.push(entry)
+      continue
+    }
+    const entry = { raw: ref.raw, kind: ref.kind, verifiable: true, ok: false, reason: refFailureReason(result) }
+    if (result.matches) entry.matches = result.matches
+    refs.push(entry)
+  }
+  return { refs, error: null, blocks: 0, needsRoot }
 }
 
 function validateRefsForWrite({ memory_key, type, content, projectRoot }) {

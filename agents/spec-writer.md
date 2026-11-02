@@ -96,7 +96,7 @@ Each decision uses this block:
   **Elección:** <solution>
   **Descartado:** <alternative, or `ninguna relevante`>
   **Justificación:** <verifiable motive or tradeoff>
-  **Refs:** `change:<slug>`; `path:<repo-relative>`; `spec:<capability>#<requirement>` when one exists
+  **Refs:** refs de la decisión — fuente única: `spec:memory-engine#Refs normalizadas materializadas en el contenido del nodo` (en `aspec/specs/memory-engine/spec.md`)
   **Estado:** propuesto
 
 Record one block per durable decision with `memory_key`, `Elección`, `Descartado`, `Justificación`, `Refs` and `Estado`; a single line `decisión | alternativa descartada | por qué | fuente/evidencia` is equivalent. Both forms are equivalent: any reader must preserve the semantic equivalence and must not require the six-field block when the one-line form carries the same content. `Estado` is one of `propuesto`, `aprobado`, `enmendado`, `descartado`.

@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.2] - 2026-11-01
+
+### Changed
+- **Regla de severidad de `cleto-review` en su hogar normativo**: `aspec/specs/code-review` establece CRITICAL sólo para duplicación literal verificable o dead code probado; los hallazgos inferidos son WARNING/SUGGESTION y ante la duda se degrada la severidad.
+- **`aspec/specs/memory-engine` fija el slug de refs**: `change:<slug>` va sin prefijo de fecha.
+- **`agents/spec-writer.md` referencia la fuente única** en vez de re-enunciar la gramática de refs.
+
+Sin cambios de código.
+
 ## [0.18.1] - 2026-11-01
 
 ### Changed

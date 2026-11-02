@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-01T02:38:20Z
-pluginVersion: 0.17.2
+generatedAt: 2026-11-02T12:11:50Z
+pluginVersion: 0.18.2
 skillVersion: '2.3'
 ---
 
@@ -37,11 +37,11 @@ CLI monolítica en ESM, sin framework externo. Capas:
 | Empaquetado y tiers | `src/core/repomix-tier.js` | Args de Repomix, ignores por tier, `--compress`, token budget. |
 | Selección de modelos | `src/core/tier-models.js` | Modelos por tier, resolución de tier gratis (Muse Spark/probe/env). |
 | Entorno de máquina | `src/core/machine-env.js` | **Dueño único** de detectar plataforma/shell/EOL/tooling (disponibilidad = **resoluble e invocable**, con sonda `--version` acotada), renderizar y escribir `.ancleto/machine-env.md`, y garantizar su exclusión local vía `info/exclude`; `checkMachineEnvTracked` para `check`. |
-| Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (refs fail-closed en `recordNode`, rechazo de secretos, **`inspectRefs` read-only**, search/record/export/import/gc/**merge**, `formatTopologyBlock`, procedencia `source`, aviso de overflow), `snapshot` (**copia consistente con historial**), `tools`, `mcp-server`, `doctor` (**read-only por defecto con cinco checks**, incluido `Refs de nodos activos`), `working-context` (render compartido; refresh on-write CLI compare-based y staleness advisory). |
+| Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database`, `engine` (refs fail-closed en `recordNode`, rechazo de secretos, **`inspectRefs` read-only**, **`resolveNodeRefs` read-only para recall**, search/record/export/import/gc/**merge**, `formatTopologyBlock`, procedencia `source`, aviso de overflow), `snapshot` (**copia consistente con historial**), `tools`, `mcp-server`, `doctor` (**read-only por defecto con cinco checks**, incluido `Refs de nodos activos`), `working-context` (render compartido; refresh on-write CLI compare-based y staleness advisory). |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE del usuario (10 agents, 16 commands, 21 skills, 2 templates + perfil `test`). |
 | Contratos de prompt | `agents/*.md` | Normativa del pipeline: intake de sesión, techo de lecturas, trigger de Recall, contrato de validación, **checkpoint de contrato** tras `@spec-writer`, sección `## Decisiones` del proposal, **retiro de `design.md`/`context.md`** (lectura legacy opcional, nunca precondición) y **promoción al archivar**. Los mirrors `.opencode/agents/*.md` se regeneran, no se editan a mano. |
-| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 1 change activo (`ancleto-vscode-extension`) + `changes/archive/` (34; el último, `2026-10-31-mem-04-doctor-referencias-no-resueltas`). El delta del retiro está **mergeado** en `aspec/specs/` y publicado en `0.17.1`. |
-| Config del host opencode | `opencode.json` (raíz) | Override de `agent.model` para 9 subagentes; **no** se publica en el paquete. |
+| Specs del propio repo | `aspec/` | `config.yaml` + `specs/` (19 capacidades) + 2 changes activos (`ancleto-vscode-extension`, `mem-04b-resolver-referencias-navegables`) + `changes/archive/` (35; el último, `2026-11-01-clarificaciones-spec-severidad-y-refs`). El delta del retiro está **mergeado** en `aspec/specs/` y publicado desde `0.17.1`. |
+| Config del host opencode | `opencode.json` (raíz) | Override de `agent.model` para los 10 subagentes (incluye `orchestrator`); **no** se publica en el paquete. |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
 | Tests | `test/*.test.js` | Suite `node --test` (15 archivos; no re-ejecutada en esta regeneración). |
 | Análisis (no runtime) | `optimizacion-de-tokens.md` | Barrido de costo de tokens del producto y matriz de decisión de la promesa "token-economy". |
@@ -100,6 +100,16 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   **copian la base con historial**, **consolidan duplicados por supersesión**, materializan el
   bloque activo, lo listan en modo read-only y verifican integridad **con cinco checks, incluida
   la auditoría de refs de nodos activos**. Detalle: `units/memory-engine.md`.
+- **Resolver de refs (`MEM-04b`)**: `resolveNodeRefs({ content, projectRoot })` es una API
+  **read-only** del engine, sin comando ni tool MCP asociada. Reutiliza el parser y el
+  resolvedor del camino de escritura y devuelve, en orden declarado, `{ refs, error, blocks,
+  needsRoot }`; cada ref trae `raw`, `kind`, `verifiable` y, si aplica, `ok`, `path`, `heading`,
+  `reason` o `matches`. `change:` devuelve el directorio repo-relativo (activo o
+  `archive/YYYY-MM-DD-<slug>`); `spec:` devuelve `aspec/specs/<cap>/spec.md` y el heading
+  **real**; `path:` se normaliza antes del chequeo y se devuelve posix; `commit:`/`workitem:`
+  quedan `verifiable: false`. Un error de lectura se reporta por ref como
+  `inválido (lectura no disponible: <CODE>)` sin abortar las demás. Evidencia:
+  `src/core/memory/engine.js`, `aspec/changes/mem-04b-resolver-referencias-navegables/`.
 - **Render de reglas**: `buildWorkingContext` compone `<ProjectMemoryRules>` solo con reglas
   activas; por cada regla renderiza **solo la prosa**, recortando el bloque `refs:`
   (`renderRuleContent`); el `content` almacenado conserva sus refs. Evidencia:
@@ -160,8 +170,8 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   durable va a `proposal.md ## Decisiones`. Los consumidores (`coder`, `tester`, `reviewer`,
   `documenter`, `orchestrator`, `apply`, `verify`, `bulk-archive`) leen un `design.md`/`context.md`
   legacy solo como contexto opcional y `verify` mide completitud contra `tasks.md` + `specs/`. El
-  archive mueve el directorio sin modificarlo (ya no borra `context.md`). El delta está mergeado
-  en `aspec/specs/artifact-update` y `aspec/specs/prompt-contracts`. Evidencia:
+  archive mueve el directorio sin modificarlo. El delta está mergeado en
+  `aspec/specs/artifact-update` y `aspec/specs/prompt-contracts`. Evidencia:
   `aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/`, `agents/*.md`,
   `skills/**`, `aspec/specs/{artifact-update,prompt-contracts}/spec.md`,
   `test/content-guards.test.js`.
@@ -201,7 +211,12 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
    contenido debe incluir un bloque `refs:` válido y resoluble. Una ref rota, ambigua, un
    segundo bloque `refs:` o una credencial rechazan la escritura **antes** de la transacción.
    Evidencia: `src/core/memory/engine.js`, `src/core/memory/mcp-server.js`.
-6. **Mantenimiento de memoria** — `memory doctor` audita sin mutar (por defecto) con cinco
+6. **Recall con refs navegables (`MEM-04b`)** — quien recupera un nodo puede pasar su `content`
+   y la raíz del proyecto a `resolveNodeRefs` y obtener la ubicación concreta de cada ref
+   (`change:` → directorio, `spec:` → `spec.md` + heading real, `path:` → path normalizado).
+   La API es read-only, no abre la DB y no agrega comando ni tool MCP. Evidencia:
+   `src/core/memory/engine.js`, `aspec/changes/mem-04b-resolver-referencias-navegables/`.
+7. **Mantenimiento de memoria** — `memory doctor` audita sin mutar (por defecto) con cinco
    checks, incluido el diagnóstico de refs no resueltas de nodos activos;
    `memory snapshot --out <archivo.db>` produce una copia restaurable con historial;
    `memory merge --target <key> --sources <k1,k2,...>` consolida duplicados supersediendo cada
@@ -209,13 +224,13 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
    `memory export|import|gc` mueven/purgan nodos activos. Evidencia:
    `src/core/memory/{snapshot,doctor,engine}.js`, `src/cli/index.js`,
    `aspec/specs/memory-ops/spec.md`.
-7. **Entorno de máquina** — en cada ciclo de vida el CLI detecta hechos locales y escribe
+8. **Entorno de máquina** — en cada ciclo de vida el CLI detecta hechos locales y escribe
    `.ancleto/machine-env.md`; si el contenido (sin `generated_at`) no cambió, no reescribe.
    Después agrega/verifica la exclusión en `info/exclude` (sin tocar `.gitignore`). Los agentes
    leen el archivo antes de ejecutar comandos; el orquestador incluye el bloque en cada
    delegación con `bash: true` y esa lectura no consume su techo de 3 archivos. Evidencia:
    `src/core/machine-env.js`, `agents/*.md`, `aspec/specs/machine-environment/spec.md`.
-8. **Ciclo de change** — `/cleto-new` → `/cleto-propose` → **checkpoint de contrato** →
+9. **Ciclo de change** — `/cleto-new` → `/cleto-propose` → **checkpoint de contrato** →
    `/cleto-apply` → `/cleto-verify` → `/cleto-archive`, con `/cleto-review`/`/cleto-security`
    para calidad y seguridad, `/cleto-update` para actualizar artifacts ante cambios de definición
    y `/cleto-transplant` para mudar proyectos entre máquinas. El proposal registra sus decisiones
@@ -224,41 +239,44 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
    arquitectura. Con perfil `test`, el orchestrator rutea lo test-only al tester ampliado
    (`cleto-test-*`). Evidencia: `commands/`, `skills/`, `agents/spec-writer.md`,
    `agents/orchestrator.md`, `aspec/changes/archive/`.
-9. **Cierre del change** — el tester computa el `affected-set` con `ancleto affected`
-   (dependientes, no solo archivos tocados) y produce un Validation Ledger completo y cerrado;
-   el orquestador arma/verifica el cierre y delega el review con el `affected-set` como scope.
-   Tras la aprobación de archive, `@documenter` mergea las specs; **después** de ese merge (y
-   nunca en paralelo) el gate de archive promueve las decisiones aprobadas a memoria con una
-   pasada de `@memory-keeper`. El cierre hace **como máximo una** llamada de Automatic Record.
-   Evidencia: `agents/orchestrator.md`, `agents/tester.md`, `agents/reviewer.md`,
-   `skills/ancleto-archive/SKILL.md`, `aspec/specs/prompt-contracts/spec.md`.
-10. **Arranque de sesión del orquestador** — intake read-only (changes activos excluyendo
+10. **Cierre del change** — el tester computa el `affected-set` con `ancleto affected`
+    (dependientes, no solo archivos tocados) y produce un Validation Ledger completo y cerrado;
+    el orquestador arma/verifica el cierre y delega el review con el `affected-set` como scope.
+    Tras la aprobación de archive, `@documenter` mergea las specs; **después** de ese merge (y
+    nunca en paralelo) el gate de archive promueve las decisiones aprobadas a memoria con una
+    pasada de `@memory-keeper`. El cierre hace **como máximo una** llamada de Automatic Record.
+    Evidencia: `agents/orchestrator.md`, `agents/tester.md`, `agents/reviewer.md`,
+    `skills/ancleto-archive/SKILL.md`, `aspec/specs/prompt-contracts/spec.md`.
+11. **Arranque de sesión del orquestador** — intake read-only (changes activos excluyendo
     `archive/`; `git status --short` delegado a `@technical-discovery` sólo si el pedido toca
     el estado del repo; silencio si no hay nada que reportar) → **Active Change Check** → triage
     (`spec-required` / `direct-test-only` / `direct-implementation` / `clarification-needed`) →
     ejecución delegada, con el techo de 3 archivos. Evidencia: `agents/orchestrator.md`,
     `agents/technical-discovery.md`, `aspec/specs/prompt-contracts/spec.md`.
-11. **Validación local** — contrato **declarativo**: se corre solo lo declarado en `PRODUCT.md`
+12. **Validación local** — contrato **declarativo**: se corre solo lo declarado en `PRODUCT.md`
     → `## Project Commands` (aquí `npm run lint` y `npm test`). Evidencia: `AGENTS.md`
     (`LOCKED: validation-commands`), `PRODUCT.md`, `package.json`.
 
 ## Estado del repositorio
 
-Versión `0.17.2` en rama `development` (HEAD `6574426`,
-`docs(agents): documenta donde se cambia el modelo de los agentes`); release `fc6d2cb`
-(`chore(release): 0.17.2`) y tag **anotado** `v0.17.2` en `main` (`2129395`, merge de
-`development`; **no** es ancestro de HEAD). `CHANGELOG.md` cubre hasta `0.17.2` e incluye el
-**retiro de `design.md`/`context.md`**, publicado en `0.17.1`. **MEM-04** (check de refs en
-`memory doctor`) y la guía de modelos de `AGENTS.md` quedaron **después** del tag: están en
-`development`, no en `v0.17.2`. Dogfooding histórico: el framework fue inicializado sobre este
-repo; este checkout **sí materializa `.ancletorc` y `.opencode/`** (ambos gitignored, no
-versionados) y persiste `AGENTS.md`, `PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier
-resuelto es **`minimo`** vía `.opencode/.ancleto-tier`. **`.ancleto/machine-env.md` ya existe**
-(generado el 2026-10-30 con `ancleto: 0.17.1`) y los mirrors `.opencode/` están regenerados.
-Queda **un solo change activo** (`ancleto-vscode-extension`); el más reciente archivado es
-`2026-10-31-mem-04-doctor-referencias-no-resueltas` (five-check de refs, sólo artifacts y
-código del doctor). El árbol de trabajo tiene **dos cambios transitorios sin commitear**
-(`agents/spec-writer.md` con otro `model:` de probe y `opencode.json` con el mapeo local del
-orquestador) más los artefactos derivados del discovery. Evidencia: `.gitignore`,
+Versión `0.18.2` en `package.json`; release `8d23dbe` (`chore(release): 0.18.2`) y tag
+**anotado** `v0.18.2` en `main` (`41d2313`, merge de `development`). `v0.18.1` apunta a
+`a240d6a` y `v0.18.0` a `75373a`. HEAD `d2138df` en `development`
+(`docs(backlog): cierra CH-11 y MEM-07`), **1 commit adelante** de `origin/development`;
+`git describe --tags` resuelve `v0.16.0-25-gd2138df`. `CHANGELOG.md` cubre hasta `0.18.2`:
+`0.18.0` publicó el quinto check del doctor (MEM-04), `0.18.1` sincronizó el discovery map y
+mapeó al orquestador en `opencode.json`, y `0.18.2` es **docs-only**.
+
+El árbol de trabajo tiene el change **`mem-04b-resolver-referencias-navegables` implementado
+y verificado pero sin commitear**: `src/core/memory/engine.js` expone `resolveNodeRefs`, y los
+tests/fixtures lo cubren (M04/M05/M06 activas con `mode: "refs"`). No está publicado ni
+archivado; los archivos derivados del discovery también aparecen modificados. Dogfooding
+histórico: el framework fue inicializado sobre este repo; este checkout **sí materializa
+`.ancletorc` y `.opencode/`** (ambos gitignored, no versionados) y persiste `AGENTS.md`,
+`PRODUCT.md`, `aspec/` y `.ancleto/memory.db`. El tier resuelto es **`minimo`** vía
+`.opencode/.ancleto-tier`. **`.ancleto/machine-env.md` ya existe** (generado el 2026-11-01 con
+`ancleto: 0.18.0`) y los mirrors `.opencode/` están regenerados. Hay **2 changes activos**
+(`ancleto-vscode-extension` y `mem-04b-resolver-referencias-navegables`); el más reciente
+archivado es `2026-11-01-clarificaciones-spec-severidad-y-refs`. Evidencia: `.gitignore`,
 `.discovery-map.json`, `ancleto discovery --check`, `git log`, `git status --short`,
 `aspec/changes/`, `CHANGELOG.md`.

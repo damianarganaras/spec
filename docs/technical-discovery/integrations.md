@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-11-01T02:38:20Z
-pluginVersion: 0.17.2
+generatedAt: 2026-11-02T12:11:50Z
+pluginVersion: 0.18.2
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.17.2` (`package.json`); el tag `v0.17.2` es **anotado** y vive en `main` (`2129395`, merge de `development`; no es ancestro de HEAD). El paquete `0.17.2` incluye el retiro de `design.md`/`context.md` (`CHANGELOG.md`); **MEM-04** y la guía de modelos de `AGENTS.md` quedaron después del tag, sólo en `development`. | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log`, `CHANGELOG.md` |
+| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.2` (`package.json`); el tag `v0.18.2` es **anotado** y vive en `main` (`41d2313`, merge de `development`). `0.18.0` publicó el quinto check del doctor (MEM-04); `0.18.1` el discovery map + orquestador en `opencode.json`; `0.18.2` es docs-only. MEM-04b (`resolveNodeRefs`) no está publicado. | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log`, `CHANGELOG.md` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -49,11 +49,11 @@ host. `ancleto check` valida que el frontmatter instalado coincida con la salida
 
 ## Configuración del host opencode (raíz del repo)
 
-`opencode.json` es configuración **del checkout**, no del paquete: el baseline commiteado fija
-`agent.model = commandcode/deepseek/deepseek-v4.1-flash` para 9 subagentes (sin orquestador) y
-`package.json` → `files` no lo publica. El árbol de trabajo agrega **sin commitear** un mapeo
-`agent.orchestrator.model`; es un probe local del host, no un contrato de producto. Evidencia:
-`opencode.json`, `package.json`.
+`opencode.json` es configuración **del checkout**, no del paquete: fija
+`agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los **10 subagentes** (incluye
+`orchestrator` desde `0.18.1`) y `package.json` → `files` no lo publica. No hay cambios
+pendientes en ese archivo en el árbol de trabajo. Evidencia: `opencode.json`, `package.json`,
+`CHANGELOG.md`.
 
 ## Entorno de máquina (integración local con git)
 
@@ -91,9 +91,10 @@ Las operaciones de memoria son **locales y sincrónicas**:
   `Refs de nodos activos`, sólo lectura local de `aspec/specs/**/spec.md` y listado de
   `aspec/changes/**` con `existsSync`/`statSync`; no hay chequeo remoto ni escritura. Las refs
   `commit:`/`workitem:` no se resuelven contra ningún servicio.
-- La validación de refs (`MEM-03`) resuelve `spec:`/`change:`/`path:` contra el **filesystem
-  local** del repo (`aspec/specs`, `aspec/changes`, paths relativos); no hay servicio externo
-  ni tabla nueva. `commit:` y `workitem:` solo se validan por gramática.
+- `resolveNodeRefs` (`MEM-04b`) resuelve `spec:`/`change:`/`path:` contra el **filesystem
+  local** del repo, sin abrir la DB ni escribir. No invoca git para `commit:` ni un tracker
+  para `workitem:`: esas refs quedan `verifiable: false`. Evidencia:
+  `src/core/memory/engine.js`, `aspec/changes/mem-04b-resolver-referencias-navegables/`.
 
 Evidencia: `src/core/memory/snapshot.js`, `src/core/memory/doctor.js`,
 `src/core/memory/engine.js`.
@@ -113,9 +114,9 @@ resto en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp
 | `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Solo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
 
 Del lado del motor, la procedencia de escritura se fija en `createMemoryServer`:
-`createMemoryToolHandlers(engine, { source: 'mcp:ancleto-memory', projectRoot })`
-(`src/core/memory/mcp-server.js:13-17`). El `cli:import` **no** usa esa ruta: `importNodes`
-queda fuera de `recordNode` y conserva LWW sin validar refs.
+`createMemoryToolHandlers(engine, { source: 'mcp:ancleto-memory', projectRoot })`. El
+`cli:import` **no** usa esa ruta: `importNodes` queda fuera de `recordNode` y conserva LWW sin
+validar refs.
 
 Adicionalmente, `ancleto memory doctor` emite un **chequeo de staleness advisory** sobre el
 working-context (línea `Working-context: <ok|ausente|desactualizado>`,

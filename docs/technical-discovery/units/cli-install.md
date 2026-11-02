@@ -22,8 +22,8 @@ covers:
   - promoción al archivar
   - permisos de shell por agente
 sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js"]
-generatedAt: 2026-11-01T02:38:20Z
-pluginVersion: 0.17.2
+generatedAt: 2026-11-02T12:11:50Z
+pluginVersion: 0.18.2
 skillVersion: '2.3'
 ---
 
@@ -53,6 +53,10 @@ Evidencia: `package.json`, `src/cli/index.js`.
 `src/cli/index.js`, `README.md`. `affected` delega en `computeAffectedSet`
 (`src/core/affected-set.js`); es **read-only**. `stats failures` delega en
 `statsFailuresCommand` y también es **read-only**.
+
+**Resolver de refs (`MEM-04b`)**: `resolveNodeRefs` vive en `src/core/memory/engine.js` y **no**
+es un subcomando del CLI ni una tool MCP; hoy lo consume el harness golden y quedará disponible
+para el recall de MEM-05. El CLI no expone una superficie nueva por este change.
 
 **Escrituras de memoria del CLI**:
 
@@ -85,9 +89,9 @@ El refresh es **compare-based** y reusa la conexión abierta: reescribe
 considera exitosa y el fallo se reporta por stderr.
 
 **Escritura MCP**: el server fija `source: 'mcp:ancleto-memory'` y `projectRoot` al crear los
-handlers (`src/core/memory/mcp-server.js:13-17`); por eso las escrituras MCP pasan por la
-validación fail-closed de refs de `recordNode` (salvo procedencia `runtime`). El CLI no
-reimplementa esa validación: solo el import la evita por usar `importNodes`.
+handlers (`src/core/memory/mcp-server.js`); por eso las escrituras MCP pasan por la validación
+fail-closed de refs de `recordNode` (salvo procedencia `runtime`). El CLI no reimplementa esa
+validación: solo el import la evita por usar `importNodes`.
 
 Evidencia: `src/cli/index.js` (`memoryImport`, `memorySnapshot`, `memoryMerge`,
 `memoryDoctorCmd`, `requiredMemoryFlag`), `src/core/memory/snapshot.js`,
@@ -112,12 +116,11 @@ El paso de archive **mueve el directorio sin modificarlo**: desde el retiro de
 `design.md`/`context.md` ya no borra `context.md` ni ningún scaffold legacy; los artifacts de un
 change archivado se preservan intactos. Evidencia: `skills/ancleto-archive/SKILL.md`,
 `aspec/specs/prompt-contracts/spec.md` (requirement "Retiro de `design.md` y `context.md` sin
-artifact sucesor"),
-`aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/`.
+artifact sucesor"), `aspec/changes/archive/2026-10-30-retire-design-and-context-artifacts/`.
 
-Evidencia: `skills/ancleto-archive/SKILL.md:51-70`,
-`agents/memory-keeper.md:80-97`, `agents/orchestrator.md:192`, `agents/orchestrator.md:326`,
-`aspec/specs/memory-engine/spec.md` (requirement "Promoción al archivar…").
+Evidencia: `skills/ancleto-archive/SKILL.md`, `agents/memory-keeper.md`,
+`agents/orchestrator.md`, `aspec/specs/memory-engine/spec.md` (requirement "Promoción al
+archivar…").
 
 ## Modelo único de destinos por host (`AGENT_TARGETS`)
 
@@ -439,7 +442,8 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 - **`ancleto stats failures` es read-only**: no escribe la base de opencode; solo consulta.
 - **`memory snapshot` no modifica la fuente** y **`memory doctor` no muta por defecto**;
   `--rebuild` es el único camino de escritura del doctor. El check `Refs de nodos activos` es
-  read-only y comparte parser y resolución con `recordNode`.
+  read-only y comparte parser y resolución con `recordNode`. `resolveNodeRefs` es otra
+  superficie read-only, sin comando ni tool MCP.
 - **Refresh on-write CLI y staleness advisory son best-effort**:
   - `memoryImport` envuelve el refresh en `try/catch` y reporta el fallo por stderr sin abortar.
   - `memoryMerge` no revierte el merge si falla el refresh: sale ≠ 0 informando el estado real.
@@ -452,13 +456,15 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 - **Errores no bloqueantes**: binarios ausentes (MCP/git/gh/az), assets no soportados,
   divergencias de frontmatter y exclusiones no garantizadas se omiten con warning a stderr.
 - **`opencode.json` no se publica**: el override de modelos es config del checkout, no del
-  paquete (`package.json` → `files`). El baseline commiteado cubre 9 subagentes; el mapeo local
-  del orquestador que hoy tiene el árbol de trabajo está **sin commitear** y no es estado del
-  producto.
+  paquete (`package.json` → `files`). El baseline cubre los 10 subagentes, incluido el
+  orquestador desde `0.18.1`.
 - **El `model:` de los agentes vive en tres superficies** (canónica `agents/*.md`, mirror
   `.opencode/agents/*` y global `~/.config/opencode/agents/*`); `install`/`update` reescriben
   `model:` por tier y `upgrade` no aplica tier. Procedimiento en `AGENTS.md`; ver `setup.md`.
 - `ancleto --version` lee `package.json` en runtime (no hardcodeado).
+- **Deuda MEM-04**: `inspectRefs` no captura errores de I/O y el conteo de no verificables con
+  rotas sigue pendiente en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` §5.2; MEM-04b no la
+  corrige.
 
 ## Paths clave
 
@@ -468,17 +474,18 @@ re-aplica el tier, **reconcilia y mergea templates** y **regenera** el MCP local
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`; dueño único de la transformación. |
 | `src/core/machine-env.js` | Exporta `machineEnvPath`, `detectMachineFacts`, `renderMachineEnv`, `writeMachineEnv`, `ensureMachineEnvExclusion`, `materializeMachineEnv`, `checkMachineEnvTracked` y la constante `TOOL_PROBE_TIMEOUT_MS`; la sonda de invocabilidad es **interna** (`findExecutables`, `spawnProbe`, `probeExecutable`, `isBatchShim`, `comspecCommand`, `firstLine`, `fallbackFor`). Dueño único del entorno local. |
 | `src/core/memory/snapshot.js` | `snapshotDatabase`; dueño único de la copia binaria consistente. |
-| `src/core/memory/engine.js` | `recordNode` (validación de refs y rechazo de secretos), `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`, `inspectRefs` (auditoría read-only compartida con el doctor), `resolveSpecRef`/`resolveChangeRef`/`resolvePathRef`, `renderRuleContent`, `importNodes` (fuera de la validación). |
+| `src/core/memory/engine.js` | `recordNode` (validación de refs y rechazo de secretos), `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`, `inspectRefs` (auditoría read-only compartida con el doctor), `resolveNodeRefs` (resolver read-only de recall), `resolveSpecRef`/`resolveChangeRef`/`resolvePathRef`, `renderRuleContent`, `importNodes` (fuera de la validación). |
 | `src/core/memory/mcp-server.js` | Fija `source: 'mcp:ancleto-memory'` y `projectRoot` para las escrituras MCP. |
 | `src/core/memory/working-context.js` | `renderWorkingContextBlock`, `writeWorkingContext`/`writeWorkingContextBlock`, `shouldRefreshWorkingContext` (MCP), `refreshWorkingContextOnWrite` (CLI, compare-based), `checkWorkingContextFreshness`, `normalizeBlock`, `readWorkingContextFile`, `resolveMemoryProjectRoot` (día-cero). |
 | `skills/ancleto-archive/SKILL.md` | Gate de promoción al archivar (preflight, cero candidatos, `recordDecision`). |
 | `agents/memory-keeper.md` | Modo Promotion. |
 | `src/cli/ui.js` | Banner y menús TTY (`selectOption`, `selectMultiple`). |
-| `opencode.json` | Override local de `agent.model` para 9 subagentes (baseline commiteado); el árbol de trabajo tiene un mapeo sin commitear del orquestador. No se publica. |
+| `opencode.json` | Override de `agent.model` para los 10 subagentes (incl. orquestador). No se publica. |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED (incl. `validation-commands`)/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable; en agents el frontmatter se adapta por host, en skills se copia. |
-| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js` | Guardas del CLI, del adaptador, de contenido, del working-context, del entorno de máquina, del reporte de fallos y del contrato de PR-1. |
+| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js`, `test/memory-fixtures.test.js` | Guardas del CLI, del adaptador, de contenido, del working-context, del entorno de máquina, del reporte de fallos, del contrato de PR-1 y del harness golden/resolver. |
 | `aspec/changes/archive/2026-10-29-decisiones-y-contrato-checkpoint/` | Change archivado de PR-2 (checkpoint de contrato y `## Decisiones`). |
 | `aspec/changes/archive/2026-10-30-mem-03-promocion-decisiones-refs/` | Change archivado de MEM-03 (refs obligatorias y promoción al archivar). |
 | `aspec/changes/archive/2026-10-31-mem-04-doctor-referencias-no-resueltas/` | Change archivado de MEM-04 (quinto check del doctor y gramática de refs con indentación opcional). |
+| `aspec/changes/mem-04b-resolver-referencias-navegables/` | Change activo de MEM-04b (resolver read-only), implementado y verificado sin commitear. |
 | `agents/technical-discovery.md` | Allowlist de `bash` de dos literales (`ancleto discovery --check`, `git status --short`) sobre `'*': deny`. |

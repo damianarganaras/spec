@@ -2840,3 +2840,301 @@ describe('consolidate', () => {
     })
   })
 })
+
+// MEM-05: recall task-aware. Cada caso corre sobre una DB temporal para que el
+// corpus no interactue con el engine compartido del archivo.
+describe('searchMemory — recall task-aware (MEM-05)', () => {
+  function withRecallEngine(fn) {
+    const root = mkdtempSync(join(tmpdir(), 'ancleto-recall-'))
+    const dbPath = join(root, '.ancleto', 'memory.db')
+    const eng = createMemoryEngine(dbPath)
+    try {
+      return fn(eng, root, dbPath)
+    } finally {
+      eng.close()
+      try {
+        rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+      } catch {
+        // best effort: en Windows los handles de WAL pueden tardar en liberarse
+      }
+    }
+  }
+
+  it('T07 (preview): content > 240 se colapsa a una linea, recorta a 240 con … y no expone content', () => {
+    withRecallEngine((eng) => {
+      const long = `previewlongo\n\n   ${'x'.repeat(300)}`
+      const boundary = `previewborde ${'y'.repeat(227)}` // exactamente 240 chars
+      eng.recordNode({ memory_key: 'prev-long', type: 'rule', scope: 'project', content: long })
+      eng.recordNode({ memory_key: 'prev-boundary', type: 'rule', scope: 'project', content: boundary })
+
+      const [row] = eng.searchMemory({ query: 'previewlongo' })
+      assert.equal(row.memory_key, 'prev-long')
+      assert.equal(row.preview.length, 240, 'el preview ocupa como maximo 240 chars, el … incluido')
+      assert.equal(row.preview.endsWith('…'), true)
+      assert.equal(row.preview.includes('\n'), false, 'el preview colapsa el content a una sola linea')
+      assert.equal(row.content_truncated, true)
+      assert.equal('content' in row, false, 'el modo preview no incluye el content completo')
+
+      const [exact] = eng.searchMemory({ query: 'previewborde' })
+      assert.equal(exact.content_truncated, false, 'un content de exactamente 240 chars no se marca truncado')
+      assert.equal(exact.preview.length, 240)
+      assert.equal(exact.preview, boundary)
+    })
+  })
+
+  it('keys expande solo las claves pedidas de la pagina y falla nombrando una clave fuera de ella', () => {
+    withRecallEngine((eng) => {
+      const term = 'zqkeysrecall'
+      eng.recordNode({ memory_key: 'keys-1', type: 'rule', scope: 'project', content: `${term} short` })
+      eng.recordNode({ memory_key: 'keys-2', type: 'rule', scope: 'project', content: `${term} other` })
+
+      const page = eng.searchMemory({ query: term, keys: ['keys-2'], limit: 50 })
+      const expanded = page.find((r) => r.memory_key === 'keys-2')
+      const previewed = page.find((r) => r.memory_key === 'keys-1')
+      assert.equal(expanded.content, `${term} other`)
+      assert.equal('preview' in expanded, false, 'la clave pedida devuelve el content completo')
+      assert.equal(previewed.content_truncated, false)
+      assert.equal('content' in previewed, false, 'las claves no pedidas conservan la previsualizacion')
+
+      assert.throws(
+        () => eng.searchMemory({ query: term, keys: ['keys-absent'], limit: 50 }),
+        (err) => /keys-absent/.test(err.message) && /no esta en la pagina/.test(err.message),
+        'una key pedida fuera de la pagina falla nombrandola: nunca se descarta en silencio'
+      )
+    })
+  })
+
+  it('expand prevalece sobre keys y devuelve el payload heredado de seis campos', () => {
+    withRecallEngine((eng) => {
+      eng.recordNode({ memory_key: 'both-1', type: 'rule', scope: 'project', content: 'zqbothkeys expand gana' })
+      const [row] = eng.searchMemory({ query: 'zqbothkeys', expand: true, keys: ['no-existe'] })
+      assert.equal(row.memory_key, 'both-1')
+      assert.equal(row.content, 'zqbothkeys expand gana')
+      assert.deepEqual(Object.keys(row).sort(), ['content', 'created_at', 'justification', 'memory_key', 'scope', 'type'])
+    })
+  })
+
+  it('required se promueve al frente en el orden declarado y sin terminos FTS devuelve solo las requeridas', () => {
+    withRecallEngine((eng) => {
+      const term = 'zqrequired'
+      const filler = 'filler '.repeat(20)
+      eng.recordNode({ memory_key: 'req-a', type: 'rule', scope: 'project', content: `${term} ${filler}` })
+      eng.recordNode({ memory_key: 'req-b', type: 'rule', scope: 'project', content: `${term} ${filler}` })
+      eng.recordNode({ memory_key: 'req-hit', type: 'rule', scope: 'project', content: term })
+
+      const page = eng.searchMemory({ query: term, required: ['req-b', 'req-a'], limit: 10 })
+      assert.deepEqual(
+        page.slice(0, 2).map((r) => r.memory_key),
+        ['req-b', 'req-a'],
+        'las requeridas van primero en el orden declarado, aunque el bm25 las deje ultimas'
+      )
+      assert.equal(page.some((r) => r.memory_key === 'req-hit'), true)
+      assert.equal('required' in eng.listNodes().find((n) => n.memory_key === 'req-b'), false, 'required no se persiste ni se expone')
+
+      const withoutTerms = eng.searchMemory({ query: 'como de la el', required: ['req-b'] })
+      assert.deepEqual(withoutTerms.map((r) => r.memory_key), ['req-b'], 'sin terminos FTS devuelve solo la requerida')
+      assert.deepEqual(eng.searchMemory({ query: 'como de la el' }), [])
+    })
+  })
+
+  it('required inexistente, inactiva o de otro type falla nombrando la memory_key', () => {
+    withRecallEngine((eng, _root, dbPath) => {
+      eng.recordNode({ memory_key: 'req-rule', type: 'rule', scope: 'project', content: 'zqreqerr rule' })
+      eng.recordNode({ memory_key: 'req-dec', type: 'decision', scope: 'project', content: 'zqreqerr decision' })
+
+      assert.throws(
+        () => eng.searchMemory({ query: 'zqreqerr', required: ['req-ghost'] }),
+        /req-ghost/,
+        'una key inexistente nunca se omite en silencio'
+      )
+      assert.throws(
+        () => eng.searchMemory({ query: 'zqreqerr', required: ['req-dec'], type: 'rule' }),
+        (err) => /req-dec/.test(err.message) && /type "rule"/.test(err.message),
+        'una requerida de otro type falla nombrando la key'
+      )
+
+      const db = openDatabase(dbPath)
+      try {
+        db.prepare(`UPDATE memory_nodes SET status = 'superseded' WHERE memory_key = 'req-rule'`).run()
+      } finally {
+        db.close()
+      }
+      assert.throws(
+        () => eng.searchMemory({ query: 'zqreqerr', required: ['req-rule'] }),
+        /req-rule/,
+        'una requerida inactiva falla nombrando la key'
+      )
+    })
+  })
+
+  it('el limit por defecto es 5 y se conserva el clamp [1, 50]', () => {
+    withRecallEngine((eng) => {
+      for (let i = 1; i <= 7; i++) {
+        eng.recordNode({ memory_key: `lim-${i}`, type: 'rule', scope: 'project', content: 'zqlimitdefault' })
+      }
+      assert.equal(eng.searchMemory({ query: 'zqlimitdefault' }).length, 5, 'sin limit explicito devuelve cinco')
+      assert.equal(eng.searchMemory({ query: 'zqlimitdefault', limit: 0 }).length, 1, 'el clamp inferior es 1')
+      assert.equal(eng.searchMemory({ query: 'zqlimitdefault', limit: 99 }).length, 7, 'el clamp superior no recorta el corpus')
+    })
+  })
+
+  it('T07 (recuperacion): una requerida fuera del presupuesto normal se inyecta completa y no aparece como omitida', () => {
+    withRecallEngine((eng, root) => {
+      const critical = `PALABRA_CRITICA ${'c'.repeat(650)}`
+      eng.recordNode({ memory_key: 'crit-required', type: 'rule', scope: 'project', content: critical, createdAt: '2026-01-02T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'bulk-omitted', type: 'rule', scope: 'project', content: 'B'.repeat(1600), createdAt: '2026-01-03T00:00:00.000Z' })
+
+      const block = eng.buildWorkingContext('project', 500, root, { required: ['crit-required'] })
+      assert.ok(block.includes(`- [crit-required] ${critical}`), 'la requerida se inyecta completa y primera')
+      assert.equal(block.includes('B'.repeat(1600)), false, 'la no requerida queda fuera del presupuesto')
+      assert.ok(block.indexOf('[crit-required]') < block.indexOf('Omitted:'))
+      assert.doesNotMatch(block, /Omitted: [^\n]*crit-required/, 'la requerida no se lista como omitida')
+      assert.match(block, /1 rules omitted/)
+      assert.match(block, /Omitted: bulk-omitted/)
+      assert.ok(block.length <= 500 * 4, 'el bloque completo, aviso incluido, respeta el presupuesto')
+    })
+  })
+
+  it('T07 (bloqueo): una requerida que no entra falla con memory_key y ruta posix repo-relativa, sin degradar a aviso', () => {
+    withRecallEngine((eng, root) => {
+      mkdirSync(join(root, 'docs'), { recursive: true })
+      writeFileSync(join(root, 'docs', 'no-cabe.md'), '// fixture\n')
+      const content = `PALABRA_BLOQUEO ${'z'.repeat(800)}\n\nrefs:\n  - path:docs/no-cabe.md`
+      eng.recordNode({ memory_key: 'req-no-cabe', type: 'rule', scope: 'project', content })
+
+      // Invariante negativa: la construccion NO trunca la requerida en silencio ni la
+      // degrada a <ContextOverflowWarning>; falla entera con diagnostico.
+      assert.throws(
+        () => eng.buildWorkingContext('project', 200, root, { required: ['req-no-cabe'] }),
+        (err) => {
+          assert.match(err.message, /req-no-cabe/, 'el error nombra la memory_key')
+          assert.ok(err.message.includes('docs/no-cabe.md'), `el error incluye la ruta repo-relativa (${err.message})`)
+          assert.equal(err.message.includes(root), false, 'la ruta del error no es absoluta')
+          assert.equal(err.message.includes('\\'), false, 'la ruta del error es posix')
+          assert.doesNotMatch(err.message, /ContextOverflowWarning/, 'la requerida no se degrada al aviso')
+          return true
+        }
+      )
+    })
+  })
+
+  it('T07: una requerida sin refs resolubles se informa como tal junto con la memory_key', () => {
+    withRecallEngine((eng, root) => {
+      eng.recordNode({ memory_key: 'req-sin-refs', type: 'rule', scope: 'project', content: `PALABRA_SIN_REFS ${'q'.repeat(800)}` })
+      assert.throws(
+        () => eng.buildWorkingContext('project', 200, root, { required: ['req-sin-refs'] }),
+        (err) => /req-sin-refs/.test(err.message) && /sin refs resolubles/.test(err.message),
+        'sin refs resolubles el error lo indica junto con la memory_key'
+      )
+    })
+  })
+
+  it('T07: buildWorkingContext falla si una requerida no existe como rule activa del scope inyectado', () => {
+    withRecallEngine((eng, root) => {
+      eng.recordNode({ memory_key: 'wc-feature-rule', type: 'rule', scope: 'feature', content: 'regla feature' })
+      assert.throws(
+        () => eng.buildWorkingContext('project', undefined, root, { required: ['wc-feature-rule'] }),
+        /wc-feature-rule/,
+        'fuera del scope inyectado la requerida falla nombrandola'
+      )
+      assert.throws(
+        () => eng.buildWorkingContext('project', undefined, root, { required: ['wc-ghost'] }),
+        /wc-ghost/
+      )
+    })
+  })
+
+  it('T28 (bloque): no aplica el tope <=5 reglas/1500 B del campo destilado y respeta 8.000 chars', () => {
+    withRecallEngine((eng, root) => {
+      const keys = []
+      for (let i = 1; i <= 8; i++) {
+        const key = `small-${i}`
+        keys.push(key)
+        eng.recordNode({
+          memory_key: key,
+          type: 'rule',
+          scope: 'project',
+          content: `regla chica ${i} `.padEnd(100, 'k'),
+          createdAt: `2026-01-0${i}T00:00:00.000Z`
+        })
+      }
+
+      const block = eng.buildWorkingContext('project', 2000, root) // 8.000 chars
+      assert.ok(block.length <= 2000 * 4)
+      assert.equal((block.match(/^- \[/gm) || []).length, 8, 'las ocho reglas chicas entran: el bloque no tiene tope de 5')
+      for (const key of keys) assert.ok(block.includes(`[${key}]`), `${key} debe estar en el bloque`)
+      assert.doesNotMatch(block, /<ContextOverflowWarning>/, 'sin omision no hay aviso')
+
+      // El tope <=5 reglas / <=1.500 B es del campo destilado por delegacion y lo
+      // sigue verificando test/content-guards.test.js; aqui no se compone ni se suma.
+    })
+  })
+
+  it('T1.2 (tier: anclaje declarado) el nodo con refs: declarado gana al scope mas especifico', () => {
+    withRecallEngine((eng) => {
+      const term = 'zqanchortier'
+      // El no anclado tiene el scope mas especifico (task); el anclado declara una
+      // ref y es project, el scope mas amplio.
+      eng.recordNode({ memory_key: 'tier-task-plain', type: 'rule', scope: 'task', content: `${term} sin ancla` })
+      eng.recordNode({
+        memory_key: 'tier-project-anchored',
+        type: 'rule',
+        scope: 'project',
+        content: `${term} con ancla\n\nrefs:\n  - change:ref-fixture`
+      })
+
+      const page = eng.searchMemory({ query: term })
+      assert.deepEqual(
+        page.map((r) => r.memory_key),
+        ['tier-project-anchored', 'tier-task-plain'],
+        'el tier de anclaje declarado precede al tier de scope'
+      )
+      assert.deepEqual(page.map((r) => r.scope), ['project', 'task'])
+    })
+  })
+
+  it('el empate de bm25 sobrevive a reconstruir la DB con rowid invertidos (mismo orden y subconjunto)', () => {
+    withRecallEngine((eng, root) => {
+      const term = 'zqrebuildtie'
+      const content = `${term} contenido identico de longitud fija`
+      const keys = ['rt-1', 'rt-2', 'rt-3', 'rt-4', 'rt-5']
+      const createdAt = '2026-01-01T00:00:00.000Z'
+      // Insercion invertida: en esta DB el rowid creciente va al reves del orden lexicografico.
+      for (const k of [...keys].reverse()) {
+        eng.recordNode({ memory_key: k, type: 'rule', scope: 'project', content, createdAt })
+      }
+
+      // Premisa: contenidos identicos => empate real de bm25; el orden observado es el desempate.
+      const db = openDatabase(join(root, '.ancleto', 'memory.db'))
+      let scores
+      try {
+        scores = db.prepare(
+          `SELECT bm25(memory_fts) AS score FROM memory_fts JOIN memory_nodes n ON n.rowid = memory_fts.rowid
+           WHERE memory_fts MATCH ?`
+        ).all(`"${term}"`).map((r) => r.score)
+      } finally {
+        db.close()
+      }
+      assert.equal(scores.length, keys.length)
+      assert.equal(new Set(scores).size, 1, 'el empate de bm25 es real')
+
+      const before = eng.searchMemory({ query: term, limit: 50 }).map((r) => r.memory_key)
+      const beforePage = eng.searchMemory({ query: term, limit: 3 }).map((r) => r.memory_key)
+
+      // Reconstruccion: exportar e importar el corpus invertido en una DB nueva
+      // cambia los rowid respecto de la original.
+      const rebuilt = createMemoryEngine(join(root, 'rebuilt', '.ancleto', 'memory.db'))
+      try {
+        rebuilt.importNodes(eng.exportActive().reverse())
+        const after = rebuilt.searchMemory({ query: term, limit: 50 }).map((r) => r.memory_key)
+        const afterPage = rebuilt.searchMemory({ query: term, limit: 3 }).map((r) => r.memory_key)
+
+        assert.deepEqual(before, keys.slice(), 'la DB original ordena por memory_key, no por rowid')
+        assert.deepEqual(after, before, 'reconstruir la DB no cambia el orden')
+        assert.deepEqual(afterPage, beforePage, 'reconstruir la DB no cambia el subconjunto')
+      } finally {
+        rebuilt.close()
+      }
+    })
+  })
+})

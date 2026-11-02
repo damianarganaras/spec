@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.4] - 2026-11-02
+
+### Added
+- **Orden determinístico de inyección** de reglas en `<ProjectMemoryRules>`: scope, anclaje declarado, recencia y `memory_key`.
+- **Manifiesto de reglas omitidas** en el `<ContextOverflowWarning>`, con tope de 40 claves y sufijo `+N`.
+
+### Changed
+- **El presupuesto del bloque incluye el aviso de overflow**: el bloque completo respeta `maxTokens × CHARS_PER_TOKEN`.
+
 ## [0.18.3] - 2026-11-02
 
 ### Added

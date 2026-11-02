@@ -517,17 +517,30 @@ describe('buildWorkingContext — truncamiento (v0.3.0 item 2)', () => {
     }
   }
 
+  function captureWarn(fn) {
+    const messages = []
+    const original = console.warn
+    console.warn = (...args) => messages.push(args.join(' '))
+    try {
+      return { result: fn(), messages }
+    } finally {
+      console.warn = original
+    }
+  }
+
   it('trunca reglas enteras (nunca corta strings) y el XML cierra correctamente', () => {
     withEngine((eng, dir) => {
-      const c1 = 'A'.repeat(100)
-      const c2 = 'B'.repeat(100)
-      eng.recordNode({ memory_key: 'a1', type: 'rule', scope: 'project', content: c1 })
-      eng.recordNode({ memory_key: 'a2', type: 'rule', scope: 'project', content: c2 })
+      const c1 = 'A'.repeat(120)
+      const c2 = 'B'.repeat(150)
+      eng.recordNode({ memory_key: 'a1', type: 'rule', scope: 'project', content: c1, createdAt: '2026-01-02T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'a2', type: 'rule', scope: 'project', content: c2, createdAt: '2026-01-01T00:00:00.000Z' })
 
-      const block = eng.buildWorkingContext('project', 75, dir) // 300 chars: solo entra una regla
+      const maxTokens = 130
+      const block = eng.buildWorkingContext('project', maxTokens, dir)
       assert.equal(block.startsWith('<ProjectMemoryRules>'), true)
       assert.equal(block.endsWith('</ProjectMemoryRules>'), true)
       assert.equal((block.match(/^- \[/gm) || []).length, 1)
+      assert.ok(block.length <= maxTokens * 4, 'el bloque completo, aviso incluido, respeta el presupuesto')
 
       // exactamente una regla incluida en su totalidad; la otra omitida por completo (sin parcial)
       const hasA1 = block.includes(`- [a1] ${c1}`)
@@ -540,25 +553,44 @@ describe('buildWorkingContext — truncamiento (v0.3.0 item 2)', () => {
     })
   })
 
-  it('inyecta ContextOverflowWarning con la cantidad correcta de reglas omitidas', () => {
+  it('inyecta ContextOverflowWarning con la cantidad correcta y las claves omitidas en orden', () => {
     withEngine((eng, dir) => {
-      for (let i = 1; i <= 3; i++) {
-        eng.recordNode({ memory_key: `r${i}`, type: 'rule', scope: 'project', content: 'X'.repeat(60) })
+      const short = 'X'.repeat(50)
+      const long = 'X'.repeat(400)
+      const contents = [short, short, long, long]
+      for (let i = 1; i <= 4; i++) {
+        eng.recordNode({
+          memory_key: `r${i}`,
+          type: 'rule',
+          scope: 'project',
+          content: contents[i - 1],
+          createdAt: `2026-01-0${5 - i}T00:00:00.000Z`
+        })
       }
-      const block = eng.buildWorkingContext('project', 60, dir) // 240 chars: 1 entra, 2 omitidas
+      const maxTokens = 130
+      const block = eng.buildWorkingContext('project', maxTokens, dir)
       const m = block.match(/Context truncated due to size limits\. (\d+) rules omitted/)
       assert.ok(m, 'warning presente')
       assert.equal(m[1], '2')
-      assert.equal((block.match(/^- \[/gm) || []).length, 1)
+      assert.equal((block.match(/^- \[/gm) || []).length, 2)
+      assert.ok(block.includes('Omitted: r3, r4'))
+      assert.ok(block.length <= maxTokens * 4)
     })
   })
 
   it('el aviso de overflow delega un Recall a @memory-keeper y no nombra searchMemory', () => {
     withEngine((eng, dir) => {
+      const contents = ['X'.repeat(50), 'X'.repeat(400), 'X'.repeat(400)]
       for (let i = 1; i <= 3; i++) {
-        eng.recordNode({ memory_key: `w${i}`, type: 'rule', scope: 'project', content: 'X'.repeat(60) })
+        eng.recordNode({
+          memory_key: `w${i}`,
+          type: 'rule',
+          scope: 'project',
+          content: contents[i - 1],
+          createdAt: `2026-01-0${4 - i}T00:00:00.000Z`
+        })
       }
-      const block = eng.buildWorkingContext('project', 60, dir) // 240 chars: 1 entra, 2 omitidas
+      const block = eng.buildWorkingContext('project', 130, dir)
       // el prefijo y el conteo se conservan (contrato de las aserciones previas)
       assert.match(block, /Context truncated due to size limits\. (\d+) rules omitted/)
       assert.match(block, /@memory-keeper/)
@@ -569,25 +601,217 @@ describe('buildWorkingContext — truncamiento (v0.3.0 item 2)', () => {
 
   it('prioriza task sobre project en la retencion con poco espacio', () => {
     withEngine((eng, dir) => {
-      const projContent = 'P'.repeat(100)
-      eng.recordNode({ memory_key: 'proj1', type: 'rule', scope: 'project', content: projContent })
-      eng.recordNode({ memory_key: 'task1', type: 'rule', scope: 'task', content: 'TASK_SHORT' })
+      const projContent = 'P'.repeat(260)
+      eng.recordNode({ memory_key: 'proj1', type: 'rule', scope: 'project', content: projContent, createdAt: '2026-01-02T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'task1', type: 'rule', scope: 'task', content: 'TASK_SHORT', createdAt: '2026-01-01T00:00:00.000Z' })
 
-      const block = eng.buildWorkingContext('task', 50, dir) // 200 chars: solo task entra
+      const maxTokens = 130
+      const block = eng.buildWorkingContext('task', maxTokens, dir)
       assert.ok(block.includes('- [task1] TASK_SHORT'))
       assert.equal(block.includes(projContent), false)
       assert.match(block, /1 rules omitted/)
+      assert.ok(block.length <= maxTokens * 4)
     })
   })
 
-  it('con limite muy chico no incluye reglas y el XML sigue valido', () => {
+  it('con limite menor al piso estructural no incluye reglas ni aviso y el XML sigue valido', () => {
     withEngine((eng, dir) => {
       eng.recordNode({ memory_key: 'x1', type: 'rule', scope: 'project', content: 'contenido' })
-      const block = eng.buildWorkingContext('project', 5, dir) // 20 chars < header: nada entra
+      const block = eng.buildWorkingContext('project', 5, dir) // 20 chars < piso del wrapper
       assert.equal(block.startsWith('<ProjectMemoryRules>'), true)
       assert.equal(block.endsWith('</ProjectMemoryRules>'), true)
       assert.equal((block.match(/^- \[/gm) || []).length, 0)
+      assert.doesNotMatch(block, /<ContextOverflowWarning>/)
+    })
+  })
+
+  it('en la frontera degenerada (piso del wrapper sin espacio para el aviso) no incluye reglas ni aviso', () => {
+    withEngine((eng, dir) => {
+      eng.recordNode({ memory_key: 'deg1', type: 'rule', scope: 'project', content: 'X'.repeat(100) })
+      const floorBlock = eng.buildWorkingContext('project', 1, dir) // maxChars bajo el piso del wrapper
+      const maxTokens = Math.ceil((floorBlock.length + 40) / 4) // > piso del wrapper, < piso + aviso minimo
+      const block = eng.buildWorkingContext('project', maxTokens, dir)
+      assert.equal(block, floorBlock, 'el bloque es el piso estructural: ni reglas ni aviso')
+      assert.equal(block.startsWith('<ProjectMemoryRules>'), true)
+      assert.equal(block.endsWith('</ProjectMemoryRules>'), true)
+      assert.equal((block.match(/^- \[/gm) || []).length, 0)
+      assert.doesNotMatch(block, /<ContextOverflowWarning>/)
+      assert.ok(block.length <= maxTokens * 4, 'el bloque respeta el presupuesto aun sin aviso')
+    })
+  })
+
+  it('respeta el presupuesto con el aviso incluido y es determinista', () => {
+    withEngine((eng, dir) => {
+      for (let i = 1; i <= 10; i++) {
+        eng.recordNode({
+          memory_key: `r${i}`,
+          type: 'rule',
+          scope: 'project',
+          content: 'X'.repeat(200),
+          createdAt: `2026-01-10T00:00:${String(60 - i).padStart(2, '0')}.000Z`
+        })
+      }
+      const maxTokens = 400
+      const first = eng.buildWorkingContext('project', maxTokens, dir)
+      const second = eng.buildWorkingContext('project', maxTokens, dir)
+      assert.equal(first, second, 'dos renders consecutivos producen el mismo bloque')
+      assert.ok(first.length <= maxTokens * 4, 'bloque completo <= maxTokens * CHARS_PER_TOKEN')
+      assert.match(first, /5 rules omitted/)
+      assert.ok(first.indexOf('Omitted: r6') > 0)
+      assert.ok(first.indexOf('r6, r7, r8, r9, r10') > 0)
+    })
+  })
+
+  it('con mas de 40 omitidas lista 40 claves y agrega +N', () => {
+    withEngine((eng, dir) => {
+      const createdAt = '2026-01-01T00:00:00.000Z'
+      for (let i = 0; i < 60; i++) {
+        eng.recordNode({ memory_key: `k${String(i).padStart(2, '0')}`, type: 'rule', scope: 'project', content: 'X'.repeat(300), createdAt })
+      }
+      const maxTokens = 800
+      const block = eng.buildWorkingContext('project', maxTokens, dir)
+      assert.match(block, /52 rules omitted/)
+      assert.ok(block.includes('k08'), 'la primera omitida aparece')
+      assert.ok(block.includes('k47'), 'la clave 40 del manifiesto aparece')
+      assert.equal(block.includes('k48'), false, 'mas alla del tope no se lista')
+      assert.match(block, /\+12\./)
+      assert.ok(block.length <= maxTokens * 4)
+    })
+  })
+
+  it('con claves largas la reserva recorta el manifiesto antes del tope 40 y +N cuenta las no listadas', () => {
+    withEngine((eng, dir) => {
+      const createdAt = '2026-01-01T00:00:00.000Z'
+      // 39 chars por clave: 40 claves (~1.640 chars) no caben en la reserva de 800 tokens.
+      for (let i = 0; i < 60; i++) {
+        const key = `omit-${String(i).padStart(3, '0')}-${'x'.repeat(30)}`
+        eng.recordNode({ memory_key: key, type: 'rule', scope: 'project', content: 'X'.repeat(300), createdAt })
+      }
+      const maxTokens = 800
+      const block = eng.buildWorkingContext('project', maxTokens, dir)
+      const omitted = Number(block.match(/(\d+) rules omitted/)[1])
+      const manifest = block.match(/Omitted: ([^\n]*?)\./)
+      assert.ok(manifest, 'el manifiesto aparece')
+      const items = manifest[1].split(', ')
+      const plus = items[items.length - 1]
+      assert.match(plus, /^\+\d+$/, 'el resto se cuenta con +N')
+      const listed = items.length - 1
+      assert.ok(listed > 0 && listed < 40, 'la reserva recorta antes del tope de 40')
+      assert.equal(Number(plus.slice(1)), omitted - listed, '+N cuenta todas las no listadas')
+      assert.ok(block.length <= maxTokens * 4)
+    })
+  })
+
+  it('con count === 0 el manifiesto conserva +N y no pierde el total', () => {
+    withEngine((eng, dir) => {
+      const key = `omit-${'x'.repeat(300)}`
+      eng.recordNode({ memory_key: key, type: 'rule', scope: 'project', content: 'Z'.repeat(100), createdAt: '2026-01-01T00:00:00.000Z' })
+
+      const floor = eng.buildWorkingContext('project', 1, dir)
+      let block = ''
+      let maxTokens = Math.ceil(floor.length / 4) + 1
+      for (; maxTokens <= Math.ceil((floor.length + 2000) / 4); maxTokens++) {
+        block = eng.buildWorkingContext('project', maxTokens, dir)
+        if (block.includes('<ContextOverflowWarning>')) break
+      }
+      assert.ok(block.includes('<ContextOverflowWarning>'), 'el aviso entra')
+      assert.equal(Number(block.match(/(\d+) rules omitted/)[1]), 1)
+      assert.match(block, /Omitted: \+1\./, 'count === 0 cuenta el total con +N')
+      assert.equal(block.includes(key), false, 'la clave no entra en el manifiesto')
+      assert.ok(block.length <= maxTokens * 4, 'el bloque completo respeta el presupuesto')
+    })
+  })
+
+  it('registra por consola el conteo de omitidas', () => {
+    withEngine((eng, dir) => {
+      const contents = ['X'.repeat(50), 'X'.repeat(400), 'X'.repeat(400)]
+      for (let i = 1; i <= 3; i++) {
+        eng.recordNode({
+          memory_key: `c${i}`,
+          type: 'rule',
+          scope: 'project',
+          content: contents[i - 1],
+          createdAt: `2026-01-0${4 - i}T00:00:00.000Z`
+        })
+      }
+      const { result, messages } = captureWarn(() => eng.buildWorkingContext('project', 130, dir))
+      assert.match(result, /2 rules omitted/)
+      assert.ok(messages.some((m) => m.includes('ancleto: 2 reglas omitidas por limite de tamano')))
+    })
+  })
+})
+
+describe('buildWorkingContext — orden determinista de inyeccion', () => {
+  function withEngine(fn) {
+    const dir = mkdtempSync(join(tmpdir(), 'ancleto-order-'))
+    const eng = createMemoryEngine(join(dir, 'memory.db'))
+    try {
+      return fn(eng, dir)
+    } finally {
+      eng.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  function orderOf(block, keys) {
+    return keys.map((key) => block.indexOf(`[${key}]`))
+  }
+
+  it('una regla anclada gana a una no anclada del mismo scope y gana la retencion', () => {
+    withEngine((eng, dir) => {
+      const prose = 'A'.repeat(120)
+      const anchored = `${prose}\n\nrefs:\n  - path:src/core/memory/engine.js`
+      eng.recordNode({ memory_key: 'z-anchor', type: 'rule', scope: 'project', content: anchored, createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'a-plain', type: 'rule', scope: 'project', content: 'B'.repeat(900), createdAt: '2026-01-02T00:00:00.000Z' })
+
+      const block = eng.buildWorkingContext('project', 330, dir)
+      assert.ok(block.includes(`- [z-anchor] ${prose}`))
+      assert.equal(block.includes('B'.repeat(900)), false, 'la no anclada queda fuera del presupuesto')
       assert.match(block, /1 rules omitted/)
+      assert.ok(block.includes('Omitted: a-plain'))
+    })
+  })
+
+  it('el scope task gana al project en un contexto task', () => {
+    withEngine((eng, dir) => {
+      eng.recordNode({ memory_key: 'a-project', type: 'rule', scope: 'project', content: 'regla project', createdAt: '2026-01-02T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'z-task', type: 'rule', scope: 'task', content: 'regla task', createdAt: '2026-01-01T00:00:00.000Z' })
+      const block = eng.buildWorkingContext('task', undefined, dir)
+      const [project, task] = orderOf(block, ['a-project', 'z-task'])
+      assert.ok(task >= 0 && project >= 0)
+      assert.ok(task < project)
+    })
+  })
+
+  it('empata por recencia y luego por memory_key lexicografico', () => {
+    withEngine((eng, dir) => {
+      eng.recordNode({ memory_key: 'a-old', type: 'rule', scope: 'project', content: 'vieja', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'z-new', type: 'rule', scope: 'project', content: 'nueva', createdAt: '2026-01-02T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'b-tie', type: 'rule', scope: 'project', content: 'empate b', createdAt: '2026-01-03T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'a-tie', type: 'rule', scope: 'project', content: 'empate a', createdAt: '2026-01-03T00:00:00.000Z' })
+
+      const block = eng.buildWorkingContext('project', undefined, dir)
+      const [tieA, tieB, oldIdx, newIdx] = orderOf(block, ['a-tie', 'b-tie', 'a-old', 'z-new'])
+      assert.ok(newIdx < oldIdx, 'created_at DESC antes del memory_key')
+      assert.ok(tieA < tieB, 'mismo created_at: memory_key ascendente')
+    })
+  })
+
+  it('un bloque refs: invalido, vacio, solo commit: o multiple no cuenta como anclaje', () => {
+    withEngine((eng, dir) => {
+      const anchored = `prosa anclada\n\nrefs:\n  - path:src/core/memory/engine.js`
+      eng.recordNode({ memory_key: 'z-anchor', type: 'rule', scope: 'project', content: anchored, createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'a-invalid', type: 'rule', scope: 'project', content: 'invalida\n\nrefs:\n  - bogus:x', createdAt: '2026-01-03T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'a-empty', type: 'rule', scope: 'project', content: 'vacia\n\nrefs:\n\n', createdAt: '2026-01-03T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'a-commit', type: 'rule', scope: 'project', content: 'commit\n\nrefs:\n  - commit:abcdef1', createdAt: '2026-01-03T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'a-multi', type: 'rule', scope: 'project', content: 'multiple\n\nrefs:\n  - path:src/a.js\n\nrefs:\n  - path:src/b.js', createdAt: '2026-01-03T00:00:00.000Z' })
+
+      const block = eng.buildWorkingContext('project', undefined, dir)
+      const [anchor, invalid, empty, commit, multi] = orderOf(block, ['z-anchor', 'a-invalid', 'a-empty', 'a-commit', 'a-multi'])
+      assert.ok(anchor < invalid)
+      assert.ok(anchor < empty)
+      assert.ok(anchor < commit)
+      assert.ok(anchor < multi, 'dos bloques refs: no anclan')
     })
   })
 })

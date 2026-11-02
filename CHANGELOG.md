@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.3] - 2026-11-02
+
+### Added
+- **`resolveNodeRefs` expone la ubicación resuelta** de refs `change:` / `spec:` / `path:`.
+- **Golden M04–M06 activas**: resolución de refs.
+
+### Changed
+- **`path:` normaliza separadores y `.`** antes del chequeo de existencia (compatible Windows/Linux).
+
 ## [0.18.2] - 2026-11-01
 
 ### Changed

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDatabase } from '../src/core/memory/database.js'
-import { createMemoryEngine, defaultMemoryDbPath, resolveNodeRefs, resolveProjectRoot } from '../src/core/memory/engine.js'
+import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath, resolveNodeRefs, resolveProjectRoot } from '../src/core/memory/engine.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
 import { memoryTools, createMemoryToolkit } from '../src/core/memory/tools.js'
 import { resolveMemoryProjectRoot } from '../src/core/memory/working-context.js'
@@ -2636,6 +2636,202 @@ describe('MEM-04b — resolver de refs navegables (engine)', () => {
       assert.equal(out.refs[0].reason, 'inválido (lectura no disponible: EISDIR)')
       assert.equal(out.refs[1].ok, true)
       assert.equal(out.refs[1].path, 'docs/note.md')
+    })
+  })
+})
+
+// memory-consolidacion-autonoma: `consolidate` del engine (dry-run, canonico, apply,
+// near-duplicates, read-only y sin schema nuevo).
+describe('consolidate', () => {
+  it('el dry-run no cambia status/superseded_by y dos corridas dan el mismo reporte', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'dup-case', type: 'rule', scope: 'project', content: 'Regla  Duplicada con accion', createdAt: '2026-04-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'dup-acento', type: 'rule', scope: 'project', content: 'regla duplicada con accion', createdAt: '2026-04-02T00:00:00.000Z' })
+
+      const before = rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY memory_key`)
+      const first = eng.consolidate()
+      const second = eng.consolidate()
+
+      assert.deepEqual(first, second)
+      assert.equal(first.dryRun, true)
+      assert.equal(first.exactGroups.length, 1)
+      assert.equal(first.exactGroups[0].canonical, 'dup-acento')
+      assert.deepEqual(first.exactGroups[0].superseded, ['dup-case'])
+      assert.deepEqual(first.superseded, ['dup-case'])
+      assert.deepEqual(rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY memory_key`), before)
+    })
+  })
+
+  it('grupo de tres: gana mas refs y --apply supersede el resto con superseded_by al canonico', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({
+        memory_key: 'refs-dos',
+        type: 'rule',
+        scope: 'project',
+        content: 'misma prosa\n\nrefs:\n- commit:aaaaaaa\n- workitem:gh:1',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      })
+      eng.recordNode({
+        memory_key: 'refs-uno',
+        type: 'rule',
+        scope: 'project',
+        content: 'misma prosa\n\nrefs:\n- commit:bbbbbbb',
+        createdAt: '2026-03-01T00:00:00.000Z'
+      })
+      eng.recordNode({ memory_key: 'refs-cero', type: 'rule', scope: 'project', content: 'misma prosa', createdAt: '2026-02-01T00:00:00.000Z' })
+
+      const schemaBefore = rawAt(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`)
+      const canonicalId = rawAt(`SELECT id FROM memory_nodes WHERE memory_key = 'refs-dos'`)[0].id
+
+      const result = eng.consolidate({ dryRun: false })
+      assert.equal(result.dryRun, false)
+      assert.equal(result.exactGroups.length, 1)
+      assert.equal(result.exactGroups[0].canonical, 'refs-dos')
+      assert.equal(result.exactGroups[0].refs, 2)
+      assert.deepEqual(result.exactGroups[0].superseded.sort(), ['refs-cero', 'refs-uno'])
+      assert.deepEqual(result.superseded.sort(), ['refs-cero', 'refs-uno'])
+
+      const rows = rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes
+        WHERE memory_key IN ('refs-dos', 'refs-uno', 'refs-cero') ORDER BY memory_key`)
+      const byKey = Object.fromEntries(rows.map((r) => [r.memory_key, r]))
+      assert.equal(byKey['refs-dos'].status, 'active')
+      assert.equal(byKey['refs-uno'].status, 'superseded')
+      assert.equal(byKey['refs-uno'].superseded_by, canonicalId)
+      assert.equal(byKey['refs-cero'].status, 'superseded')
+      assert.equal(byKey['refs-cero'].superseded_by, canonicalId)
+      assert.deepEqual(rawAt(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`), schemaBefore)
+
+      const again = eng.consolidate({ dryRun: false })
+      assert.equal(again.exactGroups.length, 0)
+      assert.deepEqual(again.superseded, [])
+    })
+  })
+
+  it('desempata por created_at y luego por memory_key sin locale', () => {
+    withFreshEngine((eng, _dbPath, _rawAt) => {
+      eng.recordNode({ memory_key: 'tie-z', type: 'rule', scope: 'project', content: 'empate de canonico', createdAt: '2026-05-02T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'tie-a', type: 'rule', scope: 'project', content: 'empate de canonico', createdAt: '2026-05-02T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'tie-old', type: 'rule', scope: 'project', content: 'empate de canonico', createdAt: '2026-05-01T00:00:00.000Z' })
+
+      const first = eng.consolidate()
+      const second = eng.consolidate()
+      assert.deepEqual(first, second)
+      assert.equal(first.exactGroups[0].canonical, 'tie-a')
+      assert.deepEqual(first.exactGroups[0].superseded.sort(), ['tie-old', 'tie-z'])
+    })
+  })
+
+  it('el mismo texto en rule y decision no se agrupa (los type no se cruzan)', () => {
+    withFreshEngine((eng) => {
+      eng.recordNode({ memory_key: 'cross-rule', type: 'rule', scope: 'project', content: 'texto compartido' })
+      eng.recordNode({ memory_key: 'cross-decision', type: 'decision', scope: 'project', content: 'texto compartido' })
+
+      const result = eng.consolidate()
+      assert.deepEqual(result.exactGroups, [])
+      assert.deepEqual(result.superseded, [])
+    })
+  })
+
+  it('el near-duplicate >= 0.60 se reporta y --apply no lo toca', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'near-a', type: 'rule', scope: 'project', content: 'alpha beta gamma delta epsilon zeta' })
+      eng.recordNode({ memory_key: 'near-b', type: 'rule', scope: 'project', content: 'alpha beta gamma delta epsilon eta' })
+
+      const preview = eng.consolidate()
+      assert.equal(preview.exactGroups.length, 0)
+      assert.equal(preview.nearDuplicates.length, 1)
+      assert.deepEqual([preview.nearDuplicates[0].a, preview.nearDuplicates[0].b], ['near-a', 'near-b'])
+      assert.ok(preview.nearDuplicates[0].score >= 0.6)
+
+      const applied = eng.consolidate({ dryRun: false })
+      assert.equal(applied.nearDuplicates.length, 1)
+      assert.deepEqual(
+        rawAt(`SELECT memory_key, status FROM memory_nodes WHERE memory_key LIKE 'near-%' ORDER BY memory_key`)
+          .map((row) => ({ memory_key: row.memory_key, status: row.status })),
+        [
+          { memory_key: 'near-a', status: 'active' },
+          { memory_key: 'near-b', status: 'active' }
+        ]
+      )
+    })
+  })
+
+  it('un content con solo bloque refs: no agrupa ni se toca con --apply', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'refs-only-a', type: 'rule', scope: 'project', content: 'refs:\n- path:test/ref-fixture.test.js' })
+      eng.recordNode({ memory_key: 'refs-only-b', type: 'rule', scope: 'project', content: 'refs:\n- commit:bbbbbbb' })
+
+      const preview = eng.consolidate()
+      assert.deepEqual(preview.exactGroups, [])
+      assert.deepEqual(preview.superseded, [])
+
+      eng.consolidate({ dryRun: false })
+      assert.deepEqual(
+        rawAt(`SELECT memory_key, status FROM memory_nodes WHERE memory_key LIKE 'refs-only-%' ORDER BY memory_key`)
+          .map((row) => ({ memory_key: row.memory_key, status: row.status })),
+        [
+          { memory_key: 'refs-only-a', status: 'active' },
+          { memory_key: 'refs-only-b', status: 'active' }
+        ]
+      )
+    })
+  })
+
+  it('agrupa aunque el scope difiera y, a igual created_at, prefiere el scope mas amplio', () => {
+    withFreshEngine((eng) => {
+      eng.recordNode({ memory_key: 'scope-project', type: 'rule', scope: 'project', content: 'regla con scope distinto', createdAt: '2026-06-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'scope-feature', type: 'rule', scope: 'feature', content: 'regla con scope distinto', createdAt: '2026-06-01T00:00:00.000Z' })
+
+      const preview = eng.consolidate()
+      assert.equal(preview.exactGroups.length, 1)
+      assert.equal(preview.exactGroups[0].canonical, 'scope-project')
+      assert.deepEqual(preview.exactGroups[0].superseded, ['scope-feature'])
+    })
+  })
+
+  it('el near-duplicate usa los tokens whitespace del content normalizado (Jaccard >= 0.60)', () => {
+    withFreshEngine((eng) => {
+      eng.recordNode({ memory_key: 'ws-a', type: 'rule', scope: 'project', content: 'el deploy usa docker' })
+      eng.recordNode({ memory_key: 'ws-b', type: 'rule', scope: 'project', content: 'el deploy usa podman' })
+
+      const preview = eng.consolidate()
+      assert.equal(preview.exactGroups.length, 0)
+      assert.equal(preview.nearDuplicates.length, 1)
+      assert.deepEqual([preview.nearDuplicates[0].a, preview.nearDuplicates[0].b], ['ws-a', 'ws-b'])
+      assert.equal(preview.nearDuplicates[0].score, 0.6)
+    })
+  })
+
+  it('el umbral Jaccard reporta 0.60, descarta 0.50 y llega a 1.0 con sets de tokens identicos', () => {
+    withFreshEngine((eng) => {
+      eng.recordNode({ memory_key: 'thr-60-a', type: 'rule', scope: 'project', content: 'uno dos tres cuatro' })
+      eng.recordNode({ memory_key: 'thr-60-b', type: 'rule', scope: 'project', content: 'uno dos tres cinco' })
+      eng.recordNode({ memory_key: 'thr-50-a', type: 'rule', scope: 'task', content: 'alpha beta gamma' })
+      eng.recordNode({ memory_key: 'thr-50-b', type: 'rule', scope: 'task', content: 'alpha beta delta' })
+      eng.recordNode({ memory_key: 'thr-100-a', type: 'rule', scope: 'feature', content: 'red green blue' })
+      eng.recordNode({ memory_key: 'thr-100-b', type: 'rule', scope: 'feature', content: 'blue red green' })
+
+      const pairs = eng.consolidate().nearDuplicates.map((pair) => `${pair.a}~${pair.b}=${pair.score}`).sort()
+      assert.deepEqual(pairs, ['thr-100-a~thr-100-b=1', 'thr-60-a~thr-60-b=0.6'])
+    })
+  })
+
+  it('el engine read-only rechaza dryRun:false antes de escribir', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'ro-a', type: 'rule', scope: 'project', content: 'regla read only' })
+      eng.recordNode({ memory_key: 'ro-b', type: 'rule', scope: 'project', content: 'regla read only' })
+      const before = rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY memory_key`)
+
+      const ro = createReadonlyMemoryEngine(dbPath)
+      try {
+        const preview = ro.consolidate()
+        assert.equal(preview.dryRun, true)
+        assert.throws(() => ro.consolidate({ dryRun: false }), /consolidate: la conexion es read-only/)
+      } finally {
+        ro.close()
+      }
+
+      assert.deepEqual(rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY memory_key`), before)
     })
   })
 })

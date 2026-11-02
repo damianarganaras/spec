@@ -4208,3 +4208,86 @@ describe('CLI machine environment (machine-environment-block)', () => {
     })
   })
 })
+
+// memory-consolidacion-autonoma: subcomando `memory consolidate` (dry-run default,
+// --json, --apply con refresco del working-context y flags incompatibles).
+describe('CLI memory consolidate', () => {
+  function states(dbPath) {
+    const db = new DatabaseSync(dbPath)
+    try {
+      return db.prepare(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY memory_key`).all()
+    } finally {
+      db.close()
+    }
+  }
+
+  function seedDuplicates(dir) {
+    const dbPath = join(dir, '.ancleto', 'memory.db')
+    const engine = createMemoryEngine(dbPath)
+    engine.recordNode({ memory_key: 'cons-a', type: 'rule', scope: 'project', content: 'misma regla duplicada', createdAt: '2026-01-01T00:00:00.000Z' })
+    engine.recordNode({ memory_key: 'cons-b', type: 'rule', scope: 'project', content: 'misma regla duplicada', createdAt: '2026-01-02T00:00:00.000Z' })
+    engine.close()
+    return dbPath
+  }
+
+  it('sin --apply es dry-run: no escribe la base ni el working-context y --json parsea', () => {
+    withDir((dir) => {
+      const dbPath = seedDuplicates(dir)
+      const before = states(dbPath)
+      const ctxPath = join(dir, '.ancleto', 'working-context.md')
+
+      const r = run(['memory', 'consolidate', '--json'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const payload = JSON.parse(r.stdout)
+      assert.equal(payload.dryRun, true)
+      assert.equal(payload.exactGroups.length, 1)
+      assert.equal(payload.exactGroups[0].canonical, 'cons-b')
+      assert.deepEqual(payload.superseded, ['cons-a'])
+      assert.deepEqual(states(dbPath), before)
+      assert.equal(existsSync(ctxPath), false)
+    })
+  })
+
+  it('--apply supersede los no canonicos y refresca el working-context bajo la DB', () => {
+    withDir((dir) => {
+      const dbPath = seedDuplicates(dir)
+      const canonicalId = (() => {
+        const db = new DatabaseSync(dbPath)
+        try {
+          return db.prepare(`SELECT id FROM memory_nodes WHERE memory_key = 'cons-b'`).get().id
+        } finally {
+          db.close()
+        }
+      })()
+
+      const r = run(['memory', 'consolidate', '--apply', '--json'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const payload = JSON.parse(r.stdout)
+      assert.equal(payload.dryRun, false)
+      assert.deepEqual(payload.superseded, ['cons-a'])
+
+      const rows = states(dbPath)
+      const byKey = Object.fromEntries(rows.map((row) => [row.memory_key, row]))
+      assert.equal(byKey['cons-b'].status, 'active')
+      assert.equal(byKey['cons-a'].status, 'superseded')
+      assert.equal(byKey['cons-a'].superseded_by, canonicalId)
+
+      const ctxPath = join(dir, '.ancleto', 'working-context.md')
+      assert.equal(existsSync(ctxPath), true)
+      const ctx = readFileSync(ctxPath, 'utf8')
+      assert.match(ctx, /\[cons-b\]/)
+      assert.doesNotMatch(ctx, /\[cons-a\]/)
+    })
+  })
+
+  it('--dry-run y --apply juntos es un error de uso y no escribe', () => {
+    withDir((dir) => {
+      const dbPath = seedDuplicates(dir)
+      const before = states(dbPath)
+      const r = run(['memory', 'consolidate', '--dry-run', '--apply'], dir)
+      assert.notEqual(r.status, 0)
+      assert.match(r.stderr, /uso: ancleto memory consolidate/)
+      assert.deepEqual(states(dbPath), before)
+    })
+  })
+})

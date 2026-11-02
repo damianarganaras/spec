@@ -2,6 +2,11 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.5] - 2026-11-02
+
+### Added
+- **`memory consolidate`**: consolidación determinística de duplicados exactos con `--dry-run` por defecto, `--apply` reversible por supersesión y reporte informativo de near-duplicates.
+
 ## [0.18.4] - 2026-11-02
 
 ### Added

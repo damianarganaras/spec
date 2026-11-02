@@ -565,7 +565,7 @@ describe('working-context — sin recursion ni corrupcion (6.9)', () => {
         assert.equal(toolkit.handlers.recordRule({ memory_key: 'wc-rec-0', content: 'regla 0 v2', scope: 'project' }).superseded, 1)
 
         // la DB sigue operativa tras la secuencia de refreshes
-        const hits = toolkit.handlers.searchMemory({ query: 'regla' })
+        const hits = toolkit.handlers.searchMemory({ query: 'regla', expand: true })
         assert.ok(hits.some((n) => n.memory_key === 'wc-rec-0' && n.content === 'regla 0 v2'))
         toolkit.engine.checkpoint()
       } finally {

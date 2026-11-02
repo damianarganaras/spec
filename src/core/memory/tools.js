@@ -14,7 +14,10 @@ const SEARCH_SCHEMA = {
   properties: {
     query: { type: 'string', description: 'Consulta lexica para buscar en la memoria del proyecto.' },
     type: { type: 'string', enum: ['rule', 'decision'], description: 'Filtra por tipo de nodo.' },
-    limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Maximo de resultados (default 10).' }
+    limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Maximo de resultados (default 5).' },
+    expand: { type: 'boolean', description: 'Devuelve el content completo con el payload heredado de seis campos en lugar de la previsualizacion.' },
+    keys: { type: 'array', items: { type: 'string' }, description: 'Expande el content completo solo de las memory_key indicadas que esten presentes en la pagina devuelta.' },
+    required: { type: 'array', items: { type: 'string' }, description: 'memory_key que se promueven al frente del orden; si no existe, no esta activa o no cumple type, la llamada falla.' }
   },
   required: ['query'],
   additionalProperties: false
@@ -47,7 +50,7 @@ const RECORD_DECISION_SCHEMA = {
 export const memoryTools = [
   {
     name: 'searchMemory',
-    description: 'Busca en la memoria del proyecto (BM25). Devuelve reglas y decisiones activas. Acepta lenguaje natural: intenta terminos exactos y, si no hay coincidencia, reintenta por prefijos.',
+    description: 'Busca en la memoria del proyecto (BM25). Devuelve previsualizaciones de reglas y decisiones activas; usa expand para el content completo. Acepta lenguaje natural: intenta terminos exactos y, si no hay coincidencia, reintenta por prefijos.',
     inputSchema: SEARCH_SCHEMA
   },
   {

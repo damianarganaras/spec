@@ -76,6 +76,59 @@ function publicNode(row) {
   }
 }
 
+const PREVIEW_MAX_CHARS = 240
+
+// Preview por defecto: colapsa el content a una linea y lo recorta a 239
+// caracteres mas `…`. `content_truncated` es true exactamente cuando hubo recorte.
+function previewNode(row) {
+  const collapsed = String(row.content).replace(/\s+/g, ' ').trim()
+  const truncated = collapsed.length > PREVIEW_MAX_CHARS
+  return {
+    memory_key: row.memory_key,
+    type: row.type,
+    scope: row.scope,
+    created_at: row.created_at,
+    preview: truncated ? `${collapsed.slice(0, PREVIEW_MAX_CHARS - 1)}…` : collapsed,
+    content_truncated: truncated
+  }
+}
+
+// `required` es una entrada de llamada: lista de memory_key, nunca estado del nodo.
+function normalizeRequired(required) {
+  if (required === undefined || required === null) return []
+  if (!Array.isArray(required)) throw new Error('required debe ser un array de memory_key')
+  const keys = []
+  const seen = new Set()
+  for (const raw of required) {
+    if (typeof raw !== 'string' || !raw.trim()) throw new Error('required contiene una memory_key vacia')
+    const key = raw.trim()
+    if (seen.has(key)) continue
+    seen.add(key)
+    keys.push(key)
+  }
+  return keys
+}
+
+// Proyeccion de la pagina de resultados: expand devuelve el payload heredado de
+// seis campos; keys expande solo las claves presentes en la pagina; por defecto preview.
+function projectSearchPage(page, { expand, keys } = {}) {
+  if (expand) return page.map(publicNode)
+  if (keys !== undefined && keys !== null) {
+    if (!Array.isArray(keys)) throw new Error('keys debe ser un array de memory_key')
+    const requested = new Set()
+    for (const raw of keys) {
+      if (typeof raw !== 'string' || !raw.trim()) throw new Error('keys contiene una memory_key vacia')
+      requested.add(raw.trim())
+    }
+    const pageKeys = new Set(page.map((row) => row.memory_key))
+    for (const key of requested) {
+      if (!pageKeys.has(key)) throw new Error(`keys: la memory_key "${key}" no esta en la pagina devuelta`)
+    }
+    return page.map((row) => (requested.has(row.memory_key) ? publicNode(row) : previewNode(row)))
+  }
+  return page.map(previewNode)
+}
+
 // --- MEM-03: refs normalizadas y rechazo de secretos en el camino de escritura ---
 //
 // Reglas fijas del change:
@@ -283,6 +336,23 @@ function scopeRank(scope) {
   return SCOPE_RANK[scope] ?? 9
 }
 
+// Orden total de recall: requerido -> anclaje declarado -> scope -> bm25 ascendente
+// -> memory_key ascendente. `requiredIndex` expresa el orden declarado por el
+// llamador; el resto queda despues. `score` es el bm25 de FTS5 (negativo: mejor primero).
+function compareRecall(a, b, requiredIndex) {
+  const rankA = requiredIndex.has(a.memory_key) ? requiredIndex.get(a.memory_key) : Number.MAX_SAFE_INTEGER
+  const rankB = requiredIndex.has(b.memory_key) ? requiredIndex.get(b.memory_key) : Number.MAX_SAFE_INTEGER
+  if (rankA !== rankB) return rankA - rankB
+  const byAnchor = Number(declaresAnchor(b.content)) - Number(declaresAnchor(a.content))
+  if (byAnchor !== 0) return byAnchor
+  const byScope = scopeRank(a.scope) - scopeRank(b.scope)
+  if (byScope !== 0) return byScope
+  const scoreA = Number.isFinite(a.score) ? a.score : 0
+  const scoreB = Number.isFinite(b.score) ? b.score : 0
+  if (scoreA !== scoreB) return scoreA - scoreB
+  return compareKeys(a.memory_key, b.memory_key)
+}
+
 // El aviso entra en un presupuesto de caracteres: se listan las claves omitidas
 // en orden de inyeccion hasta el tope de 40 mientras entren; las no listadas se
 // cuentan en `+N`. Si ni el aviso minimo entra, se omite el aviso para no
@@ -484,6 +554,15 @@ export function resolveNodeRefs({ content = '', projectRoot = null } = {}) {
   return { refs, error: null, blocks: 0, needsRoot }
 }
 
+// Error diagnostico para una requerida que no entra en el presupuesto: nombra la
+// memory_key y la ubicacion repo-relativa de sus refs resueltas (o `sin refs resolubles`).
+function requiredBudgetError(row, projectRoot) {
+  const resolved = resolveNodeRefs({ content: row.content, projectRoot })
+  const paths = resolved.refs.filter((ref) => ref.ok && ref.path).map((ref) => ref.path)
+  const location = paths.length > 0 ? paths.join(', ') : 'sin refs resolubles'
+  return new Error(`required: la memory_key "${row.memory_key}" no entra en el presupuesto del working-context (${location})`)
+}
+
 function validateRefsForWrite({ memory_key, type, content, projectRoot }) {
   const prefix = `refs: la ${type} "${memory_key}"`
   const parsed = parseRefsBlock(content)
@@ -603,6 +682,7 @@ function buildReadonlyEngine(db, dbPath) {
 function buildEngine(db, dbPath) {
 
   const findActive = db.prepare(`SELECT id, type FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
+  const findActivePublic = db.prepare(`SELECT ${PUBLIC_COLUMNS} FROM memory_nodes n WHERE n.memory_key = ? AND n.status = 'active'`)
   const findActiveRow = db.prepare(`SELECT id, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
   const findLatestStatus = db.prepare(`SELECT status FROM memory_nodes WHERE memory_key = ? ORDER BY rowid DESC LIMIT 1`)
   const countSuperseded = db.prepare(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = ? AND status = 'superseded'`)
@@ -626,7 +706,8 @@ function buildEngine(db, dbPath) {
   )
   const findActiveById = db.prepare(`SELECT id FROM memory_nodes WHERE id = ? AND status = 'active'`)
 
-  function buildWorkingContext(scope, maxTokens = MAX_TOKENS, cwd = process.cwd()) {
+  function buildWorkingContext(scope, maxTokens = MAX_TOKENS, cwd = process.cwd(), { required = [] } = {}) {
+    const requiredKeys = normalizeRequired(required)
     const scopes = SCOPE_HIERARCHY[scope] || [scope]
     const placeholders = scopes.map(() => '?').join(', ')
     const rows = db.prepare(
@@ -636,11 +717,25 @@ function buildEngine(db, dbPath) {
 
     const topoBlock = formatTopologyBlock(readTopologySummary(cwd))
 
+    // `required` se resuelve antes del early return y del piso estructural: una key
+    // inexistente, inactiva o fuera del scope inyectado falla nombrandola.
+    const requiredIndex = new Map()
+    for (const key of requiredKeys) {
+      const row = rows.find((r) => r.memory_key === key)
+      if (!row) {
+        throw new Error(`required: la memory_key "${key}" no existe como rule activa del scope "${scope}"`)
+      }
+      requiredIndex.set(key, requiredIndex.size)
+    }
+
     if (rows.length === 0) return topoBlock
 
-    // Orden determinista y total: jerarquia de scope, anclaje declarado, recencia
-    // y memory_key como desempate final. El anclaje no es expresable en SQL.
+    // Orden determinista y total: requerido, jerarquia de scope, anclaje declarado,
+    // recencia y memory_key como desempate final. El anclaje no es expresable en SQL.
     rows.sort((a, b) => {
+      const rankA = requiredIndex.has(a.memory_key) ? requiredIndex.get(a.memory_key) : Number.MAX_SAFE_INTEGER
+      const rankB = requiredIndex.has(b.memory_key) ? requiredIndex.get(b.memory_key) : Number.MAX_SAFE_INTEGER
+      if (rankA !== rankB) return rankA - rankB
       const byScope = scopeRank(a.scope) - scopeRank(b.scope)
       if (byScope !== 0) return byScope
       const byAnchor = Number(declaresAnchor(b.content)) - Number(declaresAnchor(a.content))
@@ -655,6 +750,7 @@ function buildEngine(db, dbPath) {
     const wrapperClose = '\n</ProjectMemoryRules>'
     const structuralFloor = `${wrapperOpen}${wrapperClose}`
     if (!Number.isFinite(maxChars) || maxChars <= structuralFloor.length) {
+      if (requiredKeys.length > 0) throw requiredBudgetError(rows[0], cwd)
       return topoBlock ? `${topoBlock}\n${structuralFloor}` : structuralFloor
     }
 
@@ -663,7 +759,12 @@ function buildEngine(db, dbPath) {
     let includedCount = 0
     for (const r of rows) {
       const line = `- [${r.memory_key}] ${renderRuleContent(r.content)}`
-      if (block.length + 1 + line.length + wrapperClose.length > maxChars - reserve) break
+      const fits = block.length + 1 + line.length + wrapperClose.length <= maxChars - reserve
+      if (!fits) {
+        // Una requerida no se trunca ni se degrada al aviso: falla con ruta.
+        if (requiredIndex.has(r.memory_key)) throw requiredBudgetError(r, cwd)
+        break
+      }
       block += `\n${line}`
       includedCount++
     }
@@ -680,38 +781,57 @@ function buildEngine(db, dbPath) {
     return topoBlock ? `${topoBlock}\n${memoryBlock}` : memoryBlock
   }
 
-  function searchMemory({ query, type, limit } = {}) {
+  function searchMemory({ query, type, limit, expand = false, keys, required } = {}) {
     const q = ftsQuery(query)
-    if (!q) return []
     if (type !== undefined && type !== 'rule' && type !== 'decision') {
       throw new Error(`type invalido: ${type}`)
     }
-    const lim = Math.min(Math.max(Number(limit) || 10, 1), 50)
-    const base = `SELECT ${PUBLIC_COLUMNS} FROM memory_fts f JOIN memory_nodes n ON n.rowid = f.rowid
+    const requiredKeys = normalizeRequired(required)
+    const numericLimit = Number(limit)
+    const lim = Number.isFinite(numericLimit) ? Math.min(Math.max(numericLimit, 1), 50) : 5
+
+    // Requeridas: se resuelven contra nodos activos y se promueven al frente en el
+    // orden declarado. Una key que no existe, no esta activa o no cumple el type falla.
+    const requiredRows = []
+    const requiredIndex = new Map()
+    for (const key of requiredKeys) {
+      const row = findActivePublic.get(key)
+      if (!row) throw new Error(`required: la memory_key "${key}" no existe o no esta activa`)
+      if (type && row.type !== type) {
+        throw new Error(`required: la memory_key "${key}" no satisface el type "${type}"`)
+      }
+      requiredIndex.set(key, requiredRows.length)
+      requiredRows.push(row)
+    }
+
+    // Sin terminos FTS: solo las requeridas (o [] sin requeridas).
+    if (!q) return projectSearchPage(requiredRows.slice(0, lim), { expand, keys })
+
+    const base = `SELECT ${PUBLIC_COLUMNS}, bm25(memory_fts) AS score FROM memory_fts f JOIN memory_nodes n ON n.rowid = f.rowid
        WHERE memory_fts MATCH ? AND n.status = 'active'`
-    const run = (match, _loose) => {
-      const sql = type
-        ? db.prepare(`${base} AND n.type = ? ORDER BY rank, n.rowid LIMIT ?`)
-        : db.prepare(`${base} ORDER BY rank, n.rowid LIMIT ?`)
-      // FTS5 no acepta parametros en ORDER BY rank; el prefijo '*' va dentro del MATCH.
+    const run = (match) => {
+      const sql = type ? db.prepare(`${base} AND n.type = ?`) : db.prepare(base)
       try {
-        return type ? sql.all(match, type, lim) : sql.all(match, lim)
+        return type ? sql.all(match, type) : sql.all(match)
       } catch {
         return null
       }
     }
 
     // 1) intento preciso (AND): respeta busquedas por terminos exactos.
+    // 2) fallback tolerante (OR con prefijos) solo cuando la pass 1 no devuelve nada.
     let rows = run(q)
-    if (rows && rows.length > 0) return rows.map(publicNode)
-
-    // 2) fallback tolerante (OR con prefijos): cubre consultas en lenguaje natural.
-    const loose = ftsQueryLoose(query)
-    if (loose && loose !== q) {
-      const looseRows = run(loose)
-      if (looseRows && looseRows.length > 0) return looseRows.map(publicNode)
+    if (!rows || rows.length === 0) {
+      const loose = ftsQueryLoose(query)
+      rows = loose && loose !== q ? run(loose) : []
     }
-    return []
+
+    // El subconjunto devuelto es el prefijo del orden total: rankear antes de recortar.
+    const seen = new Set(requiredRows.map((row) => row.memory_key))
+    const rest = (rows || []).filter((row) => !seen.has(row.memory_key))
+    rest.sort((a, b) => compareRecall(a, b, requiredIndex))
+    const page = [...requiredRows, ...rest].slice(0, lim)
+    return projectSearchPage(page, { expand, keys })
   }
 
   // Procedencia de escritura (runtime-owned): `source` se resuelve exclusivamente

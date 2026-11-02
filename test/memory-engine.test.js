@@ -124,7 +124,7 @@ describe('supersesion atomica', () => {
     engine.recordNode({ memory_key: 'k-fts-sup', type: 'rule', scope: 'repo', content: 'nuevo concepto' })
 
     assert.equal(engine.searchMemory({ query: 'viejo' }).length, 0)
-    const found = engine.searchMemory({ query: 'nuevo' })
+    const found = engine.searchMemory({ query: 'nuevo', expand: true })
     assert.equal(found.length, 1)
     assert.equal(found[0].content, 'nuevo concepto')
   })
@@ -183,13 +183,16 @@ describe('searchMemory', () => {
 
   it('no expone campos gestionados por el runtime', () => {
     engine.recordNode({ memory_key: 's6', type: 'rule', scope: 'repo', content: 'campo privado' })
-    const [row] = engine.searchMemory({ query: 'privado' })
+    const [row] = engine.searchMemory({ query: 'privado', expand: true })
     assert.deepEqual(Object.keys(row).sort(), ['content', 'created_at', 'justification', 'memory_key', 'scope', 'type'])
+
+    const [preview] = engine.searchMemory({ query: 'privado' })
+    assert.deepEqual(Object.keys(preview).sort(), ['content_truncated', 'created_at', 'memory_key', 'preview', 'scope', 'type'])
   })
 
   it('no expone source en el resultado (procedencia oculta al LLM)', () => {
     engine.recordNode({ memory_key: 's-src-hidden', type: 'rule', scope: 'repo', content: 'ocultamiento procedencia' })
-    const [row] = engine.searchMemory({ query: 'ocultamiento' })
+    const [row] = engine.searchMemory({ query: 'ocultamiento', expand: true })
     assert.ok(row)
     assert.equal('source' in row, false)
   })
@@ -224,8 +227,9 @@ describe('searchMemory', () => {
   })
 })
 
-// memory-search-order-tiebreak: orden total por `rank, n.rowid` (ascendente) en
-// ambas ramas de `run` (pass 1 AND y pass 2 OR con prefijos).
+// memory-search-order-tiebreak: el orden total de `searchMemory` resuelve el empate
+// por `memory_key` ascendente (no por `rowid`), tanto en la pass 1 (AND) como en la
+// pass 2 (OR con prefijos).
 describe('searchMemory — desempate determinista (memory-search-order-tiebreak)', () => {
   function withSearchEngine(fn) {
     const dir = mkdtempSync(join(tmpdir(), 'ancleto-tie-'))
@@ -248,11 +252,12 @@ describe('searchMemory — desempate determinista (memory-search-order-tiebreak)
     }
   }
 
-  it('empate de bm25 con truncamiento: subconjunto y orden deterministas, rowid ascendente', () => {
+  it('empate de bm25 con truncamiento: subconjunto y orden deterministas por memory_key', () => {
     withSearchEngine((eng, dbPath) => {
       const content = 'zqtiebreak contenido identico de longitud fija'
       const keys = ['tie-1', 'tie-2', 'tie-3', 'tie-4', 'tie-5']
-      for (const k of keys) {
+      // insercion inversa: el rowid creciente no coincide con el orden esperado
+      for (const k of [...keys].reverse()) {
         eng.recordNode({ memory_key: k, type: 'rule', scope: 'project', content })
       }
 
@@ -272,9 +277,9 @@ describe('searchMemory — desempate determinista (memory-search-order-tiebreak)
       // determinismo: misma query sobre el mismo estado -> mismo subconjunto y orden
       assert.deepEqual(first.map((n) => n.memory_key), second.map((n) => n.memory_key))
 
-      // desempate por rowid ascendente: sobrevive el subconjunto de menor rowid
+      // desempate por memory_key ascendente: sobrevive el subconjunto lexicograficamente menor
       const expected = rawAt(dbPath,
-        `SELECT memory_key FROM memory_nodes WHERE content = ? ORDER BY rowid ASC`, content
+        `SELECT memory_key FROM memory_nodes WHERE content = ? ORDER BY memory_key ASC`, content
       ).slice(0, limit).map((r) => r.memory_key)
       assert.deepEqual(first.map((n) => n.memory_key), expected)
     })
@@ -284,7 +289,7 @@ describe('searchMemory — desempate determinista (memory-search-order-tiebreak)
     withSearchEngine((eng, dbPath) => {
       const content = 'zqfbterm contenido identico de longitud fija'
       const keys = ['fb-1', 'fb-2', 'fb-3', 'fb-4']
-      for (const k of keys) {
+      for (const k of [...keys].reverse()) {
         eng.recordNode({ memory_key: k, type: 'rule', scope: 'project', content })
       }
 
@@ -305,7 +310,7 @@ describe('searchMemory — desempate determinista (memory-search-order-tiebreak)
       assert.deepEqual(first.map((n) => n.memory_key), second.map((n) => n.memory_key))
 
       const expected = rawAt(dbPath,
-        `SELECT memory_key FROM memory_nodes WHERE content = ? ORDER BY rowid ASC`, content
+        `SELECT memory_key FROM memory_nodes WHERE content = ? ORDER BY memory_key ASC`, content
       ).slice(0, limit).map((r) => r.memory_key)
       assert.deepEqual(first.map((n) => n.memory_key), expected)
     })
@@ -334,10 +339,10 @@ describe('searchMemory — desempate determinista (memory-search-order-tiebreak)
   it('el filtro type acota el conjunto y aplica el desempate dentro del tipo', () => {
     withSearchEngine((eng, dbPath) => {
       const content = 'zqtypefiltro contenido identico de longitud fija'
-      for (const k of ['tf-r1', 'tf-r2', 'tf-r3']) {
+      for (const k of ['tf-r3', 'tf-r2', 'tf-r1']) {
         eng.recordNode({ memory_key: k, type: 'rule', scope: 'project', content })
       }
-      for (const k of ['tf-d1', 'tf-d2']) {
+      for (const k of ['tf-d2', 'tf-d1']) {
         eng.recordNode({ memory_key: k, type: 'decision', scope: 'project', content })
       }
 
@@ -347,7 +352,7 @@ describe('searchMemory — desempate determinista (memory-search-order-tiebreak)
       assert.ok(rules.every((n) => n.type === 'rule'))
 
       const expectedRules = rawAt(dbPath,
-        `SELECT memory_key FROM memory_nodes WHERE content = ? AND type = 'rule' ORDER BY rowid ASC`, content
+        `SELECT memory_key FROM memory_nodes WHERE content = ? AND type = 'rule' ORDER BY memory_key ASC`, content
       ).slice(0, limit).map((r) => r.memory_key)
       assert.deepEqual(rules.map((n) => n.memory_key), expectedRules)
 

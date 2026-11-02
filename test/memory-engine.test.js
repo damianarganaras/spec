@@ -2969,15 +2969,25 @@ describe('searchMemory — recall task-aware (MEM-05)', () => {
         'las requeridas van primero en el orden declarado, aunque el bm25 las deje ultimas'
       )
       assert.equal(page.some((r) => r.memory_key === 'req-hit'), true)
+      assert.equal('required' in page.find((r) => r.memory_key === 'req-b'), false, 'searchMemory no expone required')
 
       const db = openDatabase(dbPath)
       try {
         const columns = db.prepare('PRAGMA table_info(memory_nodes)').all().map((c) => c.name)
         assert.equal(columns.includes('required'), false, 'required no es una columna del schema')
         assert.equal(columns.includes('pinned'), false, 'pinned no es una columna del schema')
+        const tables = db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND (name LIKE '%required%' OR name LIKE '%pinned%')")
+          .all()
+          .map((t) => t.name)
+        assert.deepEqual(tables, [], 'required/pinned no crean tablas')
       } finally {
         db.close()
       }
+
+      const readNode = eng.listNodes({}).find((n) => n.memory_key === 'req-b')
+      assert.equal('required' in readNode, false, 'la lectura del nodo no expone required')
+      assert.equal('pinned' in readNode, false, 'la lectura del nodo no expone pinned')
 
       const withoutTerms = eng.searchMemory({ query: 'como de la el', required: ['req-b'] })
       assert.deepEqual(withoutTerms.map((r) => r.memory_key), ['req-b'], 'sin terminos FTS devuelve solo la requerida')

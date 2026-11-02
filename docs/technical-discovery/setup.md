@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-11-02T12:11:50Z
-pluginVersion: 0.18.2
+generatedAt: 2026-11-02T18:45:50Z
+pluginVersion: 0.18.5
 skillVersion: '2.3'
 ---
 
@@ -15,7 +15,7 @@ skillVersion: '2.3'
 |---|---|---|
 | Node.js ≥ 24.0.0 | Obligatorio: el motor de memoria usa el módulo nativo `node:sqlite`. | `package.json` (`engines.node`), `README.md` |
 | Repomix | Opcional: se resuelve por `PATH` o vía `npx -y repomix@1.18.0`. | `src/cli/index.js`, pack |
-| Git | Necesario para el ciclo de changes, el workflow de publish, la exclusión local de `.ancleto/machine-env.md` y el `git status --short` que el intake del orquestador delega a `@technical-discovery`. Si falta, el CLI degrada con warning. | `.github/workflows/publish.yml`, `src/core/machine-env.js`, `agents/orchestrator.md` |
+| Git | Necesario para el ciclo de changes, el workflow de publish, la exclusión local de `.ancleto/machine-env.md` y el `git status --short` que el intake delega a `@technical-discovery`. Si falta, el CLI degrada con warning. | `.github/workflows/publish.yml`, `src/core/machine-env.js`, `agents/orchestrator.md` |
 
 ## Instalación y CLI
 
@@ -25,21 +25,22 @@ npm install -g @ancleto/spec     # instalación global del CLI
 ancleto init [--agent <host>] [--tier normal|minimo|gratis] [--lang es|en|pt|auto] [--exclude <globs>] [--profile general|test] [--with-azure] [--no-mcp]
 ancleto install [--project <dir>] [--global] [--no-mcp] [--with-engram] [--tier ...] [--agent ...] [--profile ...]
 ancleto update                    # re-instala la última versión sobre lo existente
-ancleto upgrade [--agent <nombre>] [--profile <perfil>]  # re-aplica templates (LOCKED) y assets respetando personalizaciones
+ancleto upgrade [--agent <nombre>] [--profile <perfil>]  # re-aplica templates (LOCKED) y assets
 ancleto export [--tar <file>]     # bundle portable + manifest.json sin rutas
 ancleto import <bundle> [--repair] | ancleto import --repair  # restaura regenerando el MCP local
 ancleto discovery --check         # estado del seed en JSON (READY/STALE/PARTIAL/MISSING) + config
 ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
-ancleto affected [--cwd <dir>] [--json] <archivo...>   # affected-set read-only (grafo de imports)
+ancleto affected [--cwd <dir>] [--json] <archivo...>   # affected-set read-only
 ancleto mcp                       # servidor MCP stdio de memoria propia
 ancleto memory context [--scope X] [--out <archivo>]
 ancleto memory list [--type X] [--scope X] [--all] [--json]
-ancleto memory doctor [--rebuild]   # cinco checks read-only + advisory de frescura del working-context
-ancleto memory export [--out <archivo>]        # nodos activos a JSON (stdout o archivo)
-ancleto memory import <archivo>                # upsert por memory_key, idempotente; refresca el working-context
-ancleto memory gc [--dry-run] [--days N]       # purga superseded con antigüedad > N días (default 30)
-ancleto memory snapshot --out <archivo.db> [--force] [--json]   # copia consistente con historial
-ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]   # supersede sources hacia el target
+ancleto memory doctor [--rebuild]   # cinco checks read-only + advisory del working-context
+ancleto memory export [--out <archivo>]
+ancleto memory import <archivo>
+ancleto memory gc [--dry-run] [--days N]
+ancleto memory snapshot --out <archivo.db> [--force] [--json]
+ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]
+ancleto memory consolidate [--dry-run] [--apply] [--json]   # duplicados exactos; dry-run default
 ancleto specs check [--change <name>] [--json]
 ancleto stats [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--json]
 ancleto stats failures [--all] [--limit N] [--since YYYY-MM-DD] [--session <id>] [--class <env|check|tool|unknown,...>] [--tool <t,...>] [--json]
@@ -51,148 +52,120 @@ Evidencia: `src/cli/index.js` (texto de `--help` incluido), `README.md`,
 `aspec/specs/memory-ops/spec.md`, `aspec/specs/session-failure-report/spec.md`.
 `install` sin `--project`/`--global` opera sobre el proyecto actual si hay `.ancletorc`;
 `--global` fuerza el alcance global. `init` configura el MCP del host por defecto; `--no-mcp`
-lo evita. `--agent` acepta 8 hosts (`opencode` default, `claude`, `vscode`, `antigravity`,
-`cursor`, `roo`, `copilot`, `commandcode`). `ancleto affected` es **read-only**: reporta el
-`affected-set` por stdout, los inconclusos por stderr y omite la línea de externos cuando el
-conteo es 0 (`externalCount` sigue en `--json`). `stats failures` también es **read-only** y
-solo funciona con la base de sesiones de opencode.
+lo evita. `--agent` acepta 8 hosts. `ancleto affected` es **read-only**; `stats failures`
+también y sólo funciona con la base de sesiones de opencode.
 
-**Contrato de escritura de memoria** (`MEM-03`, commit `90dba0d`): `recordRule` y
-`recordDecision` pasan por `recordNode`. Toda escritura cuya procedencia no sea `runtime`
-debe incluir en `content` un bloque `refs:` con al menos una ref válida; `decision` exige al
-menos `spec:` o `change:`, `rule` exige al menos `path:`, `spec:` o `change:`. Los items pueden
-ir **indentados o no**; el bloque termina en una línea en blanco o en la primera línea no
-indentada que no es item, y una línea no-item dentro del bloque es inválida. El bloque se
-valida **fail-closed** antes de abrir la transacción: refs rotas, ambiguas, un segundo bloque
-`refs:`, un `path:` absoluto o con `../`, o una credencial aparente rechazan la escritura. El
-MCP real escribe con `source: 'mcp:ancleto-memory'`; `cli:import` no pasa por `recordNode` y
-conserva LWW. Evidencia: `src/core/memory/engine.js`, `src/core/memory/mcp-server.js`.
-**`memory doctor`** audita en read-only cinco checks, incluido `Refs de nodos activos` (mismo
-parser y resolución que la escritura); `commit:`/`workitem:` no se resuelven y se cuentan
-aparte como no verificables. Evidencia: `src/core/memory/doctor.js`,
-`aspec/specs/memory-ops/spec.md`.
+**Versión del CLI**: el `ancleto` global del `PATH` en esta máquina es más viejo que el
+checkout y **no reconoce `memory consolidate`**; la versión `0.18.5` se invoca con
+`node src/cli/index.js`. Antes de concluir que una capacidad falta, verificar
+`ancleto --version` contra `package.json`.
 
-**Resolver de refs de recall (`MEM-04b`)**: `resolveNodeRefs({ content, projectRoot })` es
-una API read-only del engine, **no un subcomando**. Devuelve `{ refs, error, blocks, needsRoot }`
-y, por ref, `raw`, `kind`, `verifiable` y `ok`/`path`/`heading`/`reason`/`matches` según
-corresponda. `change:` devuelve el directorio repo-relativo; `spec:` devuelve el `spec.md` y el
-heading real; `path:` se normaliza (separadores `/`, sin `:línea`) antes de verificar existencia;
-`commit:`/`workitem:` quedan `verifiable: false`. Sin raíz, devuelve `needsRoot: true` y
-`reason: 'sin raíz'` por ref verificable. Evidencia: `src/core/memory/engine.js`,
-`aspec/changes/mem-04b-resolver-referencias-navegables/specs/memory-engine/spec.md`.
+**Contrato de escritura de memoria** (`MEM-03`, ampliado por MEM-04): `recordRule` y
+`recordDecision` pasan por `recordNode`. Toda escritura cuya procedencia no sea `runtime` debe
+incluir un bloque `refs:` con al menos una ref válida; `decision` exige al menos `spec:` o
+`change:`, `rule` exige al menos `path:`, `spec:` o `change:`. Los items pueden ir **indentados
+o no**; el bloque termina en una línea en blanco o en la primera línea no indentada que no es
+item. La validación es **fail-closed** antes de la transacción: refs rotas, ambiguas, un segundo
+bloque, un `path:` absoluto o con `../`, o una credencial aparente rechazan la escritura. El MCP
+escribe con `source: 'mcp:ancleto-memory'`; `cli:import` no pasa por `recordNode` y conserva LWW.
+Evidencia: `src/core/memory/engine.js`, `src/core/memory/mcp-server.js`.
 
-**Ops nuevas de memoria** (`PR-1`, archivado `2026-10-28-reingenieria-memoria-first`):
-`memory snapshot` exige `--out` y rechaza sobrescribir sin `--force`; produce una copia con
-historial (`superseded` + `superseded_by`) y no modifica la fuente. `memory merge` requiere
-`--target` y `--sources` (lista separada por comas); valida target activo, sources activas,
-sin repetidas y con el mismo `type`, y aplica todo en una única transacción (`--dry-run` no
-escribe la base ni el working-context). Evidencia: `src/cli/index.js`
-(`memorySnapshot`, `memoryMerge`), `src/core/memory/snapshot.js`,
-`src/core/memory/engine.js` (`validateMerge`, `merge`).
+**Resolver de refs (`MEM-04b`, publicado en `0.18.3`)**: `resolveNodeRefs({ content,
+projectRoot })` es una API read-only del engine, **no un subcomando**. Devuelve `{ refs, error,
+blocks, needsRoot }`; cada ref trae `raw`, `kind`, `verifiable` y
+`ok`/`path`/`heading`/`reason`/`matches`. `change:` devuelve el directorio repo-relativo;
+`spec:` devuelve el `spec.md` y el heading real; `path:` se normaliza antes de verificar
+existencia; `commit:`/`workitem:` quedan `verifiable: false`. Evidencia:
+`src/core/memory/engine.js`,
+`aspec/changes/archive/2026-11-02-mem-04b-resolver-referencias-navegables/`.
+
+**Ops de memoria**: `memory snapshot` exige `--out` y rechaza sobrescribir sin `--force`;
+produce una copia con historial y no modifica la fuente. `memory merge` valida target activo,
+sources activas, sin repetidas y con el mismo `type`, y aplica todo en una transacción
+(`--dry-run` no escribe). **`memory consolidate`** es dry-run por defecto; agrupa duplicados
+exactos por `type` + `content` normalizado (sin `refs:`), elige un canónico determinístico y
+con `--apply` supersede los no canónicos en una única transacción. Los near-dups (Jaccard
+≥ 0,60, mismo `type` y `scope`) **sólo se reportan**; `--apply` no los toca. Revertir requiere
+un snapshot previo. Evidencia: `src/cli/index.js` (`memorySnapshot`, `memoryMerge`,
+`memoryConsolidate`), `src/core/memory/snapshot.js`, `src/core/memory/engine.js`
+(`validateMerge`, `merge`, `consolidate`).
+
+**Estado observado de la memoria** (local, read-only): 112 nodos activos, 292 refs
+verificadas, 0 no resueltas; `consolidate` reporta 0 grupos exactos y 0 near-dups. El bloque
+proactivo omite **18 reglas** de scope `project`; `.ancleto/working-context.md` está
+`desactualizado` y se regenera con `ancleto memory context --out .ancleto/working-context.md`.
 
 ## Configuración persistida
 
 - **`.ancletorc`** (raíz): manifiesto de instalación (`schemaVersion`, `version`,
-  `installedAt`, `installedPaths`) + `discovery` (`outputDir`, `exclude`), `agent`,
-  `language`, `profile` (`general`|`test`), `azure.enabled`, `gratisModel`. `installedPaths`
-  guarda la **unión de destinos realmente escritos** por host (`templates`, `agents`,
-  `commands`, `skills`); para antigravity `commands` queda vacío (los commands viven como
-  skills). **No editar a mano durante el seed**; se consume resuelto desde
-  `ancleto discovery --check`. En este checkout `.ancletorc` **existe** (gitignored, no
-  versionado); el contrato de contenido se describe por código, no por lectura directa.
-- **`opencode.json`** (raíz): configuración del host opencode versionada en el repo. Fija
-  `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los **10 subagentes**
-  (`coder`, `spec-writer`, `tester`, `reviewer`, `documenter`, `memory-keeper`,
-  `context-resolver`, `technical-discovery`, `technical-seed-writer`, `orchestrator`). El
-  orquestador se incorporó en `0.18.1`. Es un override local del host: **no** forma parte del
-  paquete publicado (`package.json` → `files` lista `agents`, `commands`, `skills`, `templates`,
-  `profiles`, `src`). Evidencia: `opencode.json`, `package.json`, `CHANGELOG.md` (`0.18.1`).
-- **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/reviewer ampliados
-  (planning/generation/healing/coverage), comandos `cleto-test-*`, estructura `testspec/` y
-  bloque LOCKED de convenciones Playwright; instalable con cualquier host.
+  `installedAt`, `installedPaths`) + `discovery` (`outputDir`, `exclude`), `agent`, `language`,
+  `profile`, `azure.enabled`, `gratisModel`. `installedPaths` guarda la **unión de destinos
+  realmente escritos**; para antigravity `commands` queda vacío. **No editar a mano durante el
+  seed**; se consume resuelto desde `ancleto discovery --check`. En este checkout existe
+  (gitignored).
+- **`opencode.json`** (raíz): fija `agent.model = commandcode/deepseek/deepseek-v4.1-flash`
+  para los 10 subagentes. Es override del host y **no** forma parte del paquete publicado
+  (`package.json` → `files` lista `agents`, `commands`, `skills`, `templates`, `profiles`,
+  `src`). Evidencia: `opencode.json`, `package.json`.
+- **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/reviewer ampliados,
+  comandos `cleto-test-*`, estructura `testspec/` y bloque LOCKED de convenciones Playwright.
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
-  En este checkout `.opencode/.ancleto-tier` contiene **`minimo`**, por lo que el tier resuelto
-  es `minimo` (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, **sin token budget**; el
-  pack de esta corrida quedó en **722 archivos / ~17.790 tokens**). El tier decide modelos de
-  los agents y la agresividad del pack. Evidencia: `src/core/repomix-tier.js`,
-  `.opencode/.ancleto-tier`, `ancleto discovery --check`.
+  Aquí `.opencode/.ancleto-tier` contiene **`minimo`** (`--compress`, ignora `test/**`,
+  `docs/**`, `**/*.md`, sin token budget; el pack de esta corrida: **728 archivos / ~18.387
+  tokens**). Evidencia: `src/core/repomix-tier.js`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`,
-  `.commandcode/*`). Los agents de claude/vscode/antigravity/copilot/commandcode se adaptan de
-  frontmatter. Detalle: `units/cli-install.md`.
-- **MCP del host** (excepciones de host-MCP): antigravity en `.agents/mcp_config.json`,
-  commandcode en `.mcp.json` y copilot en `copilot-mcp.json`; el resto en
-  `.opencode/opencode.json` (ver `integrations.md`).
+  `.commandcode/*`). Los agents de claude/vscode/antigravity/copilot/commandcode se adaptan.
+- **MCP del host**: antigravity en `.agents/mcp_config.json`, commandcode en `.mcp.json`,
+  copilot en `copilot-mcp.json`; el resto en `.opencode/opencode.json`.
 - **`AGENTS.md` y bloques `LOCKED`**: `install`/`update`/`upgrade` re-aplican el interior de
-  los bloques `<!-- LOCKED: name -->` y preservan el resto (EXTENSIBLE), tras reconciliar
-  superficies planas legadas. Bloques canónicos actuales: **`validation-commands`**,
-  `memory-boundary`, `artifacts-language` y `seed-freshness`, más `test-block`. Evidencia:
-  `src/cli/index.js` (`mergeTemplateInto`, `mergeLocked`, `reconcileLegacyBlocks`),
-  `templates/AGENTS.md`, `AGENTS.md`.
-- **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`) y **entorno de máquina**
-  (`machine-env.md`); ignorado por git en este repo. `machine-env.md` no se versiona y no se
-  edita a mano. `.ancleto/memory.db` es la fuente que consumen `memory snapshot` y
-  `memory merge`; el snapshot es la copia que se usa para rollback/auditoría.
-- **`machine-env.md`**: artefacto derivado y local. Se genera/regenera en `ancleto init`,
-  `ancleto install --project` y `ancleto upgrade`; si los hechos no cambian, no se reescribe
-  (se ignora `generated_at` en la comparación). La exclusión se escribe en
-  `git rev-parse --git-path info/exclude`, **nunca** en `.gitignore`, con el patrón
-  repo-root-relative `<prefix>.ancleto/machine-env.md`. `ancleto check` advierte (sin cambiar
-  el exit code) si el artefacto quedó trackeado. Evidencia: `src/core/machine-env.js`,
-  `aspec/specs/machine-environment/spec.md`.
+  `<!-- LOCKED: name -->` y preservan el resto, tras reconciliar superficies planas legadas.
+  Bloques actuales: `validation-commands`, `memory-boundary`, `artifacts-language`,
+  `seed-freshness` y `test-block`. Evidencia: `src/cli/index.js` (`mergeTemplateInto`,
+  `mergeLocked`, `reconcileLegacyBlocks`), `templates/AGENTS.md`, `AGENTS.md`.
+- **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`) y entorno de máquina
+  (`machine-env.md`); gitignored. `.ancleto/memory.db` es la fuente de `memory snapshot`,
+  `merge` y `consolidate`.
+- **`machine-env.md`**: artefacto derivado y local. Se regenera en `ancleto init`,
+  `ancleto install --project` y `ancleto upgrade`; si los hechos no cambian, no se reescribe.
+  La exclusión va a `git rev-parse --git-path info/exclude`, **nunca** a `.gitignore`, con el
+  patrón repo-root-relative `<prefix>.ancleto/machine-env.md`. `ancleto check` advierte si quedó
+  trackeado.
 
 ## Entorno de máquina (`.ancleto/machine-env.md`)
 
-Contenido mínimo (spec `machine-environment`, 8 requirements / 53 scenarios):
-
-- plataforma (`win32`/`linux`/`darwin`/otra), release y arquitectura;
-- shell detectado y `shell_source` (`MSYSTEM`, `CYGWIN`, `PSModulePath`, `PROMPT`, `SHELL`,
-  `WSL_DISTRO_NAME`, `WSL_INTEROP` o `unknown`), sin ejecutar ningún shell para probarlo;
-- EOL esperado (`lf`/`crlf`) y `eol_source` (`gitattributes`, `core.eol`, `core.autocrlf` o
-  `platform-default`);
-- disponibilidad de `rg`, `node`, `npm`, `git` y `python` —**resoluble e invocable**, no solo
-  presente en `PATH`— (sin versiones) y fallback por herramienta ausente;
-- fecha de generación, versión de ancleo y un `## Hint` con la regla de precedencia.
+Contenido mínimo (spec `machine-environment`): plataforma, release y arquitectura; shell y
+`shell_source` (`MSYSTEM`, `CYGWIN`, `PSModulePath`, `PROMPT`, `SHELL`, `WSL_DISTRO_NAME`,
+`WSL_INTEROP` o `unknown`); EOL y `eol_source` (`gitattributes`, `core.eol`, `core.autocrlf` o
+`platform-default`); disponibilidad de `rg`, `node`, `npm`, `git` y `python` —resoluble e
+invocable—; fecha, versión de ancleo y un `## Hint` de precedencia.
 
 Precedencia del shell en Windows: MSYS/Cygwin → `bash`; `PSModulePath` con marcador de
 PowerShell 7 → `PowerShell 7`; `PROMPT` → `cmd`; `SHELL` POSIX + marcador legacy → `unknown`;
 `SHELL` POSIX → ese shell; solo marcador legacy → `Windows PowerShell 5.1`; si no, `unknown`.
-`ComSpec` **no** se usa como evidencia. No se renderizan secretos, tokens, valores de `PATH`
-ni versiones de herramientas. Los 10 agents contienen la instrucción canónica de leer el
-archivo antes de ejecutar comandos; `agents/orchestrator.md` agrega `## Machine Environment`,
-lo incluye verbatim en delegaciones con `bash: true` y exime esa lectura del techo de 3
-archivos. Evidencia: `src/core/machine-env.js`, `agents/*.md`,
-`aspec/specs/machine-environment/spec.md`.
+`ComSpec` no se usa. No se renderizan secretos, tokens, valores de `PATH` ni versiones.
 
-**Sonda de invocabilidad**: una herramienta se declara `disponible` solo si el candidato
-resuelto en `PATH` **se ejecuta con éxito** con la bandera `--version`; estar en `PATH` no
-basta. Cada intento está acotado a **2 s** (`TOOL_PROBE_TIMEOUT_MS`) y la corrida a un
-presupuesto acumulado de **10 s** (`TOOL_PROBE_BUDGET_MS`); las invocaciones de `git` usadas
-para el EOL están acotadas a **5 s** (`GIT_TIMEOUT_MS`). En `win32` los shims `.cmd`/`.bat` se
-sondean por `process.env.ComSpec` (`/d /s /c` + `windowsVerbatimArguments`); la guarda `EINVAL`
-de Node (CVE-2024-27980) es **inconclusa**, nunca `bloqueado`, y un candidato que se abandona
-por presupuesto agotado también. Un fallo real se publica como sufijo aditivo
-`- <tool>: no disponible — fallback: <X> — bloqueado: <fallo saneado>`, con el texto saneado
-(sin ANSI/OSC ni caracteres de control, espacios colapsados, tope de 200 caracteres); un veredicto
-inconcluso no lleva sufijo. La versión observada nunca se renderiza. Evidencia:
-`src/core/machine-env.js`, `aspec/specs/machine-environment/spec.md`.
+**Sonda de invocabilidad**: una herramienta se declara `disponible` sólo si el candidato
+resuelto en `PATH` **se ejecuta con éxito** con `--version`. Cada intento se acota a **2 s**
+(`TOOL_PROBE_TIMEOUT_MS`) y la corrida a **10 s** (`TOOL_PROBE_BUDGET_MS`); las llamadas a
+`git` para EOL se acotan a **5 s** (`GIT_TIMEOUT_MS`). En `win32` los shims `.cmd`/`.bat` se
+sondean por `process.env.ComSpec`; la guarda `EINVAL` de Node es **inconclusa**, nunca
+`bloqueado`. Un fallo real se publica con sufijo saneado (sin ANSI/OSC, espacios colapsados,
+tope de 200 caracteres); un veredicto inconcluso no lleva sufijo.
 
-**Estado en este checkout**: el artefacto **existe** (generado el 2026-11-01): `win32` /
+**Estado en este checkout**: el artefacto existe (generado el 2026-11-01): `win32` /
 `10.0.26200` / `x64`, shell `Windows PowerShell 5.1` (`shell_source: PSModulePath`), EOL `lf`
 (`eol_source: gitattributes`), `rg` **no disponible** (fallback: `Select-String`),
-`node`/`npm`/`git`/`python` **disponibles** —resolubles **e invocables** según la sonda; el
-artefacto declara disponibilidad, no versión—, `ancleto: 0.18.0`. La exclusión local está
-escrita en `info/exclude`. Evidencia: `.ancleto/machine-env.md`.
+`node`/`npm`/`git`/`python` disponibles, `ancleto: 0.18.0`. La exclusión local está en
+`info/exclude`. Evidencia: `.ancleto/machine-env.md`.
 
 ## Permisos de shell por agente
-
-El bloque `tools`/`permission` de cada definición de agente es la frontera de privilegio:
 
 | Agente | Shell |
 |---|---|
 | `@orchestrator`, `@reviewer`, `@spec-writer`, `@memory-keeper` | `bash: false` — no ejecutan comandos. |
 | `@coder`, `@tester`, `@documenter`, `@context-resolver`, `@technical-discovery`, `@technical-seed-writer` | `bash: true`. |
-| `@technical-discovery` | `permission.bash` con `'*': deny` y **exactamente dos literales permitidos**: `'ancleto discovery --check'` y `'git status --short'`. El segundo existe para que el intake de sesión del orquestador obtenga el estado del árbol sin que el orquestador tenga shell. |
+| `@technical-discovery` | `permission.bash` con `'*': deny` y **exactamente dos literales**: `'ancleto discovery --check'` y `'git status --short'`. |
 
 Evidencia: `agents/*.md`, `agents/technical-discovery.md`, `aspec/specs/prompt-contracts/spec.md`.
 
@@ -201,17 +174,16 @@ Evidencia: `agents/*.md`, `agents/technical-discovery.md`, `aspec/specs/prompt-c
 | Tier | Modelos y empaquetado |
 |---|---|
 | `normal` | Modelos balanceados (`qwen3.7-plus`, `minimax-m3`, etc.), pack sin comprimir ni ignores extra, sin token budget. |
-| `minimo` | Un único modelo `opencode-go/deepseek-v4.1-flash` para los 10 agents; pack comprimido (`--compress`), excluye `test/**`, `docs/**`, `**/*.md` y **no fija token budget**. **Tier resuelto en este checkout.** |
-| `gratis` | Muse Spark 1.3 Free si está habilitado en la cuenta; fallback `opencode/big-pickle`; mismo empaquetado que `minimo` + token budget estricto (50k). |
+| `minimo` | Un único modelo `opencode-go/deepseek-v4.1-flash` para los 10 agents; pack comprimido (`--compress`), excluye `test/**`, `docs/**`, `**/*.md`, sin token budget. **Tier resuelto aquí.** |
+| `gratis` | Muse Spark 1.3 Free si está habilitado; fallback `opencode/big-pickle`; mismo empaquetado que `minimo` + token budget estricto (50k). |
 
 Evidencia: `src/core/tier-models.js`, `src/core/repomix-tier.js` (`TIER_PACK_CONFIG`),
-`README.md`.
-Nota: `readProjectTier` cae en `gratis` **por default** cuando no existe `.ancleto-tier`; aquí
-existe `.opencode/.ancleto-tier` con `minimo`.
+`README.md`. `readProjectTier` cae en `gratis` por default cuando no existe `.ancleto-tier`;
+aquí existe `.opencode/.ancleto-tier` con `minimo`.
 
 ## Variables de entorno
 
-Solo nombres; **valores omitidos** (ver riesgo de secretos en `decisions.md`):
+Sólo nombres; **valores omitidos** (ver riesgo de secretos en `decisions.md`):
 
 - `ANCLETO_PROJECTS_FILE` — ruta alternativa del registro global de proyectos.
 - `ANCLETO_MUSE_SPARK` — `1`/`0` fuerza/niega Muse Spark en tier gratis.
@@ -219,7 +191,7 @@ Solo nombres; **valores omitidos** (ver riesgo de secretos en `decisions.md`):
 - `XDG_CONFIG_HOME` — base del registro global (`~/.config/ancleto/`, `~/.config/opencode/`).
 - `NPM_TOKEN` — secreto del workflow de publish (GitHub Actions).
 - Azure DevOps (opcional): `AZURE_DEVOPS_ORG_URL`, `AZURE_DEVOPS_PAT`.
-- Detección de shell/EOL (solo se leen, nunca se renderizan valores): `MSYSTEM`, `CYGWIN`,
+- Detección de shell/EOL (sólo se leen, nunca se renderizan valores): `MSYSTEM`, `CYGWIN`,
   `PSModulePath`, `PROMPT`, `SHELL`, `WSL_DISTRO_NAME`, `WSL_INTEROP`, `PATH`, `PATHEXT`.
 
 Evidencia: `README.md`, `src/cli/index.js`, `src/core/machine-env.js`,
@@ -227,78 +199,58 @@ Evidencia: `README.md`, `src/cli/index.js`, `src/core/machine-env.js`,
 
 ## Tests y validaciones
 
-El contrato es **declarativo** (change archivado `2026-10-14-contrato-validaciones`):
+El contrato es **declarativo**:
 
-- **Fuente única**: el proyecto declara sus comandos en `PRODUCT.md` → `## Project Commands`.
-  La política vive en `AGENTS.md` / `templates/AGENTS.md` → bloque `LOCKED: validation-commands`
-  y **prohíbe** inventar un runner/linter/formatter/typechecker. Si un comando no está
-  declarado, la validación se **saltea y se registra la omisión**.
+- **Fuente única**: `PRODUCT.md` → `## Project Commands`. La política vive en `AGENTS.md` /
+  `templates/AGENTS.md` → bloque `LOCKED: validation-commands` y **prohíbe** inventar un
+  runner/linter/formatter/typechecker. Si un comando no está declarado, la validación se
+  **saltea y se registra la omisión**.
 - **Este repo declara**: **Lint** `npm run lint` (`eslint src/ test/`) y **Tests** `npm test`
   (`node --test "test/*.test.js"`). Evidencia: `package.json`.
-- **Format check**: `not-configured` — el repo no declara formatter (no es un fallo).
-- **Typecheck**: no aplica — paquete JavaScript sin `tsconfig.json` (pesa que `AGENTS.md`
-  mantiene la regla genérica de template "TypeScript strict" en "Guardrails & Conventions").
-- **Tests acotados**: para validar un subconjunto, pasar **rutas explícitas** al archivo
-  relevante; **nunca** `node --test` sin acotar (descubre archivos fuera de la suite declarada).
+- **Format check**: `not-configured` — no hay formatter declarado.
+- **Typecheck**: no aplica — JavaScript sin `tsconfig.json` (aunque `AGENTS.md` conserva la
+  regla genérica "TypeScript strict" del template).
+- **Tests acotados**: pasar **rutas explícitas**; **nunca** `node --test` sin acotar.
 - **Suite**: 15 archivos (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`,
   `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`,
-  `memory-engine`, **`memory-fixtures`**, **`memory-pr1-contract`**, `stats-failures`,
-  `tier-models`, `working-context`) y **tres fixtures** en `test/fixtures/memory/`:
-  `seed.json` (formato `exportActive()`), `golden.json` (M01–M10) y
-  `golden-refs-seed.json` (tres nodos con `refs:` para M04/M05/M06), más el root versionado
-  `refs-root/`. `memory-fixtures` cubre el check `Refs de nodos activos`, el resolver y el
-  modo `refs` del harness; `cli` verifica que la ayuda enumere el check. `content-guards`
-  asierta **behavior** (keywords y salvaguardas), no la redacción literal. El change MEM-04b
-  declara en `tasks.md` la suite en **727 tests (723 ok, 4 skip preexistentes)**; esta
-  regeneración del seed es state-only y **no** re-ejecutó la suite. Evidencia: `test/`,
-  `aspec/changes/mem-04b-resolver-referencias-navegables/tasks.md`,
-  `aspec/specs/memory-ops/spec.md`.
-- **CI**: `.github/workflows/publish.yml` corre `npm ci` + `npm run lint` + `node --test
-  test/*.test.js` y publica a npm al pushear un tag `v*` (o `workflow_dispatch`), con canary
-  no bloqueante y creación del Release. El lint bloquea el publish. Evidencia:
-  `.github/workflows/publish.yml`.
+  `memory-engine`, `memory-fixtures`, `memory-pr1-contract`, `stats-failures`, `tier-models`,
+  `working-context`) y tres fixtures en `test/fixtures/memory/`: `seed.json`, `golden.json` y
+  `golden-refs-seed.json`, más `refs-root/`. Esta regeneración es **state-only**: no re-ejecutó
+  la suite. Evidencia: `test/`.
+- **CI**: `.github/workflows/publish.yml` corre `npm ci` + `npm run lint` +
+  `node --test test/*.test.js` y publica al pushear un tag `v*` (o `workflow_dispatch`), con
+  canary no bloqueante y creación del Release. El lint bloquea el publish.
 
 ## Cambiar el modelo de los agentes
 
 `AGENTS.md` → `## Cambiar el modelo de los agentes` fija el procedimiento. El `model:` existe en
-**tres superficies** y hay que mirarlas todas antes de tocarlo:
+**tres superficies**:
 
-- `agents/*.md` — fuente canónica y **publicada en el paquete**; no es donde se cambia el modelo
-  de una máquina concreta.
+- `agents/*.md` — fuente canónica y **publicada**; no es donde se cambia el modelo de una
+  máquina concreta.
 - `.opencode/agents/*.md` — mirror que regenera `ancleto upgrade`; **no se edita a mano**.
-- `~/.config/opencode/agents/*.md` — instalación **global** del CLI. En este setup es la copia
-  que el runtime carga: repuntar sólo el mirror del proyecto no cambia el modelo de los
-  subagentes.
+- `~/.config/opencode/agents/*.md` — instalación **global**; en este setup es la copia que carga
+  el runtime.
 
-`opencode.json` → `agent.<nombre>.model` sí aplica al agente **primario** (así el orquestador
-puede correr en un modelo distinto del que dice su mirror), pero **no** alcanza a los
-subagentes. Un tier aplicado por `ancleto install` / `ancleto update` reescribe las líneas
-`model:`; `ancleto upgrade` **no** aplica tier.
-
-Verificación antes y después, en las tres superficies:
+`opencode.json` → `agent.<nombre>.model` aplica al agente **primario**, pero **no** a los
+subagentes. `ancleto install`/`update` reescriben las líneas `model:`; `ancleto upgrade` **no**
+aplica tier. Verificación en las tres superficies:
 
 ```powershell
 Select-String -Path <directorio>/*.md -Pattern '^model:'
 ```
 
 `ancleto check` reporta `frontmatter diverge del adaptador` cuando un mirror se apartó de su
-fuente: es la señal de que alguien editó a mano y falta regenerar con `ancleto upgrade`. Si el
-modelo está bien en las tres superficies y el proveedor responde `Insufficient account funds`,
-el problema es la cuenta, no la configuración. **En este checkout** `opencode.json` ya incluye
-al orquestador (commiteado en `0.18.1`) y no hay probes locales pendientes en ese archivo; el
-único cambio de trabajo abierto es `mem-04b` (engine, tests y fixtures). Evidencia: `AGENTS.md`,
-`agents/*.md`, `opencode.json`, `src/cli/index.js` (`applyTier`, `checkAgentsFrontmatter`).
+fuente. Si el modelo está bien y el proveedor responde `Insufficient account funds`, el problema
+es la cuenta. Evidencia: `AGENTS.md`, `agents/*.md`, `opencode.json`, `src/cli/index.js`.
 
 ## Convenciones de trabajo
 
-- Conventional Commits (`feat(scope):`, `fix(scope):`, ...) y **no** commitear a `main`/`master`
-  (declarado en `AGENTS.md`; no se verificó protección real en el remoto). Evidencia:
-  `AGENTS.md`.
+- Conventional Commits y **no** commitear a `main`/`master` (declarado en `AGENTS.md`; no se
+  verificó protección real en el remoto).
 - Rama de trabajo observada: `development`; el publish se dispara por tag y crea el Release.
-  Evidencia: `git status --short --branch`, `.github/workflows/publish.yml`.
-- Idioma de artifacts: español (`language: "es"` en el repo dogfooded); keywords y nombres de
-  archivo siempre en inglés literal (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`).
-  Única fuente canónica del texto: `LOCKED: artifacts-language` en `AGENTS.md`; las skills y
-  agentes la referencian. Evidencia: `AGENTS.md`, `templates/AGENTS.md`.
+- Idioma de artifacts: español (`language: "es"` en este repo); keywords y nombres de archivo
+  siempre en inglés literal (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`). Fuente:
+  `LOCKED: artifacts-language`.
 - Los mirrors `.opencode/agents/*.md` y `.opencode/commands/*.md` se **regeneran** con
-  `ancleto upgrade`; nunca se editan a mano. Evidencia: `agents/orchestrator.md`.
+  `ancleto upgrade`; nunca se editan a mano.

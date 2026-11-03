@@ -432,7 +432,7 @@ Funciona en tres piezas que comparten el mismo archivo:
 
 | Herramienta | Función |
 |---|---|
-| `searchMemory` | Recupera decisiones y reglas previas. Búsqueda léxica (FTS5/BM25) con fallback tolerante: intenta términos exactos y, si no hay coincidencia, reintenta por prefijos, así el lenguaje natural también encuentra. |
+| `searchMemory` | Recupera decisiones y reglas previas. Búsqueda léxica (FTS5/BM25) con fallback tolerante: intenta términos exactos y, si no hay coincidencia, reintenta por prefijos, así el lenguaje natural también encuentra. El modo por defecto devuelve **preview** (prefijo literal de hasta 240 caracteres por nodo, `limit` 5 y `content_truncated`); `expand: true` devuelve el payload completo, `keys` expande selectivo y falla si la clave pedida no está en la página, y `required` es una entrada de la llamada que falla si excede el límite o el presupuesto. Contrato completo en el bloque `LOCKED: memory-protocol` de `AGENTS.md`. |
 | `recordRule` | Guarda una regla o restricción permanente. |
 | `recordDecision` | Registra el *por qué* de una decisión. |
 

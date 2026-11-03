@@ -27,10 +27,7 @@
 - **Repository App ID**: `ancleto.spec`
 - **Scope**: `project:spec`
 
-> Memory for this repository is persisted locally in `.ancleto/memory.db` (SQLite + FTS5).
-> Agents store architectural decisions and rules here automatically. It never leaves the repo.
-> Consult via the `searchMemory` tool when modifying prior decisions, after a
-> `<ContextOverflowWarning>`, or before major refactors / contract changes.
+> Contrato de uso y recuperación: ver el bloque `LOCKED: memory-protocol` en `AGENTS.md`. La memoria vive en `.ancleto/memory.db` (SQLite + FTS5) y no sale del repositorio.
 
 ---
 
@@ -92,7 +89,7 @@ Guardrails del repositorio (fuente: `AGENTS.md`):
 - **Commits**: Conventional Commits (`feat(scope):`, `fix(scope):`, `chore(scope):`). No commitear directo a ramas protegidas (`main`, `master`).
 - **Seguridad**: toda operación destructiva (borrado de BD, archivos clave, deploys) requiere confirmación explícita del usuario.
 - **Validaciones antes de cerrar una tarea (declarativas)**: se corre solo lo que este proyecto declara en `## Project Commands` (fuente única); si un comando no está declarado, se saltea y se registra la omisión, nunca se inventa (ver el bloque LOCKED `validation-commands` de `AGENTS.md`).
-- **Protocolo de memoria reactiva**: invocar `searchMemory` antes de modificar/revertir una decisión de diseño previa, ante un `<ContextOverflowWarning>`, o antes de refactorizaciones mayores y cambios de contratos de API/persistencia.
+- **Protocolo de memoria reactiva**: ver el bloque `LOCKED: memory-protocol` de `AGENTS.md`.
 - **Frontera de memoria**: la memoria **del repo** (`.ancleto/memory.db`) guarda reglas y decisiones del proyecto y se comparte; la **del agente** (p. ej. engram) es de sesión. Una entrada vive en una sola.
 
 **Take special care when modifying:**

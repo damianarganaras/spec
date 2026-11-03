@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-11-03T10:45:00Z
-pluginVersion: 0.18.6
+generatedAt: 2026-11-03T13:54:02Z
+pluginVersion: 0.18.7
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación de `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.6`. La `0.18.6` agrega MEM-05 (recall task-aware) y el protocolo canónico de memoria; `0.18.5` publicó `memory consolidate`; `0.18.4` el ranking/omisiones; `0.18.3` MEM-04b. `git describe --tags` = `v0.18.5-14-g95b2599` (0.18.6 sin tag al momento del relevamiento). | `.github/workflows/publish.yml`, `package.json`, `git log`, `git tag`, `CHANGELOG.md` |
+| **npm registry** | Publicación de `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.7`. `0.18.7` publica el protocolo canónico de memoria, la reconciliación gateada de texto plano legado y `memory gc` por `superseded_at`; `0.18.6` publicó MEM-05 (recall task-aware); `0.18.5` `memory consolidate`; `0.18.4` el ranking/omisiones; `0.18.3` MEM-04b. El tag `v0.18.7` existe; `git describe --tags` desde `development` da `v0.18.5-19-gbd903d2` porque el tag de release vive en `main`, que no es ancestro de `development`. | `.github/workflows/publish.yml`, `package.json`, `git log`, `git tag`, `CHANGELOG.md` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **sólo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Usa `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -85,6 +85,9 @@ Las operaciones de memoria son **locales y sincrónicas**:
   `node:fs`. No invoca herramientas externas.
 - `memory merge` y `memory consolidate --apply` usan el motor transaccional. No escriben
   archivos; el CLI refresca el working-context derivado.
+- `memory curate` usa un engine read-only (`readonly: true`, `migrate: false`): compone
+  `resolveNodeRefs` y `consolidate({ dryRun: true, includeNearDuplicates: false })` y sólo
+  reporta. No escribe la base ni artefactos derivados.
 - `memory gc` usa el motor transaccional con un cutoff calculado localmente; `VACUUM`/`REINDEX`
   son best-effort y no salen del proceso.
 - `memory doctor` usa `PRAGMA quick_check`, la tabla sombra `memory_fts_docsize` y, en
@@ -98,7 +101,7 @@ Las operaciones de memoria son **locales y sincrónicas**:
 - `memory consolidate` agrupa y compara contenido localmente; los near-dups se calculan con
   Jaccard sobre tokens, sin servicio externo.
 
-Evidencia: `src/core/memory/{snapshot,doctor,engine}.js`.
+Evidencia: `src/core/memory/{snapshot,doctor,engine,curation}.js`.
 
 ## MCP (Model Context Protocol)
 
@@ -119,10 +122,11 @@ La procedencia de escritura se fija en `createMemoryServer`:
 `cli:import` **no** usa esa ruta: `importNodes` queda fuera de `recordNode` y conserva LWW sin
 validar refs.
 
-`memory doctor` emite además un **chequeo de staleness advisory** del working-context
-(`Working-context: <ok|ausente|desactualizado>`). Es read-only y no es un MCP. En el estado
-actual reporta `desactualizado`. Evidencia: `src/core/memory/working-context.js`,
-`src/cli/index.js`, `aspec/specs/memory-engine/spec.md`.
+`memory curate` **no** es una tool MCP ni un sexto check de `doctor`: es un subcomando CLI que
+abre la misma base en modo read-only. `memory doctor` emite además un **chequeo de staleness
+advisory** del working-context (`Working-context: <ok|ausente|desactualizado>`). Es read-only y
+no es un MCP. En el estado actual reporta `desactualizado`. Evidencia:
+`src/core/memory/working-context.js`, `src/cli/index.js`, `aspec/specs/memory-engine/spec.md`.
 
 ## Observabilidad / telemetría
 
@@ -130,7 +134,8 @@ actual reporta `desactualizado`. Evidencia: `src/core/memory/working-context.js`
 |---|---|---|
 | **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Sólo opencode. Es la fuente de la compuerta de medición de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
 | **`ancleto stats failures`** | Reporte read-only de tool parts fallidos de opencode: clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y enmascara secretos/rutas. No imprime `output` ni `state.error`. | `src/cli/index.js`, `aspec/specs/session-failure-report/spec.md` |
-| **`memory doctor`** | Cinco checks read-only; en la corrida local: 228 filas indexadas (228 nodos totales), **125 activos**, **344 refs verificadas, 0 no resueltas**, WAL presente. | `src/cli/index.js`, `src/core/memory/doctor.js` |
+| **`memory doctor`** | Cinco checks read-only; en la corrida local: 232 filas FTS indexadas (232 nodos totales), **129 activos**, **360 refs verificadas, 0 no resueltas**, WAL presente. | `src/cli/index.js`, `src/core/memory/doctor.js` |
+| **`memory curate`** | Reporte read-only determinístico: refs rotas, refs no verificables y duplicados exactos; advisory con `--strict` opt-in. En la corrida local: `status: ok` con 0/0/0. | `src/cli/index.js`, `src/core/memory/curation.js` |
 | **Working-context advisory** | `memory doctor` expone `Working-context: <estado>` tras los checks. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
 
 ## Azure DevOps (opcional, apagado)

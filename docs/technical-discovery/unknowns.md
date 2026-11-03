@@ -2,45 +2,56 @@
 node: unknowns
 kind: unknowns
 read_when: "límites de evidencia: qué no se pudo verificar en este seed"
-generatedAt: 2026-11-03T10:45:00Z
-pluginVersion: 0.18.6
+generatedAt: 2026-11-03T13:54:02Z
+pluginVersion: 0.18.7
 skillVersion: '2.3'
 ---
 
 # Límites de evidencia
 
 - **Pack comprimido (tree-sitter).** El pack usado contiene firmas de funciones, no cuerpos ni
-  valores de constantes (740 fuentes, ~19.907 tokens, tier `minimo`). Las descripciones de flujo
+  valores de constantes (745 fuentes, ~20.536 tokens, tier `minimo`). Las descripciones de flujo
   de `src/**` provienen de firmas + `README.md` + `CHANGELOG.md` + specs de `aspec/` + lectura
   puntual de los archivos citados (en particular
-  `src/core/memory/{engine,database,doctor,working-context}.js`, `src/cli/index.js`,
-  `agents/{orchestrator,memory-keeper}.md` y las propuestas archivadas de `0.18.4`–`0.18.6`).
-  Confirmar cualquier detalle fino en el archivo citado.
+  `src/core/memory/{engine,database,doctor,working-context,curation}.js`, `src/cli/index.js`,
+  `agents/{orchestrator,memory-keeper}.md`, los changes archivados y el backlog). Confirmar
+  cualquier detalle fino en el archivo citado.
 - **El pack no incluye markdown ni tests.** El tier resuelto (`minimo`) ignora `test/**`,
   `docs/**` y `**/*.md`; Repomix además respeta `.gitignore`. Por eso `agents/`, `commands/`,
   `skills/`, `templates/`, `docs/` y `documentation/` **no aparecen** en el pack. Se describen
   por lectura puntual; el próximo `--check` puede no detectar cambios dentro de esas áreas.
 - **Reporte de origen.** La generación partió de `STALE` / `impact: material`:
-  `changedAreas: [".ancleto", ".ancletorc", ".opencode", "AGENTS.md", "CHANGELOG.md",
-  "PRODUCT.md", "README.md", "agents", "aspec", "docs", "package.json", "skills", "src",
-  "templates", "test"]`, `materialReasons: ["archivo material modificado: package.json"]`, con
-  los 11 documentos del seed en `affectedDocs`. La causa es el salto a `0.18.6` y el estado
-  local del discovery.
-- **Versión y tags.** `package.json` marca `0.18.6`. HEAD `95b2599`
-  (`docs(specs): archivar MEM-05a y MEM-05b y sincronizar source-of-truth`) en `development`.
-  El tag `v0.18.6` **sí existe**: es anotado y apunta a `main` (`427fbf8…`). `git describe --tags`
-  desde `development` resuelve `v0.18.5-…` porque el tag de release vive en `main`, que no es
-  ancestro de `development`; la ausencia en `describe` no implica que el tag falte. El árbol tiene
-  cambios sin commitear en `src/cli/index.js`, `src/core/memory/{database,engine}.js`,
-  `agents/memory-keeper.md`, dos specs y tests; el pack refleja el **árbol de trabajo**, no el
-  último commit. No se consultó el registry npm ni se verificó el tarball publicado.
+  `changedAreas: [".ancleto", "CHANGELOG.md", "PRODUCT.md", "README.md", "aspec", "docs",
+  "package.json", "src", "test"]`, `materialReasons: ["archivo material modificado:
+  package.json"]`, con los 11 documentos del seed en `affectedDocs`. La causa es el salto a
+  `0.18.7` y la curaduría CH-09, más el estado local del discovery.
+- **Versión y tags.** `package.json` marca `0.18.7`; `CHANGELOG.md` llega a `0.18.7`
+  (2026-11-03). HEAD `bd903d2` (`docs(specs): archive ch-09 curation change`) en `development`.
+  El tag `v0.18.7` **existe**: es anotado y apunta a `main`; `git describe --tags` desde
+  `development` resuelve `v0.18.5-19-gbd903d2` porque el tag de release vive en `main`, que no
+  es ancestro de `development`; la ausencia en `describe` no implica que el tag falte. El árbol
+  de trabajo está limpio salvo `.discovery-map.json` y
+  `docs/technical-discovery/.discovery-state.json`, que esta corrida regeneró. El pack refleja
+  el **árbol de trabajo**, no el último commit. No se consultó el registry npm ni se verificó el
+  tarball publicado.
+- **`memory curate` (CH-09): leído en código y spec; `--json` ejecutado, `--strict` no.** Se
+  ejecutó `node src/cli/index.js memory curate --json` sobre la base real y devolvió
+  `{ status: 'ok', brokenRefs: [], unverifiable: [], exactDuplicates: [] }`. No se probó
+  `--strict` (un exit ≠ 0 con hallazgos), ni el escenario `no-db` (sin `.ancleto/memory.db`), ni
+  una fixture con refs rotas/duplicados, ni la idempotencia byte a byte de la base. La lógica se
+  leyó en `src/core/memory/curation.js`, `src/cli/index.js` (`memoryCurateCmd`) y el requirement
+  `Curaduría read-only con memory curate` de `aspec/specs/memory-ops/spec.md`.
+- **`includeNearDuplicates`: leído, no probado con near-dups reales.** La firma
+  `consolidate({ dryRun = true, includeNearDuplicates = true })` y el forwarding del engine
+  read-only están verificados por lectura; el default no se comparó contra una base con
+  near-duplicates (la base real tiene 0). La suite (`test/memory-engine.test.js`) no se ejecutó.
 - **MEM-05 (recall task-aware): leído en código y spec, no re-ejecutado.** Se leyeron
   `previewNode`, `projectSearchPage`, `normalizeRequired`, `compareRecall`, `searchMemory` y
   `formatOverflowWarning` en `src/core/memory/engine.js`; el requirement
   `Recall task-aware con orden total, preview expandible y keys requeridas` en
   `aspec/specs/memory-engine/spec.md`; `agents/memory-keeper.md` (Modo 1 usa `query` +
-  `expand: true`); y `README.md` (sección de la tool). No se invocó `searchMemory` contra nodos
-  reales ni se corrieron los tests de preview/`expand`/`keys`/`required`.
+  `expand: true`); y `README.md`. No se invocó `searchMemory` contra nodos reales ni se corrieron
+  los tests de preview/`expand`/`keys`/`required`.
 - **MEM-05a (docs contract): verificado por lectura, no por tests.** El protocolo canónico vive
   en `AGENTS.md` → `LOCKED: memory-protocol` y `PRODUCT.md` sólo apunta; el requirement
   `Protocolo de memoria canónico en AGENTS.md y puntero único desde PRODUCT.md` está en
@@ -53,24 +64,25 @@ skillVersion: '2.3'
   `memory gc` (ni dry-run ni purge), no se creó una base previa sin la columna para probar la
   migración y no se verificó el detach de `superseded_by` con datos reales.
 - **`0.18.5` (consolidate): dry-run ejecutado, `--apply` no.** `node src/cli/index.js memory
-  consolidate --json` devolvió `{ dryRun: true, exactGroups: [], superseded: [], nearDuplicates:
-  [] }`. No se ejecutó `--apply` (habría sido un no-op, pero no se probó), ni un caso con
-  duplicados, ni un rollback, ni un fallo de refresh. La semántica se leyó en
+  consolidate --json` devolvió `{ dryRun: true, exactGroups: [], superseded: [],
+  nearDuplicates: [] }`. No se ejecutó `--apply` (habría sido un no-op, pero no se probó), ni un
+  caso con duplicados, ni un rollback, ni un fallo de refresh. La semántica se leyó en
   `src/core/memory/engine.js`, `src/cli/index.js`, `aspec/specs/memory-ops/spec.md` y la
   propuesta archivada.
 - **Memoria observada, no auditada.** `node src/cli/index.js memory doctor` reportó: integridad
-  OK, **228 filas FTS indexadas**, unicidad OK, **344 refs verificadas en 125 nodos activos, 0 no
-  resueltas**, WAL presente (4.161.232 bytes) y `Working-context: desactualizado`. `memory
-  consolidate` reportó 0 grupos exactos y 0 near-dups. `memory list --json` dio **125 activos**:
-  34 rules `project`, 78 decisions `project` y 13 decisions `feature`. **No** se auditó cada ref
-  ni se abrió el WAL. La afirmación "todos los activos tienen refs" se verificó por el check de
-  refs del doctor (0 no resueltas), no por inspección individual.
+  OK, **232 filas FTS indexadas** (232 nodos), unicidad OK, **360 refs verificadas en 129 nodos
+  activos, 0 no resueltas**, WAL presente (4.161.232 bytes), `Working-context: desactualizado` y
+  **20 reglas omitidas** por tamaño. `memory list --json` dio **129 activos**: 34 rules
+  `project`, 82 decisions `project` y 13 decisions `feature`. `consolidate` y `curate`
+  reportaron 0/0/0. **No** se auditó cada ref ni se abrió el WAL. La afirmación "todos los
+  activos tienen refs" se verificó por el check de refs del doctor (0 no resueltas), no por
+  inspección individual.
 - **Discrepancia DB por `cwd` vs raíz MCP.** Sigue abierta: `defaultMemoryDbPath(cwd)` y el
   `projectRoot` que fija el MCP pueden resolver bases distintas. No se reprodujo en esta corrida
   (el MCP no se levantó); se documenta como riesgo, no como hecho observado.
 - **CLI global desactualizado.** El `ancleto` del `PATH` es **0.17.1** y no reconoce
-  `memory consolidate` ni el contrato nuevo de `searchMemory`, mientras
-  `node src/cli/index.js` sí (0.18.6). No se reinstaló el binario global. Cualquier conclusión
+  `memory consolidate` ni `memory curate` ni el contrato nuevo de `searchMemory`, mientras
+  `node src/cli/index.js` sí (0.18.7). No se reinstaló el binario global. Cualquier conclusión
   sobre capacidades debe contrastarse con `package.json` y con la invocación local.
 - **Overflow del bloque proactivo.** La base real omite **20 reglas** de scope `project` (entran
   14 de 34). No se midió el texto exacto emitido en una sesión real del orquestador; sólo se
@@ -79,8 +91,9 @@ skillVersion: '2.3'
   `golden-refs-seed.json`, `refs-root/`, `memory-fixtures.test.js` y `memory-pr1-contract.test.js`.
   **No** se corrieron las consultas de referencia ni la suite; la cifra de tests de `tasks.md`
   no se reprodujo.
-- **Suite de tests: no ejecutada.** Hay 15 archivos `*.test.js` y tres fixtures; esta
-  regeneración es **state-only**. No se verificó lint, tests, cobertura ni el estado de CI.
+- **Suite de tests: no ejecutada.** Hay 16 archivos `*.test.js` (incluye `curation.test.js`) y
+  tres fixtures; esta regeneración es **state-only**. No se verificó lint, tests, cobertura ni el
+  estado de CI.
 - **`memory doctor` read-only: ejecutado, pero no en todos los escenarios.** Se observó la
   corrida feliz; no se probó una base con refs rotas/ambiguas, un FTS desalineado, un FTS con
   `columnsize=0`, ni el modo `--rebuild`.
@@ -92,9 +105,9 @@ skillVersion: '2.3'
   `src/cli/index.js` y `aspec/specs/session-failure-report/spec.md`; no se corrió contra una base
   real de opencode.
 - **Entorno de máquina:** el artefacto existe (generado el 2026-11-03) y declara `ancleto:
-  0.18.6`, `win32`/`10.0.26200`/`x64`, shell `Windows PowerShell 5.1`, EOL `lf`, `rg` no
-  disponible, `node`/`npm`/`git`/`python` disponibles. No se regeneró el artefacto en esta
-  corrida ni se re-probó cada sonda.
+  0.18.6` (generado por el CLI anterior a esta regeneración), `win32`/`10.0.26200`/`x64`, shell
+  `Windows PowerShell 5.1`, EOL `lf`, `rg` no disponible, `node`/`npm`/`git`/`python`
+  disponibles. No se regeneró el artefacto en esta corrida ni se re-probó cada sonda.
 - **Intake de sesión, techo de lecturas y trigger de Recall:** verificados por lectura de
   `agents/orchestrator.md` y `agents/technical-discovery.md` (fuera del pack) y por los guards de
   `test/content-guards.test.js` (no ejecutados). No se ejecutó una sesión real del orquestador.
@@ -122,22 +135,23 @@ skillVersion: '2.3'
   analizó su contenido.
 - **`package-lock.json`: falso positivo del check.** Puede marcarse como "área raíz eliminada",
   pero existe y está en `config.exclude`. Mismo criterio para `yarn.lock`/`pnpm-lock.yaml`.
-- **`BACKLOG.md` no existe.** El backlog P0 de memoria vive en
-  `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`; `§5.2` conserva la deuda de I/O de `inspectRefs`
-  y el conteo de no verificables con rotas. No se releyó el backlog completo en esta corrida.
+- **`BACKLOG.md` no existe.** El backlog vive en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`.
+  CH-09 está **cerrado** por `ch-09-curaduria-recurrente`; quedan diferidos CH-09a…CH-09h
+  (gate de criticalidad, auto-reparación, curaduría periódica, tope de escala y las deudas e…h
+  del reporte de `curate`). El CHANGELOG de `0.18.7` registra además `MEM-05c`…`MEM-05g`. No se
+  releyó el backlog completo en esta corrida.
 - **`.ancletorc` presente pero no leído como evidencia de contenido.** Por contrato de la skill
   se consume resuelto vía `ancleto discovery --check` (`config.outputDir`, `config.tier`,
   `config.exclude`). El tier resuelto `minimo` proviene del reporte y de
   `.opencode/.ancleto-tier`.
 - **`opencode.json` no se publica: verificado por lectura.** Se comparó con `package.json` →
   `files`. No se ejecutó `npm pack` ni se verificó el modelo efectivo en las tres superficies.
-- **Docs de producto parcialmente desalineados.** `PRODUCT.md` sigue declarando 12 commands y 18
-  skills (hoy 16 y 21) y no menciona `machine-env`, `stats failures`, `snapshot`, `merge`,
-  `consolidate`, `gc`, el check de refs ni el resolver. Su sección de memoria **sí** apunta al
-  bloque `LOCKED: memory-protocol`, y `README.md` ya documenta preview/`expand`/`keys`/`required`.
-  `CHANGELOG.md` llega a `0.18.6`. El seed refleja el estado observado; no se editaron esos
-  archivos.
-- **`aspec/`**: 19 specs fuente + **1 change activo** + **41 archivados**. No se analizó el
+- **Docs de producto con deriva menor.** `PRODUCT.md` ya no declara conteos obsoletos y su
+  sección de memoria apunta al bloque `LOCKED: memory-protocol`; `README.md` documenta
+  preview/`expand`/`keys`/`required` y `memory curate`, pero su badge declara **18 skills**
+  cuando el árbol tiene **21**. `CHANGELOG.md` llega a `0.18.7` y **no** menciona `memory curate`
+  (archivado, sin release). El seed refleja el estado observado; no se editaron esos archivos.
+- **`aspec/`**: 19 specs fuente + **1 change activo** + **42 archivados**. No se analizó el
   contenido completo de cada spec más allá de las capabilities afectadas (`memory-engine`,
   `memory-ops`, `machine-environment`, `session-failure-report`, `prompt-contracts`, `review`,
   `agent-install-routing`, `code-review`).

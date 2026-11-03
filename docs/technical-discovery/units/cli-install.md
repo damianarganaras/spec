@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates y reconciliación legacy, commands como skills, wizard, MCP, portabilidad, entorno de máquina, sonda de invocabilidad, superficie de shell por agente, stats failures, affected, las ops de memoria del CLI (snapshot, merge, consolidate, gc, doctor read-only) y la promoción al archivar"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter (incl. Command Code), merge de templates y reconciliación legacy, commands como skills, wizard, MCP, portabilidad, entorno de máquina, sonda de invocabilidad, superficie de shell por agente, stats failures, affected, las ops de memoria del CLI (snapshot, merge, consolidate, curate, gc, doctor read-only) y la promoción al archivar"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -18,15 +18,16 @@ covers:
   - memory snapshot
   - memory merge
   - memory consolidate
+  - memory curate
   - memory gc
   - memory doctor read-only
   - refs de nodos activos
   - memory import refresh on-write
   - promoción al archivar
   - permisos de shell por agente
-sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js"]
-generatedAt: 2026-11-03T10:45:00Z
-pluginVersion: 0.18.6
+sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js", "src/core/memory/curation.js"]
+generatedAt: 2026-11-03T13:54:02Z
+pluginVersion: 0.18.7
 skillVersion: '2.3'
 ---
 
@@ -36,7 +37,7 @@ skillVersion: '2.3'
 
 `src/cli/index.js` es el **único entry point** (`bin.ancleto`/`bin.aspec`): parseo de comandos,
 instalación de assets por host, resolución de agente/IDE, tiers, MCP, discovery, memoria
-(incluyendo snapshot, merge, **consolidate**, **gc**, refresh on-write y staleness advisory),
+(incluyendo snapshot, merge, **consolidate**, **curate**, **gc**, refresh on-write y staleness advisory),
 entorno de máquina, reporte de fallos, registro de proyectos y diagnósticos. La adaptación de
 frontmatter es un módulo aparte (`src/core/adapters/frontmatter.js`), `src/core/machine-env.js`
 posee el entorno local, `src/core/memory/snapshot.js` la copia binaria y `src/cli/ui.js` el
@@ -46,14 +47,14 @@ wizard. Evidencia: `package.json`, `src/cli/index.js`.
 
 `install`, `update`, `upgrade`, `init`, `export` (`--tar`), `import` (`<bundle>`/`--repair`),
 `discovery` (`--check` / pack), `affected` (read-only: `[--cwd <dir>] [--json] <archivo...>`),
-`mcp`, `memory (context|list|doctor|export|import|gc|snapshot|merge|consolidate)`,
+`mcp`, `memory (context|list|doctor|export|import|gc|snapshot|merge|consolidate|curate)`,
 `specs check`, `stats`, **`stats failures`**, `projects (list|scan|prune|info|update)`,
 `list --projects`, `check`, `doctor`, `--help`, `--version`. Flags transversales: `--agent`,
 `--tier`, `--lang`, `--profile`, `--exclude`, `--no-mcp`, `--with-engram`, `--yes` (sólo
 importación openspec). Evidencia: `src/cli/index.js`, `README.md`.
 
 **Versión del binario**: el `ancleto` global del `PATH` en esta máquina es **0.17.1**, más viejo
-que `0.18.6`, y responde `subcomando de memory desconocido: consolidate`; la versión del checkout
+que `0.18.7`, y responde `subcomando de memory desconocido: consolidate` (tampoco conoce `memory curate`); la versión del checkout
 se invoca con `node src/cli/index.js`. La comparación de capacidades debe hacerse contra
 `package.json` y la invocación local.
 
@@ -79,6 +80,14 @@ consume y queda disponible para el recall. El CLI no expone una superficie nueva
   Dry-run usa `createReadonlyMemoryEngine`; `--apply` usa `createMemoryEngine`, imprime el
   reporte (grupos exactos, canónico, superseded y near-dups) y refresca el working-context. Si el
   refresh falla, la consolidación **ya se aplicó** y el comando sale ≠ 0 informándolo.
+- `memory curate [--json] [--strict]` (`memoryCurateCmd`): curaduría **read-only**. Valida que
+  los flags sean sólo `--json`/`--strict`; sin base reporta `status: no-db` y sale ≠ 0; abre con
+  `createReadonlyMemoryEngine` (`readonly: true`, `migrate: false`) y delega en `curateMemory`
+  con la raíz derivada de `resolveMemoryProjectRoot(dbPath)`. El reporte tiene `status`,
+  `brokenRefs`, `unverifiable` y `exactDuplicates`; el orden es total y determinístico. Es
+  **advisory**: sale `0` con hallazgos salvo `--strict`; `unverifiable` nunca cambia el exit
+  code. **No** refresca el working-context ni toca la base. La firma del engine `consolidate`
+  agrega `includeNearDuplicates` (default `true`); el CLI no lo expone como flag.
 - `memory gc [--dry-run] [--days N]` (`memoryGc`): mide la **edad de supersesión**
   (`COALESCE(superseded_at, created_at)`) con un cutoff único. `--dry-run` sólo reporta;
   el purge real limpia `superseded_by` de los elegibles y luego borra en transacción, con
@@ -92,10 +101,12 @@ consume y queda disponible para el recall. El CLI no expone una superficie nueva
   `Working-context: <ok|ausente|desactualizado>` con `checkWorkingContextFreshness`. El exit code
   sigue midiendo la integridad de la DB.
 
-**Estado observado** (`node src/cli/index.js memory doctor`): integridad OK, **228 filas FTS
-indexadas** (228 nodos totales), unicidad OK, **344 refs verificadas en 125 nodos activos, 0 no
+**Estado observado** (`node src/cli/index.js memory doctor`): integridad OK, **232 filas FTS
+indexadas** (232 nodos totales), unicidad OK, **360 refs verificadas en 129 nodos activos, 0 no
 resueltas**, WAL presente y `Working-context: desactualizado`; el bloque proactivo omite **20
-reglas**. La consolidación dry-run devuelve `{ exactGroups: [], nearDuplicates: [] }`.
+reglas**. La consolidación dry-run devuelve `{ exactGroups: [], nearDuplicates: [] }`;
+`memory curate --json` devuelve `status: ok` con 0 refs rotas, 0 no verificables y 0 duplicados
+exactos.
 
 El refresh es **compare-based** y reusa la conexión abierta: reescribe
 `.ancleto/working-context.md` sólo si el bloque renderizado difiere del contenido en disco. En
@@ -434,9 +445,10 @@ repara in place sin bundle. Wrapper `/cleto-transplant`. Evidencia: `src/cli/ind
   `affected`/`unresolved`/`externalCount`.
 - **`ancleto stats failures` es read-only**: sólo consulta la base de opencode.
 - **`memory snapshot` no modifica la fuente**; **`memory doctor` no muta por defecto**;
-  **`memory consolidate` es dry-run por defecto**; **`memory gc` respeta `--dry-run`**. `--rebuild`
-  es el único camino de escritura del doctor y `--apply` el único de consolidate. El check de
-  refs y `resolveNodeRefs` son read-only.
+  **`memory consolidate` es dry-run por defecto**; **`memory curate` es read-only estricto**;
+  **`memory gc` respeta `--dry-run`**. `--rebuild` es el A�nico camino de escritura del doctor,
+  `--apply` el A�nico de consolidate y `--strict` sA3lo cambia el exit code de `curate`, nunca
+  escribe. El check de refs, `resolveNodeRefs` y `curateMemory` son read-only.
 - **GC mide la edad de supersesión**, no la de creación: `COALESCE(superseded_at, created_at)`
   con cutoff único; limpia `superseded_by` de los elegibles antes del `DELETE`.
 - **Refresh on-write CLI y staleness advisory son best-effort**:
@@ -461,11 +473,12 @@ repara in place sin bundle. Wrapper `/cleto-transplant`. Evidencia: `src/cli/ind
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `refreshMachineEnv`, `memoryImport`, `memorySnapshot`, `memoryMerge`, `memoryConsolidate`, `memoryDoctorCmd`, `memoryExport`/`memoryGc`, `affectedCommand`, `statsFailuresCommand`. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `refreshMachineEnv`, `memoryImport`, `memorySnapshot`, `memoryMerge`, `memoryConsolidate`, `memoryCurateCmd`, `memoryDoctorCmd`, `memoryExport`/`memoryGc`, `affectedCommand`, `statsFailuresCommand`. |
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`. |
 | `src/core/machine-env.js` | `machineEnvPath`, `detectMachineFacts`, `renderMachineEnv`, `writeMachineEnv`, `ensureMachineEnvExclusion`, `materializeMachineEnv`, `checkMachineEnvTracked`; sonda interna (`findExecutables`, `spawnProbe`, `probeExecutable`). |
+| `src/core/memory/curation.js` | `curateMemory`: composiciA3n read-only de `resolveNodeRefs` + `consolidate({ dryRun: true, includeNearDuplicates: false })`; reporte determinA-stico. |
 | `src/core/memory/snapshot.js` | `snapshotDatabase`; dueño único de la copia binaria. |
-| `src/core/memory/engine.js` | `searchMemory` (preview/`expand`/`keys`/`required`), `recordNode`, `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`, `inspectRefs`, `resolveNodeRefs`, `renderRuleContent`, `importNodes`, `gcSuperseded`/`getGcDetach`, `merge`, `consolidate`, orden/`formatOverflowWarning`. |
+| `src/core/memory/engine.js` | `searchMemory` (preview/`expand`/`keys`/`required`), `recordNode`, `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`, `inspectRefs`, `resolveNodeRefs`, `renderRuleContent`, `importNodes`, `gcSuperseded`/`getGcDetach`, `merge`, `consolidate` (con `includeNearDuplicates`), orden/`formatOverflowWarning`. |
 | `src/core/memory/mcp-server.js` | Fija `source: 'mcp:ancleto-memory'` y `projectRoot`. |
 | `src/core/memory/working-context.js` | Render único, refresh on-write (MCP/CLI), `checkWorkingContextFreshness`, `resolveMemoryProjectRoot`. |
 | `skills/ancleto-archive/SKILL.md` | Gate de promoción al archivar. |
@@ -474,10 +487,11 @@ repara in place sin bundle. Wrapper `/cleto-transplant`. Evidencia: `src/cli/ind
 | `opencode.json` | Override de `agent.model` para los 10 subagentes. No se publica. |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable; en agents el frontmatter se adapta, en skills se copia. |
-| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js`, `test/memory-fixtures.test.js` | Guardas del CLI, adaptador, contenido, working-context, entorno, fallos, PR-1 y golden/resolver. |
+| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js`, `test/memory-fixtures.test.js`, `test/curation.test.js` | Guardas del CLI, adaptador, contenido, working-context, entorno, fallos, PR-1, golden/resolver y curaduría. |
 | `aspec/changes/archive/2026-11-02-mem-05-recall-task-aware/` | Change archivado y publicado en `0.18.6`. |
 | `aspec/changes/archive/2026-11-02-mem-05a-searchmemory-docs-contract/` | Protocolo canónico de memoria en `AGENTS.md`. |
 | `aspec/changes/archive/2026-11-02-mem-05b-gc-superseded-age/` | GC por edad de supersesión. |
+| `aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/` | `memory curate`: curaduría read-only (archivado; aún sin release). |
 | `aspec/changes/archive/2026-11-02-mem-04b-resolver-referencias-navegables/` | Change archivado y publicado en `0.18.3`. |
 | `aspec/changes/archive/2026-11-02-memory-ranking-y-omisiones-visibles/` | Change archivado y publicado en `0.18.4`. |
 | `aspec/changes/archive/2026-11-02-memory-consolidacion-autonoma/` | Change archivado y publicado en `0.18.5`. |

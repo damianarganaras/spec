@@ -1565,6 +1565,14 @@ describe('content guards - intake de sesion, techo de lecturas y recall accionab
     // desde un guard de contenido; la declara el bullet de Team Memory.
   })
 
+  it('memory-keeper Recall pide expand: true: el preview por defecto no trae content', () => {
+    const recall = agentSection('memory-keeper', '## Mode 1')
+    assert.match(recall, /Pass only `query` and `expand: true`/)
+    assert.match(recall, /Without `expand: true` the engine returns previews without `content`/)
+    assert.match(recall, /Return the full content/)
+    assert.doesNotMatch(recall, /Pass only `query`\./, 'el recall no debe quedar en previews')
+  })
+
   it('la superficie de privilegio de technical-discovery queda acotada a dos literales allow', () => {
     const t = readAgent('technical-discovery').replace(/\r\n/g, '\n')
     const block = t.match(/^permission:\n  bash:\n((?: {4}.*\n)+)/m)

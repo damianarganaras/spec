@@ -69,8 +69,8 @@ src/
   core/             # discovery.js, repomix-tier.js, tier-models.js
   core/memory/      # database.js, engine.js, tools.js, mcp-server.js, doctor.js
 agents/             # 10 subagentes instalables (.md)
-commands/           # 12 comandos /cleto-* (.md)
-skills/             # 18 skills nativas (SKILL.md + references)
+commands/           # comandos /cleto-* (.md)
+skills/             # skills nativas (SKILL.md + references)
 templates/          # AGENTS.md, PRODUCT.md
 aspec/              # config.yaml; changes/ (changes activos)
 test/               # suite node --test (*.test.js)

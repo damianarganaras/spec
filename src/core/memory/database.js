@@ -55,9 +55,11 @@ export function openDatabase(dbPath, { migrate = true, readonly = false } = {}) 
     // backfill reproduce la elegibilidad historica de gc (created_at), sin
     // otorgar gracia retroactiva, y no toca los nodos activos.
     const columns = db.prepare('PRAGMA table_info(memory_nodes)').all()
+    let addedColumn = false
     if (!columns.some((column) => column.name === 'superseded_at')) {
       try {
         db.exec('ALTER TABLE memory_nodes ADD COLUMN superseded_at TEXT')
+        addedColumn = true
       } catch (err) {
         // Carrera con otra apertura concurrente: si la columna ya existe, la
         // migracion se considera aplicada.
@@ -65,14 +67,20 @@ export function openDatabase(dbPath, { migrate = true, readonly = false } = {}) 
         if (!after.some((column) => column.name === 'superseded_at')) throw err
       }
     }
-    try {
-      db.exec(
-        `UPDATE memory_nodes SET superseded_at = created_at WHERE status = 'superseded' AND superseded_at IS NULL`
-      )
-    } catch (err) {
-      console.warn(
-        `ancleto: backfill de superseded_at omitido: ${err.message}. Ejecutá "ancleto memory doctor --rebuild" si el indice FTS esta desalineado.`
-      )
+    // El backfill solo hace falta cuando esta apertura agrego la columna: las
+    // rutas de supersesion vigentes ya escriben `superseded_at`, y `gc` mide
+    // `COALESCE(superseded_at, created_at)`, el mismo fallback historico. Evita
+    // un UPDATE con scan completo en cada apertura de escritura.
+    if (addedColumn) {
+      try {
+        db.exec(
+          `UPDATE memory_nodes SET superseded_at = created_at WHERE status = 'superseded' AND superseded_at IS NULL`
+        )
+      } catch (err) {
+        console.warn(
+          `ancleto: backfill de superseded_at omitido: ${err.message}. Ejecutá "ancleto memory doctor --rebuild" si el indice FTS esta desalineado.`
+        )
+      }
     }
   }
   return db

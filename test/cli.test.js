@@ -2050,6 +2050,49 @@ describe('CLI LOCKED blocks (G7)', () => {
       assert.match(updated, /Contexto gestionado por @ancleto\/spec/)
     })
   })
+
+  it('inserta bloques LOCKED nuevos en el orden del template aunque falte el siguiente en local', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst, { recursive: true })
+      run(['install', '--project', dst, '--no-mcp', '--tier', 'gratis'], dst)
+      const path = join(dst, 'AGENTS.md')
+      const local = readFileSync(path, 'utf8')
+      // Template fuente con DOS bloques nuevos antes de test-block: el siguiente
+      // inmediato (new-b) no existe en local, pero test-block si. El ancla debe
+      // saltar el ausente y seguir el orden del template.
+      const marker = '<!-- LOCKED: test-block -->'
+      assert.ok(local.includes(marker), 'precondicion: test-block en local')
+      const source = local.replace(
+        marker,
+        '<!-- LOCKED: new-a -->\nA\n<!-- /LOCKED: new-a -->\n\n<!-- LOCKED: new-b -->\nB\n<!-- /LOCKED: new-b -->\n\n' + marker
+      )
+
+      const bundle = join(dir, 'bundle')
+      mkdirSync(bundle, { recursive: true })
+      writeFileSync(join(bundle, 'manifest.json'), JSON.stringify({
+        format: 'ancleto-export/1',
+        ancletoVersion: PKG.version,
+        exportedAt: new Date().toISOString(),
+        agent: 'opencode',
+        tier: 'gratis',
+        language: 'auto',
+        profile: 'general',
+        flags: {},
+        mcp: []
+      }, null, 2) + '\n')
+      writeFileSync(join(bundle, 'AGENTS.md'), source)
+
+      const r = run(['import', bundle], dst)
+      assert.equal(r.status, 0)
+      const updated = readFileSync(path, 'utf8')
+      const a = updated.indexOf('<!-- LOCKED: new-a -->')
+      const b = updated.indexOf('<!-- LOCKED: new-b -->')
+      const t = updated.indexOf(marker)
+      assert.ok(a >= 0 && b >= 0, 'ambos bloques nuevos se insertan')
+      assert.ok(a < b && b < t, 'los nuevos conservan el orden del template antes del siguiente presente')
+    })
+  })
 })
 
 // Fixtures del estado pre-change de AGENTS.md: la guia plana que el merge por bloques
@@ -2627,6 +2670,149 @@ describe('CLI reconciliacion del protocolo de memoria (MEM-05a)', () => {
       assert.equal(countBlock(updated, 'memory-boundary'), 1, 'memory-boundary se conserva')
       assert.match(updated, /MI_SECCION_IMPORT/, 'preserva contenido personalizado')
       assert.doesNotMatch(r.stderr, /bloque legado de protocolo de memoria no reconocido/)
+    })
+  })
+})
+
+describe('CLI merge y reconciliacion (parche de bordes)', () => {
+  const countBlock = (content, name) =>
+    (content.match(new RegExp(`<!-- LOCKED: ${name} -->`, 'g')) || []).length
+
+  const writeBundle = (dir, files) => {
+    const bundle = join(dir, 'bundle')
+    mkdirSync(bundle, { recursive: true })
+    writeFileSync(join(bundle, 'manifest.json'), JSON.stringify({
+      format: 'ancleto-export/1',
+      ancletoVersion: PKG.version,
+      exportedAt: new Date().toISOString(),
+      agent: 'opencode',
+      tier: 'gratis',
+      language: 'auto',
+      profile: 'general',
+      flags: {},
+      mcp: []
+    }, null, 2) + '\n')
+    for (const [name, body] of Object.entries(files)) writeFileSync(join(bundle, name), body)
+    return bundle
+  }
+
+  it('inserta un bloque LOCKED al final de un archivo sin newline sin incrustar el marcador', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const fresh = readFileSync(path, 'utf8')
+      const head = fresh.slice(0, fresh.indexOf('<!-- LOCKED: validation-commands -->')).replace(/\s+$/, '')
+      writeFileSync(path, head)
+
+      const first = run(['upgrade'], dir)
+      assert.equal(first.status, 0, first.stderr)
+      const updated = readFileSync(path, 'utf8')
+      const lines = updated.split('\n')
+      assert.ok(lines.includes('<!-- LOCKED: validation-commands -->'), 'el marcador queda al inicio de linea')
+      assert.ok(lines.includes('<!-- LOCKED: memory-protocol -->'), 'el siguiente bloque tambien')
+
+      const second = run(['upgrade'], dir)
+      assert.equal(second.status, 0, second.stderr)
+      assert.doesNotMatch(second.stderr, /bloque legado de/, 'un segundo upgrade no emite avisos falsos')
+    })
+  })
+
+  it('un source sin los bloques canonicos preserva los runs planos del destino', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8')))
+      // Source sintetico minimo: solo el bloque LOCKED del perfil. Desacopla el test
+      // de profiles/test/templates/AGENTS.md si el perfil gana bloques en el futuro.
+      const profileAgents = '<!-- LOCKED: test-profile -->\nperfil sintetico\n<!-- /LOCKED: test-profile -->\n'
+      const bundle = writeBundle(dir, { 'AGENTS.md': profileAgents })
+
+      const r = run(['import', bundle], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const updated = readFileSync(path, 'utf8')
+      assert.match(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'el run plano se conserva')
+      assert.match(updated, /Debés invocar `searchMemory`/, 'el protocolo plano se conserva')
+      assert.equal(countBlock(updated, 'validation-commands'), 0, 'el source no trae el bloque canonico')
+      assert.match(updated, /LOCKED: test-profile/, 'el bloque del source si se mergea')
+      assert.doesNotMatch(r.stderr, /bloque legado de/, 'un source sin los bloques canonicos no emite aviso')
+    })
+  })
+
+  it('un source raiz sigue reconciliando los runs planos del destino', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8')))
+      const rootAgents = readFileSync(join(TEST_DIR, '..', 'templates', 'AGENTS.md'), 'utf8')
+      const bundle = writeBundle(dir, { 'AGENTS.md': rootAgents })
+
+      const r = run(['import', bundle], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const updated = readFileSync(path, 'utf8')
+      assert.doesNotMatch(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'run plano eliminado')
+      assert.doesNotMatch(updated, /Debés invocar `searchMemory`/, 'protocolo plano eliminado')
+      assert.equal(countBlock(updated, 'validation-commands'), 1)
+      assert.equal(countBlock(updated, 'memory-protocol'), 1)
+    })
+  })
+
+  it('sin run legado y con EOL mixto, el archivo se devuelve byte a byte', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--profile', 'test', '--no-mcp', '--tier', 'minimo'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const before = readFileSync(path, 'utf8') + '\n## Seccion del usuario\r\n\r\nlinea CRLF\r\nlinea LF\n'
+      writeFileSync(path, before)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.equal(readFileSync(path, 'utf8'), before, 'no se normaliza el EOL mixto')
+    })
+  })
+
+  it('no borra un run legado documentado dentro de un code fence', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const fresh = readFileSync(path, 'utf8')
+      const fenced = [
+        '## Documentacion de la migracion',
+        '',
+        '```markdown',
+        LEGACY_FLAT.trimEnd(),
+        '',
+        LEGACY_MEMORY_FLAT,
+        '```'
+      ].join('\n')
+      const content = fresh.replace(LOCKED_PROTOCOL_RE, () => fenced)
+      assert.notEqual(content, fresh, 'precondicion: snippet en fence')
+      writeFileSync(path, content)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const updated = readFileSync(path, 'utf8')
+      assert.match(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'el snippet documentado sobrevive')
+      assert.match(updated, /Debés invocar `searchMemory`/, 'el protocolo documentado sobrevive')
+      assert.equal(countBlock(updated, 'validation-commands'), 1, 'igual se inserta el bloque canonico')
+      assert.equal(countBlock(updated, 'memory-protocol'), 1)
+      assert.doesNotMatch(r.stderr, /bloque legado de/, 'un snippet en fence no avisa')
+    })
+  })
+
+  it('reconcilia un archivo que termina con el protocolo plano', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const fresh = readFileSync(path, 'utf8')
+      const head = fresh.slice(0, fresh.indexOf('<!-- LOCKED: validation-commands -->')).replace(/\s+$/, '')
+      writeFileSync(path, `${head}\n\n${LEGACY_FLAT.trimEnd()}\n\n${LEGACY_MEMORY_FLAT}`)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const updated = readFileSync(path, 'utf8')
+      assert.doesNotMatch(updated, /Debés invocar `searchMemory`/, 'el run plano final se elimina')
+      assert.doesNotMatch(updated, /Validaciones obligatorias antes de cerrar una tarea/)
+      assert.equal(countBlock(updated, 'memory-protocol'), 1, 'queda el bloque canonico')
+      assert.doesNotMatch(r.stderr, /bloque legado de/, 'sin aviso de firma no reconocida')
     })
   })
 })

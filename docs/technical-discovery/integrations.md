@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-11-02T18:45:50Z
-pluginVersion: 0.18.5
+generatedAt: 2026-11-03T10:45:00Z
+pluginVersion: 0.18.6
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación de `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.5`. Tag `v0.18.5` → merge `dbf7df5` (`merge development: 0.18.5`, en `main`). `0.18.3` publicó MEM-04b; `0.18.4` el ranking/omisiones; `0.18.5` `memory consolidate`. | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log`, `CHANGELOG.md` |
+| **npm registry** | Publicación de `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.6`. La `0.18.6` agrega MEM-05 (recall task-aware) y el protocolo canónico de memoria; `0.18.5` publicó `memory consolidate`; `0.18.4` el ranking/omisiones; `0.18.3` MEM-04b. `git describe --tags` = `v0.18.5-14-g95b2599` (0.18.6 sin tag al momento del relevamiento). | `.github/workflows/publish.yml`, `package.json`, `git log`, `git tag`, `CHANGELOG.md` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **sólo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Usa `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -85,17 +85,20 @@ Las operaciones de memoria son **locales y sincrónicas**:
   `node:fs`. No invoca herramientas externas.
 - `memory merge` y `memory consolidate --apply` usan el motor transaccional. No escriben
   archivos; el CLI refresca el working-context derivado.
+- `memory gc` usa el motor transaccional con un cutoff calculado localmente; `VACUUM`/`REINDEX`
+  son best-effort y no salen del proceso.
 - `memory doctor` usa `PRAGMA quick_check`, la tabla sombra `memory_fts_docsize` y, en
   `Refs de nodos activos`, sólo lectura local de `aspec/specs/**/spec.md` y listado de
   `aspec/changes/**` con `existsSync`/`statSync`; no hay chequeo remoto ni escritura. Las refs
   `commit:`/`workitem:` no se resuelven contra ningún servicio.
 - `resolveNodeRefs` resuelve `spec:`/`change:`/`path:` contra el **filesystem local**, sin abrir
   la DB ni escribir. No invoca git para `commit:` ni un tracker para `workitem:`.
+- `searchMemory` es local: FTS5 con pass AND y fallback OR-prefijo; el preview/`expand`/`keys`/
+  `required` se resuelven en el engine, sin red.
 - `memory consolidate` agrupa y compara contenido localmente; los near-dups se calculan con
   Jaccard sobre tokens, sin servicio externo.
 
-Evidencia: `src/core/memory/snapshot.js`, `src/core/memory/doctor.js`,
-`src/core/memory/engine.js`.
+Evidencia: `src/core/memory/{snapshot,doctor,engine}.js`.
 
 ## MCP (Model Context Protocol)
 
@@ -106,7 +109,7 @@ regenera entradas rotas con rutas locales.
 
 | MCP | Tipo | Rol | Default |
 |---|---|---|---|
-| `ancleto-memory` | local (stdio) | Memoria propia del repo: `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. Escribe con `source: 'mcp:ancleto-memory'`, por lo que sus escrituras pasan por la validación fail-closed de refs. El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. | Habilitado |
+| `ancleto-memory` | local (stdio) | Memoria propia del repo: `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. Escribe con `source: 'mcp:ancleto-memory'`, por lo que sus escrituras pasan por la validación fail-closed de refs. El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. `searchMemory` devuelve preview por defecto; el Recall canónico usa `expand: true`. | Habilitado |
 | `caveman` | local (binario) | Compresión de salida del agente (`caveman-mcp.exe`). Su directiva es host-scoped: se materializa sólo donde la config MCP incluye la tool (`opencode`/`antigravity`). | Habilitado si está en `PATH` |
 | `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`) por su costo (~4.900 tokens/request). | Deshabilitado |
 | `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Sólo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
@@ -127,7 +130,7 @@ actual reporta `desactualizado`. Evidencia: `src/core/memory/working-context.js`
 |---|---|---|
 | **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Sólo opencode. Es la fuente de la compuerta de medición de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
 | **`ancleto stats failures`** | Reporte read-only de tool parts fallidos de opencode: clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y enmascara secretos/rutas. No imprime `output` ni `state.error`. | `src/cli/index.js`, `aspec/specs/session-failure-report/spec.md` |
-| **`memory doctor`** | Cinco checks read-only; en la corrida local: 212 filas indexadas, 112 nodos activos, 292 refs verificadas, 0 no resueltas, WAL presente. | `src/cli/index.js`, `src/core/memory/doctor.js` |
+| **`memory doctor`** | Cinco checks read-only; en la corrida local: 228 filas indexadas (228 nodos totales), **125 activos**, **344 refs verificadas, 0 no resueltas**, WAL presente. | `src/cli/index.js`, `src/core/memory/doctor.js` |
 | **Working-context advisory** | `memory doctor` expone `Working-context: <estado>` tras los checks. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
 
 ## Azure DevOps (opcional, apagado)

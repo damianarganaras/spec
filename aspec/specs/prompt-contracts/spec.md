@@ -280,6 +280,8 @@ del usuario fuera del bloque identificado. La invocación MAY modificar el archi
 bloques `LOCKED` del mismo pase (inserción del bloque canónico faltante y reemplazo de bloques
 `LOCKED` existentes); la garantía NO SHALL enunciarse como "el archivo no cambia".
 
+La reconciliación de un run legado SHALL requerir además que el `source` del merge contenga el reemplazo canónico de ese run (el bloque `LOCKED` correspondiente, o el puntero que lo menciona en `PRODUCT.md`); si el `source` no lo trae —por ejemplo la plantilla de `profile: test` o un bundle viejo— SHALL preservar el run sin cambios y NO SHALL emitir aviso.
+
 El run legado de `AGENTS.md` SHALL identificarse como el tramo contiguo exacto entre el heading
 `## Memoria Persistente (Protocolo Reactivo)` y la última línea de la lista que sigue a
 `**Comportamiento:**`, y SHALL considerarse cerrado sólo cuando la siguiente línea no vacía sea

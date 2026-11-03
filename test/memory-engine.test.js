@@ -1407,6 +1407,32 @@ describe('gcSuperseded', () => {
       assert.equal(result.removed, 1)
     })
   })
+
+  it('purga un nodo referenciado por un superseded retenido sin violar la FK', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      const daysAgo = (days) => new Date(Date.now() - days * 86400000).toISOString()
+      const db = openDatabase(dbPath)
+      try {
+        // T: superseded hace 40 dias (elegible). S: superseded hace 2 dias
+        // (retenido) y su superseded_by apunta a T. La FK diferida no debe
+        // revertir el purge al borrar T.
+        db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at, superseded_at)
+          VALUES ('gc-fk-t', 'gc-fk-t', 'rule', 'project', 'superseded', 'viejo', '', 'test', 1, ?, ?)`)
+          .run(daysAgo(140), daysAgo(40))
+        db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, superseded_by, source, confidence, created_at, superseded_at)
+          VALUES ('gc-fk-s', 'gc-fk-s', 'rule', 'project', 'superseded', 'nuevo', '', 'gc-fk-t', 'test', 1, ?, ?)`)
+          .run(daysAgo(102), daysAgo(2))
+      } finally {
+        db.close()
+      }
+
+      const result = eng.gcSuperseded({ days: 30 })
+      assert.equal(result.removed, 1)
+      const remaining = rawAt(`SELECT id, superseded_by FROM memory_nodes`)
+      assert.deepEqual(remaining.map((row) => row.id), ['gc-fk-s'])
+      assert.equal(remaining[0].superseded_by, null, 'la referencia retenida queda suelta')
+    })
+  })
 })
 
 // MEM-05b: toda ruta de supersesion persiste el instante en `superseded_at`.
@@ -1597,6 +1623,33 @@ describe('migracion aditiva de superseded_at (MEM-05b)', () => {
       }
       const left = readAt(legacyPath, `SELECT memory_key FROM memory_nodes WHERE status = 'superseded'`)
       assert.deepEqual(left.map((row) => row.memory_key), ['legacy-recent'])
+    })
+  })
+
+  it('no repite el backfill cuando la columna ya existe y conserva el fallback created_at de gc', () => {
+    withLegacyDir((legacyPath) => {
+      const daysAgo = new Date(Date.now() - 40 * 86400000).toISOString()
+      const created = openDatabase(legacyPath)
+      created.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('pending-null', 'pending-null', 'rule', 'project', 'superseded', 'historico', '', 'test', 1, ?)`).run(daysAgo)
+      created.close()
+
+      // La columna ya existe: esta apertura no agrego nada, asi que no debe
+      // repetir el UPDATE de backfill en cada apertura de escritura.
+      const reopened = openDatabase(legacyPath)
+      const row = reopened.prepare(`SELECT superseded_at FROM memory_nodes WHERE id = 'pending-null'`).get()
+      assert.equal(row.superseded_at, null, 'sin ALTER no se re-ejecuta el backfill')
+      reopened.close()
+
+      // La semantica de gc no cambia: COALESCE usa created_at para una fila previa
+      // que quedo en NULL, asi que sigue siendo elegible.
+      const eng = createMemoryEngine(legacyPath)
+      try {
+        const gc = eng.gcSuperseded({ days: 30 })
+        assert.equal(gc.removed, 1, 'gc mide created_at como fallback')
+      } finally {
+        eng.close()
+      }
     })
   })
 

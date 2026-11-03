@@ -702,6 +702,7 @@ function buildEngine(db, dbPath) {
   let supersedeStmt = null
   let gcSelectStmt = null
   let gcDeleteStmt = null
+  let gcDetachStmt = null
   function getSupersede() {
     if (!supersedeStmt) {
       supersedeStmt = db.prepare(
@@ -714,7 +715,7 @@ function buildEngine(db, dbPath) {
     if (!gcSelectStmt) {
       gcSelectStmt = db.prepare(
         `SELECT id, length(content) + length(justification) AS size FROM memory_nodes
-         WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' days')`
+         WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < ?`
       )
     }
     return gcSelectStmt
@@ -722,10 +723,24 @@ function buildEngine(db, dbPath) {
   function getGcDelete() {
     if (!gcDeleteStmt) {
       gcDeleteStmt = db.prepare(
-        `DELETE FROM memory_nodes WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' days')`
+        `DELETE FROM memory_nodes WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < ?`
       )
     }
     return gcDeleteStmt
+  }
+  // Suelta las referencias (superseded_by) que apuntan a nodos elegibles antes del
+  // DELETE; la subquery evita materializar un placeholder por id. Mismo cutoff.
+  function getGcDetach() {
+    if (!gcDetachStmt) {
+      gcDetachStmt = db.prepare(
+        `UPDATE memory_nodes SET superseded_by = NULL
+         WHERE status = 'superseded'
+           AND superseded_by IN (
+             SELECT id FROM memory_nodes WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < ?
+           )`
+      )
+    }
+    return gcDetachStmt
   }
   const insertNode = db.prepare(
     `INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, superseded_by, source, confidence, created_at)
@@ -1043,7 +1058,7 @@ function buildEngine(db, dbPath) {
 
   // Purga nodos superseded cuya edad de supersesion (`superseded_at`, con
   // `created_at` como fallback para filas historicas sin el dato) supere
-  // `opts.days`. Dry-run y purge real usan la misma expresion, de modo que el
+  // `opts.days`. Dry-run y purge real usan el mismo cutoff, de modo que el
   // conteo coincide. Con `opts.dryRun` solo reporta conteo y tamano estimado sin
   // modificar la DB. Sin dryRun ejecuta el DELETE en transaccion propia y luego
   // VACUUM + REINDEX fuera (SQLite no permite VACUUM dentro de una transaccion;
@@ -1051,9 +1066,13 @@ function buildEngine(db, dbPath) {
   function gcSuperseded(opts = {}) {
     const days = Number.isFinite(opts.days) && opts.days > 0 ? Math.floor(opts.days) : GC_DEFAULT_DAYS
     const dryRun = !!opts.dryRun
+    // `'now'` se evalua por sentencia: un cutoff por sentencia dejaria que una fila
+    // cruce el umbral entre el SELECT y el DELETE. Se calcula una sola vez, con el
+    // mismo formato que SQLite (segundos, sin milisegundos).
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z')
 
     if (dryRun) {
-      const rows = getGcSelect().all(days)
+      const rows = getGcSelect().all(cutoff)
       const nodes = rows.length
       const estimated_bytes = rows.reduce((acc, r) => acc + Number(r.size || 0), 0)
       return { dryRun: true, days, nodes, estimated_bytes }
@@ -1062,7 +1081,11 @@ function buildEngine(db, dbPath) {
     db.exec('BEGIN IMMEDIATE')
     let removed = 0
     try {
-      const result = getGcDelete().run(days)
+      // Un nodo retenido puede referenciar (superseded_by) a uno elegible: hay que
+      // soltar la referencia antes del DELETE o el COMMIT falla por la FK diferida.
+      // La subquery usa el mismo cutoff que el DELETE: ambos evaluan el mismo conjunto.
+      getGcDetach().run(cutoff)
+      const result = getGcDelete().run(cutoff)
       removed = Number(result.changes || 0)
       db.exec('COMMIT')
     } catch (err) {

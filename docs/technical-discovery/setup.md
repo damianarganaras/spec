@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-11-02T18:45:50Z
-pluginVersion: 0.18.5
+generatedAt: 2026-11-03T10:45:00Z
+pluginVersion: 0.18.6
 skillVersion: '2.3'
 ---
 
@@ -55,10 +55,21 @@ Evidencia: `src/cli/index.js` (texto de `--help` incluido), `README.md`,
 lo evita. `--agent` acepta 8 hosts. `ancleto affected` es **read-only**; `stats failures`
 también y sólo funciona con la base de sesiones de opencode.
 
-**Versión del CLI**: el `ancleto` global del `PATH` en esta máquina es más viejo que el
-checkout y **no reconoce `memory consolidate`**; la versión `0.18.5` se invoca con
-`node src/cli/index.js`. Antes de concluir que una capacidad falta, verificar
+**Versión del CLI**: el `ancleto` global del `PATH` en esta máquina es **0.17.1** y **no
+reconoce `memory consolidate`** ni el contrato nuevo de `searchMemory`; la versión `0.18.6` se
+invoca con `node src/cli/index.js`. Antes de concluir que una capacidad falta, verificar
 `ancleto --version` contra `package.json`.
+
+**Contrato de `searchMemory` (`0.18.6`)**: el modo por defecto devuelve **preview** (prefijo
+literal de hasta 240 caracteres por nodo, con `limit` 5 y `content_truncated` cuando queda
+contenido afuera). `expand: true` devuelve el payload completo; `keys: [...]` expande sólo las
+claves pedidas y falla si alguna no está en la página; `required: [...]` es una **entrada de la
+llamada** (no se persiste), fija claves al frente del orden y falla si excede el `limit` efectivo
+o no entra en el presupuesto. El preview no es el texto íntegro: no debe citarse como fuente de
+una regla. El protocolo completo vive en `AGENTS.md` → `LOCKED: memory-protocol`; `PRODUCT.md`
+sólo apunta. Evidencia: `AGENTS.md`, `src/core/memory/engine.js`, `src/core/memory/tools.js`,
+`agents/memory-keeper.md`, `aspec/specs/memory-engine/spec.md` (requirement
+`Recall task-aware con orden total, preview expandible y keys requeridas`).
 
 **Contrato de escritura de memoria** (`MEM-03`, ampliado por MEM-04): `recordRule` y
 `recordDecision` pasan por `recordNode`. Toda escritura cuya procedencia no sea `runtime` debe
@@ -90,10 +101,22 @@ un snapshot previo. Evidencia: `src/cli/index.js` (`memorySnapshot`, `memoryMerg
 `memoryConsolidate`), `src/core/memory/snapshot.js`, `src/core/memory/engine.js`
 (`validateMerge`, `merge`, `consolidate`).
 
-**Estado observado de la memoria** (local, read-only): 112 nodos activos, 292 refs
-verificadas, 0 no resueltas; `consolidate` reporta 0 grupos exactos y 0 near-dups. El bloque
-proactivo omite **18 reglas** de scope `project`; `.ancleto/working-context.md` está
-`desactualizado` y se regenera con `ancleto memory context --out .ancleto/working-context.md`.
+**`memory gc` por edad de supersesión (`MEM-05b`)**: `memory_nodes` incorpora la columna
+aditiva `superseded_at TEXT`; la migración es guardada (sólo `ALTER TABLE` si falta) y el
+backfill copia `created_at` en las filas históricas superseded, preservando la elegibilidad
+previa. Las cuatro rutas de supersesión (`recordNode`, `importNodes`, `merge`, `consolidate`)
+escriben el instante. `gcSuperseded` mide `COALESCE(superseded_at, created_at)` con **un único
+cutoff calculado en JS** (segundos, sin milisegundos) compartido por dry-run y purge real; antes
+del `DELETE` limpia el `superseded_by` de los elegibles para no violar la FK. `VACUUM`+`REINDEX`
+son best-effort post-commit. Evidencia: `src/core/memory/database.js`,
+`src/core/memory/engine.js`, `aspec/specs/memory-ops/spec.md`.
+
+**Estado observado de la memoria** (local, read-only): **125 nodos activos** (34 rules
+`project`, 78 decisions `project`, 13 decisions `feature`) sobre **228 filas** en
+`memory_nodes`; **344 refs verificadas, 0 no resueltas**; `consolidate` reporta 0 grupos exactos
+y 0 near-dups. El bloque proactivo omite **20 reglas** de scope `project` (entran 14 de 34);
+`.ancleto/working-context.md` está `desactualizado` y se regenera con
+`ancleto memory context --out .ancleto/working-context.md`.
 
 ## Configuración persistida
 
@@ -111,7 +134,7 @@ proactivo omite **18 reglas** de scope `project`; `.ancleto/working-context.md` 
   comandos `cleto-test-*`, estructura `testspec/` y bloque LOCKED de convenciones Playwright.
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
   Aquí `.opencode/.ancleto-tier` contiene **`minimo`** (`--compress`, ignora `test/**`,
-  `docs/**`, `**/*.md`, sin token budget; el pack de esta corrida: **728 archivos / ~18.387
+  `docs/**`, `**/*.md`, sin token budget; el pack de esta corrida: **740 archivos / ~19.907
   tokens**). Evidencia: `src/core/repomix-tier.js`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`,
@@ -120,12 +143,13 @@ proactivo omite **18 reglas** de scope `project`; `.ancleto/working-context.md` 
   copilot en `copilot-mcp.json`; el resto en `.opencode/opencode.json`.
 - **`AGENTS.md` y bloques `LOCKED`**: `install`/`update`/`upgrade` re-aplican el interior de
   `<!-- LOCKED: name -->` y preservan el resto, tras reconciliar superficies planas legadas.
-  Bloques actuales: `validation-commands`, `memory-boundary`, `artifacts-language`,
-  `seed-freshness` y `test-block`. Evidencia: `src/cli/index.js` (`mergeTemplateInto`,
-  `mergeLocked`, `reconcileLegacyBlocks`), `templates/AGENTS.md`, `AGENTS.md`.
+  Bloques actuales: `memory-protocol`, `validation-commands`, `memory-boundary`,
+  `artifacts-language`, `seed-freshness` y `test-block`. Evidencia: `src/cli/index.js`
+  (`mergeTemplateInto`, `mergeLocked`, `reconcileLegacyBlocks`), `templates/AGENTS.md`,
+  `AGENTS.md`.
 - **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`) y entorno de máquina
   (`machine-env.md`); gitignored. `.ancleto/memory.db` es la fuente de `memory snapshot`,
-  `merge` y `consolidate`.
+  `merge`, `consolidate` y `gc`.
 - **`machine-env.md`**: artefacto derivado y local. Se regenera en `ancleto init`,
   `ancleto install --project` y `ancleto upgrade`; si los hechos no cambian, no se reescribe.
   La exclusión va a `git rev-parse --git-path info/exclude`, **nunca** a `.gitignore`, con el
@@ -153,10 +177,10 @@ sondean por `process.env.ComSpec`; la guarda `EINVAL` de Node es **inconclusa**,
 `bloqueado`. Un fallo real se publica con sufijo saneado (sin ANSI/OSC, espacios colapsados,
 tope de 200 caracteres); un veredicto inconcluso no lleva sufijo.
 
-**Estado en este checkout**: el artefacto existe (generado el 2026-11-01): `win32` /
+**Estado en este checkout**: el artefacto existe (generado el 2026-11-03): `win32` /
 `10.0.26200` / `x64`, shell `Windows PowerShell 5.1` (`shell_source: PSModulePath`), EOL `lf`
 (`eol_source: gitattributes`), `rg` **no disponible** (fallback: `Select-String`),
-`node`/`npm`/`git`/`python` disponibles, `ancleto: 0.18.0`. La exclusión local está en
+`node`/`npm`/`git`/`python` disponibles, `ancleto: 0.18.6`. La exclusión local está en
 `info/exclude`. Evidencia: `.ancleto/machine-env.md`.
 
 ## Permisos de shell por agente
@@ -249,8 +273,9 @@ es la cuenta. Evidencia: `AGENTS.md`, `agents/*.md`, `opencode.json`, `src/cli/i
 - Conventional Commits y **no** commitear a `main`/`master` (declarado en `AGENTS.md`; no se
   verificó protección real en el remoto).
 - Rama de trabajo observada: `development`; el publish se dispara por tag y crea el Release.
-- Idioma de artifacts: español (`language: "es"` en este repo); keywords y nombres de archivo
-  siempre en inglés literal (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`). Fuente:
+- Idioma de artifacts: el de la conversación o el `language` configurado en `.ancletorc`
+  (este seed está en español); keywords y nombres de archivo siempre en inglés literal
+  (`Requirement`, `Scenario`, `SHALL`, `WHEN`/`THEN`/`AND`). Fuente:
   `LOCKED: artifacts-language`.
 - Los mirrors `.opencode/agents/*.md` y `.opencode/commands/*.md` se **regeneran** con
   `ancleto upgrade`; nunca se editan a mano.

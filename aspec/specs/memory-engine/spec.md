@@ -38,7 +38,7 @@ decisions SHALL permanecer reactiva vía `searchMemory`.
 
 La documentación de producto y la descripción del campo `scope` de las tools MCP SHALL describir con precisión qué nodos se inyectan proactivamente: las `rule` activas con scope `project`. Las `decision` son reactivas. NO SHALL afirmarse que toda entrada de scope `project` (incluidas las `decision`) entra en `<ProjectMemoryRules>`. La documentación SHALL describir además la inyección día-cero: el bloque `<ProjectTopology>` se materializa e inyecta desde el día cero aunque no haya reglas ni base de memoria, y la descripción de la materialización del working-context SHALL coincidir con el comportamiento real de la CLI.
 
-La documentación de producto SHALL describir `searchMemory` de forma consistente con
+La documentación de producto (`README.md`) SHALL describir `searchMemory` de forma consistente con
 `Recall task-aware con orden total, preview expandible y keys requeridas`: SHALL indicar que el
 modo por defecto devuelve una previsualización —prefijo literal de hasta 240 caracteres, `limit` 5
 y `content_truncated`— y NO SHALL presentar el `content` completo como resultado por defecto.

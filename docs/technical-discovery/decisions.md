@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-02T18:45:50Z
-pluginVersion: 0.18.5
+generatedAt: 2026-11-03T10:45:00Z
+pluginVersion: 0.18.6
 skillVersion: '2.3'
 ---
 
@@ -92,10 +92,12 @@ skillVersion: '2.3'
     absolutos**; los superseded no se exportan. `importNodes(json)` valida el schema y **aborta
     el batch entero** si una entrada es inválida; upsert por `memory_key`: inserta si no existe,
     supersede sólo si el `createdAt` del JSON es más reciente y **no reactiva** superseded.
-    `gcSuperseded({days, dryRun})` purga superseded con antigüedad mayor al umbral (default 30
-    días) usando **`created_at` original** como proxy (no existe `superseded_at`); tras el
-    DELETE hace `VACUUM`+`REINDEX` best-effort. Evidencia:
-    `src/core/memory/engine.js`, `src/cli/index.js`, `aspec/specs/memory-ops/spec.md`.
+    `gcSuperseded({days, dryRun})` purga superseded con **antigüedad de supersesión** mayor al
+    umbral (default 30 días), medida como `COALESCE(superseded_at, created_at)`; las cuatro rutas
+    de supersesión escriben `superseded_at`. Antes del DELETE limpia `superseded_by` de los
+    elegibles; después hace `VACUUM`+`REINDEX` best-effort. Evidencia:
+    `src/core/memory/engine.js`, `src/core/memory/database.js`, `src/cli/index.js`,
+    `aspec/specs/memory-ops/spec.md`.
 14. **Migración/importación `openspec/` → `aspec/` no destructiva.** `migrateLegacyOpenspec`
     copia recursiva con `force: false`, escribe `.migrated-from-openspec` y conserva
     `openspec/`; si `aspec/` ya tiene contenido real avisa y no migra. `detectLegacyOpenSpec`
@@ -428,10 +430,41 @@ skillVersion: '2.3'
     `src/cli/index.js` (`memoryConsolidate`), `aspec/specs/memory-ops/spec.md`.
 56. **Curación de provenance separada del render (`0.18.4`).** Los nodos históricos sin refs se
     curan por runbook y aprobación por lote, fuera del render: éste no backfillea, no revalida ni
-    reescribe. En el estado actual **todos los activos declaran `refs:`** (112 activos, 292 refs,
+    reescribe. En el estado actual **todos los activos declaran `refs:`** (125 activos, 344 refs,
     0 rotas); la deuda de provenance quedó cerrada. Evidencia:
     `aspec/changes/archive/2026-11-02-memory-ranking-y-omisiones-visibles/`,
     `node src/cli/index.js memory doctor`.
+57. **Recall task-aware con orden total y preview expandible (`MEM-05`, `0.18.6`).**
+    `searchMemory` ordena de forma total y determinística —`required`, anclaje declarado, scope,
+    `bm25` y `memory_key`, sin `rowid`— y devuelve por defecto un **preview** (prefijo literal de
+    hasta 240 caracteres, `limit` 5 y `content_truncated`); `expand: true` devuelve el payload
+    completo y `keys` expande sólo claves presentes en la página. `required` es una **entrada de
+    la llamada**, no estado del nodo: promueve claves al frente y falla si excede el `limit`
+    efectivo o el presupuesto, en vez de degradarse a una omisión. `buildWorkingContext` acepta
+    `{ required }` y falla con un diagnóstico que nombra la `memory_key` y sus refs resueltas.
+    El subconjunto devuelto es el prefijo del orden total (rankear antes de recortar). Evidencia:
+    `src/core/memory/engine.js`, `aspec/specs/memory-engine/spec.md`,
+    `aspec/changes/archive/2026-11-02-mem-05-recall-task-aware/`.
+58. **GC mide la edad de supersesión (`MEM-05b`).** `memory_nodes` incorpora `superseded_at TEXT`
+    como columna aditiva; la migración sólo hace `ALTER TABLE` si falta y el backfill copia
+    `created_at` en superseded históricos, preservando la elegibilidad previa. Las cuatro rutas
+    de supersesión (`recordNode`, `importNodes`, `merge`, `consolidate`) escriben el instante en
+    el mismo statement. `gcSuperseded` usa `COALESCE(superseded_at, created_at)` con un **único
+    cutoff calculado en JS** (segundos, sin milisegundos) compartido por dry-run y purge, y antes
+    del `DELETE` limpia `superseded_by` de los elegibles para no violar la FK. Los statements que
+    referencian la columna se preparan lazy para que un engine read-only sobre una base previa
+    siga construyendo. Evidencia: `src/core/memory/{database,engine}.js`,
+    `aspec/specs/memory-ops/spec.md`,
+    `aspec/changes/archive/2026-11-02-mem-05b-gc-superseded-age/`.
+59. **Protocolo de memoria canónico y reconciliación legacy gateada.** El protocolo de memoria
+    vive en `AGENTS.md` → `LOCKED: memory-protocol` y `PRODUCT.md`/`templates/PRODUCT.md` sólo
+    apuntan; el aviso de overflow nombra `memory_key` omitidas y no menciona `searchMemory`. La
+    reconciliación de superficies planas legadas se aplica **antes** de `mergeLocked`, sólo con
+    coincidencia exacta, gateada por `requiresInSource` (si el template no trae el reemplazo
+    canónico, no se borra el run legado) y con las líneas de bloques `LOCKED` y code fences
+    enmascaradas. Un bloque `LOCKED` nuevo se inserta separado por exactamente una línea en
+    blanco. Evidencia: `src/cli/index.js` (`reconcileLegacyBlocks`, `maskLockedLines`,
+    `mergeTemplateInto`), `AGENTS.md`, `aspec/specs/prompt-contracts/spec.md`.
 
 ## Seed incremental (contrato del discovery)
 
@@ -441,10 +474,12 @@ skillVersion: '2.3'
   - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
     raíz nuevo (o un archivo material como `package.json`).
 - **Reporte que originó esta regeneración**: `STALE` / `impact: material`;
-  `changedAreas: [".ancleto", "CHANGELOG.md", "aspec", "package.json", "src", "test"]`;
-  `materialReasons: ["archivo material modificado: package.json"]`; 11 `affectedDocs`.
-  La causa es el salto a `0.18.5` (CHANGELOG, `package.json`, engine, CLI y tests) y los
-  artefactos derivados del discovery; `.ancleto` es estado local, no producto versionado.
+  `changedAreas: [".ancleto", ".ancletorc", ".opencode", "AGENTS.md", "CHANGELOG.md",
+  "PRODUCT.md", "README.md", "agents", "aspec", "docs", "package.json", "skills", "src",
+  "templates", "test"]`; `materialReasons: ["archivo material modificado: package.json"]`; los 11
+  documentos del seed en `affectedDocs`. La causa es el salto a `0.18.6` (CHANGELOG,
+  `package.json`, `engine`, `database`, CLI, `memory-keeper`, specs y tests) y los artefactos
+  derivados del discovery; `.ancleto` es estado local, no producto versionado.
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **sólo** esos
   documentos; con `impact: material` se regenera el seed completo. El mapeo vive en
   `seed-map.json`; sin ese archivo la regeneración es completa.
@@ -459,7 +494,7 @@ skillVersion: '2.3'
   recorre el disco con `DEFAULT_IGNORES` + `exclude` y **no** aplica `.gitignore`.
 - **Detección material por archivo, no por contrato**: cualquier bump de `package.json` marca
   `impact: material` aunque no cambie comportamiento. En esta corrida el motivo fue
-  `0.18.4` → `0.18.5`.
+  `0.18.5` → `0.18.6`.
 - `EXPECTED_DOCS` = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`, `integrations`,
   `decisions`, `unknowns`, `units/_map`).
 - Evidencia: `README.md`, `src/cli/index.js` (`checkDiscovery`, `computeImpact`,
@@ -467,18 +502,19 @@ skillVersion: '2.3'
 
 ## Riesgos, deuda y acoplamiento
 
-- **Publicación `0.18.3`–`0.18.5`.** `0.18.3` publicó MEM-04b; `0.18.4` el orden por anclaje y
-  las omisiones visibles; `0.18.5` la consolidación. Los tres changes están archivados y sus
-  specs fuente mergeadas. Evidencia: `git log`, `git tag`, `CHANGELOG.md`,
-  `aspec/changes/archive/`.
+- **Publicación `0.18.3`–`0.18.6`.** `0.18.3` publicó MEM-04b; `0.18.4` el orden por anclaje y
+  las omisiones visibles; `0.18.5` la consolidación; `0.18.6` el recall task-aware y el protocolo
+  canónico de memoria. Los changes están archivados y sus specs fuente mergeadas. Evidencia:
+  `git log`, `CHANGELOG.md`, `aspec/changes/archive/`.
 - **`memory consolidate` no es reversible por CLI.** No hay "unsupersede": revertir exige un
   `memory snapshot` previo. `--apply` conserva `id` y `superseded_by`, así que el historial es
   reconstruible, pero no hay comando de restauración. Evidencia:
   `src/core/memory/engine.js`, `src/cli/index.js`.
-- **Consolidar adelanta la elegibilidad de `memory gc`.** `gcSuperseded` purga por el
-  **`created_at` original**, no por la fecha de supersesión; un duplicado antiguo consolidado
-  puede quedar elegible en el siguiente `memory gc --days`. El snapshot previo es la red.
-  Evidencia: `src/core/memory/engine.js`.
+- **La elegibilidad de `memory gc` ahora depende del backfill.** MEM-05b cerró la distorsión de
+  purgar por `created_at`, pero una fila histórica sin `superseded_at` recibe `created_at` como
+  `superseded_at` (preserva la elegibilidad previa, no otorga gracia retroactiva). Las filas
+  superseded por las rutas vigentes sí llevan el instante real. `--dry-run` permite auditarlo.
+  Evidencia: `src/core/memory/database.js`, `src/core/memory/engine.js`.
 - **La normalización de consolidate puede unir nodos que difieren sólo en mayúsculas, espacios
   o diacríticos.** Es la definición acordada de duplicado exacto; el dry-run permite revisarlo.
   El criterio "`content` más largo" puede favorecer nodos con más texto de refs, pero la
@@ -487,18 +523,19 @@ skillVersion: '2.3'
 - **Los near-dups no se consolidan.** Jaccard ≥ 0,60 sólo se reporta; no hay guard por similitud
   en `recordNode` ni auto-merge semántico. La calibración queda para una medición futura.
   Evidencia: proposal de `2026-11-02-memory-consolidacion-autonoma`.
-- **El bloque proactivo sigue desbordado.** El presupuesto ahora se cumple, pero entran 11 de 29
-  reglas de scope `project` y **18 quedan omitidas**; el aviso las nombra. El working-context
+- **El bloque proactivo sigue desbordado.** El presupuesto ahora se cumple, pero entran 14 de 34
+  reglas de scope `project` y **20 quedan omitidas**; el aviso las nombra. El working-context
   está `desactualizado`. No es una falla de integridad: es presión de contenido. Evidencia:
   `node src/cli/index.js memory doctor`, `src/core/memory/engine.js`.
 - **Discrepancia de raíz de DB (abierta).** `defaultMemoryDbPath(cwd)` resuelve desde el `cwd`
   del proceso, mientras el MCP usa `context.projectRoot`; si ambos difieren, las superficies
   pueden leer/escribir bases distintas. No se reprodujo en esta corrida; el riesgo sigue
   registrado. Evidencia: `src/core/memory/engine.js`, `src/core/memory/mcp-server.js`.
-- **CLI global desactualizado.** El `ancleto` del `PATH` de esta máquina no conoce
-  `memory consolidate`; el checkout sí. Un agente que sólo use el binario global puede concluir
-  erróneamente que la capacidad no existe. Verificar `ancleto --version` y, si difiere, usar
-  `node src/cli/index.js`. Evidencia: ejecución local.
+- **CLI global desactualizado.** El `ancleto` del `PATH` de esta máquina es **0.17.1** y no
+  conoce `memory consolidate` ni el contrato nuevo de `searchMemory`; el checkout sí (0.18.6). Un
+  agente que sólo use el binario global puede concluir erróneamente que la capacidad no existe.
+  Verificar `ancleto --version` y, si difiere, usar `node src/cli/index.js`. Evidencia: ejecución
+  local.
 - **Tres superficies del `model:`.** Cambiar el modelo exige revisar `agents/*.md`,
   `.opencode/agents/*` y `~/.config/opencode/agents/*`; `opencode.json` sólo alcanza al agente
   primario. Evidencia: `AGENTS.md`, `opencode.json`.
@@ -533,10 +570,11 @@ skillVersion: '2.3'
   `aspec/changes/<change>/` deja de resolver tras el move; el preflight lo prohíbe.
 - **La allowlist de `bash` es la frontera de privilegio.** `agents/technical-discovery.md` tiene
   `'*': deny` con dos literales; cada literal nuevo es un incremento que debe justificarse.
-- **Guía `searchMemory` residual.** `AGENTS.md` (bloque de memoria reactiva), `PRODUCT.md` y sus
-  templates siguen recomendando invocar `searchMemory` ante `<ContextOverflowWarning>`, lo que
-  contradice el aviso vigente (regla 32) y la prohibición del orquestador. Es deuda abierta
-  (ítem `#17` del backlog).
+- **Protocolo de memoria duplicado (resuelto en `0.18.6`).** El protocolo vive una sola vez en
+  `AGENTS.md` → `LOCKED: memory-protocol`; `PRODUCT.md` y `templates/PRODUCT.md` sólo apuntan.
+  Cualquier re-enunciación en otra superficie vuelve a abrir la deuda: el texto del aviso y el
+  contrato de `searchMemory` deben seguir siendo la fuente única. Evidencia: `AGENTS.md`,
+  `templates/PRODUCT.md`, `aspec/specs/prompt-contracts/spec.md`.
 - **Merge de templates: contrato de reconciliación.** Toda ruta que mergee `TEMPLATES` debe
   reconciliar bloques planos antes de `mergeLocked`; saltearlo reintroduce guía obsoleta.
 - **Directiva host-específica filtrada a texto compartido.** Riesgo de que una instrucción (p.
@@ -564,8 +602,10 @@ skillVersion: '2.3'
   al target (`superseded_by`). Deshacerlo requiere snapshot previo o reescribir nodos.
 - **Import pierde genealogía.** El export sólo incluye activos; para historial usar
   `memory snapshot`.
-- **GC usa `created_at` como proxy.** Un nodo creado hace mucho y superseded recientemente puede
-  purgarse antes de lo deseado; `--dry-run` permite auditarlo.
+- **GC y `superseded_at`: backfill histórico.** Un nodo superseded antes de MEM-05b tiene
+  `superseded_at = created_at`; un nodo creado hace mucho y superseded recientemente **no** se
+  purga antes de tiempo si la supersesión pasó por las rutas vigentes. `--dry-run` permite
+  auditarlo. Evidencia: `src/core/memory/database.js`, `src/core/memory/engine.js`.
 - **Procedencia ≠ autorización, pero sí compuerta de validación.** La columna `source` es
   auditable y decide si se validan refs; no hay canal de identidad autenticado (MCP stdio).
 - **`ancleto stats` y `stats failures` acoplados a opencode.** Leen la base de sesiones de
@@ -596,22 +636,22 @@ skillVersion: '2.3'
 - **Staleness advisory puede dar falsos positivos triviales.** La normalización es acotada
   (CRLF, espacios finales, salto final); cambios cosméticos mayores podrían disparar
   `desactualizado`.
-- **Docs de producto parcialmente desalineados.** `PRODUCT.md` declara 12 commands y 18 skills
-  (hoy 16 y 21), no menciona `machine-env`, `stats failures`, `snapshot`, `merge`,
-  `consolidate`, el check de refs ni el resolver, y conserva la guía residual de `searchMemory`.
-  `README.md` describe el doctor read-only y MEM-04, pero **no** documenta el ranking de
-  `0.18.4` ni `memory consolidate` de `0.18.5`. `CHANGELOG.md` sí llega a `0.18.5`.
+- **Docs de producto parcialmente desalineados.** `PRODUCT.md` sigue declarando 12 commands y 18
+  skills (hoy 16 y 21) y no menciona `machine-env`, `stats failures`, `snapshot`, `merge`,
+  `consolidate`, `gc`, el check de refs ni el resolver. Su sección de memoria **sí** apunta al
+  bloque `LOCKED: memory-protocol`, y `README.md` ya documenta preview/`expand`/`keys`/`required`.
+  `CHANGELOG.md` llega a `0.18.6`.
 - **Sin backlog raíz.** `BACKLOG.md` no existe. El backlog P0 de memoria vive en
   `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`; `§5.2` conserva la deuda de I/O de `inspectRefs`
   y el conteo de no verificables con rotas.
-- **Versión y publicación.** `package.json` marca `0.18.5`; tag `v0.18.5` → merge `dbf7df5` en
-  `main`; `development` en `82d7cca` (ancestro de `main`). `git describe --tags` da
-  `v0.16.0-32-g82d7cca`. Evidencia: `package.json`, `git tag`, `git log`.
+- **Versión y publicación.** `package.json` marca `0.18.6`; HEAD `95b2599` en `development`;
+  `git describe --tags` da `v0.18.5-14-g95b2599`, es decir **0.18.6 sin tag** al momento del
+  relevamiento. Evidencia: `package.json`, `git log`, `git tag`.
 
 ## Decisiones registradas en memoria del repo
 
-> Registradas/actualizadas en `.ancleto/memory.db`. Esta corrida **sí** consultó la memoria en
-> modo read-only: 112 nodos activos, 292 refs, 0 refs rotas.
+> Registradas/actualizadas en `.ancleto/memory.db`. En esta corrida se inspeccionó la memoria
+> en modo read-only (`memory doctor`/`memory list`): 125 nodos activos, 344 refs, 0 refs rotas.
 
 - `dogfooding-versionado-init`: versionar `AGENTS.md`, `PRODUCT.md` y `aspec/`; ignorar
   `.opencode/`, `.ancletorc`, `.ancleto/`.
@@ -624,6 +664,12 @@ skillVersion: '2.3'
 - `memory-consolidate-exactos-deterministico`, `memory-consolidate-dry-run-default`,
   `memory-consolidate-reversible-supersede`, `memory-consolidate-semantico-diferido`:
   decisiones de `0.18.5`.
+- `mem-05-orden-total-sin-rowid`, `mem-05-preview-prefijo-literal`,
+  `mem-05-preview-opt-in-expand`, `mem-05-required-es-entrada-de-call`,
+  `mem-05-required-excedente-falla`, `mem-05-presupuestos-separados-no-componibles`: decisiones
+  de `0.18.6`.
+- `gc-superseded-at-columna`: la edad de supersesión se mide con `superseded_at` (MEM-05b).
 - Evidencia: `.ancleto/memory.db`, `aspec/specs/memory-engine/spec.md`,
   `aspec/changes/archive/2026-11-02-memory-ranking-y-omisiones-visibles/`,
-  `aspec/changes/archive/2026-11-02-memory-consolidacion-autonoma/`.
+  `aspec/changes/archive/2026-11-02-memory-consolidacion-autonoma/`,
+  `aspec/changes/archive/2026-11-02-mem-05-recall-task-aware/`.

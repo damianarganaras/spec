@@ -1420,29 +1420,49 @@ function mergeLocked(source, local, filename) {
     if (anchor === null) {
       console.warn(`ancleto: no se pudo insertar el bloque LOCKED "${name}" en ${filename}`)
     } else {
-      result = result.slice(0, anchor) + sourceBlock + '\n\n' + result.slice(anchor)
+      const before = result.slice(0, anchor)
+      const after = result.slice(anchor)
+      // El bloque queda al inicio de linea y separado de sus vecinos por exactamente
+      // un blanco: antes de un bloque existente y al final del archivo, de modo que
+      // dos inserciones consecutivas no queden pegadas.
+      let lead = ''
+      if (anchor > 0) {
+        if (!before.endsWith('\n')) lead = '\n\n'
+        else if (!before.endsWith('\n\n')) lead = '\n'
+      }
+      // Al final del archivo alcanza con el newline de cierre; con contenido
+      // siguiente, un blanco de separacion.
+      const trail = after === '' ? '\n' : '\n\n'
+      result = before + lead + sourceBlock + trail + after
     }
   }
   return result
 }
 
-// Punto de insercion para un bloque LOCKED nuevo: justo antes del bloque LOCKED
-// que lo sigue en el template, o al final del archivo si es el ultimo.
+// Punto de insercion para un bloque LOCKED nuevo: justo antes del primer bloque
+// LOCKED que lo sigue en el template y existe en el archivo local. Saltar los
+// siguientes ausentes preserva el orden del template aunque falten varios; si
+// ninguno esta presente, al final del archivo.
 function findInsertAnchor(local, source, name) {
   const order = [...extractLockedBlocks(source).keys()]
-  const nextInSource = order[order.indexOf(name) + 1]
-  if (nextInSource && extractLockedBlocks(local).has(nextInSource)) {
-    const at = local.search(new RegExp(`<!--\\s*LOCKED:\\s*${escapeRe(nextInSource)}\\s*-->`))
+  const localBlocks = extractLockedBlocks(local)
+  for (const candidate of order.slice(order.indexOf(name) + 1)) {
+    if (!localBlocks.has(candidate)) continue
+    const at = local.search(new RegExp(`<!--\\s*LOCKED:\\s*${escapeRe(candidate)}\\s*-->`))
     if (at >= 0) return at
   }
   return local.length
 }
 
 // Firmas legadas de contenido PLANO que el merge por bloques LOCKED no reconcilia.
-// Cada entrada: { id, label, filename, heading, lines, terminator?, eofTerminator? }.
+// Cada entrada: { id, label, filename, heading, lines, terminator?, eofTerminator?,
+// requiresInSource }.
 // filename acota la firma al archivo correcto (no a toda ruta que mergea TEMPLATES):
 // asi un archivo sin firma registrada (p. ej. PRODUCT.md, EXTENSIBLE) es un no-op.
 // heading identifica el bloque legado (distingue "no esta" de "personalizado").
+// requiresInSource acota la firma al source que puede reemplazarla: si el template
+// no trae el bloque canonico (p. ej. un perfil parcial o un bundle viejo), borrar el
+// run plano dejaria el archivo sin la seccion. Sin source se aplica como siempre.
 // Dos formas de firma:
 //   - plana: `lines` son regex de las lineas siguientes; se elimina si coinciden y no
 //     la continua otro item/continuacion indentada.
@@ -1460,7 +1480,8 @@ const LEGACY_SIGNATURES = [
       /^[ \t]*-[ \t]*`npm run typecheck`[ \t]+o[ \t]+`npx tsc --noEmit`[ \t]*$/,
       /^[ \t]*-[ \t]*`npm run lint`[ \t]*$/,
       /^[ \t]*-[ \t]*`npm test`[ \t]*$/
-    ]
+    ],
+    requiresInSource: /<!--\s*LOCKED:\s*validation-commands\s*-->/
   },
   {
     id: 'memory-protocol-flat',
@@ -1495,7 +1516,10 @@ const LEGACY_SIGNATURES = [
     ],
     // Cualquier marcador de apertura LOCKED (memory-boundary o validation-commands):
     // el bloque siguiente depende del orden del template de la version instalada.
-    terminator: /^[ \t]*<!--[ \t]*LOCKED:[ \t]*[\w-]+[ \t]*-->[ \t]*$/
+    terminator: /^[ \t]*<!--[ \t]*LOCKED:[ \t]*[\w-]+[ \t]*-->[ \t]*$/,
+    // Un archivo que termina con el protocolo plano tambien se reconcilia.
+    eofTerminator: true,
+    requiresInSource: /<!--\s*LOCKED:\s*memory-protocol\s*-->/
   },
   {
     id: 'memory-blockquote-flat',
@@ -1508,25 +1532,48 @@ const LEGACY_SIGNATURES = [
       '> `<ContextOverflowWarning>`, or before major refactors / contract changes.'
     ],
     terminator: /^[ \t]*---[ \t]*$/,
-    eofTerminator: true
+    eofTerminator: true,
+    requiresInSource: /LOCKED:\s*memory-protocol/
   }
 ]
 
-// Lineas dentro de un bloque LOCKED: se excluyen de la busqueda de firmas legadas
-// porque el bloque canonico repite el heading legado (p. ej. el `## Memoria
-// Persistente (Protocolo Reactivo)` de memory-protocol) y dispararia un aviso falso.
+// Lineas dentro de un bloque LOCKED o de un code fence: se excluyen de la busqueda
+// de firmas legadas porque el bloque canonico repite el heading legado (p. ej. el
+// `## Memoria Persistente (Protocolo Reactivo)` de memory-protocol) y dispararia un
+// aviso falso, y un snippet documentado en ``` no es contenido real a migrar.
+function fenceOpening(line) {
+  const match = /^[ \t]*(`{3,}|~{3,})/.exec(line)
+  if (!match) return null
+  // En un fence de backticks el info string no puede contener backticks.
+  if (match[1][0] === '`' && line.slice(match[0].length).includes('`')) return null
+  return { char: match[1][0], len: match[1].length }
+}
+
 function maskLockedLines(lines) {
   const masked = new Array(lines.length).fill(false)
-  let open = false
+  let locked = false
+  let fence = null
   for (let i = 0; i < lines.length; i++) {
-    if (!open && /^[ \t]*<!--[ \t]*LOCKED:[ \t]*[\w-]+[ \t]*-->[ \t]*$/.test(lines[i])) {
-      open = true
+    if (fence) {
+      masked[i] = true
+      const close = new RegExp(`^[ \\t]*${fence.char}{${fence.len},}[ \\t]*$`)
+      if (close.test(lines[i])) fence = null
+      continue
+    }
+    if (locked) {
+      masked[i] = true
+      if (/^[ \t]*<!--[ \t]*\/LOCKED:[ \t]*[\w-]+[ \t]*-->[ \t]*$/.test(lines[i])) locked = false
+      continue
+    }
+    const opened = fenceOpening(lines[i])
+    if (opened) {
+      fence = opened
       masked[i] = true
       continue
     }
-    if (open) {
+    if (/^[ \t]*<!--[ \t]*LOCKED:[ \t]*[\w-]+[ \t]*-->[ \t]*$/.test(lines[i])) {
+      locked = true
       masked[i] = true
-      if (/^[ \t]*<!--[ \t]*\/LOCKED:[ \t]*[\w-]+[ \t]*-->[ \t]*$/.test(lines[i])) open = false
     }
   }
   return masked
@@ -1535,9 +1582,15 @@ function maskLockedLines(lines) {
 // Reconciliacion de bloques planos legados (migracion de install/upgrade).
 // Segura: solo elimina con coincidencia EXACTA de la firma; si el bloque legado
 // esta personalizado (heading presente pero lineas distintas) avisa y NO toca.
-// Las firmas se buscan solo fuera de bloques LOCKED (ver maskLockedLines).
+// Las firmas se buscan solo fuera de bloques LOCKED y de code fences (ver
+// maskLockedLines). Sin `source` se aplican todas las firmas del archivo
+// (compatibilidad); con `source`, solo las que ese template puede reemplazar.
 // Idempotente: tras eliminar, la firma ya no esta y re-ejecutar es un no-op.
-function reconcileLegacyBlocks(content, filename) {
+function reconcileLegacyBlocks(content, filename, source = '') {
+  const signatures = LEGACY_SIGNATURES.filter((sig) =>
+    sig.filename === filename && (!source || !sig.requiresInSource || sig.requiresInSource.test(source))
+  )
+  if (signatures.length === 0) return content
   const eol = content.includes('\r\n') ? '\r\n' : '\n'
   const lines = content.split(/\r?\n/)
   const masked = maskLockedLines(lines)
@@ -1555,8 +1608,9 @@ function reconcileLegacyBlocks(content, filename) {
   }
   const out = []
   const warned = new Set()
+  let removed = false
   for (let i = 0; i < lines.length; i++) {
-    const sig = !masked[i] && LEGACY_SIGNATURES.find((s) => s.filename === filename && s.heading.test(lines[i]))
+    const sig = !masked[i] && signatures.find((s) => s.heading.test(lines[i]))
     if (sig && sig.terminator) {
       const last = i + sig.lines.length
       const exact = last < lines.length && sig.lines.every((expected, k) => {
@@ -1570,6 +1624,7 @@ function reconcileLegacyBlocks(content, filename) {
             (out.length === 0 || trimEnd(out[out.length - 1]) === '')) {
           i++
         }
+        removed = true
         continue
       }
       if (!warned.has(sig.id)) {
@@ -1588,6 +1643,7 @@ function reconcileLegacyBlocks(content, filename) {
       const closed = next >= lines.length || !isListContinuation(lines[next])
       if (exact && closed) {
         i += sig.lines.length // salta el heading y sus lineas
+        removed = true
         continue
       }
       if (!warned.has(sig.id)) {
@@ -1597,7 +1653,9 @@ function reconcileLegacyBlocks(content, filename) {
     }
     out.push(lines[i])
   }
-  return out.join(eol)
+  // Sin eliminaciones, el contenido se devuelve byte a byte: un rejoin
+  // normalizaria un EOL mixto sin motivo.
+  return removed ? out.join(eol) : content
 }
 
 // Merge de un template sobre el contenido local: reconcilia los bloques planos
@@ -1605,7 +1663,7 @@ function reconcileLegacyBlocks(content, filename) {
 // LOCKED). Punto unico para install/upgrade (copyTemplates) e import (importCmd):
 // ambos caminos deben dejar el proyecto coherente sin pasos manuales.
 function mergeTemplateInto(source, local, filename) {
-  return mergeLocked(source, reconcileLegacyBlocks(local, filename), filename)
+  return mergeLocked(source, reconcileLegacyBlocks(local, filename, source), filename)
 }
 
 // Solo mergea los templates raiz (AGENTS.md/PRODUCT.md). Los assets por host

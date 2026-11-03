@@ -39,6 +39,22 @@ function readRc(dir) {
   return JSON.parse(readFileSync(join(dir, '.ancletorc'), 'utf8'))
 }
 
+// Catálogo alternativo por `ANCLETO_MODEL_CATALOG`: seam de test/manual, mismo
+// precedente que `ANCLETO_PROJECTS_FILE`. Se arma desde el snapshot commiteado
+// quitándole los IDs indicados; nunca se muta el snapshot versionado.
+function catalogWithout(dir, ids, name = 'catalog.json') {
+  const base = JSON.parse(readFileSync(join(TEST_DIR, '..', 'src', 'core', 'model-catalog.json'), 'utf8'))
+  const providers = Object.fromEntries(
+    Object.entries(base.providers).map(([provider, entries]) => [
+      provider,
+      entries.filter((entry) => !ids.includes(entry.id))
+    ])
+  )
+  const path = join(dir, name)
+  writeFileSync(path, JSON.stringify({ ...base, providers }))
+  return path
+}
+
 describe('CLI init (G6 manifest)', () => {
   it('crea el .ancletorc con el manifiesto completo', () => {
     withDir((dir) => {
@@ -1139,6 +1155,91 @@ describe('CLI export/import (cross-machine-export-import)', () => {
       assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'MCP regenerado local')
     })
   })
+
+  // Bundle mínimo armado a mano (manifest + .ancletorc portables): fija tier y
+  // `gratisModel` del escenario sin depender del export del proyecto origen.
+  function writeBundle(dir, { tier = 'minimo', agent = 'opencode', gratisModel, template = false } = {}) {
+    const bundle = join(dir, 'bundle')
+    mkdirSync(bundle, { recursive: true })
+    const rc = { agent, language: 'auto', profile: 'general' }
+    if (gratisModel !== undefined) rc.gratisModel = gratisModel
+    writeFileSync(join(bundle, '.ancletorc'), JSON.stringify(rc, null, 2))
+    const manifest = {
+      format: 'ancleto-export/1',
+      ancletoVersion: PKG.version,
+      exportedAt: new Date().toISOString(),
+      agent,
+      tier,
+      language: 'auto',
+      profile: 'general',
+      ...(gratisModel !== undefined ? { gratisModel } : {}),
+      flags: { azure: false, engram: false },
+      mcp: []
+    }
+    writeFileSync(join(bundle, 'manifest.json'), JSON.stringify(manifest, null, 2))
+    if (template) writeFileSync(join(bundle, 'AGENTS.md'), '# plantilla del bundle\n')
+    return bundle
+  }
+
+  it('import escribe .opencode/.ancleto-tier y el check posterior no diverge', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const r = run(['import', writeBundle(dir)], dst)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dst, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'minimo')
+      assert.equal(readRc(dst).gratisModel, undefined, 'no agrega la clave ausente')
+      const check = run(['check'], dst)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('import sobre un proyecto ya inicializado actualiza el tier (evita divergencia falsa)', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      // Sin `--no-mcp`: la compresion queda consistente entre install, import y
+      // check (si el binario de caveman existe, la nota del orchestrator tambien).
+      assert.equal(run(['install', '--project', dst, '--tier', 'normal'], dst).status, 0)
+      const r = run(['import', writeBundle(dir)], dst)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dst, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'minimo')
+      const check = run(['check'], dst)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('import normaliza un gratisModel desconocido del bundle', () => {
+    withDir((dir) => {
+      const bundle = writeBundle(dir, { tier: 'gratis', gratisModel: 'opencode/muse-spark-1.3-contributor-free' })
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const r = run(['import', bundle], dst)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dst).gratisModel, 'opencode/big-pickle')
+      assert.match(
+        readFileSync(join(dst, '.opencode', 'agents', 'orchestrator.md'), 'utf8'),
+        /model: opencode\/big-pickle/
+      )
+    })
+  })
+
+  it('import que no puede resolver el tier aborta antes de escribir (sin estado parcial)', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const r = run(['import', writeBundle(dir, { template: true })], dst, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /no hay ningún candidato disponible/)
+      assert.equal(existsSync(join(dst, '.ancletorc')), false, 'sin manifiesto escrito')
+      assert.equal(existsSync(join(dst, 'AGENTS.md')), false, 'sin template escrito')
+      assert.equal(existsSync(join(dst, '.opencode', 'agents', 'orchestrator.md')), false, 'sin agents escritos')
+    })
+  })
 })
 
 describe('CLI import openspec externo (import-legacy-openspec)', () => {
@@ -1481,22 +1582,7 @@ describe('CLI check (G3)', () => {
     })
   })
 
-  // Catálogo alternativo por `ANCLETO_MODEL_CATALOG`: seam de test/manual, mismo
-  // precedente que `ANCLETO_PROJECTS_FILE`. Se arma desde el snapshot commiteado
-  // quitándole los IDs indicados; nunca se muta el snapshot versionado.
-  function catalogWithout(dir, ids, name = 'catalog.json') {
-    const base = JSON.parse(readFileSync(join(TEST_DIR, '..', 'src', 'core', 'model-catalog.json'), 'utf8'))
-    const providers = Object.fromEntries(
-      Object.entries(base.providers).map(([provider, entries]) => [
-        provider,
-        entries.filter((entry) => !ids.includes(entry.id))
-      ])
-    )
-    const path = join(dir, name)
-    writeFileSync(path, JSON.stringify({ ...base, providers }))
-    return path
-  }
-
+  // Catálogo alternativo por `ANCLETO_MODEL_CATALOG`: ver `catalogWithout` arriba.
   it('minimo con la cabeza disponible en install y ausente en check: sin divergencia, con aviso', () => {
     withDir((dir) => {
       const chain = TIER_CHAINS.minimo.orchestrator
@@ -1584,6 +1670,34 @@ describe('CLI check (G3)', () => {
       assert.match(r.stderr, /no hay ningún candidato disponible/)
       assert.match(r.stderr, /commandcode\/deepseek\/deepseek-v4\.1-flash/)
       assert.equal(existsSync(join(dir, '.opencode', 'agents', 'orchestrator.md')), false)
+    })
+  })
+
+  it('install/init con un host que no escribe model: no resuelve el catálogo ni aborta', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      const inst = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(inst.status, 0)
+      assert.doesNotMatch(inst.stderr, /no hay ningún candidato disponible/)
+      assert.ok(existsSync(join(dir, '.claude', 'agents', 'orchestrator.md')), 'layout del host instalado')
+      const initDir = join(dir, 'init')
+      mkdirSync(initDir)
+      const ini = run(['init', '--tier', 'minimo', '--agent', 'claude', '--no-mcp'], initDir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(ini.status, 0)
+      assert.doesNotMatch(ini.stderr, /no hay ningún candidato disponible/)
+    })
+  })
+
+  it('init con opencode y sin candidatos aborta con error explícito sin escribir agents ni tier', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      const r = run(['init', '--tier', 'minimo'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /no hay ningún candidato disponible/)
+      assert.equal(existsSync(join(dir, '.opencode', 'agents', 'orchestrator.md')), false)
+      assert.equal(existsSync(join(dir, '.opencode', '.ancleto-tier')), false)
     })
   })
 

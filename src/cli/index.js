@@ -1732,14 +1732,22 @@ async function install(args) {
     : null
   const persistGratisModel = hasPersistedGratisModel
 
-  // Resolver antes de escribir agents: si ningun candidato del tier esta disponible,
-  // el comando aborta sin materializar un ID inventado.
+  // El tier se materializa con `applyTier` solo en los mirrors de opencode: los
+  // demas hosts dropean `model:` (claude/vscode/copilot/commandcode) o emiten un
+  // valor propio (antigravity: `model: inherit`), asi que resolver el catalogo ahi
+  // no tendria efecto y solo podria abortar de mas. El install global siempre
+  // copia los assets de opencode, sin importar el flag `--agent`.
+  const appliesTier = !projectDir || agent === 'opencode'
   let models = null
-  try {
-    models = resolveTierMap(tier, gratisModelChoice).models
-  } catch (err) {
-    console.error(err.message)
-    process.exit(1)
+  if (appliesTier) {
+    // Resolver antes de escribir agents: si ningun candidato del tier esta
+    // disponible, el comando aborta sin materializar un ID inventado.
+    try {
+      models = resolveTierMap(tier, gratisModelChoice).models
+    } catch (err) {
+      console.error(err.message)
+      process.exit(1)
+    }
   }
 
   if (projectDir) {
@@ -1771,7 +1779,7 @@ async function install(args) {
     }
   }
 
-  await applyTier(join(target, 'agents'), tier, models)
+  if (appliesTier) await applyTier(join(target, 'agents'), tier, models)
   // El estado de tier vive en el base de opencode; puede no existir si el host
   // resuelto ubica sus assets en otro directorio (p. ej. cursor -> .cursor/).
   await mkdir(target, { recursive: true })
@@ -1798,7 +1806,7 @@ async function install(args) {
     : `${target} (disponible en todos tus proyectos)`
   console.log(`ancleto: instalado en ${loc}`)
   console.log(`ancleto: tier de costo de agents: ${tier}`)
-  if (tier === 'gratis') console.log(`ancleto: modelo gratis: ${models.orchestrator}`)
+  if (tier === 'gratis') console.log(`ancleto: modelo gratis: ${gratisModelChoice}`)
   if (res.added.length) {
     console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
   }
@@ -1928,8 +1936,11 @@ async function initProject(args) {
   const persistGratisModel = hasPersistedGratisModel
 
   // Resolver antes de escribir agents/tier: sin candidato disponible se aborta.
+  // Solo cuando el host escribe `model:` (opencode): el resto dropea el campo o
+  // emite un valor propio (antigravity: `model: inherit`), asi que resolver ahi no
+  // tendria efecto sobre el mirror.
   let tierModelMap = null
-  if (tier) {
+  if (tier && agent === 'opencode') {
     try {
       tierModelMap = resolveTierMap(tier, gratisModelChoice).models
     } catch (err) {
@@ -1966,7 +1977,7 @@ async function initProject(args) {
   await maybeImportOpenspec(projectDir, args)
   await copyTemplates(projectDir, profile)
   if (profile === 'test') await scaffoldTestspec(projectDir)
-  if (tier) {
+  if (tierModelMap) {
     await applyTier(join(projectDir, '.opencode', 'agents'), tier, tierModelMap)
   }
   await scaffoldAspec(projectDir)
@@ -4080,13 +4091,35 @@ async function importCmd(args) {
     if (manifest.ancletoVersion && manifest.ancletoVersion !== localVersion) {
       console.warn(`ancleto: el bundle es de v${manifest.ancletoVersion} y el CLI es v${localVersion} (se continua igual)`)
     }
+    // Lectura y resolucion ANTES del primer write: un fallo del catalogo no debe
+    // dejar un import a medio aplicar (manifiesto, templates o assets ya escritos).
     const bundleRc = await readAncletorc(bundleDir)
+    const existingRc = await readAncletorc(projectDir)
+    const rcAgent = bundleRc?.agent ? bundleRc.agent : existingRc?.agent
+    const agent = (rcAgent && SUPPORTED_AGENTS.includes(rcAgent)) ? rcAgent : DEFAULT_AGENT
+    const importProfile = validProfile(bundleRc?.profile ? bundleRc.profile : existingRc?.profile) || DEFAULT_PROFILE
+    // Un `gratisModel` legacy/desconocido se normaliza al unico gratis conocido. La
+    // clave se persiste solo si el bundle la declaraba: una clave ausente no se agrega.
+    const hasBundleGratisModel = bundleRc !== null && bundleRc !== undefined
+      && Object.prototype.hasOwnProperty.call(bundleRc, 'gratisModel')
+    const bundleGratisModel = gratisModel(manifest.gratisModel)
+    // El tier se aplica solo en los mirrors de opencode, el unico host que escribe
+    // `model:`; en el resto no se resuelve ni se aborta.
+    let tierModelMap = null
+    if (manifest.tier && TIERS[manifest.tier] && agent === 'opencode') {
+      try {
+        tierModelMap = resolveTierMap(manifest.tier, bundleGratisModel).models
+      } catch (err) {
+        console.error(err.message)
+        process.exit(1)
+      }
+    }
     if (bundleRc) {
       await writeManifest(projectDir, {
         ...(bundleRc.agent ? { agent: bundleRc.agent } : {}),
         ...(bundleRc.language ? { language: bundleRc.language } : {}),
         ...(bundleRc.profile ? { profile: bundleRc.profile } : {}),
-        ...(bundleRc.gratisModel ? { gratisModel: bundleRc.gratisModel } : {}),
+        ...(hasBundleGratisModel ? { gratisModel: bundleGratisModel } : {}),
         ...(bundleRc.azure ? { azure: bundleRc.azure } : {}),
         ...(bundleRc.discovery ? { discovery: bundleRc.discovery } : {})
       })
@@ -4111,27 +4144,17 @@ async function importCmd(args) {
       const src = join(bundleDir, '.opencode', d)
       if (await exists(src)) await cp(src, join(projectDir, '.opencode', d), { recursive: true, force: false })
     }
-    const rcNow = await readAncletorc(projectDir)
-    const agent = (rcNow?.agent && SUPPORTED_AGENTS.includes(rcNow.agent)) ? rcNow.agent : DEFAULT_AGENT
-    const importProfile = validProfile(rcNow?.profile) || DEFAULT_PROFILE
-    // Resolver el tier antes de materializar assets: sin candidato disponible se
-    // aborta sin escribir un ID inventado. Un `gratisModel` legacy/desconocido se
-    // normaliza al unico gratis conocido.
-    let tierModelMap = null
-    if (manifest.tier && TIERS[manifest.tier]) {
-      try {
-        tierModelMap = resolveTierMap(manifest.tier, gratisModel(manifest.gratisModel)).models
-      } catch (err) {
-        console.error(err.message)
-        process.exit(1)
-      }
-    }
     await installAgentAssets(projectDir, agent, {
       compression: hostSupportsCompression(agent) && Boolean(buildDefaultMcp({ withEngram: manifest?.flags?.engram === true }).caveman)
     })
     if (importProfile === 'test') await installProfileOverlay(projectDir, agent)
     if (tierModelMap) {
       await applyTier(join(projectDir, '.opencode', 'agents'), manifest.tier, tierModelMap)
+      // Paridad con init: `.opencode/.ancleto-tier` es lo que `check` lee para el
+      // oraculo del tier; sin escribirlo un import sobre un proyecto inicializado
+      // dejaba el tier viejo y producia divergencias falsas.
+      await mkdir(join(projectDir, '.opencode'), { recursive: true })
+      await writeFile(tierStatePath(join(projectDir, '.opencode')), manifest.tier + '\n')
     }
     await scaffoldAspec(projectDir)
     console.log(`ancleto: bundle aplicado (agente: ${agent}${manifest.tier ? `, tier: ${manifest.tier}` : ''})`)

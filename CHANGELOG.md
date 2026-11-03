@@ -2,6 +2,22 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.10] - 2026-11-03
+
+### Added
+- **Snapshot de catálogo commiteado con guard**: el catálogo de modelos verificado queda versionado en el repo y un guard estructural detecta cuando diverge, en vez de depender de la disponibilidad en tiempo de ejecución.
+
+### Changed
+- **IDs de modelo corregidos**: `reviewer` apunta a `opencode-go/qwen3.8-max`.
+- **Cadena de fallback de `minimo` resuelta contra el catálogo verificado**, en lugar de resolverse a ciegas.
+- **Oráculo de `check` por conjunto de aceptación**: la comparación usa el conjunto aceptado, así que un catálogo cambiado no produce falsos positivos.
+- **`gratis` es free-only**: el tier sólo admite modelos gratuitos.
+- **`profiles/test/agents` alineado** con el catálogo y los tiers vigentes.
+- **`import` y hosts más robustos**: resolución de imports y de hosts endurecida.
+
+### Removed
+- **Detección muerta de Muse Spark**: se elimina el código que ya no podía alcanzarse.
+
 ## [0.18.9] - 2026-11-03
 
 ### Added

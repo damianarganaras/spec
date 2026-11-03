@@ -682,9 +682,9 @@ function buildReadonlyEngine(db, dbPath) {
       if (!dryRun) throw new Error('merge: la conexion es read-only')
       return engine.merge({ target, sources, dryRun: true })
     },
-    consolidate({ dryRun = true } = {}) {
+    consolidate({ dryRun = true, includeNearDuplicates = true } = {}) {
       if (dryRun === false) throw new Error('consolidate: la conexion es read-only')
-      return engine.consolidate({ dryRun: true })
+      return engine.consolidate({ dryRun: true, includeNearDuplicates })
     }
   }
 }
@@ -1185,7 +1185,9 @@ function buildEngine(db, dbPath) {
   // canonico por el orden total de `compareCanonical`. El dry-run es el default y
   // no abre transaccion. `--apply` supersede los no canonicos en una unica
   // transaccion; los near-duplicates solo se reportan y nunca se tocan.
-  function consolidate({ dryRun = true } = {}) {
+  // `includeNearDuplicates: false` omite el escaneo O(n^2) cuando el llamador no
+  // usa la seccion (p. ej. curaduria); el default conserva el reporte actual.
+  function consolidate({ dryRun = true, includeNearDuplicates = true } = {}) {
     const nodes = listActiveForConsolidate.all().map((row) => ({
       ...row,
       refs: declaredRefCount(row.content),
@@ -1224,28 +1226,30 @@ function buildEngine(db, dbPath) {
     const supersededKeys = plans.flatMap(({ superseded }) => superseded.map((node) => node.memory_key))
 
     const nearDuplicates = []
-    const nearOrder = nodes.filter((node) => node.normalized).sort((a, b) => compareKeys(a.memory_key, b.memory_key))
-    for (let i = 0; i < nearOrder.length; i++) {
-      for (let j = i + 1; j < nearOrder.length; j++) {
-        const a = nearOrder[i]
-        const b = nearOrder[j]
-        if (a.type !== b.type || a.scope !== b.scope) continue
-        if (a.normalized === b.normalized) continue
-        const score = jaccardScore(a.normalized, b.normalized)
-        if (score < 0.6) continue
-        nearDuplicates.push({
-          a: a.memory_key,
-          b: b.memory_key,
-          score: Math.round(score * 10000) / 10000
-        })
+    if (includeNearDuplicates) {
+      const nearOrder = nodes.filter((node) => node.normalized).sort((a, b) => compareKeys(a.memory_key, b.memory_key))
+      for (let i = 0; i < nearOrder.length; i++) {
+        for (let j = i + 1; j < nearOrder.length; j++) {
+          const a = nearOrder[i]
+          const b = nearOrder[j]
+          if (a.type !== b.type || a.scope !== b.scope) continue
+          if (a.normalized === b.normalized) continue
+          const score = jaccardScore(a.normalized, b.normalized)
+          if (score < 0.6) continue
+          nearDuplicates.push({
+            a: a.memory_key,
+            b: b.memory_key,
+            score: Math.round(score * 10000) / 10000
+          })
+        }
       }
+      nearDuplicates.sort((x, y) => {
+        if (y.score !== x.score) return y.score - x.score
+        const byA = compareKeys(x.a, y.a)
+        if (byA !== 0) return byA
+        return compareKeys(x.b, y.b)
+      })
     }
-    nearDuplicates.sort((x, y) => {
-      if (y.score !== x.score) return y.score - x.score
-      const byA = compareKeys(x.a, y.a)
-      if (byA !== 0) return byA
-      return compareKeys(x.b, y.b)
-    })
 
     const report = { dryRun: !!dryRun, exactGroups, superseded: supersededKeys, nearDuplicates }
     if (dryRun || plans.length === 0) return report

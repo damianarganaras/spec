@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-03T10:45:00Z
-pluginVersion: 0.18.6
+generatedAt: 2026-11-03T13:54:02Z
+pluginVersion: 0.18.7
 skillVersion: '2.3'
 ---
 
@@ -29,7 +29,7 @@ CLI monolítica en ESM, sin framework externo. Capas:
 
 | Capa | Ruta | Rol |
 |---|---|---|
-| CLI / orquestación | `src/cli/index.js` | Parsing, `init`/`install`/`update`/`upgrade`, instalación por host, perfiles, export/import, discovery, memoria y sus ops (`snapshot`/`merge`/**`consolidate`**/**`gc`**), `specs check`, `affected`, projects, `stats` + `stats failures`, doctor, MCP; merge de templates y reconciliación legacy; directiva de compresión host-scoped; working-context día-cero; refresh on-write CLI; staleness advisory; **generación de `.ancleto/machine-env.md`**. |
+| CLI / orquestación | `src/cli/index.js` | Parsing, `init`/`install`/`update`/`upgrade`, instalación por host, perfiles, export/import, discovery, memoria y sus ops (`snapshot`/`merge`/**`consolidate`**/**`curate`**/**`gc`**), `specs check`, `affected`, projects, `stats` + `stats failures`, doctor, MCP; merge de templates y reconciliación legacy; directiva de compresión host-scoped; working-context día-cero; refresh on-write CLI; staleness advisory; **generación de `.ancleto/machine-env.md`**. |
 | UI de terminal | `src/cli/ui.js` | Banner ASCII animado y menús TTY (Raw Mode) sin librerías; helpers de color. |
 | Adaptación de frontmatter | `src/core/adapters/frontmatter.js` | **Módulo puro, dueño único** de la transformación por host/assetKind (incluye Antigravity y Command Code). |
 | Discovery | `src/core/discovery.js` | Mapa topológico `.discovery-map.json`. |
@@ -37,13 +37,13 @@ CLI monolítica en ESM, sin framework externo. Capas:
 | Empaquetado y tiers | `src/core/repomix-tier.js` | Args de Repomix, ignores por tier, `--compress`, token budget. |
 | Selección de modelos | `src/core/tier-models.js` | Modelos por tier, resolución de tier gratis (Muse Spark/probe/env). |
 | Entorno de máquina | `src/core/machine-env.js` | **Dueño único** de detectar plataforma/shell/EOL/tooling (disponibilidad = **resoluble e invocable**), renderizar/escribir `.ancleto/machine-env.md` y excluirlo vía `info/exclude`; `checkMachineEnvTracked`. |
-| Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database` (incluye migración `superseded_at`), `engine` (refs fail-closed, secretos, `inspectRefs`, `resolveNodeRefs`, recall task-aware, search/record/export/import/gc/merge/**consolidate**, orden de inyección y aviso de overflow), `snapshot`, `tools`, `mcp-server`, `doctor` (read-only, cinco checks), `working-context`. |
+| Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database` (incluye migración `superseded_at`), `engine` (refs fail-closed, secretos, `inspectRefs`, `resolveNodeRefs`, recall task-aware, search/record/export/import/gc/merge/**consolidate**, orden de inyección y aviso de overflow), **`curation`** (curaduría read-only que compone resolver + consolidate), `snapshot`, `tools`, `mcp-server`, `doctor` (read-only, cinco checks), `working-context`. |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE (10 agents, 16 commands, 21 skills, 2 templates + perfil `test`). |
 | Contratos de prompt | `agents/*.md` | Intake de sesión, techo de lecturas, trigger de Recall, validación declarativa, checkpoint de contrato, `## Decisiones`, retiro de `design.md`/`context.md` y promoción al archivar. Los mirrors `.opencode/agents/*.md` se regeneran. |
-| Specs del propio repo | `aspec/` | `config.yaml` + 19 specs fuente + **1 change activo** (`ancleto-vscode-extension`) + **41 archivados**. |
+| Specs del propio repo | `aspec/` | `config.yaml` + 19 specs fuente + **1 change activo** (`ancleto-vscode-extension`) + **42 archivados**. |
 | Config del host opencode | `opencode.json` (raíz) | Override de `agent.model` para los 10 subagentes; **no** se publica. |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
-| Tests | `test/*.test.js` | Suite `node --test` (15 archivos; no re-ejecutada en esta regeneración). |
+| Tests | `test/*.test.js` | Suite `node --test` (16 archivos; no re-ejecutada en esta regeneración). |
 | Análisis (no runtime) | `optimizacion-de-tokens.md` | Barrido de costo y matriz de decisión de "token-economy". |
 
 Entry point único: `src/cli/index.js` (`bin.ancleto` y `bin.aspec`). No hay servidor ni base
@@ -61,7 +61,8 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   CLI**: `memoryImport` llama a `refreshWorkingContextOnWrite` (compare-based); `memoryMerge` y
   `memoryConsolidate --apply` hacen lo mismo tras escribir, derivando la raíz de
   `resolveMemoryProjectRoot(dbPath)`; si el refresh falla, el cambio ya está commiteado y el
-  comando sale ≠ 0 informándolo. Evidencia: `src/cli/index.js`,
+  comando sale ≠ 0 informándolo. **Lecturas de memoria**: `memory curate` abre la base
+  exclusivamente read-only y nunca la modifica. Evidencia: `src/cli/index.js`,
   `src/core/memory/working-context.js`, `aspec/specs/memory-ops/spec.md`.
 - **Entorno de máquina**: `detectMachineFacts` deriva plataforma, release, arquitectura, shell
   (con `shell_source`), EOL (con `eol_source`) y disponibilidad de `rg`, `node`, `npm`, `git` y
@@ -85,9 +86,17 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   supersesión atómica por `memory_key` y procedencia `source` runtime-owned. **Camino de
   escritura único `recordNode`**: valida `refs:` fail-closed (exención `source === 'runtime'`) y
   rechaza credenciales sin eco. `importNodes` no pasa por `recordNode` (LWW). Subcomandos:
-  `memory export|import|gc|snapshot|merge|consolidate|context|list|doctor`.
+  `memory export|import|gc|snapshot|merge|consolidate|curate|context|list|doctor`.
   `memory doctor` audita **cinco checks read-only**, incluido `Refs de nodos activos` con
   `inspectRefs`. Detalle: `units/memory-engine.md`.
+- **Curaduría read-only (`memory curate`)**: `src/core/memory/curation.js` exporta
+  `curateMemory(engine, { projectRoot })`, que **compone** `resolveNodeRefs` y
+  `consolidate({ dryRun: true, includeNearDuplicates: false })`; no contiene SQL, parser,
+  resolvedor ni normalización propios. Reporta `{ status, brokenRefs, unverifiable,
+  exactDuplicates }` en orden total por `memory_key`. El CLI lo expone como
+  `memory curate [--json] [--strict]`: advisory (exit 0) salvo `--strict`; `no-db` explícito con
+  exit ≠ 0. Evidencia: `src/core/memory/curation.js`, `src/cli/index.js`,
+  `aspec/specs/memory-ops/spec.md` (requirement `Curaduría read-only con memory curate`).
 - **Recall task-aware (`0.18.6`)**: `searchMemory` ordena de forma total (requerido, ref
   declarada, scope, `bm25`, `memory_key`), devuelve **preview** por defecto (prefijo literal de
   hasta 240 caracteres, `limit` 5, `content_truncated`), expande con `expand: true` o `keys`, y
@@ -108,10 +117,11 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   respeta `maxTokens × CHARS_PER_TOKEN`; antes de cortar reserva `min(1.500, 15 % de maxChars)`.
   El aviso conserva el conteo, lista hasta 40 `memory_key` omitidas en orden de inyección y
   agrega `+N`; delega **un** Recall a `@memory-keeper` y no menciona `searchMemory`.
-- **Consolidación (`0.18.5`)**: `engine.consolidate({ dryRun = true })` agrupa activos por
-  `type` + `content` normalizado sin `refs:`, elige un canónico determinístico y, con
-  `--apply`, supersede los no canónicos en una transacción. Los **near-dups** (Jaccard ≥ 0,60,
-  mismo `type` y `scope`) sólo se reportan. El dry-run usa conexión read-only.
+- **Consolidación (`0.18.5`)**: `engine.consolidate({ dryRun = true, includeNearDuplicates = true })`
+  agrupa activos por `type` + `content` normalizado sin `refs:`, elige un canónico determinístico
+  y, con `--apply`, supersede los no canónicos en una transacción. Los **near-dups** (Jaccard
+  ≥ 0,60, mismo `type` y `scope`) sólo se reportan. El dry-run usa conexión read-only. La opción
+  aditiva `includeNearDuplicates: false` omite el escaneo O(n²) sin cambiar el default.
 - **GC por supersesión (`MEM-05b`)**: `memory_nodes.superseded_at` es una columna aditiva; las
   cuatro rutas de supersesión (`recordNode`, `importNodes`, `merge`, `consolidate`) escriben el
   instante y `memory gc` mide `COALESCE(superseded_at, created_at)`. Antes del `DELETE` limpia
@@ -176,9 +186,10 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 6. **Recall task-aware** — `searchMemory` devuelve preview o payload completo según `expand`,
    permite `keys` y `required`; `resolveNodeRefs` da la ubicación concreta de cada ref. El
    consumo canónico del protocolo está en `AGENTS.md`.
-7. **Mantenimiento de memoria** — `memory doctor` audita sin mutar; `memory snapshot` produce
-   una copia restaurable con historial; `memory merge` consolida por claves nombradas;
-   **`memory consolidate`** agrupa duplicados exactos y supersede con `--apply` (dry-run por
+7. **Mantenimiento de memoria** — `memory doctor` audita sin mutar; **`memory curate`** reporta
+   refs rotas, no verificables y duplicados exactos sin escribir; `memory snapshot` produce una
+   copia restaurable con historial; `memory merge` consolida por claves nombradas;
+   `memory consolidate` agrupa duplicados exactos y supersede con `--apply` (dry-run por
    defecto); `export|import|gc` mueven y purgan nodos; `gc` mide la edad de **supersesión**.
 8. **Entorno de máquina** — cada lifecycle detecta hechos locales y escribe
    `.ancleto/machine-env.md`; si no cambió, no reescribe. La exclusión va a `info/exclude`, nunca
@@ -197,23 +208,30 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 
 ## Estado del repositorio
 
-Versión `0.18.6` en `package.json`; HEAD `95b2599` en `development` y `git describe --tags` =
-`v0.18.5-14-g95b2599` (0.18.6 sin tag). `CHANGELOG.md` cubre hasta `0.18.6`: `0.18.3` publicó
-MEM-04b (`resolveNodeRefs`), `0.18.4` el ranking por anclaje y las omisiones visibles, `0.18.5`
-`memory consolidate` y `0.18.6` el **recall task-aware** (preview/`expand`/`keys`/`required`) y
-el **protocolo canónico de memoria** en `AGENTS.md`.
+Versión `0.18.7` en `package.json` y tope de `CHANGELOG.md` (fechado 2026-11-03). HEAD
+`bd903d2` (`docs(specs): archive ch-09 curation change`) en `development`; `git describe --tags`
+= `v0.18.5-19-gbd903d2`. El tag `v0.18.7` existe (anotado, en `main`) y no aparece en `describe`
+porque `main` no es ancestro de `development`. `0.18.7` publicó el **protocolo canónico de
+memoria**, la reconciliación gateada de texto plano legado, `memory gc` por `superseded_at` y el
+seed regenerado; `0.18.6` publicó el **recall task-aware**; `0.18.5` `memory consolidate`;
+`0.18.4` el ranking por anclaje y las omisiones visibles; `0.18.3` `resolveNodeRefs`.
 
-El único change activo es **`ancleto-vscode-extension`**. MEM-05, MEM-05a y MEM-05b están
-archivados. El corpus de memoria tiene **125 nodos activos** (228 filas totales), **344 refs
-verificadas** y **0 refs rotas**. `memory consolidate` reporta **0 grupos exactos** y **0
-near-dups**, por lo que `--apply` sería un no-op sobre esta base. Quedan abiertos: el
-**overflow** del bloque proactivo (**20 reglas omitidas**) y la **discrepancia de raíz de DB**
-entre `cwd` y el `projectRoot` del MCP (no reproducida).
+El único change activo es **`ancleto-vscode-extension`**. Hay **42 archivados**; el más reciente,
+`2026-11-03-ch-09-curaduria-recurrente`, introduce `memory curate`, que todavía **no** figura en
+el CHANGELOG de `0.18.7` (capacidad archivada, sin release). El corpus de memoria tiene **129
+nodos activos** (34 rules `project`, 82 decisions `project`, 13 decisions `feature`), **232 filas
+totales**, **360 refs verificadas** y **0 refs rotas**. `memory consolidate` reporta **0 grupos
+exactos** y **0 near-dups**; `memory curate --json` devuelve `status: ok` con `0` refs rotas,
+`0` no verificables y `0` duplicados exactos. Quedan abiertos: el **overflow** del bloque
+proactivo (**20 reglas omitidas**) y la **discrepancia de raíz de DB** entre `cwd` y el
+`projectRoot` del MCP (no reproducida).
 
 El `ancleto` global del `PATH` está desactualizado respecto del checkout (**0.17.1**): no
-reconoce `memory consolidate` ni el contrato nuevo de `searchMemory`; la versión local se invoca
-con `node src/cli/index.js`. El tier resuelto es **`minimo`** (`.opencode/.ancleto-tier`).
-`.ancleto/machine-env.md` existe (generado el 2026-11-03, declara `ancleto: 0.18.6`);
-`.ancleto/working-context.md` está `desactualizado`. Evidencia: `git log`, `git tag`,
-`ancleto discovery --check`, `node src/cli/index.js memory {doctor,list,consolidate}`,
-`.gitignore`, `.discovery-map.json`.
+reconoce `memory consolidate` ni `memory curate` ni el contrato nuevo de `searchMemory`; la
+versión local se invoca con `node src/cli/index.js`. El tier resuelto es **`minimo`**
+(`.opencode/.ancleto-tier`). `.ancleto/machine-env.md` existe (generado el 2026-11-03, declara
+`ancleto: 0.18.6`, es decir generado por el CLI anterior); `.ancleto/working-context.md` está
+`desactualizado`. El árbol de trabajo está limpio salvo los artefactos derivados del discovery.
+Evidencia: `git log`, `git tag`, `ancleto discovery --check`,
+`node src/cli/index.js memory {doctor,list,consolidate,curate}`, `.gitignore`,
+`.discovery-map.json`.

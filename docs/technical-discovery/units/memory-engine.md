@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware (preview/expand/keys/required), la validación de refs, el resolver de refs navegables, la promoción al archivar, el working-context, el refresh on-write, la procedencia source, las ops export/import/gc por supersesión, snapshot, merge, consolidate, el doctor read-only, el orden de inyección, el presupuesto/aviso de overflow y su consumo por el orquestador"
-covers: [motor de memoria, tools, recall task-aware, preview, expand, keys, required, refs normalizadas, validación fail-closed, indentación de refs, rechazo de secretos, resolver de refs navegables, resolveNodeRefs, orden de inyección, anclaje, presupuesto, manifiesto de omitidas, promoción al archivar, working-context, día-cero, procedencia source, export/import/gc, superseded_at, snapshot consistente, merge por supersesión, consolidate, doctor read-only, auditoría de refs, inspectRefs, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware (preview/expand/keys/required), la validación de refs, el resolver de refs navegables, la promoción al archivar, el working-context, el refresh on-write, la procedencia source, las ops export/import/gc por supersesión, snapshot, merge, consolidate, la curaduría read-only con memory curate, el doctor read-only, el orden de inyección, el presupuesto/aviso de overflow y su consumo por el orquestador"
+covers: [motor de memoria, tools, recall task-aware, preview, expand, keys, required, refs normalizadas, validación fail-closed, indentación de refs, rechazo de secretos, resolver de refs navegables, resolveNodeRefs, orden de inyección, anclaje, presupuesto, manifiesto de omitidas, promoción al archivar, working-context, día-cero, procedencia source, export/import/gc, superseded_at, snapshot consistente, merge por supersesión, consolidate, includeNearDuplicates, curaduría read-only, curate, refs rotas, no verificables, duplicados exactos, doctor read-only, auditoría de refs, inspectRefs, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
 sources: ["src/core/memory/**"]
-generatedAt: 2026-11-03T10:45:00Z
-pluginVersion: 0.18.6
+generatedAt: 2026-11-03T13:54:02Z
+pluginVersion: 0.18.7
 skillVersion: '2.3'
 ---
 
@@ -14,18 +14,21 @@ skillVersion: '2.3'
 ## Propósito
 
 Retener reglas y decisiones del proyecto entre sesiones de IA, en una base SQLite **local**
-(`.ancleto/memory.db`), sin bases vectoriales. Un mismo motor soporta cinco consumidores: tools
-MCP del LLM, subcomandos CLI (mantenimiento, snapshot, merge, **consolidate**, **gc** e
-integridad), el working-context inyectado al system prompt, el doctor y un **resolver read-only
+(`.ancleto/memory.db`), sin bases vectoriales. Un mismo motor soporta seis consumidores: tools
+MCP del LLM, subcomandos CLI (mantenimiento, snapshot, merge, **consolidate**, **curate**, **gc**
+e integridad), el working-context inyectado al system prompt, el doctor y un **resolver read-only
 de refs para recall**. Desde `MEM-03`, `recordNode` es el punto único de **validación de refs** y
 **rechazo de secretos**. Desde `MEM-04` (`0.18.0`), `memory doctor` audita esas refs con
 `inspectRefs`, sin un segundo parser. `MEM-04b` (`0.18.3`) expone `resolveNodeRefs` sobre el
 mismo parser y resolvedor. `0.18.4` agrega el **orden por anclaje** y el **manifiesto de
 omitidas**; `0.18.5` agrega **`consolidate`**; `0.18.6` agrega el **recall task-aware**
 (preview/`expand`/`keys`/`required`) y publica el **protocolo canónico** en `AGENTS.md`;
-`MEM-05b` agrega **`superseded_at`** para que `gc` mida la edad de supersesión. Evidencia:
-`README.md`, `DESIGN-memory-engine-v0.2.0.md`, `aspec/specs/memory-ops/spec.md`,
-`aspec/specs/memory-engine/spec.md`, `aspec/changes/archive/2026-11-02-*`.
+`MEM-05b` agrega **`superseded_at`** para que `gc` mida la edad de supersesión. CH-09 agrega
+**`memory curate`** (archivado, aún sin release): un reporte read-only que compone resolver y
+consolidate sin duplicar primitivas. Evidencia: `README.md`,
+`DESIGN-memory-engine-v0.2.0.md`, `aspec/specs/memory-ops/spec.md`,
+`aspec/specs/memory-engine/spec.md`, `aspec/changes/archive/2026-11-02-*`,
+`aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/`.
 
 ## Recorrido relevante
 
@@ -33,12 +36,13 @@ omitidas**; `0.18.5` agrega **`consolidate`**; `0.18.6` agrega el **recall task-
 2. `recordRule`/`recordDecision` pasan por `recordNode`: rechazan secretos y, si la procedencia
    no es `runtime`, validan `refs:` antes de abrir la transacción. Luego superseden atómicamente
    por `memory_key` y pueden refrescar el working-context.
-3. `ancleto memory export|import|gc|snapshot|merge|consolidate|context|list|doctor` mueven,
-   copian, consolidan, inspeccionan y verifican la memoria:
+3. `ancleto memory export|import|gc|snapshot|merge|consolidate|curate|context|list|doctor` mueven,
+   copian, consolidan, reportan, inspeccionan y verifican la memoria:
    - `import` y `merge`/`consolidate --apply` refrescan el working-context compare-based;
    - `import` **no** pasa por `recordNode` y conserva LWW sin validar refs;
    - `snapshot` produce una copia binaria con historial;
    - `consolidate` agrupa duplicados exactos y supersede con `--apply`;
+   - `curate` **sólo reporta** refs rotas, no verificables y duplicados exactos, sin escribir;
    - `doctor` audita en read-only y reporta la frescura del working-context.
 4. `buildWorkingContext` materializa `<ProjectMemoryRules>`/`<ProjectTopology>`; el bloque de
    reglas renderiza sólo la **prosa** de cada `content`, ordena por scope/anclaje/recencia/clave
@@ -52,7 +56,8 @@ omitidas**; `0.18.5` agrega **`consolidate`**; `0.18.6` agrega el **recall task-
 | Archivo | Rol |
 |---|---|
 | `src/core/memory/database.js` | Abre la DB (`openDatabase`, con opción `readonly`), PRAGMAs (`WAL`, `foreign_keys`, `busy_timeout=5000`), migraciones idempotentes (incl. `superseded_at` aditiva con backfill), FTS5 external-content, triggers, `checkpointDatabase`. |
-| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext` (orden, presupuesto, aviso, `required`), `searchMemory` (BM25, escape FTS5, fallback AND→OR, preview/`expand`/`keys`/`required`), `recordNode` (procedencia, refs, secretos), `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`, `inspectRefs`, `resolveNodeRefs`, `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `validateMerge`/`merge`, **`consolidate`**, `sanitizePaths`, `checkpoint`, `close`. Presupuesto: `CHARS_PER_TOKEN = 4`, `MAX_TOKENS = 2000`, `MAX_OMITTED_KEYS = 40`. |
+| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext` (orden, presupuesto, aviso, `required`), `searchMemory` (BM25, escape FTS5, fallback AND→OR, preview/`expand`/`keys`/`required`), `recordNode` (procedencia, refs, secretos), `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`, `inspectRefs`, `resolveNodeRefs`, `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `validateMerge`/`merge`, **`consolidate`** (con `includeNearDuplicates`), `sanitizePaths`, `checkpoint`, `close`. Presupuesto: `CHARS_PER_TOKEN = 4`, `MAX_TOKENS = 2000`, `MAX_OMITTED_KEYS = 40`. |
+| `src/core/memory/curation.js` | `curateMemory(engine, { projectRoot })`: módulo puro que **compone** `resolveNodeRefs` + `consolidate({ dryRun: true, includeNearDuplicates: false })`; no abre/cierra/migra/escribe la DB ni duplica SQL, parser, resolvedor o normalización. Devuelve `{ status, brokenRefs, unverifiable, exactDuplicates }` en orden total por `memory_key`. |
 | `src/core/memory/snapshot.js` | Dueño único de la copia binaria: `realpathish`/`sameFile`, `vacuumInto`, `verifySnapshot`, `replaceDestination` y `snapshotDatabase(dbPath, outPath, { overwrite })`. |
 | `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de las 3 tools) y `createMemoryToolkit`; tras `recordNode`, evalúa `shouldRefreshWorkingContext(result)` y llama `writeWorkingContext` en `try/catch`. |
 | `src/core/memory/mcp-server.js` | `createMemoryServer`/`serveMemoryMcp`: MCP stdio sin dependencias; fija `{ source: 'mcp:ancleto-memory', projectRoot }`. |
@@ -295,7 +300,8 @@ el presupuesto. Una regla sin `refs:` se renderiza completa. Evidencia:
 ## Consolidación determinística (`0.18.5`)
 
 `ancleto memory consolidate [--dry-run] [--apply] [--json]` es un wrapper fino sobre
-`engine.consolidate({ dryRun = true })`. No agrega tool MCP, tabla, columna ni migración.
+`engine.consolidate({ dryRun = true, includeNearDuplicates = true })`. No agrega tool MCP, tabla,
+columna ni migración.
 
 - **Duplicado exacto**: mismo `type` + `content` normalizado idéntico. La normalización quita el
   bloque `refs:` (línea e items), aplica trim, colapsa whitespace, pasa a minúsculas y quita
@@ -320,9 +326,52 @@ el presupuesto. Una regla sin `refs:` se renderiza completa. Evidencia:
   conserva `id`/`superseded_by`, por lo que el historial es reconstruible.
 - **Estado observado**: dry-run sobre la base real devuelve `0` grupos exactos y `0` near-dups;
   `--apply` sería un no-op. La operación es opt-in y el default no escribe.
+- **Opción aditiva `includeNearDuplicates`**: default `true` (preserva el reporte actual). Con
+  `false` omite el doble loop O(n²) de near-duplicates; la definición de duplicado exacto, la
+  cadena de canónico y su orden no cambian. El engine read-only reenvía la opción. La usa
+  `memory curate`, que no reporta near-dups. Evidencia: `src/core/memory/engine.js:685-688`,
+  `:1190`, `:1229`, `test/memory-engine.test.js`.
 - Evidencia: `src/core/memory/engine.js` (`consolidate`, `compareCanonical`,
   `consolidationScopeRank`), `src/cli/index.js` (`memoryConsolidate`),
   `aspec/specs/memory-ops/spec.md`.
+
+## Curaduría read-only (`memory curate`, CH-09)
+
+`ancleto memory curate [--json] [--strict]` es un wrapper fino sobre
+`src/core/memory/curation.js`; **no** es una tool MCP ni un sexto check de `doctor`. El change
+está archivado (`2026-11-03-ch-09-curaduria-recurrente`) y todavía **no** figura en un release.
+Evidencia: `src/core/memory/curation.js`, `src/cli/index.js` (`memoryCurateCmd`),
+`aspec/specs/memory-ops/spec.md` (requirement `Curaduría read-only con memory curate`).
+
+- **Composición, no duplicación**: `curateMemory(engine, { projectRoot })` recibe un engine ya
+  abierto y la raíz; usa `resolveNodeRefs` para clasificar cada ref (aporta `kind` y `reason`) y
+  `consolidate({ dryRun: true, includeNearDuplicates: false })` para duplicados exactos. No
+  contiene SQL, parser de refs, resolvedor ni una segunda normalización.
+- **Read-only estricto**: el CLI abre con `readonly: true` y `migrate: false`; no acepta
+  `--rebuild`, `VACUUM`, snapshot, DDL, `PRAGMA` mutante, `INSERT`/`UPDATE`/`DELETE` ni escritura
+  de `superseded_by`/`superseded_at`. La base queda byte a byte idéntica.
+- **Reporte**: `status` (`ok`/`no-db`/`error`), `brokenRefs` (`memory_key`, `kind` de
+  `spec`/`change`/`path`, `ref`, `reason`), `unverifiable` (`commit:`/`workitem:`, `reason` `no
+  verificable`) y `exactDuplicates` (`canonical` + `superseded`). Un bloque `refs:` malformado o
+  repetido se reporta con `ref: 'refs:'` o la línea ofensora, sin `kind` y `reason` `inválido
+  (gramática)`.
+- **Display de refs rotas**: sólo dos transformaciones — separadores `\` → `/` y quitar el sufijo
+  final `:line`; no se colapsan `.`/`..` ni se resuelve nada. Resolver sigue siendo exclusivo de
+  `resolveNodeRefs`.
+- **Determinismo**: orden total por `memory_key` ascendente (sin `localeCompare`) y, a igual
+  clave, orden de aparición de la ref; paths POSIX sin `:line`; sin timestamps ni campos
+  volátiles. Los duplicados exactos se ordenan por `type` y `memory_key` del canónico.
+- **Códigos de salida**: advisory por defecto —sale `0` aunque haya hallazgos—; `--strict` sale
+  ≠ 0 si hay al menos una ref rota o un grupo exacto. `unverifiable` nunca afecta el exit code.
+  Sin base, reporta `no-db` y sale ≠ 0, con y sin `--strict`; un error de apertura/lectura
+  reporta estado distinto de `ok` con su motivo y exit ≠ 0, nunca un reporte limpio.
+- **Estado observado**: `node src/cli/index.js memory curate --json` →
+  `{"status":"ok","brokenRefs":[],"unverifiable":[],"exactDuplicates":[]}` sobre 129 nodos
+  activos y 360 refs.
+- **Deuda diferida (backlog CH-09e…CH-09h)**: (e) `exactDuplicates` no proyecta el `type` del
+  grupo; (f) lectura no atómica entre `listNodes` y `consolidate`; (g) el literal `inválido
+  (gramática)` está duplicado entre `doctor` y `curate`; (h) el orden total asume el índice
+  parcial `UNIQUE` activo de `memory_key`.
 
 ## GC por edad de supersesión (`MEM-05b`)
 
@@ -415,8 +464,8 @@ Evidencia: `src/core/memory/snapshot.js`, `src/core/memory/database.js`,
   `checkWorkingContextFreshness`; no altera el exit code. En el estado actual reporta
   `desactualizado`.
 
-**Estado observado** (`node src/cli/index.js memory doctor`): integridad OK, **228 filas FTS
-indexadas** (228 nodos totales), unicidad OK, **344 refs verificadas en 125 nodos activos, 0 no
+**Estado observado** (`node src/cli/index.js memory doctor`): integridad OK, **232 filas FTS
+indexadas** (232 nodos totales), unicidad OK, **360 refs verificadas en 129 nodos activos, 0 no
 resueltas**, WAL presente (4.161.232 bytes) y `Working-context: desactualizado`; **20 reglas
 omitidas** por tamaño. Evidencia: `src/core/memory/doctor.js`, `src/core/memory/engine.js`,
 `src/cli/index.js`, `aspec/specs/memory-ops/spec.md`.
@@ -498,9 +547,9 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
   reescribe sólo si difiere (normaliza CRLF, espacios finales y salto final); no crea un archivo
   vacío; reusa la conexión. Lo invocan `memory import`, `memory merge` (real) y
   **`memory consolidate --apply`**.
-- **No disparan refresh**: `export`, `list`, `doctor` (read-only), `gc` (purga superseded sin
-  alterar reglas activas), `snapshot` (copia binaria), `merge --dry-run`, `consolidate` en
-  dry-run, `context --out` (destino manual) y `resolveNodeRefs` (read-only).
+- **No disparan refresh**: `export`, `list`, `doctor` (read-only), `curate` (read-only), `gc`
+  (purga superseded sin alterar reglas activas), `snapshot` (copia binaria), `merge --dry-run`,
+  `consolidate` en dry-run, `context --out` (destino manual) y `resolveNodeRefs` (read-only).
 
 | Superficie | Refresca |
 |---|---|
@@ -541,9 +590,9 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
 5. `buildWorkingContext`: ordena, materializa reglas + topología, trunca con aviso de omitidas.
 6. **Recall con refs**: `resolveNodeRefs({ content, projectRoot })`; read-only.
 7. **Cierre**: el gate de archive promueve decisiones aprobadas con `recordDecision`.
-8. **Mantenimiento**: `doctor` audita o repara; `snapshot` copia con historial; `merge` consolida
-   claves nombradas; **`consolidate`** agrupa duplicados exactos; `export|import|gc` mueven y
-   purgan.
+8. **Mantenimiento**: `doctor` audita o repara; **`curate`** reporta refs rotas, no verificables y
+   duplicados exactos sin escribir; `snapshot` copia con historial; `merge` consolida claves
+   nombradas; **`consolidate`** agrupa duplicados exactos; `export|import|gc` mueven y purgan.
 
 ## Reglas invariantes
 
@@ -583,9 +632,13 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
 - **Merge no crea nodos ni cambia schema**: enlaza sources activas del mismo `type` al target;
   atómico y revalidado bajo lock.
 - **Consolidate sólo supersede grupos exactos**: canónico determinístico, near-dups sólo reporte,
-  dry-run default, sin borrado ni nodos nuevos.
-- **Export/import/gc/snapshot/merge/consolidate/refs no agregan dependencias**: sólo `node:sqlite`,
-  `node:fs` y resolución local de paths.
+  dry-run default, sin borrado ni nodos nuevos. `includeNearDuplicates: false` omite el escaneo
+  O(n²) sin cambiar la definición de duplicado exacto ni el default.
+- **Curaduría read-only**: `curateMemory` compone resolver + consolidate, nunca escribe ni
+  duplica parser/SQL/normalización; advisory por defecto, `--strict` opt-in, `unverifiable` no
+  afecta el exit code. Reportar un duplicado no equivale a consolidarlo.
+- **Export/import/gc/snapshot/merge/consolidate/curate/refs no agregan dependencias**: sólo
+  `node:sqlite`, `node:fs` y resolución local de paths.
 - **El aviso de overflow nombra sólo capacidades existentes**: delega un Recall a
   `@memory-keeper` y no menciona `searchMemory`.
 - **Staleness advisory es no bloqueante**.
@@ -596,18 +649,20 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
 | Path | Rol |
 |---|---|
 | `src/core/memory/database.js` | Conexión (con `readonly`), PRAGMAs, migraciones (incl. `superseded_at`), FTS5. |
-| `src/core/memory/engine.js` | `buildWorkingContext` (orden, presupuesto, aviso, `required`), `searchMemory` (preview/`expand`/`keys`/`required`), `recordNode`, `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`/`inspectRefs`/`resolveNodeRefs`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded` (+ `getGcDetach`), `validateMerge`/`merge`, `consolidate`, `sanitizePaths`. |
+| `src/core/memory/engine.js` | `buildWorkingContext` (orden, presupuesto, aviso, `required`), `searchMemory` (preview/`expand`/`keys`/`required`), `recordNode`, `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`/`inspectRefs`/`resolveNodeRefs`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded` (+ `getGcDetach`), `validateMerge`/`merge`, `consolidate` (con `includeNearDuplicates`), `sanitizePaths`. |
+| `src/core/memory/curation.js` | `curateMemory`: composición read-only de `resolveNodeRefs` + `consolidate({ dryRun: true, includeNearDuplicates: false })`; reporte `{ status, brokenRefs, unverifiable, exactDuplicates }` en orden total. |
 | `src/core/memory/snapshot.js` | `snapshotDatabase`, `vacuumInto`, `verifySnapshot`, `replaceDestination`, `realpathish`/`sameFile`. |
 | `src/core/memory/doctor.js` | `memoryDoctor` read-only, `observeWal`, cinco checks, rebuild explícito. |
 | `src/core/memory/working-context.js` | Render único, persistencia, refresh MCP/CLI, frescura, raíz, día-cero. |
 | `src/core/memory/tools.js` | Handlers, schemas (incl. `expand`/`keys`/`required`), refresh on-write MCP. |
 | `src/core/memory/mcp-server.js` | Transporte MCP stdio; `source: 'mcp:ancleto-memory'` y `projectRoot`. |
-| `src/cli/index.js` | `memoryExport`, `memoryImport`, `memoryGc`, `memorySnapshot`, `memoryMerge`, `memoryConsolidate`, `memoryContext`, `memoryListCmd`, `memoryDoctorCmd`, `memoryCmd`. |
+| `src/cli/index.js` | `memoryExport`, `memoryImport`, `memoryGc`, `memorySnapshot`, `memoryMerge`, `memoryConsolidate`, `memoryCurateCmd`, `memoryContext`, `memoryListCmd`, `memoryDoctorCmd`, `memoryCmd`. |
 | `skills/ancleto-archive/SKILL.md` | Gate de promoción: preflight, cero candidatos ⇒ cero escrituras. |
 | `agents/memory-keeper.md` | Modo Recall con `query` + `expand: true`; Modo Promotion: un `recordDecision` por bloque. |
 | `agents/orchestrator.md` | Consumidor del overflow, presupuesto de Automatic Record y orden de promoción. |
-| `aspec/specs/memory-ops/spec.md` | Contrato de export/import/gc por supersesión, snapshot, doctor read-only, `--rebuild`, merge, **consolidate**, harness golden y diagnóstico de refs. |
+| `aspec/specs/memory-ops/spec.md` | Contrato de export/import/gc por supersesión, snapshot, doctor read-only, `--rebuild`, merge, **consolidate**, **curaduría read-only (`memory curate`)**, harness golden y diagnóstico de refs. |
 | `aspec/specs/memory-engine/spec.md` | Contrato de refs, promoción, día-cero, refresh, staleness, **orden de inyección**, **presupuesto/aviso**, **recall task-aware**, `resolveNodeRefs` y render sin `refs:`. |
+| `aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/` | `memory curate` (archivado; aún sin release). |
 | `aspec/changes/archive/2026-11-02-mem-05-recall-task-aware/` | Recall task-aware: preview/`expand`/`keys`/`required` (`0.18.6`). |
 | `aspec/changes/archive/2026-11-02-mem-05a-searchmemory-docs-contract/` | Protocolo canónico en `AGENTS.md` y puntero desde `PRODUCT.md`. |
 | `aspec/changes/archive/2026-11-02-mem-05b-gc-superseded-age/` | GC por edad de supersesión (`superseded_at`). |
@@ -617,4 +672,4 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
 | `aspec/changes/archive/2026-10-31-mem-04-doctor-referencias-no-resueltas/` | Quinto check y gramática de refs. |
 | `aspec/changes/archive/2026-10-30-mem-03-promocion-decisiones-refs/` | Refs obligatorias y promoción al archivar. |
 | `DESIGN-memory-engine-v0.2.0.md` | Diseño congelado del motor. |
-| `test/memory-engine.test.js`, `test/mcp.test.js`, `test/working-context.test.js`, `test/memory-pr1-contract.test.js`, `test/memory-fixtures.test.js`, `test/fixtures/memory/` | Suite del motor, MCP, working-context, PR-1, golden y resolver. |
+| `test/memory-engine.test.js`, `test/curation.test.js`, `test/mcp.test.js`, `test/working-context.test.js`, `test/memory-pr1-contract.test.js`, `test/memory-fixtures.test.js`, `test/fixtures/memory/` | Suite del motor, curaduría, MCP, working-context, PR-1, golden y resolver. |

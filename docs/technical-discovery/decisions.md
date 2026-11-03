@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-03T10:45:00Z
-pluginVersion: 0.18.6
+generatedAt: 2026-11-03T13:54:02Z
+pluginVersion: 0.18.7
 skillVersion: '2.3'
 ---
 
@@ -430,7 +430,7 @@ skillVersion: '2.3'
     `src/cli/index.js` (`memoryConsolidate`), `aspec/specs/memory-ops/spec.md`.
 56. **Curación de provenance separada del render (`0.18.4`).** Los nodos históricos sin refs se
     curan por runbook y aprobación por lote, fuera del render: éste no backfillea, no revalida ni
-    reescribe. En el estado actual **todos los activos declaran `refs:`** (125 activos, 344 refs,
+    reescribe. En el estado actual **todos los activos declaran `refs:`** (129 activos, 360 refs,
     0 rotas); la deuda de provenance quedó cerrada. Evidencia:
     `aspec/changes/archive/2026-11-02-memory-ranking-y-omisiones-visibles/`,
     `node src/cli/index.js memory doctor`.
@@ -465,6 +465,24 @@ skillVersion: '2.3'
     enmascaradas. Un bloque `LOCKED` nuevo se inserta separado por exactamente una línea en
     blanco. Evidencia: `src/cli/index.js` (`reconcileLegacyBlocks`, `maskLockedLines`,
     `mergeTemplateInto`), `AGENTS.md`, `aspec/specs/prompt-contracts/spec.md`.
+60. **Curaduría read-only y advisory (`memory curate`, CH-09).** El subcomando
+    `ancleto memory curate [--json] [--strict]` es un wrapper fino sobre un módulo puro,
+    `src/core/memory/curation.js`, que **compone** `resolveNodeRefs` (aporta `kind` y `reason`
+    por ref) y `consolidate({ dryRun: true, includeNearDuplicates: false })` (duplicados
+    exactos). No agrega SQL, parser, resolvedor ni normalización propios; no es una tool MCP ni
+    un sexto check de `doctor`. Abre la base con `readonly: true` y `migrate: false`: no ejecuta
+    DDL, `PRAGMA` mutante, `VACUUM`, snapshot ni `INSERT`/`UPDATE`/`DELETE`. Reporta
+    `{ status, brokenRefs, unverifiable, exactDuplicates }` en orden total (`memory_key` y orden
+    de aparición de la ref; paths POSIX sin `:line`; sin timestamps ni `localeCompare`/`readdir`/
+    `rowid`). Es **advisory**: exit `0` con hallazgos salvo `--strict`, que sale ≠ 0 sólo por refs
+    rotas o grupos exactos; `unverifiable` (`commit:`/`workitem:`) nunca afecta el exit code. Sin
+    base reporta `no-db` y sale ≠ 0, con y sin `--strict`. Reportar un duplicado no lo consolida.
+    La opción aditiva `includeNearDuplicates` de `consolidate` (default `true`) permite omitir el
+    escaneo O(n²) sin cambiar la definición de duplicado exacto ni el comportamiento por defecto.
+    No se cablea a archive, `memory context`, cron ni servicio. Evidencia:
+    `src/core/memory/curation.js`, `src/cli/index.js` (`memoryCurateCmd`),
+    `aspec/specs/memory-ops/spec.md`, `test/curation.test.js`,
+    `aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/`.
 
 ## Seed incremental (contrato del discovery)
 
@@ -474,12 +492,12 @@ skillVersion: '2.3'
   - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
     raíz nuevo (o un archivo material como `package.json`).
 - **Reporte que originó esta regeneración**: `STALE` / `impact: material`;
-  `changedAreas: [".ancleto", ".ancletorc", ".opencode", "AGENTS.md", "CHANGELOG.md",
-  "PRODUCT.md", "README.md", "agents", "aspec", "docs", "package.json", "skills", "src",
-  "templates", "test"]`; `materialReasons: ["archivo material modificado: package.json"]`; los 11
-  documentos del seed en `affectedDocs`. La causa es el salto a `0.18.6` (CHANGELOG,
-  `package.json`, `engine`, `database`, CLI, `memory-keeper`, specs y tests) y los artefactos
-  derivados del discovery; `.ancleto` es estado local, no producto versionado.
+  `changedAreas: [".ancleto", "CHANGELOG.md", "PRODUCT.md", "README.md", "aspec", "docs",
+  "package.json", "src", "test"]`; `materialReasons: ["archivo material modificado:
+  package.json"]`; los 11 documentos del seed en `affectedDocs`. La causa es el salto a `0.18.7`
+  y la curaduría CH-09 (`curation.js`, CLI, spec `memory-ops`, `curation.test.js`, README y
+  backlog) más los artefactos derivados del discovery; `.ancleto` es estado local, no producto
+  versionado.
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **sólo** esos
   documentos; con `impact: material` se regenera el seed completo. El mapeo vive en
   `seed-map.json`; sin ese archivo la regeneración es completa.
@@ -494,7 +512,7 @@ skillVersion: '2.3'
   recorre el disco con `DEFAULT_IGNORES` + `exclude` y **no** aplica `.gitignore`.
 - **Detección material por archivo, no por contrato**: cualquier bump de `package.json` marca
   `impact: material` aunque no cambie comportamiento. En esta corrida el motivo fue
-  `0.18.5` → `0.18.6`.
+  `0.18.5` → `0.18.7`.
 - `EXPECTED_DOCS` = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`, `integrations`,
   `decisions`, `unknowns`, `units/_map`).
 - Evidencia: `README.md`, `src/cli/index.js` (`checkDiscovery`, `computeImpact`,
@@ -502,14 +520,24 @@ skillVersion: '2.3'
 
 ## Riesgos, deuda y acoplamiento
 
-- **Publicación `0.18.3`–`0.18.6`.** `0.18.3` publicó MEM-04b; `0.18.4` el orden por anclaje y
+- **Publicación `0.18.3`–`0.18.7`.** `0.18.3` publicó MEM-04b; `0.18.4` el orden por anclaje y
   las omisiones visibles; `0.18.5` la consolidación; `0.18.6` el recall task-aware y el protocolo
-  canónico de memoria. Los changes están archivados y sus specs fuente mergeadas. Evidencia:
+  canónico de memoria; `0.18.7` el protocolo canónico en `AGENTS.md`, la reconciliación legacy
+  gateada, `memory gc` por `superseded_at` y el seed regenerado. `memory curate` (CH-09) queda
+  archivado pero no figura en un release. Los changes están archivados y sus specs fuente
+  mergeadas. Evidencia:
   `git log`, `CHANGELOG.md`, `aspec/changes/archive/`.
 - **`memory consolidate` no es reversible por CLI.** No hay "unsupersede": revertir exige un
   `memory snapshot` previo. `--apply` conserva `id` y `superseded_by`, así que el historial es
   reconstruible, pero no hay comando de restauración. Evidencia:
   `src/core/memory/engine.js`, `src/cli/index.js`.
+- **`memory curate` reporta, no repara.** No escribe refs, no redirige nodos ni consolida
+  duplicados: reportar un grupo exacto no lo supersede. La deuda diferida del backlog CH-09e…h
+  acota el reporte: (e) `exactDuplicates` no proyecta el `type` del grupo; (f) `listNodes` y
+  `consolidate` se leen en dos statements sin transacción común; (g) el literal `inválido
+  (gramática)` está duplicado entre `doctor` y `curate`; (h) el orden total por `memory_key`
+  asume el índice parcial `UNIQUE` activo. Evidencia: `src/core/memory/curation.js`,
+  `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` (filas CH-09e…CH-09h).
 - **La elegibilidad de `memory gc` ahora depende del backfill.** MEM-05b cerró la distorsión de
   purgar por `created_at`, pero una fila histórica sin `superseded_at` recibe `created_at` como
   `superseded_at` (preserva la elegibilidad previa, no otorga gracia retroactiva). Las filas
@@ -532,7 +560,8 @@ skillVersion: '2.3'
   pueden leer/escribir bases distintas. No se reprodujo en esta corrida; el riesgo sigue
   registrado. Evidencia: `src/core/memory/engine.js`, `src/core/memory/mcp-server.js`.
 - **CLI global desactualizado.** El `ancleto` del `PATH` de esta máquina es **0.17.1** y no
-  conoce `memory consolidate` ni el contrato nuevo de `searchMemory`; el checkout sí (0.18.6). Un
+  conoce `memory consolidate` ni `memory curate` ni el contrato nuevo de `searchMemory`; el
+  checkout sí (0.18.7). Un
   agente que sólo use el binario global puede concluir erróneamente que la capacidad no existe.
   Verificar `ancleto --version` y, si difiere, usar `node src/cli/index.js`. Evidencia: ejecución
   local.
@@ -636,22 +665,25 @@ skillVersion: '2.3'
 - **Staleness advisory puede dar falsos positivos triviales.** La normalización es acotada
   (CRLF, espacios finales, salto final); cambios cosméticos mayores podrían disparar
   `desactualizado`.
-- **Docs de producto parcialmente desalineados.** `PRODUCT.md` sigue declarando 12 commands y 18
-  skills (hoy 16 y 21) y no menciona `machine-env`, `stats failures`, `snapshot`, `merge`,
-  `consolidate`, `gc`, el check de refs ni el resolver. Su sección de memoria **sí** apunta al
-  bloque `LOCKED: memory-protocol`, y `README.md` ya documenta preview/`expand`/`keys`/`required`.
-  `CHANGELOG.md` llega a `0.18.6`.
+- **Docs de producto con deriva menor.** `PRODUCT.md` ya no declara conteos obsoletos de
+  commands/skills y su sección de memoria apunta al bloque `LOCKED: memory-protocol`; `README.md`
+  documenta preview/`expand`/`keys`/`required` y `memory curate`, pero su badge declara **18
+  skills** cuando el árbol tiene **21** directorios. `CHANGELOG.md` llega a `0.18.7` y **no**
+  menciona `memory curate` (archivado, aún sin release). El seed refleja el estado observado; no
+  se editaron esos archivos.
 - **Sin backlog raíz.** `BACKLOG.md` no existe. El backlog P0 de memoria vive en
   `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`; `§5.2` conserva la deuda de I/O de `inspectRefs`
   y el conteo de no verificables con rotas.
-- **Versión y publicación.** `package.json` marca `0.18.6`; HEAD `95b2599` en `development`;
-  `git describe --tags` da `v0.18.5-14-g95b2599`, es decir **0.18.6 sin tag** al momento del
-  relevamiento. Evidencia: `package.json`, `git log`, `git tag`.
+- **Versión y publicación.** `package.json` marca `0.18.7`; HEAD `bd903d2`
+  (`docs(specs): archive ch-09 curation change`) en `development`; `git describe --tags` da
+  `v0.18.5-19-gbd903d2`. El tag `v0.18.7` **existe** (anotado, en `main`) y no aparece en
+  `describe` porque `main` no es ancestro de `development`; la ausencia en `describe` no implica
+  que el tag falte. Evidencia: `package.json`, `git log`, `git tag`.
 
 ## Decisiones registradas en memoria del repo
 
 > Registradas/actualizadas en `.ancleto/memory.db`. En esta corrida se inspeccionó la memoria
-> en modo read-only (`memory doctor`/`memory list`): 125 nodos activos, 344 refs, 0 refs rotas.
+> en modo read-only (`memory doctor`/`memory list`): 129 nodos activos, 360 refs, 0 refs rotas.
 
 - `dogfooding-versionado-init`: versionar `AGENTS.md`, `PRODUCT.md` y `aspec/`; ignorar
   `.opencode/`, `.ancletorc`, `.ancleto/`.
@@ -669,6 +701,10 @@ skillVersion: '2.3'
   `mem-05-required-excedente-falla`, `mem-05-presupuestos-separados-no-componibles`: decisiones
   de `0.18.6`.
 - `gc-superseded-at-columna`: la edad de supersesión se mide con `superseded_at` (MEM-05b).
+- `curation-subcomando-readonly-composicion`, `curation-advisory-exit-strict`,
+  `curation-sin-escritura-ni-gate`, `curation-enumeracion-familia-corregida`: decisiones de
+  CH-09 (`memory curate`): composición read-only, advisory con `--strict` opt-in, sin gate de
+  criticalidad y corrección de la enumeración de la familia `memory` en `memory-ops`.
 - Evidencia: `.ancleto/memory.db`, `aspec/specs/memory-engine/spec.md`,
   `aspec/changes/archive/2026-11-02-memory-ranking-y-omisiones-visibles/`,
   `aspec/changes/archive/2026-11-02-memory-consolidacion-autonoma/`,

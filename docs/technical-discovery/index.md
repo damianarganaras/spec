@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-03T10:45:00Z
-pluginVersion: 0.18.6
+generatedAt: 2026-11-03T13:54:02Z
+pluginVersion: 0.18.7
 skillVersion: '2.3'
 ---
 
@@ -11,10 +11,11 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto` / alias `aspec`).
 No es un inventario exhaustivo: enruta a la respuesta más corta. Evidencia base: pack Repomix
-(`--compress`, tier resuelto `minimo`, **740 archivos, ~19.907 tokens**), `package.json`
-(`0.18.6`), `CHANGELOG.md` (hasta `0.18.6`), `.discovery-map.json` (`total_files: 752`), el
+(`--compress`, tier resuelto `minimo`, **745 archivos, ~20.536 tokens**), `package.json`
+(`0.18.7`), `CHANGELOG.md` (hasta `0.18.7`), `.discovery-map.json` (`total_files: 757`), el
 reporte `ancleto discovery --check` y lectura puntual de los archivos citados en cada documento,
-incluidos `agents/`, `skills/`, `aspec/`, `test/` y `.ancleto/` (fuera del pack por el tier).
+incluidos `agents/`, `skills/`, `aspec/`, `test/`, `docs/` y `.ancleto/` (fuera del pack por el
+tier).
 
 ## Ruteo por pregunta
 
@@ -31,11 +32,12 @@ incluidos `agents/`, `skills/`, `aspec/`, `test/` y `.ancleto/` (fuera del pack 
 | Motor de memoria (SQLite + FTS5, tools, working-context, procedencia `source`), refs normalizadas y fail-closed, promoción al archivar, export/import/gc, snapshot, merge, **consolidate** | `units/memory-engine.md` |
 | **`searchMemory` task-aware**: orden total, **preview** por defecto (≤240 chars, `limit` 5, `content_truncated`), `expand:true`, `keys`, `required` como entrada de llamada | `units/memory-engine.md`, `decisions.md` |
 | **`memory gc` por edad de supersesión**: columna `superseded_at`, backfill histórico, `COALESCE(superseded_at, created_at)`, cutoff único y detach de `superseded_by` | `units/memory-engine.md`, `setup.md`, `decisions.md` |
+| **`memory curate`**: curaduría read-only de refs rotas, refs no verificables y duplicados exactos; advisory con `--strict` opt-in; `no-db` explícito | `units/memory-engine.md`, `setup.md`, `decisions.md` |
 | **Protocolo de memoria canónico** en `AGENTS.md` (`LOCKED: memory-protocol`), puntero único desde `PRODUCT.md`, aviso de overflow que no nombra `searchMemory` | `decisions.md`, `setup.md`, `units/memory-engine.md` |
 | **`memory doctor` de cinco checks** (`Integridad DB`, `Indice FTS5`, `Reglas activas`, `Refs de nodos activos`, `Checkpoint WAL`) y auditoría read-only de refs | `units/memory-engine.md`, `decisions.md` |
 | **Resolver de refs navegables** (`resolveNodeRefs`): `change:` activo/archivado, `spec:` con heading real, `path:` normalizado, `commit:`/`workitem:` no verificables | `units/memory-engine.md`, `decisions.md` |
 | **Orden determinístico de inyección** (scope, anclaje, recencia, `memory_key`), presupuesto que incluye el aviso y manifiesto de omitidas (`+N`) | `units/memory-engine.md`, `decisions.md` |
-| **`memory consolidate`**: duplicados exactos, canónico determinístico, `--dry-run` default, `--apply` por supersesión, near-dups sólo reporte | `units/memory-engine.md`, `setup.md`, `decisions.md` |
+| **`memory consolidate`**: duplicados exactos, canónico determinístico, `--dry-run` default, `--apply` por supersesión, near-dups sólo reporte, opción `includeNearDuplicates` | `units/memory-engine.md`, `setup.md`, `decisions.md` |
 | **Reglas de escritura de memoria**: bloque `refs:` obligatorio, gramática cerrada, items indentados o no, resolución y ambigüedad, exención `runtime`, rechazo de secretos | `units/memory-engine.md`, `decisions.md` |
 | **Promoción de decisiones al archivar** (`proposal ## Decisiones` aprobadas, preflight, cero candidatos ⇒ cero escrituras, orden respecto del merge de specs) | `decisions.md`, `units/memory-engine.md`, `units/cli-install.md` |
 | Discovery, empaquetado Repomix, impacto del seed, affected-set determinístico y tiers de tokens | `units/discovery-engine.md` |
@@ -57,31 +59,39 @@ incluidos `agents/`, `skills/`, `aspec/`, `test/` y `.ancleto/` (fuera del pack 
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local,
   entorno de máquina derivado y control de costo por tier. **8 hosts**: opencode (default),
   claude, vscode, antigravity, cursor, roo, copilot y commandcode.
-- **Versión observada**: `0.18.6` (`package.json`). HEAD `95b2599`
-  (`docs(specs): archivar MEM-05a y MEM-05b y sincronizar source-of-truth`) en `development`;
-  `git describe --tags` = `v0.18.5-14-g95b2599`, es decir **0.18.6 todavía sin tag**. El árbol de
-  trabajo tiene cambios sin commitear en `src/cli/index.js`,
-  `src/core/memory/{database,engine}.js`, `agents/memory-keeper.md`,
-  `aspec/specs/{memory-engine,prompt-contracts}/spec.md` y tests.
-- **Publicación**: `0.18.6` agrega **MEM-05 recall task-aware** (preview/`expand`/`keys`/
-  `required`) y publica el **protocolo canónico de memoria** en `AGENTS.md`; MEM-05a
-  (`searchmemory-docs-contract`) y MEM-05b (`gc-superseded-age`) están archivados. `0.18.5`
-  publicó `memory consolidate`; `0.18.4` el orden por anclaje y las omisiones visibles; `0.18.3`
-  `resolveNodeRefs`.
+- **Versión observada**: `0.18.7` (`package.json` y tope de `CHANGELOG.md`, fechado 2026-11-03).
+  HEAD `bd903d2` (`docs(specs): archive ch-09 curation change`) en `development`;
+  `git describe --tags` = `v0.18.5-19-gbd903d2`. El tag `v0.18.7` **existe** (anotado, en `main`);
+  no aparece en `describe` porque `main` no es ancestro de `development`. El árbol de trabajo está
+  limpio salvo los artefactos derivados del discovery (`.discovery-map.json` y
+  `.discovery-state.json`), que esta corrida regeneró.
+- **Publicación**: `0.18.7` publica el **protocolo canónico de memoria** en `AGENTS.md`, la
+  reconciliación del texto plano legado gateada por `source`, `memory gc` por `superseded_at` y el
+  seed regenerado; registra la deuda `MEM-05c`…`MEM-05g`. `0.18.6` publicó **MEM-05 recall
+  task-aware**; `0.18.5` `memory consolidate`; `0.18.4` el orden por anclaje y las omisiones
+  visibles; `0.18.3` `resolveNodeRefs`.
+- **`memory curate` (capacidad nueva, aún sin release)**: módulo puro
+  `src/core/memory/curation.js` + subcomando `ancleto memory curate [--json] [--strict]`. Compone
+  `resolveNodeRefs` y `consolidate({ dryRun: true, includeNearDuplicates: false })`; es
+  estrictamente read-only, advisory (exit 0) con `--strict` opt-in y estado `no-db` explícito.
+  Está archivado en `aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/` y **no** figura
+  en el CHANGELOG de `0.18.7`; no debe describirse como publicado.
 - **Memoria curada** (observado con `node src/cli/index.js memory doctor` y `memory list --json`):
-  **125 nodos activos** (34 rules `project`, 78 decisions `project`, 13 decisions `feature`) y
-  **228 filas** en `memory_nodes` (incluye superseded). **344 refs verificadas, 0 no resueltas**.
-  `memory consolidate --json` da `0` grupos exactos y `0` near-dups. Persiste el **overflow del
-  bloque proactivo**: **20 reglas** de scope `project` omitidas (entran 14 de 34).
-- **Change abierto**: sólo `ancleto-vscode-extension`. MEM-05, MEM-05a y MEM-05b están
-  **archivados** (`2026-11-02-mem-05-recall-task-aware`,
-  `2026-11-02-mem-05a-searchmemory-docs-contract`, `2026-11-02-mem-05b-gc-superseded-age`).
+  **129 nodos activos** (34 rules `project`, 82 decisions `project`, 13 decisions `feature`) y
+  **232 filas** en `memory_nodes` (incluye superseded). **360 refs verificadas, 0 no resueltas**.
+  FTS5: **232 filas indexadas**, coincide con los 232 nodos. `memory consolidate --json` da `0`
+  grupos exactos y `0` near-dups; `memory curate --json` devuelve `status: ok` con `0` refs rotas,
+  `0` no verificables y `0` duplicados exactos. Persiste el **overflow del bloque proactivo**:
+  **20 reglas** de scope `project` omitidas (entran 14 de 34).
+- **Change abierto**: sólo `ancleto-vscode-extension`. **42 archivados**; el más reciente es
+  `2026-11-03-ch-09-curaduria-recurrente`.
 - **CLI del `PATH` vs checkout**: el `ancleto` global de esta máquina es **0.17.1** y no conoce
-  `memory consolidate` ni el contrato nuevo de `searchMemory`; `node src/cli/index.js` es 0.18.6.
-  Verificar la versión instalada antes de concluir que una capacidad falta.
+  `memory consolidate` ni `memory curate` ni el contrato nuevo de `searchMemory`;
+  `node src/cli/index.js` es 0.18.7. Verificar la versión instalada antes de concluir que una
+  capacidad falta.
 - **Tier resuelto**: `minimo` vía `.opencode/.ancleto-tier`; decide modelos y el pack
   (`--compress`, ignora `test/**`, `docs/**`, `**/*.md`, sin token budget; sólo `gratis` fija
-  50k). Pack de esta corrida: **740 archivos, ~19.907 tokens**.
+  50k). Pack de esta corrida: **745 archivos, ~20.536 tokens**.
 - **Linter**: ESLint 10 como **devDependency** (flat config `eslint.config.js`, 4 reglas);
   scripts `npm run lint` y `npm test`; no agrega dependencias de runtime.
 - **Contrato de validaciones declarativo**: se corre **solo** lo declarado en `PRODUCT.md` →
@@ -91,10 +101,11 @@ incluidos `agents/`, `skills/`, `aspec/`, `test/` y `.ancleto/` (fuera del pack 
 - **Módulo puro de frontmatter**: `src/core/adapters/frontmatter.js` es el **dueño único** de la
   transformación (`adaptFrontmatter`); `src/cli/index.js` lo importa.
 - **Memoria**: 3 tools del LLM (`searchMemory`, `recordRule`, `recordDecision`) + operaciones
-  `memory export|import|gc|snapshot|merge|consolidate|context|list|doctor` sobre
+  `memory export|import|gc|snapshot|merge|consolidate|curate|context|list|doctor` sobre
   `.ancleto/memory.db`. `source` es procedencia runtime-owned. Toda escritura que pasa por
   `recordNode` valida refs fail-closed, salvo `source === 'runtime'`; `cli:import` queda fuera
   (LWW). `memory consolidate` sólo supersede duplicados exactos; los near-dups se reportan.
+  `memory curate` sólo reporta y nunca escribe.
 - **Contrato de `searchMemory`**: preview por defecto (prefijo literal de hasta 240 caracteres,
   `limit` 5, `content_truncated`), `expand: true` para payload completo, `keys` selectivo y
   `required` como entrada de llamada. El protocolo de uso vive en `AGENTS.md` →
@@ -111,7 +122,7 @@ incluidos `agents/`, `skills/`, `aspec/`, `test/` y `.ancleto/` (fuera del pack 
 - **Entorno de máquina**: `src/core/machine-env.js` es el **dueño único** de detectar,
   renderizar, escribir y excluir `.ancleto/machine-env.md`. Disponibilidad = **resoluble e
   invocable** (sonda acotada). El artefacto de este checkout declara `ancleto: 0.18.6`
-  (generado el 2026-11-03).
+  (generado el 2026-11-03 con el CLI anterior; no se regeneró en esta corrida).
 - **Merge de templates**: `mergeTemplateInto` reconcilia bloques planos legados **antes** de
   `mergeLocked`; punto único de `install`/`update`/`upgrade` e `import`. La reconciliación está
   gateada por la presencia del reemplazo canónico en el `source` y enmascara bloques `LOCKED` y
@@ -131,10 +142,10 @@ incluidos `agents/`, `skills/`, `aspec/`, `test/` y `.ancleto/` (fuera del pack 
 - **Set de artifacts**: `proposal.md`, `tasks.md`, `specs/`; `design.md` y `context.md` retirados
   sin sucesor desde `0.17.1`. Una decisión durable va a `proposal.md ## Decisiones`.
 - **Ciclo SDD**: 16 comandos `/cleto-*`, 21 skills nativas, **19 specs fuente**, **1 change
-  activo** y **41 archivados**; el más reciente es
-  `2026-11-02-mem-05b-gc-superseded-age`.
+  activo** y **42 archivados**; el más reciente es
+  `2026-11-03-ch-09-curaduria-recurrente`.
 - **Discrepancias abiertas**: la raíz de la DB puede diferir entre `cwd` y el `projectRoot` del
-  MCP (no reproducido en esta corrida) y el bloque proactivo omite 20 reglas; el
+  MCP (no reproducido en esta corrida), el bloque proactivo omite 20 reglas y el
   `working-context.md` está `desactualizado`. Ver `unknowns.md`.
 - **Este checkout**: `.ancletorc` y `.opencode/` existen (gitignored); persisten
   `.ancleto/memory.db`, `.ancleto/working-context.md` y `.ancleto/machine-env.md`.

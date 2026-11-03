@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-11-03T10:45:00Z
-pluginVersion: 0.18.6
+generatedAt: 2026-11-03T13:54:02Z
+pluginVersion: 0.18.7
 skillVersion: '2.3'
 ---
 
@@ -35,6 +35,7 @@ ancleto mcp                       # servidor MCP stdio de memoria propia
 ancleto memory context [--scope X] [--out <archivo>]
 ancleto memory list [--type X] [--scope X] [--all] [--json]
 ancleto memory doctor [--rebuild]   # cinco checks read-only + advisory del working-context
+ancleto memory curate [--json] [--strict]   # curaduría read-only: refs rotas, no verificables y duplicados exactos
 ancleto memory export [--out <archivo>]
 ancleto memory import <archivo>
 ancleto memory gc [--dry-run] [--days N]
@@ -56,9 +57,9 @@ lo evita. `--agent` acepta 8 hosts. `ancleto affected` es **read-only**; `stats 
 también y sólo funciona con la base de sesiones de opencode.
 
 **Versión del CLI**: el `ancleto` global del `PATH` en esta máquina es **0.17.1** y **no
-reconoce `memory consolidate`** ni el contrato nuevo de `searchMemory`; la versión `0.18.6` se
-invoca con `node src/cli/index.js`. Antes de concluir que una capacidad falta, verificar
-`ancleto --version` contra `package.json`.
+reconoce `memory consolidate` ni `memory curate`** ni el contrato nuevo de `searchMemory`; la
+versión `0.18.7` se invoca con `node src/cli/index.js`. Antes de concluir que una capacidad
+falta, verificar `ancleto --version` contra `package.json`.
 
 **Contrato de `searchMemory` (`0.18.6`)**: el modo por defecto devuelve **preview** (prefijo
 literal de hasta 240 caracteres por nodo, con `limit` 5 y `content_truncated` cuando queda
@@ -96,10 +97,26 @@ sources activas, sin repetidas y con el mismo `type`, y aplica todo en una trans
 (`--dry-run` no escribe). **`memory consolidate`** es dry-run por defecto; agrupa duplicados
 exactos por `type` + `content` normalizado (sin `refs:`), elige un canónico determinístico y
 con `--apply` supersede los no canónicos en una única transacción. Los near-dups (Jaccard
-≥ 0,60, mismo `type` y `scope`) **sólo se reportan**; `--apply` no los toca. Revertir requiere
-un snapshot previo. Evidencia: `src/cli/index.js` (`memorySnapshot`, `memoryMerge`,
+≥ 0,60, mismo `type` y `scope`) **sólo se reportan**; `--apply` no los toca. La firma
+`consolidate({ dryRun = true, includeNearDuplicates = true })` agrega la opción aditiva
+`includeNearDuplicates: false` para omitir el escaneo O(n²) sin cambiar el default. Revertir
+requiere un snapshot previo. Evidencia: `src/cli/index.js` (`memorySnapshot`, `memoryMerge`,
 `memoryConsolidate`), `src/core/memory/snapshot.js`, `src/core/memory/engine.js`
 (`validateMerge`, `merge`, `consolidate`).
+
+**Curaduría read-only (`memory curate`)**: wrapper fino sobre `src/core/memory/curation.js`
+(`curateMemory(engine, { projectRoot })`). Abre la base exclusivamente con `readonly: true` y
+`migrate: false`; no acepta `--rebuild` ni ejecuta DDL, `PRAGMA` mutante, `VACUUM`, snapshot,
+`INSERT`/`UPDATE`/`DELETE` ni promoción. El reporte tiene `status`, `brokenRefs`, `unverifiable`
+y `exactDuplicates`; las refs `commit:`/`workitem:` se reportan aparte y nunca como rotas. El
+orden es total (`memory_key` ascendente y, a igual clave, orden de aparición de la ref), sin
+`localeCompare`, `readdir` ni `rowid`. Es **advisory**: sale `0` aunque haya hallazgos; con
+`--strict` sale ≠ 0 si hay al menos una ref rota o un grupo exacto (las no verificables nunca
+afectan el exit code). Con `--json` emite un objeto parseable; en texto, un resumen legible. Sin
+base, reporta `status: no-db` y sale ≠ 0, con y sin `--strict`. Evidencia:
+`src/core/memory/curation.js`, `src/cli/index.js` (`memoryCurateCmd`),
+`aspec/specs/memory-ops/spec.md` (requirement `Curaduría read-only con memory curate`),
+`aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/`.
 
 **`memory gc` por edad de supersesión (`MEM-05b`)**: `memory_nodes` incorpora la columna
 aditiva `superseded_at TEXT`; la migración es guardada (sólo `ALTER TABLE` si falta) y el
@@ -111,10 +128,12 @@ del `DELETE` limpia el `superseded_by` de los elegibles para no violar la FK. `V
 son best-effort post-commit. Evidencia: `src/core/memory/database.js`,
 `src/core/memory/engine.js`, `aspec/specs/memory-ops/spec.md`.
 
-**Estado observado de la memoria** (local, read-only): **125 nodos activos** (34 rules
-`project`, 78 decisions `project`, 13 decisions `feature`) sobre **228 filas** en
-`memory_nodes`; **344 refs verificadas, 0 no resueltas**; `consolidate` reporta 0 grupos exactos
-y 0 near-dups. El bloque proactivo omite **20 reglas** de scope `project` (entran 14 de 34);
+**Estado observado de la memoria** (local, read-only): **129 nodos activos** (34 rules
+`project`, 82 decisions `project`, 13 decisions `feature`) sobre **232 filas** en
+`memory_nodes`; **360 refs verificadas, 0 no resueltas**; FTS5 con **232 filas indexadas**, que
+coinciden con los 232 nodos. `consolidate` reporta 0 grupos exactos y 0 near-dups; `curate
+--json` devuelve `status: ok` con 0 refs rotas, 0 no verificables y 0 duplicados exactos. El
+bloque proactivo omite **20 reglas** de scope `project` (entran 14 de 34);
 `.ancleto/working-context.md` está `desactualizado` y se regenera con
 `ancleto memory context --out .ancleto/working-context.md`.
 
@@ -134,7 +153,7 @@ y 0 near-dups. El bloque proactivo omite **20 reglas** de scope `project` (entra
   comandos `cleto-test-*`, estructura `testspec/` y bloque LOCKED de convenciones Playwright.
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
   Aquí `.opencode/.ancleto-tier` contiene **`minimo`** (`--compress`, ignora `test/**`,
-  `docs/**`, `**/*.md`, sin token budget; el pack de esta corrida: **740 archivos / ~19.907
+  `docs/**`, `**/*.md`, sin token budget; el pack de esta corrida: **745 archivos / ~20.536
   tokens**). Evidencia: `src/core/repomix-tier.js`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`,
@@ -149,7 +168,7 @@ y 0 near-dups. El bloque proactivo omite **20 reglas** de scope `project` (entra
   `AGENTS.md`.
 - **`.ancleto/`**: memoria local (`memory.db`, `working-context.md`) y entorno de máquina
   (`machine-env.md`); gitignored. `.ancleto/memory.db` es la fuente de `memory snapshot`,
-  `merge`, `consolidate` y `gc`.
+  `merge`, `consolidate`, **`curate`** y `gc`.
 - **`machine-env.md`**: artefacto derivado y local. Se regenera en `ancleto init`,
   `ancleto install --project` y `ancleto upgrade`; si los hechos no cambian, no se reescribe.
   La exclusión va a `git rev-parse --git-path info/exclude`, **nunca** a `.gitignore`, con el
@@ -180,8 +199,9 @@ tope de 200 caracteres); un veredicto inconcluso no lleva sufijo.
 **Estado en este checkout**: el artefacto existe (generado el 2026-11-03): `win32` /
 `10.0.26200` / `x64`, shell `Windows PowerShell 5.1` (`shell_source: PSModulePath`), EOL `lf`
 (`eol_source: gitattributes`), `rg` **no disponible** (fallback: `Select-String`),
-`node`/`npm`/`git`/`python` disponibles, `ancleto: 0.18.6`. La exclusión local está en
-`info/exclude`. Evidencia: `.ancleto/machine-env.md`.
+`node`/`npm`/`git`/`python` disponibles, `ancleto: 0.18.6` (generado por el CLI anterior; no se
+regeneró en esta corrida). La exclusión local está en `info/exclude`. Evidencia:
+`.ancleto/machine-env.md`.
 
 ## Permisos de shell por agente
 
@@ -235,8 +255,8 @@ El contrato es **declarativo**:
 - **Typecheck**: no aplica — JavaScript sin `tsconfig.json` (aunque `AGENTS.md` conserva la
   regla genérica "TypeScript strict" del template).
 - **Tests acotados**: pasar **rutas explícitas**; **nunca** `node --test` sin acotar.
-- **Suite**: 15 archivos (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`,
-  `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`,
+- **Suite**: 16 archivos (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`,
+  **`curation`**, `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`,
   `memory-engine`, `memory-fixtures`, `memory-pr1-contract`, `stats-failures`, `tier-models`,
   `working-context`) y tres fixtures en `test/fixtures/memory/`: `seed.json`, `golden.json` y
   `golden-refs-seed.json`, más `refs-root/`. Esta regeneración es **state-only**: no re-ejecutó

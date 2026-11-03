@@ -14,6 +14,7 @@ import { adaptFrontmatter, parseFrontmatter } from '../core/adapters/frontmatter
 import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite } from '../core/memory/working-context.js'
 import { materializeMachineEnv, checkMachineEnvTracked } from '../core/machine-env.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
+import { curateMemory } from '../core/memory/curation.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
 import { computeAffectedSet } from '../core/affected-set.js'
@@ -90,6 +91,7 @@ Uso:
 ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FTS5, unicidad,
                                      refs de nodos activos, checkpoint WAL)
                                      y reconstruye el indice FTS5 con --rebuild
+  ancleto memory curate [--json] [--strict]  Curaduria read-only: refs rotas y duplicados exactos
   ancleto memory export [--out <archivo>]  Exporta nodos activos a JSON (stdout o archivo)
   ancleto memory import <archivo>          Importa nodos desde JSON (upsert por memory_key, idempotente)
   ancleto memory gc [--dry-run] [--days N] Purga superseded con antiguedad > N dias (default 30)
@@ -2722,6 +2724,77 @@ async function memoryConsolidate(flags) {
   }
 }
 
+const CURATE_FLAGS = new Set(['--json', '--strict'])
+
+function curateFailure(asJson, reason) {
+  if (asJson) {
+    console.log(JSON.stringify({ status: 'error', reason, brokenRefs: null, unverifiable: null, exactDuplicates: null }))
+  } else {
+    console.error(`ancleto: no se pudo leer la memoria: ${reason}`)
+  }
+  process.exitCode = 1
+}
+
+// Curaduria read-only: abre exclusivamente con `readonly: true` y `migrate: false`
+// (sin migraciones, sin pragmas mutantes, sin snapshot). Advisory por defecto;
+// `--strict` convierte hallazgos en exit != 0. `no-db` nunca es un reporte limpio.
+async function memoryCurateCmd(flags) {
+  const unknown = flags.filter((flag) => !CURATE_FLAGS.has(flag))
+  if (unknown.length > 0) {
+    console.error(`ancleto: flag desconocido: ${unknown[0]}`)
+    console.error('ancleto: uso: ancleto memory curate [--json] [--strict]')
+    process.exitCode = 1
+    return
+  }
+  const asJson = flags.includes('--json')
+  const strict = flags.includes('--strict')
+  const dbPath = defaultMemoryDbPath()
+  if (!(await exists(dbPath))) {
+    if (asJson) {
+      console.log(JSON.stringify({ status: 'no-db', brokenRefs: null, unverifiable: null, exactDuplicates: null }))
+    } else {
+      console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    }
+    process.exitCode = 1
+    return
+  }
+  let engine
+  try {
+    engine = createReadonlyMemoryEngine(dbPath)
+  } catch (err) {
+    curateFailure(asJson, err.message)
+    return
+  }
+  let report
+  try {
+    report = curateMemory(engine, { projectRoot: resolveMemoryProjectRoot(dbPath) })
+  } catch (err) {
+    curateFailure(asJson, err.message)
+    return
+  } finally {
+    engine.close()
+  }
+  if (asJson) {
+    console.log(JSON.stringify(report))
+  } else {
+    console.log(`ancleto: curate -> ${report.brokenRefs.length} ref(s) rota(s), ${report.unverifiable.length} no verificable(s), ${report.exactDuplicates.length} grupo(s) exacto(s)`)
+    for (const item of report.brokenRefs) {
+      console.log(`  [rota] ${item.memory_key} -> ${item.ref} (${item.reason})`)
+    }
+    for (const item of report.unverifiable) {
+      console.log(`  [no verificable] ${item.memory_key} -> ${item.ref}`)
+    }
+    for (const group of report.exactDuplicates) {
+      console.log(`  [duplicado exacto] ${group.canonical} <- ${group.superseded.join(', ')}`)
+    }
+  }
+  // Advisory por defecto: solo `--strict` convierte los hallazgos en falla.
+  // `unverifiable` no afecta el codigo de salida en ningun modo.
+  if (strict && (report.brokenRefs.length > 0 || report.exactDuplicates.length > 0)) {
+    process.exitCode = 1
+  }
+}
+
 async function memoryCmd(args) {
   const [sub, ...flags] = args
   if (sub === 'context') {
@@ -2760,6 +2833,10 @@ async function memoryCmd(args) {
     await memoryConsolidate(flags)
     return
   }
+  if (sub === 'curate') {
+    await memoryCurateCmd(flags)
+    return
+  }
   console.error(`ancleto: subcomando de memory desconocido: ${sub || '(ninguno)'}`)
   console.error('ancleto: uso: ancleto memory context [--scope X] [--out file]')
   console.error('ancleto: uso: ancleto memory list [--type X] [--scope X] [--all] [--json]')
@@ -2770,6 +2847,7 @@ async function memoryCmd(args) {
   console.error('ancleto: uso: ancleto memory snapshot --out <archivo.db> [--force] [--json]')
   console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]')
   console.error('ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--json]')
+  console.error('ancleto: uso: ancleto memory curate [--json] [--strict]')
   process.exit(1)
 }
 

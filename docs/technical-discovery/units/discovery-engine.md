@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y el presupuesto por tier"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js"]
-generatedAt: 2026-11-03T10:45:00Z
-pluginVersion: 0.18.6
+generatedAt: 2026-11-03T13:54:02Z
+pluginVersion: 0.18.7
 skillVersion: '2.3'
 ---
 
@@ -34,8 +34,8 @@ Evidencia: `README.md`, firmas del pack, `aspec/specs/prompt-contracts/spec.md`.
 - `writeDiscoveryMap(rootDir)`: escribe `.discovery-map.json` en la raíz.
 - `readTopologySummary(cwd)`: valida y lee el resumen para inyectarlo en el working context.
 - El mapa se regenera al correr `ancleto discovery` (no en `--check`). En esta corrida:
-  `total_files: 752`; `tree_summary` incluye `documentation` 340 y `audit logs` 9 porque el mapa
-  recorre el disco y no aplica `.gitignore`. El `total_files` **no** coincide con los 740
+  `total_files: 757`; `tree_summary` incluye `documentation` 340 y `audit logs` 9 porque el mapa
+  recorre el disco y no aplica `.gitignore`. El `total_files` **no** coincide con los 745
   archivos del pack: el mapa cuenta el disco y el pack aplica los ignores del tier y `.gitignore`.
 
 ## Empaquetado — `src/core/repomix-tier.js`
@@ -45,7 +45,7 @@ Evidencia: `README.md`, firmas del pack, `aspec/specs/prompt-contracts/spec.md`.
   `minimo` + budget 50000).
 - `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
   Aquí `.opencode/.ancleto-tier` contiene **`minimo`**, por lo que el pack de esta corrida quedó
-  en **740 archivos / ~19.907 tokens** (sin budget que lo limite). El conteo de tokens depende
+  en **745 archivos / ~20.536 tokens** (sin budget que lo limite). El conteo de tokens depende
   de la compresión efectiva de Repomix y **no es comparable entre corridas**.
 - `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
   + `--ignore` del usuario, y agrega `--compress` si el tier o el flag lo piden. No permite
@@ -115,11 +115,11 @@ objetivo de verificación del tester.
    (sources, fileHashes, hash global, `packTokens`); el seed lo redacta la skill.
 
 **Reporte de esta corrida**: `STALE` / `impact: material`;
-`changedAreas: [".ancleto", ".ancletorc", ".opencode", "AGENTS.md", "CHANGELOG.md",
-"PRODUCT.md", "README.md", "agents", "aspec", "docs", "package.json", "skills", "src",
-"templates", "test"]`; `materialReasons: ["archivo material modificado: package.json"]`; los 11
-documentos del seed en `affectedDocs`. La causa es el salto a `0.18.6` y el estado local del
-discovery.
+`changedAreas: [".ancleto", "CHANGELOG.md", "PRODUCT.md", "README.md", "aspec", "docs",
+"package.json", "src", "test"]`; `materialReasons: ["archivo material modificado:
+package.json"]`; los 11 documentos del seed en `affectedDocs`. La causa es el salto a `0.18.7`,
+la curaduría CH-09 (`src/core/memory/curation.js`, `src/cli/index.js`, specs, tests, README,
+backlog) y el estado local del discovery.
 
 ## Reglas, contratos y riesgos
 
@@ -148,7 +148,7 @@ discovery.
 | `src/core/tier-models.js` | Modelos por tier y resolución gratis. |
 | `opencode.json` | Override de `agent.model` para los 10 subagentes; fuera del paquete publicado. |
 | `src/cli/index.js` | `checkDiscovery`, `runRepomix`, `packDiscovery`, `affectedCommand`, `computeSources`, `computeImpact`, `readSeedMap`, `affectedDocsFor`. |
-| `.discovery-map.json` | Mapa topológico regenerado por la corrida del pack (752 archivos). |
+| `.discovery-map.json` | Mapa topológico regenerado por la corrida del pack (757 archivos). |
 | `docs/technical-discovery/.discovery-state.json` | Estado de hashes y `packTokens` que consume `--check`. |
 | `docs/technical-discovery/seed-map.json` | Documento del seed → áreas de evidencia (lo escribe la skill). |
 | `aspec/specs/prompt-contracts/spec.md` | Contrato del affected-set y taxonomía de 4 categorías. |

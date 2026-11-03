@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-11-03T13:54:02Z
-pluginVersion: 0.18.7
+generatedAt: 2026-11-03T18:16:04Z
+pluginVersion: 0.18.9
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación de `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.7`. `0.18.7` publica el protocolo canónico de memoria, la reconciliación gateada de texto plano legado y `memory gc` por `superseded_at`; `0.18.6` publicó MEM-05 (recall task-aware); `0.18.5` `memory consolidate`; `0.18.4` el ranking/omisiones; `0.18.3` MEM-04b. El tag `v0.18.7` existe; `git describe --tags` desde `development` da `v0.18.5-19-gbd903d2` porque el tag de release vive en `main`, que no es ancestro de `development`. | `.github/workflows/publish.yml`, `package.json`, `git log`, `git tag`, `CHANGELOG.md` |
+| **npm registry** | Publicación de `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.9`. `0.18.9` alinea los modelos canónicos, muda `TIERS` a `src/core/tier-models.js` y agrega el guard de coherencia; `0.18.8` publicó **`memory curate`** y `includeNearDuplicates`; `0.18.7` el protocolo canónico de memoria, la reconciliación gateada y `memory gc` por `superseded_at`; `0.18.6` MEM-05 (recall task-aware); `0.18.5` `memory consolidate`; `0.18.4` el ranking/omisiones; `0.18.3` MEM-04b. El tag `v0.18.9` aún **no existe** (release sin tag); `v0.18.8` sí y es ancestro de `development` (`git describe --tags` = `v0.18.8-4-gaa7943f`). | `.github/workflows/publish.yml`, `package.json`, `git log`, `git tag`, `CHANGELOG.md` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
 | **ESLint 10 + globals** | Dependencias **sólo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
 | **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Usa `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
@@ -49,10 +49,11 @@ host. `ancleto check` valida que el frontmatter instalado coincida con la salida
 
 ## Configuración del host opencode (raíz del repo)
 
-`opencode.json` es configuración **del checkout**, no del paquete: fija
-`agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los **10 subagentes** y
+`opencode.json` es configuración **del checkout**, no del paquete: declara
+`agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los **10 agentes**; según
+`AGENTS.md`, ese override surte efecto en el agente **primario** y no alcanza a los subagentes.
 `package.json` → `files` no lo publica. Es configuración local, no contrato del producto.
-Evidencia: `opencode.json`, `package.json`.
+Evidencia: `opencode.json`, `package.json`, `AGENTS.md`.
 
 ## Entorno de máquina (integración local con git)
 
@@ -134,8 +135,8 @@ no es un MCP. En el estado actual reporta `desactualizado`. Evidencia:
 |---|---|---|
 | **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Sólo opencode. Es la fuente de la compuerta de medición de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
 | **`ancleto stats failures`** | Reporte read-only de tool parts fallidos de opencode: clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y enmascara secretos/rutas. No imprime `output` ni `state.error`. | `src/cli/index.js`, `aspec/specs/session-failure-report/spec.md` |
-| **`memory doctor`** | Cinco checks read-only; en la corrida local: 232 filas FTS indexadas (232 nodos totales), **129 activos**, **360 refs verificadas, 0 no resueltas**, WAL presente. | `src/cli/index.js`, `src/core/memory/doctor.js` |
-| **`memory curate`** | Reporte read-only determinístico: refs rotas, refs no verificables y duplicados exactos; advisory con `--strict` opt-in. En la corrida local: `status: ok` con 0/0/0. | `src/cli/index.js`, `src/core/memory/curation.js` |
+| **`memory doctor`** | Cinco checks read-only; último dato observado (generación anterior; no re-verificado): 232 filas FTS indexadas (232 nodos totales), **129 activos**, **360 refs verificadas, 0 no resueltas**, WAL presente. | `src/cli/index.js`, `src/core/memory/doctor.js` |
+| **`memory curate`** | Reporte read-only determinístico (publicado en `0.18.8`): refs rotas, refs no verificables y duplicados exactos; advisory con `--strict` opt-in. Último dato observado (generación anterior): `status: ok` con 0/0/0. | `src/cli/index.js`, `src/core/memory/curation.js` |
 | **Working-context advisory** | `memory doctor` expone `Working-context: <estado>` tras los checks. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
 
 ## Azure DevOps (opcional, apagado)

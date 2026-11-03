@@ -25,9 +25,9 @@ covers:
   - memory import refresh on-write
   - promoción al archivar
   - permisos de shell por agente
-sources: ["src/cli/**", "src/core/adapters/**", "src/core/machine-env.js", "src/core/memory/snapshot.js", "src/core/memory/curation.js"]
-generatedAt: 2026-11-03T13:54:02Z
-pluginVersion: 0.18.7
+sources: ["src/cli/**", "src/core/adapters/**", "src/core/tier-models.js", "src/core/machine-env.js", "src/core/memory/snapshot.js", "src/core/memory/curation.js", "agents/**", "test/agent-model-coherence.test.js", "aspec/specs/agent-model-tiers/**"]
+generatedAt: 2026-11-03T18:16:04Z
+pluginVersion: 0.18.9
 skillVersion: '2.3'
 ---
 
@@ -54,7 +54,7 @@ wizard. Evidencia: `package.json`, `src/cli/index.js`.
 importación openspec). Evidencia: `src/cli/index.js`, `README.md`.
 
 **Versión del binario**: el `ancleto` global del `PATH` en esta máquina es **0.17.1**, más viejo
-que `0.18.7`, y responde `subcomando de memory desconocido: consolidate` (tampoco conoce `memory curate`); la versión del checkout
+que `0.18.9`, y responde `subcomando de memory desconocido: consolidate` (tampoco conoce `memory curate`); la versión del checkout
 se invoca con `node src/cli/index.js`. La comparación de capacidades debe hacerse contra
 `package.json` y la invocación local.
 
@@ -246,15 +246,42 @@ Contrato (spec `prompt-contracts`): **NO SHALL existir una ruta que mergee `TEMP
 reconciliar**. Evidencia: `src/cli/index.js`, `templates/AGENTS.md`,
 `aspec/specs/prompt-contracts/spec.md`.
 
-## Validación de frontmatter en `ancleto check`
+## Validación de frontmatter y coherencia de modelos en `ancleto check`
 
-`checkAgentsFrontmatter` recorre cada `.md` de un directorio de agents instalado, lee el origen y
-el instalado, aplica `adaptFrontmatter(origen, host, 'agents', name)` y compara. En opencode
-simula la sustitución de `model:` del tier (`applyTier`); en copilot + orchestrator suma
-`COPILOT_MODEL_NOTE`. La divergencia se reporta como **warning (⚠), no bloqueante**; sólo un
-faltante (✖) altera el exit code. El host de cada directorio se deriva del manifiesto multi-host
+`checkAgentsFrontmatter` recorre cada `.md` de un directorio de agents instalado y compara el
+archivo real contra:
+
+1. **La fuente esperada**: `adaptFrontmatter(fuente, host, 'agents', name)`, donde `fuente` es
+   `agents/<n>.md` o, para `tester`/`reviewer` con perfil `test`, el overlay
+   `profiles/test/agents/<n>.md`.
+2. **Los estados del tier** (sólo `opencode`): simula la misma sustitución de `model:` que
+   `applyTier` antes de adaptar. En `gratis` acepta los dos modelos gratis conocidos (Muse Spark
+   y `big-pickle`). Un mirror que coincide con la fuente **o** con un estado del tier no es
+   divergencia.
+3. Si el tier aplicaría un modelo distinto al de la fuente esperada, emite **un aviso por
+   directorio** (`tier '<x>' aplica un modelo distinto...`), no bloqueante.
+
+La divergencia se reporta como **warning (⚠), no bloqueante**; sólo un faltante (✖) altera el
+exit code. `checkTierOrphan` avisa además si hay un tier configurado sin agentes locales donde
+aplicarlo. El host de cada directorio se deriva del manifiesto multi-host
 (`installedHostsFromPaths`). Evidencia: `src/cli/index.js`,
 `aspec/specs/skill-frontmatter-adapters/spec.md`.
+
+### Coherencia canónica (`0.18.9`)
+
+- Los **10 `agents/*.md`** declaran el mismo `model:`
+  `commandcode/deepseek/deepseek-v4.1-flash`; es el **default publicado** y lo que materializa
+  `upgrade`.
+- `TIERS` tiene **dueño único** en `src/core/tier-models.js`; `src/cli/index.js` lo importa.
+  `TIERS.minimo` mapea los 10 agentes a ese mismo modelo, así que `applyTier` es **no-op** sobre
+  la canónica.
+- `test/agent-model-coherence.test.js` compara el conjunto y el modelo por agente de
+  `TIERS.minimo` contra `agents/*.md`, exige que `TIERS` se declare sólo en
+  `src/core/tier-models.js` y afirma que el overlay `profiles/test/agents/{tester,reviewer}.md`
+  existe pero queda fuera del conjunto canónico. No codifica proveedores ni lee `.opencode/**`.
+- `install`/`update` reescriben `model:` por tier **sólo en opencode** (los otros adaptadores lo
+  quitan o emiten `inherit`); `upgrade` no aplica tier. Evidencia:
+  `aspec/specs/agent-model-tiers/spec.md`, `test/agent-model-coherence.test.js`.
 
 ## Commands como skills (Antigravity)
 
@@ -412,8 +439,9 @@ repara in place sin bundle. Wrapper `/cleto-transplant`. Evidencia: `src/cli/ind
 4. `installAgentAssets` materializa skills/agents/commands en el destino nativo, delegando la
    adaptación en `adaptFrontmatter`; con perfil `test`, `installProfileOverlay`.
 5. `scaffoldAspec` (+ `scaffoldTestspec` con perfil `test`) crean estructura sin pisar.
-6. `applyTier` reescribe la línea `model:` de cada agente; resuelve `gratisModel` y lo guarda.
-   Paridad `init`/`install` en el tier guardado.
+6. `applyTier` reescribe la línea `model:` de cada agente **sólo en opencode** (con `minimo` es
+   no-op sobre la canónica); resuelve `gratisModel` y lo guarda. Paridad `init`/`install` en el
+   tier guardado.
 7. `setupHostMcp` configura el MCP del host **no destructivo**; en `init` el MCP se resuelve
    **antes** de escribir los agents para materializar la directiva host-scoped.
 8. `writeManifest` actualiza `.ancletorc` y `registerProject` anota el repo en
@@ -463,8 +491,10 @@ repara in place sin bundle. Wrapper `/cleto-transplant`. Evidencia: `src/cli/ind
 - **Errores no bloqueantes**: binarios ausentes, assets no soportados, divergencias de frontmatter
   y exclusiones no garantizadas se omiten con warning.
 - **`opencode.json` no se publica**: el override de modelos es config del checkout.
-- **El `model:` vive en tres superficies**; `install`/`update` reescriben por tier y `upgrade` no
-  aplica tier. Ver `setup.md`.
+- **El `model:` vive en tres superficies**; el mirror del proyecto gana sobre el global,
+  `install`/`update` reescriben por tier **sólo en opencode** y `upgrade` no aplica tier. `check`
+  es el oráculo de canónica/perfil + estado del tier. `TIERS` tiene dueño único en
+  `src/core/tier-models.js`. Ver `setup.md`, `aspec/specs/agent-model-tiers/spec.md`.
 - **`ancleto --version` lee `package.json` en runtime** (no hardcodeado).
 - **Deuda MEM-04**: `inspectRefs` no captura errores de I/O y el conteo de no verificables con
   rotas sigue en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` §5.2; MEM-04b no la corrige.
@@ -473,7 +503,8 @@ repara in place sin bundle. Wrapper `/cleto-transplant`. Evidencia: `src/cli/ind
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `refreshMachineEnv`, `memoryImport`, `memorySnapshot`, `memoryMerge`, `memoryConsolidate`, `memoryCurateCmd`, `memoryDoctorCmd`, `memoryExport`/`memoryGc`, `affectedCommand`, `statsFailuresCommand`. |
+| `src/cli/index.js` | Entry point; `AGENT_TARGETS`, `SUPPORTED_AGENTS`, `applyTier`, `installAgentAssets`, `installAssetFiles`, `installProfileOverlay`, `installCommandSkills`, `setupHostMcp`, `mergeCommandCodeMcp`, `mergeCopilotMcp`, `hostSupportsCompression`/`hostConfigHasCompression`, `mergeTemplateInto`/`reconcileLegacyBlocks`/`mergeLocked`, `checkAgentsFrontmatter`/`checkTierOrphan`, `exportCmd`/`importCmd`, `detectLegacyOpenSpec`, `localAgentDirs`, `installedHostsFromPaths`, `writeManifest`, `migrateLegacyOpenspec`, `refreshWorkingContext`/`memoryContext`, `refreshMachineEnv`, `memoryImport`, `memorySnapshot`, `memoryMerge`, `memoryConsolidate`, `memoryCurateCmd`, `memoryDoctorCmd`, `memoryExport`/`memoryGc`, `affectedCommand`, `statsFailuresCommand`. |
+| `src/core/tier-models.js` | Dueño único de `TIERS` y de la resolución del tier gratis (`tierModels`, `gratisModel`, `envGratisModel`, `isKnownGratisModel`, `detectMuseSpark`). |
 | `src/core/adapters/frontmatter.js` | `adaptFrontmatter`, `parseFrontmatter`, `serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`. |
 | `src/core/machine-env.js` | `machineEnvPath`, `detectMachineFacts`, `renderMachineEnv`, `writeMachineEnv`, `ensureMachineEnvExclusion`, `materializeMachineEnv`, `checkMachineEnvTracked`; sonda interna (`findExecutables`, `spawnProbe`, `probeExecutable`). |
 | `src/core/memory/curation.js` | `curateMemory`: composiciA3n read-only de `resolveNodeRefs` + `consolidate({ dryRun: true, includeNearDuplicates: false })`; reporte determinA-stico. |
@@ -484,14 +515,16 @@ repara in place sin bundle. Wrapper `/cleto-transplant`. Evidencia: `src/cli/ind
 | `skills/ancleto-archive/SKILL.md` | Gate de promoción al archivar. |
 | `agents/memory-keeper.md` | Modo Promotion. |
 | `src/cli/ui.js` | Banner y menús TTY. |
-| `opencode.json` | Override de `agent.model` para los 10 subagentes. No se publica. |
+| `opencode.json` | Entradas `agent.model` para los 10 agentes; según `AGENTS.md` sólo surte efecto en el primario. No se publica. |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques LOCKED/EXTENSIBLE. |
 | `skills/*/SKILL.md` | Catálogo instalable; en agents el frontmatter se adapta, en skills se copia. |
-| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js`, `test/memory-fixtures.test.js`, `test/curation.test.js` | Guardas del CLI, adaptador, contenido, working-context, entorno, fallos, PR-1, golden/resolver y curaduría. |
+| `test/cli.test.js`, `test/adapters-frontmatter.test.js`, `test/content-guards.test.js`, `test/working-context.test.js`, `test/machine-env.test.js`, `test/stats-failures.test.js`, `test/memory-pr1-contract.test.js`, `test/memory-fixtures.test.js`, `test/curation.test.js`, `test/agent-model-coherence.test.js` | Guardas del CLI, adaptador, contenido, working-context, entorno, fallos, PR-1, golden/resolver, curaduría y coherencia canónica/`TIERS`. |
 | `aspec/changes/archive/2026-11-02-mem-05-recall-task-aware/` | Change archivado y publicado en `0.18.6`. |
 | `aspec/changes/archive/2026-11-02-mem-05a-searchmemory-docs-contract/` | Protocolo canónico de memoria en `AGENTS.md`. |
 | `aspec/changes/archive/2026-11-02-mem-05b-gc-superseded-age/` | GC por edad de supersesión. |
-| `aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/` | `memory curate`: curaduría read-only (archivado; aún sin release). |
+| `aspec/specs/agent-model-tiers/spec.md` | Coherencia canónica/`TIERS`/mirror, no-op del tier `minimo`, dueño único de `TIERS` y guard estructural. |
+| `aspec/changes/archive/2026-11-03-align-agent-models-commandcode/` | Change archivado de `0.18.9`: modelos canónicos alineados y `TIERS` mudado. |
+| `aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/` | `memory curate`: curaduría read-only (publicado en `0.18.8`). |
 | `aspec/changes/archive/2026-11-02-mem-04b-resolver-referencias-navegables/` | Change archivado y publicado en `0.18.3`. |
 | `aspec/changes/archive/2026-11-02-memory-ranking-y-omisiones-visibles/` | Change archivado y publicado en `0.18.4`. |
 | `aspec/changes/archive/2026-11-02-memory-consolidacion-autonoma/` | Change archivado y publicado en `0.18.5`. |

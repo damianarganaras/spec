@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-03T13:54:02Z",
+  "generatedAt": "2026-11-03T18:16:04Z",
   "docs": {
     "decisions.md": ["src", "agents", "aspec", "package.json", "README.md", "AGENTS.md", "PRODUCT.md", "templates", "commands", "skills", "docs", "CHANGELOG.md", "eslint.config.js", "test", "opencode.json", ".ancletorc", ".opencode"],
     "index.md": ["package.json", "src", "agents", "aspec", "commands", "skills", "docs", "AGENTS.md", "PRODUCT.md", "profiles", "README.md", "CHANGELOG.md", ".ancletorc", ".opencode", ".discovery-map.json", ".gitattributes", "opencode.json", "test", ".ancleto"],
-    "integrations.md": ["package.json", "src", "agents", "README.md", ".github", "profiles", "eslint.config.js", "CHANGELOG.md", "aspec", ".gitattributes", ".gitignore", "opencode.json"],
+    "integrations.md": ["package.json", "src", "agents", "README.md", "AGENTS.md", ".github", "profiles", "eslint.config.js", "CHANGELOG.md", "aspec", ".gitattributes", ".gitignore", "opencode.json"],
     "inventory.md": ["package.json", ".discovery-map.json", ".github", "aspec", "profiles", "eslint.config.js", ".ancletorc", ".opencode", "src", "test", "README.md", "agents", "commands", "skills", "templates", "docs", ".ancleto", "opencode.json", "CHANGELOG.md", "PRODUCT.md"],
     "overview.md": ["package.json", "src", "README.md", "AGENTS.md", "PRODUCT.md", "agents", "commands", "skills", "docs", "templates", "aspec", "test", "profiles", "eslint.config.js", "CHANGELOG.md", ".discovery-map.json", ".gitattributes", ".gitignore", ".ancleto", "opencode.json"],
     "setup.md": ["package.json", "README.md", "AGENTS.md", "PRODUCT.md", "templates", "aspec", "test", ".github", "profiles", "eslint.config.js", ".opencode", ".ancletorc", "src", ".gitattributes", ".gitignore", "agents", ".ancleto", "opencode.json", "CHANGELOG.md"],

@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware (preview/expand/keys/required), la validación de refs, el resolver de refs navegables, la promoción al archivar, el working-context, el refresh on-write, la procedencia source, las ops export/import/gc por supersesión, snapshot, merge, consolidate, la curaduría read-only con memory curate, el doctor read-only, el orden de inyección, el presupuesto/aviso de overflow y su consumo por el orquestador"
 covers: [motor de memoria, tools, recall task-aware, preview, expand, keys, required, refs normalizadas, validación fail-closed, indentación de refs, rechazo de secretos, resolver de refs navegables, resolveNodeRefs, orden de inyección, anclaje, presupuesto, manifiesto de omitidas, promoción al archivar, working-context, día-cero, procedencia source, export/import/gc, superseded_at, snapshot consistente, merge por supersesión, consolidate, includeNearDuplicates, curaduría read-only, curate, refs rotas, no verificables, duplicados exactos, doctor read-only, auditoría de refs, inspectRefs, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
 sources: ["src/core/memory/**"]
-generatedAt: 2026-11-03T13:54:02Z
-pluginVersion: 0.18.7
+generatedAt: 2026-11-03T18:16:04Z
+pluginVersion: 0.18.9
 skillVersion: '2.3'
 ---
 
@@ -24,7 +24,7 @@ mismo parser y resolvedor. `0.18.4` agrega el **orden por anclaje** y el **manif
 omitidas**; `0.18.5` agrega **`consolidate`**; `0.18.6` agrega el **recall task-aware**
 (preview/`expand`/`keys`/`required`) y publica el **protocolo canónico** en `AGENTS.md`;
 `MEM-05b` agrega **`superseded_at`** para que `gc` mida la edad de supersesión. CH-09 agrega
-**`memory curate`** (archivado, aún sin release): un reporte read-only que compone resolver y
+**`memory curate`** (publicado en `0.18.8`): un reporte read-only que compone resolver y
 consolidate sin duplicar primitivas. Evidencia: `README.md`,
 `DESIGN-memory-engine-v0.2.0.md`, `aspec/specs/memory-ops/spec.md`,
 `aspec/specs/memory-engine/spec.md`, `aspec/changes/archive/2026-11-02-*`,
@@ -324,8 +324,9 @@ columna ni migración.
   cuántos nodos se supersedieron y cómo regenerar el bloque.
 - **Reversión**: no hay "unsupersede"; revertir exige un `memory snapshot` previo. `--apply`
   conserva `id`/`superseded_by`, por lo que el historial es reconstruible.
-- **Estado observado**: dry-run sobre la base real devuelve `0` grupos exactos y `0` near-dups;
-  `--apply` sería un no-op. La operación es opt-in y el default no escribe.
+- **Estado observado (generación anterior; no re-verificado)**: dry-run sobre la base real
+  devuelve `0` grupos exactos y `0` near-dups; `--apply` sería un no-op. La operación es opt-in y
+  el default no escribe.
 - **Opción aditiva `includeNearDuplicates`**: default `true` (preserva el reporte actual). Con
   `false` omite el doble loop O(n²) de near-duplicates; la definición de duplicado exacto, la
   cadena de canónico y su orden no cambian. El engine read-only reenvía la opción. La usa
@@ -339,7 +340,7 @@ columna ni migración.
 
 `ancleto memory curate [--json] [--strict]` es un wrapper fino sobre
 `src/core/memory/curation.js`; **no** es una tool MCP ni un sexto check de `doctor`. El change
-está archivado (`2026-11-03-ch-09-curaduria-recurrente`) y todavía **no** figura en un release.
+está archivado (`2026-11-03-ch-09-curaduria-recurrente`) y se publicó en **`0.18.8`**.
 Evidencia: `src/core/memory/curation.js`, `src/cli/index.js` (`memoryCurateCmd`),
 `aspec/specs/memory-ops/spec.md` (requirement `Curaduría read-only con memory curate`).
 
@@ -365,9 +366,9 @@ Evidencia: `src/core/memory/curation.js`, `src/cli/index.js` (`memoryCurateCmd`)
   ≠ 0 si hay al menos una ref rota o un grupo exacto. `unverifiable` nunca afecta el exit code.
   Sin base, reporta `no-db` y sale ≠ 0, con y sin `--strict`; un error de apertura/lectura
   reporta estado distinto de `ok` con su motivo y exit ≠ 0, nunca un reporte limpio.
-- **Estado observado**: `node src/cli/index.js memory curate --json` →
-  `{"status":"ok","brokenRefs":[],"unverifiable":[],"exactDuplicates":[]}` sobre 129 nodos
-  activos y 360 refs.
+- **Estado observado (generación anterior; no re-verificado)**: `node src/cli/index.js memory
+  curate --json` → `{"status":"ok","brokenRefs":[],"unverifiable":[],"exactDuplicates":[]}` sobre
+  129 nodos activos y 360 refs.
 - **Deuda diferida (backlog CH-09e…CH-09h)**: (e) `exactDuplicates` no proyecta el `type` del
   grupo; (f) lectura no atómica entre `listNodes` y `consolidate`; (g) el literal `inválido
   (gramática)` está duplicado entre `doctor` y `curate`; (h) el orden total asume el índice
@@ -464,10 +465,10 @@ Evidencia: `src/core/memory/snapshot.js`, `src/core/memory/database.js`,
   `checkWorkingContextFreshness`; no altera el exit code. En el estado actual reporta
   `desactualizado`.
 
-**Estado observado** (`node src/cli/index.js memory doctor`): integridad OK, **232 filas FTS
-indexadas** (232 nodos totales), unicidad OK, **360 refs verificadas en 129 nodos activos, 0 no
-resueltas**, WAL presente (4.161.232 bytes) y `Working-context: desactualizado`; **20 reglas
-omitidas** por tamaño. Evidencia: `src/core/memory/doctor.js`, `src/core/memory/engine.js`,
+**Estado observado** (`node src/cli/index.js memory doctor`, **generación anterior; no
+re-verificado en esta corrida**): integridad OK, **232 filas FTS indexadas** (232 nodos totales),
+unicidad OK, **360 refs verificadas en 129 nodos activos, 0 no resueltas**, WAL presente
+(4.161.232 bytes) y `Working-context: desactualizado`; **20 reglas omitidas** por tamaño. Evidencia: `src/core/memory/doctor.js`, `src/core/memory/engine.js`,
 `src/cli/index.js`, `aspec/specs/memory-ops/spec.md`.
 
 ## Merge por supersesión
@@ -662,7 +663,7 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
 | `agents/orchestrator.md` | Consumidor del overflow, presupuesto de Automatic Record y orden de promoción. |
 | `aspec/specs/memory-ops/spec.md` | Contrato de export/import/gc por supersesión, snapshot, doctor read-only, `--rebuild`, merge, **consolidate**, **curaduría read-only (`memory curate`)**, harness golden y diagnóstico de refs. |
 | `aspec/specs/memory-engine/spec.md` | Contrato de refs, promoción, día-cero, refresh, staleness, **orden de inyección**, **presupuesto/aviso**, **recall task-aware**, `resolveNodeRefs` y render sin `refs:`. |
-| `aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/` | `memory curate` (archivado; aún sin release). |
+| `aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/` | `memory curate` (publicado en `0.18.8`). |
 | `aspec/changes/archive/2026-11-02-mem-05-recall-task-aware/` | Recall task-aware: preview/`expand`/`keys`/`required` (`0.18.6`). |
 | `aspec/changes/archive/2026-11-02-mem-05a-searchmemory-docs-contract/` | Protocolo canónico en `AGENTS.md` y puntero desde `PRODUCT.md`. |
 | `aspec/changes/archive/2026-11-02-mem-05b-gc-superseded-age/` | GC por edad de supersesión (`superseded_at`). |

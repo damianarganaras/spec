@@ -513,22 +513,30 @@ Esto escribe `azure.enabled: true` en tu `.ancletorc`. Después completá la sec
 
 ## Referencia: agentes y modelos por tier
 
-Los 10 agentes instalados y el modelo que usa cada uno según tu tier. Al instalar, el nivel elegido se escribe en la línea `model:` de cada agente y se re-aplica en cada `update`.
+Los 10 agentes instalados y el modelo que usa cada uno según tu tier. El **default publicado** es el
+valor `model:` de los archivos canónicos `agents/*.md` (`commandcode/deepseek/deepseek-v4.1-flash`),
+que es lo que materializa `ancleto upgrade`. NO es el tier que selecciona un `install` sin `--tier`:
+ese tier por defecto es `normal`. Al instalar en el host `opencode`, el tier elegido se escribe en la
+línea `model:` de cada agente (los adaptadores de claude/vscode/copilot/commandcode quitan `model:` y
+antigravity emite `model: inherit`), y `ancleto check` avisa cuando el tier configurado aplicaría un
+modelo distinto al canónico.
 
-| Agente | `normal` (default) | `minimo` | `gratis` |
+| Agente | `normal` | `minimo` | `gratis` |
 |---|---|---|---|
-| orchestrator | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota |
-| coder | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota |
-| tester | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
-| spec-writer | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota |
-| reviewer | `opencode-go/qwen3.6-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota |
-| technical-discovery | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
-| technical-seed-writer | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota |
-| memory-keeper | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
-| context-resolver | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
-| documenter | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| orchestrator | `opencode-go/qwen3.7-plus` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| coder | `opencode-go/minimax-m3` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| tester | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| spec-writer | `opencode-go/qwen3.7-plus` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| reviewer | `opencode-go/qwen3.6-plus` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| technical-discovery | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| technical-seed-writer | `opencode-go/minimax-m3` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| memory-keeper | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| context-resolver | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| documenter | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
 
-El tier `minimo` usa un único modelo para los 10 agentes: `deepseek-v4.1-flash` es el más económico del catálogo para coding (0.15 / 0.60 por millón de tokens) y ofrece 1M de contexto.
+El tier `minimo` coincide con el default publicado: aplicarlo sobre la canónica es un no-op, así que
+`install`/`update` no reescriben `model:`. Los tiers `normal` y `gratis` conservan sus proveedores
+actuales.
 
 **Tier `gratis`.** Los 10 agentes usan **Muse Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`) si está disponible en tu cuenta —no está abierto a todos—. En `install` interactivo el wizard te lo pregunta la primera vez y la respuesta queda guardada en `.ancletorc` (`gratisModel`) para los siguientes `init`/`install`/`update`. `init` interactivo con tier `gratis` pregunta siempre, salvo que `ANCLETO_MUSE_SPARK` fuerce el valor (pre-selecciona el valor guardado o la detección automática como default); fuera del menú reutiliza el valor guardado o detecta con `opencode models` y, si no se puede confirmar, usa `opencode/big-pickle`. Ambos comandos informan cuál aplicaron y, cuando no preguntan, de dónde salió (variable de entorno, valor guardado o detección automática).
 

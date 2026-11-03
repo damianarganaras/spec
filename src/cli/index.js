@@ -20,7 +20,7 @@ import { writeDiscoveryMap } from '../core/discovery.js'
 import { computeAffectedSet } from '../core/affected-set.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
-import { tierModels, gratisModel, envGratisModel, isKnownGratisModel, MUSE_SPARK_MODEL, GRATIS_FALLBACK_MODEL } from '../core/tier-models.js'
+import { TIERS, tierModels, gratisModel, envGratisModel, isKnownGratisModel, MUSE_SPARK_MODEL, GRATIS_FALLBACK_MODEL } from '../core/tier-models.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -577,45 +577,6 @@ function buildDefaultMcp({ withEngram = false } = {}) {
   }
 
   return mcp
-}
-
-const TIERS = {
-  normal: {
-    orchestrator: 'opencode-go/qwen3.7-plus',
-    coder: 'opencode-go/minimax-m3',
-    tester: 'opencode-go/deepseek-v4.1-flash',
-    'spec-writer': 'opencode-go/qwen3.7-plus',
-    reviewer: 'opencode-go/qwen3.6-plus',
-    'technical-discovery': 'opencode-go/deepseek-v4.1-flash',
-    'technical-seed-writer': 'opencode-go/minimax-m3',
-    'memory-keeper': 'opencode-go/deepseek-v4.1-flash',
-    'context-resolver': 'opencode-go/deepseek-v4.1-flash',
-    documenter: 'opencode-go/deepseek-v4.1-flash'
-  },
-  minimo: {
-    orchestrator: 'opencode-go/deepseek-v4.1-flash',
-    coder: 'opencode-go/deepseek-v4.1-flash',
-    tester: 'opencode-go/deepseek-v4.1-flash',
-    'spec-writer': 'opencode-go/deepseek-v4.1-flash',
-    reviewer: 'opencode-go/deepseek-v4.1-flash',
-    'technical-discovery': 'opencode-go/deepseek-v4.1-flash',
-    'technical-seed-writer': 'opencode-go/deepseek-v4.1-flash',
-    'memory-keeper': 'opencode-go/deepseek-v4.1-flash',
-    'context-resolver': 'opencode-go/deepseek-v4.1-flash',
-    documenter: 'opencode-go/deepseek-v4.1-flash'
-  },
-  gratis: {
-    orchestrator: 'opencode/big-pickle',
-    coder: 'opencode/big-pickle',
-    tester: 'opencode/big-pickle',
-    'spec-writer': 'opencode/big-pickle',
-    reviewer: 'opencode/big-pickle',
-    'technical-discovery': 'opencode/big-pickle',
-    'technical-seed-writer': 'opencode/big-pickle',
-    'memory-keeper': 'opencode/big-pickle',
-    'context-resolver': 'opencode/big-pickle',
-    documenter: 'opencode/big-pickle'
-  }
 }
 
 function tierStatePath(targetDir) {
@@ -2931,52 +2892,87 @@ async function checkCommand() {
 }
 
 // T3 (delta `frontmatter-adapters`): para cada `.md` de un directorio de agents
-// instalado, compara el contenido contra `adaptFrontmatter(source, host, 'agents', name)`.
-// Para opencode tambien aplica la sustitucion de `model:` del tier (paso del install que
-// se ejecuta despues del adaptador). Para copilot + orchestrator suma `COPILOT_MODEL_NOTE`.
-// Reporta divergencia como warning (no bloqueante). No compara archivos huérfanos (ya
-// quedan avisados arriba) ni archivos sin origen comparable.
+// instalado, compara el contenido contra la adaptacion de la canónica versionada
+// (`adaptFrontmatter(source, host, 'agents', name)`), conservando las notas de host
+// por orchestrator. Para opencode tambien calcula el estado esperado del tier
+// configurado (misma sustitucion de `model:` que `applyTier`): un mirror que coincide
+// con el tier no es divergencia, pero la diferencia de modelo se anuncia una vez por
+// directorio para que nunca quede silenciosa.
+// Reporta divergencia y aviso de tier como warnings (no bloqueantes). No compara
+// archivos huérfanos (ya quedan avisados arriba) ni archivos sin origen comparable.
 async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
   const host = hostForDir('agents', dirRel)
   if (!host) return
-  // Mapa de modelos aplicado por install en opencode (model: <x> -> tier).
-  // Para 'gratis' usa el gratisModel persistido en .ancletorc.
-  let tierModelsMap = null
+  const rc = await readAncletorc(cwd)
+  const profile = validProfile(rc?.profile) || DEFAULT_PROFILE
+  // Overlay del perfil: para `test`, installProfileOverlay reemplaza tester/reviewer
+  // desde `profiles/test/agents/<n>.md` despues de instalar los agentes base, asi que
+  // esa fuente es la esperada para el cuerpo (y para el modelo tras `upgrade`). El
+  // resto sigue comparandose contra `agents/`. El estado del tier se calcula sobre la
+  // fuente que corresponda a cada agente.
+  const profileAgentsDir = join(profileAssetsRoot(profile), 'agents')
+  // Estados de tier aplicados por install en opencode (model: <x> -> tier). Para
+  // 'gratis' usa el gratisModel persistido en .ancletorc; como un proyecto legacy o
+  // importado sin `gratisModel` puede resolver un modelo gratis distinto entre
+  // install y check, ambos modelos gratis conocidos son estados aceptables. El
+  // primero es el resuelto (persistido o detectado) y manda para el aviso de tier.
+  let tier = null
+  let tierModelMaps = []
   if (host === 'opencode') {
     const tierFile = join(cwd, '.opencode', '.ancleto-tier')
     if (await exists(tierFile)) {
-      const tier = (await readFile(tierFile, 'utf8')).trim()
-      if (TIERS[tier]) {
-        const rc = await readAncletorc(cwd)
+      const rawTier = (await readFile(tierFile, 'utf8')).trim()
+      if (TIERS[rawTier]) {
+        tier = rawTier
         const persisted = isKnownGratisModel(rc?.gratisModel) ? rc.gratisModel : null
-        tierModelsMap = tierModels(tier, TIERS, persisted)
+        const primary = tierModels(tier, TIERS, persisted)
+        tierModelMaps = tier === 'gratis'
+          ? [...new Set([primary.orchestrator, MUSE_SPARK_MODEL, GRATIS_FALLBACK_MODEL])].map((m) => tierModels(tier, TIERS, m))
+          : [primary]
       }
     }
   }
+  const compression = await hostConfigHasCompression(cwd, host)
+  const adapt = (source, name) => {
+    let adapted = adaptFrontmatter(source, host, 'agents', name)
+    if (name === 'orchestrator') {
+      if (host === 'copilot') adapted += COPILOT_MODEL_NOTE
+      else if (host === 'commandcode') adapted += COMMANDCODE_MODEL_NOTE
+    }
+    if (name === 'orchestrator' && compression) adapted += CAVEMAN_USAGE_NOTE
+    return adapted
+  }
   const nameFromFile = (f) => fileExt ? f.slice(0, -fileExt.length) : f.replace(/\.md$/, '')
+  let tierDiff = 0
   for (const f of actual) {
     if (!expected.includes(f)) continue
     const name = nameFromFile(f)
-    const srcPath = join(ROOT, 'agents', `${name}.md`)
+    const canonicalPath = join(ROOT, 'agents', `${name}.md`)
+    const profilePath = join(profileAgentsDir, `${name}.md`)
+    const desdePerfil = profilePath !== canonicalPath && (await exists(profilePath))
+    const srcPath = desdePerfil ? profilePath : canonicalPath
     if (!(await exists(srcPath))) continue
-    let source = await readFile(srcPath, 'utf8')
-    // Para opencode + tier aplicado, simular la sustitucion que hace applyTier
-    // sobre el campo `model:`. El resto lo gestiona el adaptador (identidad).
-    if (tierModelsMap && tierModelsMap[name]) {
-      source = source.replace(/^model: .*$/m, `model: ${tierModelsMap[name]}`)
-    }
-    let expectedContent = adaptFrontmatter(source, host, 'agents', name)
-    if (name === 'orchestrator') {
-      if (host === 'copilot') expectedContent += COPILOT_MODEL_NOTE
-      else if (host === 'commandcode') expectedContent += COMMANDCODE_MODEL_NOTE
-    }
-    if (name === 'orchestrator' && (await hostConfigHasCompression(cwd, host))) {
-      expectedContent += CAVEMAN_USAGE_NOTE
-    }
+    const source = await readFile(srcPath, 'utf8')
+    // Estado esperado: el adaptador aplicado a la fuente que corresponde (canónica u
+    // overlay del perfil), sin tier.
+    const esperado = adapt(source, name)
+    // Estados del tier (solo opencode): simula la sustitucion de `model:` que hace
+    // applyTier sobre el campo antes de adaptar. install/init corren applyTier despues
+    // del overlay del perfil, asi que el tier es dueno de `model:` en TODOS los agentes
+    // instalados, overlay incluido (--tier gratis debe seguir siendo cost-safe). El
+    // perfil es dueno del cuerpo y del modelo en `upgrade`, que no aplica tier: por eso
+    // el overlay vuelve a su fuente byte a byte despues de upgrade.
+    const conTierEstados = tierModelMaps
+      .filter((map) => map[name])
+      .map((map) => adapt(source.replace(/^model: .*$/m, `model: ${map[name]}`), name))
+    if (conTierEstados.length > 0 && conTierEstados[0] !== esperado) tierDiff++
     const installed = await readFile(join(cwd, dirRel, f), 'utf8')
-    if (installed !== expectedContent) {
+    if (installed !== esperado && !conTierEstados.includes(installed)) {
       console.log(`  ⚠ ${dirRel}/${f} (frontmatter diverge del adaptador para host '${host}')`)
     }
+  }
+  if (tierDiff > 0) {
+    console.log(`  ⚠ ${dirRel} (tier '${tier}' aplica un modelo distinto al de su fuente en ${tierDiff} agentes; install/update reescribirá model:)`)
   }
 }
 

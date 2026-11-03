@@ -2,6 +2,16 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.9] - 2026-11-03
+
+### Added
+- **Test estructural `test/agent-model-coherence.test.js`**: guarda que los modelos canónicos, los mirrors instalados y los tiers no diverjan.
+
+### Changed
+- **Modelos canónicos alineados a `commandcode/deepseek/deepseek-v4.1-flash`**: la fuente `agents/*.md` fija ese modelo como default publicado.
+- **`TIERS` se muda a `src/core/tier-models.js`** como único dueño del mapa de modelos por tier; `minimo` queda alineado al canónico, así que `applyTier` es un no-op sobre él.
+- **`ancleto check` contrapone los agentes instalados contra el canónico** (o el overlay del perfil activo) y aflora la deriva de tier con un aviso no bloqueante en vez de omitirla.
+
 ## [0.18.8] - 2026-11-03
 
 ### Added

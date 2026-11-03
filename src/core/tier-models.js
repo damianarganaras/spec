@@ -1,16 +1,19 @@
-import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-export const MUSE_SPARK_MODEL = 'opencode/muse-spark-1.3-contributor-free'
 export const GRATIS_FALLBACK_MODEL = 'opencode/big-pickle'
 
 // Tabla de modelos por tier: unico dueno. `src/cli/index.js` la importa desde aca.
+// `TIERS` conserva la forma agente->string; para los tiers con cadena, cada valor es
+// la cabeza de su cadena (ver `TIER_CHAINS`).
 export const TIERS = {
   normal: {
     orchestrator: 'opencode-go/qwen3.7-plus',
     coder: 'opencode-go/minimax-m3',
     tester: 'opencode-go/deepseek-v4.1-flash',
     'spec-writer': 'opencode-go/qwen3.7-plus',
-    reviewer: 'opencode-go/qwen3.6-plus',
+    reviewer: 'opencode-go/qwen3.8-max',
     'technical-discovery': 'opencode-go/deepseek-v4.1-flash',
     'technical-seed-writer': 'opencode-go/minimax-m3',
     'memory-keeper': 'opencode-go/deepseek-v4.1-flash',
@@ -43,46 +46,106 @@ export const TIERS = {
   }
 }
 
-let probed = null
+// Cadena de preferencia por agente para `minimo`. El primer candidato disponible en
+// el catalogo verificado gana; si ninguno esta, la resolucion falla de forma explicita.
+const MINIMO_CHAIN = [
+  'commandcode/deepseek/deepseek-v4.1-flash',
+  'opencode-go/deepseek-v4.1-flash',
+  'opencode/deepseek-v4.1-flash-free'
+]
 
-export function envGratisModel() {
-  if (process.env.ANCLETO_MUSE_SPARK === '1') return MUSE_SPARK_MODEL
-  if (process.env.ANCLETO_MUSE_SPARK === '0') return GRATIS_FALLBACK_MODEL
-  return null
+export const TIER_CHAINS = {
+  minimo: Object.fromEntries(
+    Object.keys(TIERS.minimo).map((name) => [name, [...MINIMO_CHAIN]])
+  )
+}
+
+const CATALOG_PATH = join(dirname(fileURLToPath(import.meta.url)), 'model-catalog.json')
+
+// Carga el snapshot commiteado. La ruta es inyectable (`path`) o via
+// `ANCLETO_MODEL_CATALOG` (seam de test/manual, mismo precedente que
+// `ANCLETO_PROJECTS_FILE`). No consulta la red ni ejecuta procesos.
+export function loadModelCatalog({ path } = {}) {
+  return JSON.parse(readFileSync(path || process.env.ANCLETO_MODEL_CATALOG || CATALOG_PATH, 'utf8'))
+}
+
+// Conjunto de IDs disponibles. Acepta el snapshot completo (`{ providers }`) o un
+// mapa proveedor->IDs; cada entrada puede ser un string o `{ id, ... }`.
+export function modelIdsFromCatalog(catalog) {
+  if (catalog instanceof Set) return catalog
+  const ids = new Set()
+  const providers = catalog?.providers && typeof catalog.providers === 'object'
+    ? catalog.providers
+    : catalog
+  if (!providers || typeof providers !== 'object') return ids
+  for (const entries of Object.values(providers)) {
+    if (!Array.isArray(entries)) continue
+    for (const entry of entries) {
+      const id = typeof entry === 'string' ? entry : entry?.id
+      if (typeof id === 'string') ids.add(id)
+    }
+  }
+  return ids
+}
+
+export function missingModelIds(catalog, ids) {
+  const available = modelIdsFromCatalog(catalog)
+  return [...ids].filter((id) => !available.has(id))
 }
 
 export function isKnownGratisModel(model) {
-  return model === MUSE_SPARK_MODEL || model === GRATIS_FALLBACK_MODEL
-}
-
-export function detectMuseSpark() {
-  const env = envGratisModel()
-  if (env) return env === MUSE_SPARK_MODEL
-  if (probed !== null) return probed
-  try {
-    const r = spawnSync('opencode models opencode', {
-      encoding: 'utf8',
-      timeout: 5000,
-      shell: true,
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-    probed = !r.error && r.status === 0
-      && String(r.stdout || '').split('\n').some((l) => l.trim() === MUSE_SPARK_MODEL)
-  } catch {
-    probed = false
-  }
-  return probed
+  return model === GRATIS_FALLBACK_MODEL
 }
 
 export function gratisModel(persisted = null) {
-  const env = envGratisModel()
-  if (env) return env
-  if (isKnownGratisModel(persisted)) return persisted
-  return detectMuseSpark() ? MUSE_SPARK_MODEL : GRATIS_FALLBACK_MODEL
+  return isKnownGratisModel(persisted) ? persisted : GRATIS_FALLBACK_MODEL
 }
 
 export function tierModels(tier, tiers, gratisOverride = null) {
   if (tier !== 'gratis') return tiers[tier]
   const model = gratisOverride || gratisModel()
   return Object.fromEntries(Object.keys(tiers.gratis).map((k) => [k, model]))
+}
+
+// Resolver puro: depende solo de `tier`, `TIERS`/`TIER_CHAINS` y el catalogo
+// inyectado. Devuelve el mapa resuelto, los candidatos estaticos por agente (para el
+// conjunto de aceptacion del oraculo) y los agentes sin candidato disponible.
+// `allowUnresolved` lo usa `check` (no aborta); install/init/import usan el modo
+// estricto y reciben el error explicito.
+export function resolveTierModels(tier, catalog, {
+  tiers = TIERS,
+  chains = TIER_CHAINS,
+  gratisOverride = null,
+  allowUnresolved = false
+} = {}) {
+  const chain = chains[tier]
+  if (!chain) {
+    const models = tierModels(tier, tiers, gratisOverride)
+    return {
+      models,
+      candidates: Object.fromEntries(Object.entries(models).map(([name, model]) => [name, [model]])),
+      unresolved: []
+    }
+  }
+
+  const available = modelIdsFromCatalog(catalog)
+  const models = {}
+  const candidates = {}
+  const unresolved = []
+  for (const [name, chainIds] of Object.entries(chain)) {
+    candidates[name] = [...chainIds]
+    const chosen = chainIds.find((id) => available.has(id))
+    if (chosen) {
+      models[name] = chosen
+      continue
+    }
+    unresolved.push(name)
+    if (!allowUnresolved) {
+      throw new Error(
+        `ancleto: no hay ningún candidato disponible para el agente '${name}' en el tier '${tier}' ` +
+        `(cadena: ${chainIds.join(' -> ')}); actualizá el catálogo con scripts/refresh-model-catalog.mjs`
+      )
+    }
+  }
+  return { models, candidates, unresolved }
 }

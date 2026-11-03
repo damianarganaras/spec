@@ -20,7 +20,7 @@ import { writeDiscoveryMap } from '../core/discovery.js'
 import { computeAffectedSet } from '../core/affected-set.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
-import { TIERS, tierModels, gratisModel, envGratisModel, isKnownGratisModel, MUSE_SPARK_MODEL, GRATIS_FALLBACK_MODEL } from '../core/tier-models.js'
+import { TIERS, TIER_CHAINS, resolveTierModels, loadModelCatalog, gratisModel, isKnownGratisModel } from '../core/tier-models.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -581,6 +581,12 @@ function buildDefaultMcp({ withEngram = false } = {}) {
 
 function tierStatePath(targetDir) {
   return join(targetDir, '.ancleto-tier')
+}
+
+// Resolucion de tier contra el snapshot versionado. El resolver no sabe de donde
+// viene el catalogo (seam para reemplazar el snapshot sin cambiar el contrato).
+function resolveTierMap(tier, gratisOverride, options = {}) {
+  return resolveTierModels(tier, loadModelCatalog(), { chains: TIER_CHAINS, gratisOverride, ...options })
 }
 
 async function applyTier(agentsDir, tier, models = null) {
@@ -1686,11 +1692,9 @@ async function install(args) {
   const existingDiscovery = existingRc?.discovery || { outputDir: 'docs/technical-discovery', exclude: [] }
   let excludeChoice = excludeFlag
 
-  let bannerShown = false
   const isInteractive = Boolean(process.stdout.isTTY) && ((projectDir && !agent) || !tier || !language || (projectDir && excludeChoice === null && (existingDiscovery.exclude || []).length === 0))
   if (isInteractive) {
     await showBanner()
-    bannerShown = true
     if (projectDir && !agent) {
       agent = await selectOption('Agente/IDE', SUPPORTED_AGENTS, Math.max(0, SUPPORTED_AGENTS.indexOf(DEFAULT_AGENT)))
     }
@@ -1717,23 +1721,21 @@ async function install(args) {
   }
   if (!tier) tier = TIERS[storedTier] ? storedTier : 'normal'
 
-  let gratisModelChoice = null
-  let gratisModelOrigin = null
-  if (tier === 'gratis') {
-    const env = envGratisModel()
-    const persisted = isKnownGratisModel(existingRc?.gratisModel) ? existingRc.gratisModel : null
-    if (env || persisted) {
-      gratisModelChoice = env || persisted
-      gratisModelOrigin = env ? 'variable de entorno ANCLETO_MUSE_SPARK' : 'valor guardado en .ancletorc'
-    } else if (process.stdout.isTTY) {
-      if (!bannerShown) await showBanner()
-      const answer = await selectOption('Muse Spark 1.3 Free disponible en tu cuenta?', ['No (usar big-pickle)', 'Si (Muse Spark)'], 0)
-      if (!bannerShown) stopBanner()
-      gratisModelChoice = answer.startsWith('Si') ? MUSE_SPARK_MODEL : GRATIS_FALLBACK_MODEL
-    } else {
-      gratisModelChoice = gratisModel()
-      gratisModelOrigin = 'detección automática'
-    }
+  // `gratis` tiene un unico modelo conocido (costo 0): no hay deteccion automatica ni
+  // wizard. Un valor guardado desconocido se ignora y se normaliza al fallback; una
+  // clave ausente no se agrega al manifiesto.
+  const gratisModelChoice = tier === 'gratis' ? gratisModel(existingRc?.gratisModel) : null
+  const persistGratisModel = tier === 'gratis' && existingRc !== null && existingRc !== undefined
+    && Object.prototype.hasOwnProperty.call(existingRc, 'gratisModel')
+
+  // Resolver antes de escribir agents: si ningun candidato del tier esta disponible,
+  // el comando aborta sin materializar un ID inventado.
+  let models = null
+  try {
+    models = resolveTierMap(tier, gratisModelChoice).models
+  } catch (err) {
+    console.error(err.message)
+    process.exit(1)
   }
 
   if (projectDir) {
@@ -1752,7 +1754,7 @@ async function install(args) {
       language,
       profile,
       ...(excludeChoice !== null ? { discovery: { ...existingDiscovery, exclude: excludeChoice } } : {}),
-      ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {}),
+      ...(persistGratisModel ? { gratisModel: gratisModelChoice } : {}),
       installedPaths: unionInstalledPaths(existingRc?.installedPaths, {
         templates: ['AGENTS.md', 'PRODUCT.md'],
         ...written
@@ -1765,7 +1767,6 @@ async function install(args) {
     }
   }
 
-  const models = tierModels(tier, TIERS, gratisModelChoice)
   await applyTier(join(target, 'agents'), tier, models)
   // El estado de tier vive en el base de opencode; puede no existir si el host
   // resuelto ubica sus assets en otro directorio (p. ej. cursor -> .cursor/).
@@ -1793,7 +1794,7 @@ async function install(args) {
     : `${target} (disponible en todos tus proyectos)`
   console.log(`ancleto: instalado en ${loc}`)
   console.log(`ancleto: tier de costo de agents: ${tier}`)
-  if (tier === 'gratis') console.log(`ancleto: modelo gratis: ${models.orchestrator}${gratisModelOrigin ? ` (${gratisModelOrigin})` : ''}`)
+  if (tier === 'gratis') console.log(`ancleto: modelo gratis: ${models.orchestrator}`)
   if (res.added.length) {
     console.log(`ancleto: MCP configurados: ${res.added.join(', ')} en ${res.file}`)
   }
@@ -1910,35 +1911,29 @@ async function initProject(args) {
   }
   if (excludeChoice !== null) discovery = { ...discovery, exclude: excludeChoice }
 
+  // Paridad con install: el tier elegido tambien reescribe los modelos de los
+  // agentes locales. Antes quedaba huerfano (tier declarado, modelos de otro tier).
+  // `gratis` tiene un unico modelo conocido: no hay wizard ni deteccion.
+  const gratisModelChoice = tier === 'gratis' ? gratisModel(existing?.gratisModel) : null
+  const persistGratisModel = tier === 'gratis' && existing !== null && existing !== undefined
+    && Object.prototype.hasOwnProperty.call(existing, 'gratisModel')
+
+  // Resolver antes de escribir agents/tier: sin candidato disponible se aborta.
+  let tierModelMap = null
+  if (tier) {
+    try {
+      tierModelMap = resolveTierMap(tier, gratisModelChoice).models
+    } catch (err) {
+      console.error(err.message)
+      process.exit(1)
+    }
+  }
+
   if (tier) {
     await mkdir(join(projectDir, '.opencode'), { recursive: true })
     await writeFile(tierFile, tier + '\n')
   }
 
-  // Paridad con install: el tier elegido tambien reescribe los modelos de los
-  // agentes locales. Antes quedaba huerfano (tier declarado, modelos de otro tier).
-  let gratisModelChoice = null
-  let gratisModelOrigin = null
-  if (tier === 'gratis') {
-    const env = envGratisModel()
-    const persisted = isKnownGratisModel(existing?.gratisModel) ? existing.gratisModel : null
-    if (env) {
-      gratisModelChoice = env
-      gratisModelOrigin = 'variable de entorno ANCLETO_MUSE_SPARK'
-    } else if (isInteractive) {
-      // En menú interactivo siempre se pregunta: el valor guardado (o la
-      // detección) solo pre-selecciona el default, nunca se aplica en silencio.
-      const defIdx = (persisted || gratisModel()) === MUSE_SPARK_MODEL ? 1 : 0
-      const answer = await selectOption('Muse Spark 1.3 Free disponible en tu cuenta?', ['No (usar big-pickle)', 'Si (Muse Spark)'], defIdx)
-      gratisModelChoice = answer.startsWith('Si') ? MUSE_SPARK_MODEL : GRATIS_FALLBACK_MODEL
-    } else if (persisted) {
-      gratisModelChoice = persisted
-      gratisModelOrigin = 'valor guardado en .ancletorc'
-    } else {
-      gratisModelChoice = gratisModel()
-      gratisModelOrigin = 'detección automática'
-    }
-  }
   // D7: init configura el MCP del host igual que install (mismo dueno, sin rama
   // especial por host); --no-mcp conserva el escape. Se resuelve antes de escribir
   // los agents para materializar la directiva host-scoped solo donde hay la tool.
@@ -1953,7 +1948,7 @@ async function initProject(args) {
     agent,
     language,
     profile,
-    ...(gratisModelChoice ? { gratisModel: gratisModelChoice } : {}),
+    ...(persistGratisModel ? { gratisModel: gratisModelChoice } : {}),
     installedPaths: unionInstalledPaths(existing?.installedPaths, {
       templates: ['AGENTS.md', 'PRODUCT.md'],
       ...written
@@ -1963,7 +1958,7 @@ async function initProject(args) {
   await copyTemplates(projectDir, profile)
   if (profile === 'test') await scaffoldTestspec(projectDir)
   if (tier) {
-    await applyTier(join(projectDir, '.opencode', 'agents'), tier, tierModels(tier, TIERS, gratisModelChoice))
+    await applyTier(join(projectDir, '.opencode', 'agents'), tier, tierModelMap)
   }
   await scaffoldAspec(projectDir)
   await refreshWorkingContext(projectDir)
@@ -1975,7 +1970,7 @@ async function initProject(args) {
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
   if (mcpRes.added.length) console.log(`ancleto: MCP configurados: ${mcpRes.added.join(', ')} en ${mcpRes.file}`)
   console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''} (Idioma: ${language})`)
-  if (tier === 'gratis' && gratisModelChoice) console.log(`ancleto: modelo gratis: ${gratisModelChoice}${gratisModelOrigin ? ` (${gratisModelOrigin})` : ''}`)
+  if (tier === 'gratis') console.log(`ancleto: modelo gratis: ${gratisModelChoice}`)
 }
 
 const DEFAULT_IGNORES = ['node_modules', '.git', 'dist']
@@ -2912,12 +2907,15 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
   // fuente que corresponda a cada agente.
   const profileAgentsDir = join(profileAssetsRoot(profile), 'agents')
   // Estados de tier aplicados por install en opencode (model: <x> -> tier). Para
-  // 'gratis' usa el gratisModel persistido en .ancletorc; como un proyecto legacy o
-  // importado sin `gratisModel` puede resolver un modelo gratis distinto entre
-  // install y check, ambos modelos gratis conocidos son estados aceptables. El
-  // primero es el resuelto (persistido o detectado) y manda para el aviso de tier.
+  // `minimo` el conjunto de aceptacion son TODOS los candidatos estaticos de la
+  // cadena, con el resuelto-ahora en primer lugar: un mirror escrito cuando el
+  // catalogo tenia otro candidato sigue siendo valido. Para el resto de los tiers el
+  // unico estado es el resuelto-ahora. `gratis` resuelve con el unico gratis conocido;
+  // un `gratisModel` desconocido se ignora aca tambien.
   let tier = null
-  let tierModelMaps = []
+  let tierCandidates = {}
+  let tierResolved = {}
+  let tierUnresolved = []
   if (host === 'opencode') {
     const tierFile = join(cwd, '.opencode', '.ancleto-tier')
     if (await exists(tierFile)) {
@@ -2925,10 +2923,10 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
       if (TIERS[rawTier]) {
         tier = rawTier
         const persisted = isKnownGratisModel(rc?.gratisModel) ? rc.gratisModel : null
-        const primary = tierModels(tier, TIERS, persisted)
-        tierModelMaps = tier === 'gratis'
-          ? [...new Set([primary.orchestrator, MUSE_SPARK_MODEL, GRATIS_FALLBACK_MODEL])].map((m) => tierModels(tier, TIERS, m))
-          : [primary]
+        const resolved = resolveTierMap(tier, persisted, { allowUnresolved: true })
+        tierCandidates = resolved.candidates
+        tierResolved = resolved.models
+        tierUnresolved = resolved.unresolved
       }
     }
   }
@@ -2962,17 +2960,28 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
     // instalados, overlay incluido (--tier gratis debe seguir siendo cost-safe). El
     // perfil es dueno del cuerpo y del modelo en `upgrade`, que no aplica tier: por eso
     // el overlay vuelve a su fuente byte a byte despues de upgrade.
-    const conTierEstados = tierModelMaps
-      .filter((map) => map[name])
-      .map((map) => adapt(source.replace(/^model: .*$/m, `model: ${map[name]}`), name))
-    if (conTierEstados.length > 0 && conTierEstados[0] !== esperado) tierDiff++
-    const installed = await readFile(join(cwd, dirRel, f), 'utf8')
-    if (installed !== esperado && !conTierEstados.includes(installed)) {
+    const conTier = (model) => adapt(source.replace(/^model: .*$/m, `model: ${model}`), name)
+    const candidatos = tierCandidates[name] || []
+    const conTierEstados = candidatos.map(conTier)
+    const instalado = await readFile(join(cwd, dirRel, f), 'utf8')
+    // El aviso de tier cuenta si el mirror difiere del resuelto-ahora (el proximo
+    // install/update reescribiria `model:`) o si el resuelto-ahora difiere de la
+    // fuente esperada (el tier aplica otro modelo). Ambas direcciones quedan visibles.
+    const resolvedNow = tierResolved[name]
+    if (resolvedNow) {
+      const resueltoEstado = conTier(resolvedNow)
+      if (resueltoEstado !== esperado || instalado !== resueltoEstado) tierDiff++
+    }
+    if (instalado !== esperado && !conTierEstados.includes(instalado)) {
       console.log(`  ⚠ ${dirRel}/${f} (frontmatter diverge del adaptador para host '${host}')`)
     }
   }
   if (tierDiff > 0) {
     console.log(`  ⚠ ${dirRel} (tier '${tier}' aplica un modelo distinto al de su fuente en ${tierDiff} agentes; install/update reescribirá model:)`)
+  }
+  const ext = fileExt || '.md'
+  if (tierUnresolved.some((name) => actual.includes(name + ext))) {
+    console.log(`  ⚠ ${dirRel} (tier '${tier}': el catálogo no tiene ningún candidato resoluble; install/update abortará hasta refrescar el catálogo)`)
   }
 }
 
@@ -4074,12 +4083,24 @@ async function importCmd(args) {
     const rcNow = await readAncletorc(projectDir)
     const agent = (rcNow?.agent && SUPPORTED_AGENTS.includes(rcNow.agent)) ? rcNow.agent : DEFAULT_AGENT
     const importProfile = validProfile(rcNow?.profile) || DEFAULT_PROFILE
+    // Resolver el tier antes de materializar assets: sin candidato disponible se
+    // aborta sin escribir un ID inventado. Un `gratisModel` legacy/desconocido se
+    // normaliza al unico gratis conocido.
+    let tierModelMap = null
+    if (manifest.tier && TIERS[manifest.tier]) {
+      try {
+        tierModelMap = resolveTierMap(manifest.tier, gratisModel(manifest.gratisModel)).models
+      } catch (err) {
+        console.error(err.message)
+        process.exit(1)
+      }
+    }
     await installAgentAssets(projectDir, agent, {
       compression: hostSupportsCompression(agent) && Boolean(buildDefaultMcp({ withEngram: manifest?.flags?.engram === true }).caveman)
     })
     if (importProfile === 'test') await installProfileOverlay(projectDir, agent)
-    if (manifest.tier && TIERS[manifest.tier]) {
-      await applyTier(join(projectDir, '.opencode', 'agents'), manifest.tier, tierModels(manifest.tier, TIERS, manifest.gratisModel))
+    if (tierModelMap) {
+      await applyTier(join(projectDir, '.opencode', 'agents'), manifest.tier, tierModelMap)
     }
     await scaffoldAspec(projectDir)
     console.log(`ancleto: bundle aplicado (agente: ${agent}${manifest.tier ? `, tier: ${manifest.tier}` : ''})`)

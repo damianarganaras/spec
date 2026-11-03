@@ -1923,6 +1923,20 @@ describe('memory snapshot (CLI)', () => {
     })
   })
 
+  it('sin --json imprime un resumen legible con la ruta y el tamano', () => {
+    withCliFixture(({ dir, engine, close }) => {
+      engine.recordNode({ memory_key: 'snap-readable', type: 'rule', scope: 'project', content: 'snapshot legible' })
+      close()
+      const out = join(dir, 'backup-readable.db')
+      const r = runCli(dir, ['memory', 'snapshot', '--out', out])
+      assert.equal(r.status, 0, r.stderr)
+      assert.ok(r.stdout.includes(out), 'el resumen nombra la ruta del snapshot')
+      const match = r.stdout.match(/\((\d+) bytes\)/)
+      assert.ok(match, 'el resumen nombra el tamano en bytes')
+      assert.equal(statSync(out).size, Number(match[1]), 'el tamano reportado coincide con el archivo')
+    })
+  })
+
   it('destino existente sin --force falla, nombra la ruta y no lo toca', () => {
     withCliFixture(({ dir, engine, close }) => {
       engine.recordNode({ memory_key: 'snap-cli', type: 'rule', scope: 'project', content: 'snapshot cli' })
@@ -3156,6 +3170,26 @@ describe('consolidate', () => {
 
       const pairs = eng.consolidate().nearDuplicates.map((pair) => `${pair.a}~${pair.b}=${pair.score}`).sort()
       assert.deepEqual(pairs, ['thr-100-a~thr-100-b=1', 'thr-60-a~thr-60-b=0.6'])
+    })
+  })
+
+  it('includeNearDuplicates:false omite el near-duplicate y conserva el resto del reporte', () => {
+    withFreshEngine((eng) => {
+      eng.recordNode({ memory_key: 'opt-near-a', type: 'rule', scope: 'project', content: 'alfa beta gamma delta' })
+      eng.recordNode({ memory_key: 'opt-near-b', type: 'rule', scope: 'project', content: 'alfa beta gamma epsilon' })
+      eng.recordNode({ memory_key: 'opt-dup-a', type: 'rule', scope: 'project', content: 'texto exacto repetido' })
+      eng.recordNode({ memory_key: 'opt-dup-b', type: 'rule', scope: 'project', content: 'texto exacto repetido' })
+
+      // Default intacto: ausente y explicito true reportan el near-duplicate.
+      assert.equal(eng.consolidate().nearDuplicates.length, 1)
+      const withScan = eng.consolidate({ dryRun: true })
+      assert.equal(withScan.nearDuplicates.length, 1)
+
+      const withoutScan = eng.consolidate({ dryRun: true, includeNearDuplicates: false })
+      assert.deepEqual(withoutScan.nearDuplicates, [])
+      assert.deepEqual(withoutScan.exactGroups, withScan.exactGroups)
+      assert.deepEqual(withoutScan.superseded, withScan.superseded)
+      assert.equal(withoutScan.dryRun, true)
     })
   })
 

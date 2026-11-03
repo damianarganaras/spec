@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-03T13:54:02Z
-pluginVersion: 0.18.7
+generatedAt: 2026-11-03T18:16:04Z
+pluginVersion: 0.18.9
 skillVersion: '2.3'
 ---
 
@@ -29,21 +29,21 @@ CLI monolítica en ESM, sin framework externo. Capas:
 
 | Capa | Ruta | Rol |
 |---|---|---|
-| CLI / orquestación | `src/cli/index.js` | Parsing, `init`/`install`/`update`/`upgrade`, instalación por host, perfiles, export/import, discovery, memoria y sus ops (`snapshot`/`merge`/**`consolidate`**/**`curate`**/**`gc`**), `specs check`, `affected`, projects, `stats` + `stats failures`, doctor, MCP; merge de templates y reconciliación legacy; directiva de compresión host-scoped; working-context día-cero; refresh on-write CLI; staleness advisory; **generación de `.ancleto/machine-env.md`**. |
+| CLI / orquestación | `src/cli/index.js` | Parsing, `init`/`install`/`update`/`upgrade`, instalación por host, perfiles, export/import, discovery, memoria y sus ops (`snapshot`/`merge`/**`consolidate`**/**`curate`**/**`gc`**), `specs check`, `affected`, projects, `stats` + `stats failures`, doctor, MCP; **aplicación de tier y validación de coherencia de modelos (`applyTier`, `checkAgentsFrontmatter`/`checkTierOrphan`)**; merge de templates y reconciliación legacy; directiva de compresión host-scoped; working-context día-cero; refresh on-write CLI; staleness advisory; **generación de `.ancleto/machine-env.md`**. |
 | UI de terminal | `src/cli/ui.js` | Banner ASCII animado y menús TTY (Raw Mode) sin librerías; helpers de color. |
 | Adaptación de frontmatter | `src/core/adapters/frontmatter.js` | **Módulo puro, dueño único** de la transformación por host/assetKind (incluye Antigravity y Command Code). |
 | Discovery | `src/core/discovery.js` | Mapa topológico `.discovery-map.json`. |
 | Affected-set | `src/core/affected-set.js` | Grafo de imports zero-dep; clausura de **dependientes** (determinista) para review y verificación. |
 | Empaquetado y tiers | `src/core/repomix-tier.js` | Args de Repomix, ignores por tier, `--compress`, token budget. |
-| Selección de modelos | `src/core/tier-models.js` | Modelos por tier, resolución de tier gratis (Muse Spark/probe/env). |
+| Selección de modelos | `src/core/tier-models.js` | **Dueño único de `TIERS`**, modelos por tier y resolución de tier gratis (Muse Spark/probe/env). `src/cli/index.js` importa `TIERS`. |
 | Entorno de máquina | `src/core/machine-env.js` | **Dueño único** de detectar plataforma/shell/EOL/tooling (disponibilidad = **resoluble e invocable**), renderizar/escribir `.ancleto/machine-env.md` y excluirlo vía `info/exclude`; `checkMachineEnvTracked`. |
 | Memoria persistente | `src/core/memory/*.js` | SQLite nativo + FTS5: `database` (incluye migración `superseded_at`), `engine` (refs fail-closed, secretos, `inspectRefs`, `resolveNodeRefs`, recall task-aware, search/record/export/import/gc/merge/**consolidate**, orden de inyección y aviso de overflow), **`curation`** (curaduría read-only que compone resolver + consolidate), `snapshot`, `tools`, `mcp-server`, `doctor` (read-only, cinco checks), `working-context`. |
 | Assets instalables | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | Markdown que el CLI copia al IDE (10 agents, 16 commands, 21 skills, 2 templates + perfil `test`). |
 | Contratos de prompt | `agents/*.md` | Intake de sesión, techo de lecturas, trigger de Recall, validación declarativa, checkpoint de contrato, `## Decisiones`, retiro de `design.md`/`context.md` y promoción al archivar. Los mirrors `.opencode/agents/*.md` se regeneran. |
-| Specs del propio repo | `aspec/` | `config.yaml` + 19 specs fuente + **1 change activo** (`ancleto-vscode-extension`) + **42 archivados**. |
-| Config del host opencode | `opencode.json` (raíz) | Override de `agent.model` para los 10 subagentes; **no** se publica. |
+| Specs del propio repo | `aspec/` | `config.yaml` + 20 specs fuente (incl. `agent-model-tiers`) + **1 change activo** (`ancleto-vscode-extension`) + **43 archivados** (el último, `2026-11-03-align-agent-models-commandcode`). |
+| Config del host opencode | `opencode.json` (raíz) | Entradas `agent.model` para los 10 agentes; según `AGENTS.md` sólo surte efecto en el primario. **No** se publica. |
 | Lint | `eslint.config.js` | Flat config mínima (4 reglas) sobre `src/` y `test/`. |
-| Tests | `test/*.test.js` | Suite `node --test` (16 archivos; no re-ejecutada en esta regeneración). |
+| Tests | `test/*.test.js` | Suite `node --test` (17 archivos, incl. `agent-model-coherence`; no re-ejecutada en esta regeneración). |
 | Análisis (no runtime) | `optimizacion-de-tokens.md` | Barrido de costo y matriz de decisión de "token-economy". |
 
 Entry point único: `src/cli/index.js` (`bin.ancleto` y `bin.aspec`). No hay servidor ni base
@@ -154,8 +154,19 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
   `templates/PRODUCT.md`, `aspec/specs/prompt-contracts/spec.md`.
 - **Configuración de modelos**: `AGENTS.md` → `## Cambiar el modelo de los agentes` distingue
   tres superficies (`agents/*.md` canónica, mirror `.opencode/agents/*`, global
-  `~/.config/opencode/agents/*`), la precedencia de `opencode.json` sólo sobre el agente
-  primario y la verificación con `Select-String`.
+  `~/.config/opencode/agents/*`); el **mirror del proyecto gana** sobre la instalación global.
+  La canónica fija el default publicado (`commandcode/deepseek/deepseek-v4.1-flash`);
+  `opencode.json` sólo alcanza al agente primario. `install`/`update` reescriben `model:` por
+  tier **sólo en opencode** (los otros adaptadores lo quitan o emiten `inherit`) y `upgrade` no
+  aplica tier: materializa la canónica. `check` es el oráculo de deriva. Verificación con
+  `Select-String`.
+- **Coherencia de modelos por tier**: `TIERS` tiene **dueño único** en `src/core/tier-models.js`;
+  `minimo` mapea los 10 agentes al modelo canónico, así que aplicarlo sobre `agents/*.md` es un
+  no-op. `test/agent-model-coherence.test.js` falla si el conjunto o el modelo de `TIERS.minimo`
+  difiere de la canónica, si otro archivo `src/**` declara `TIERS` o si el overlay
+  `profiles/test/agents/{tester,reviewer}.md` se cuela en el conjunto canónico. Evidencia:
+  `src/core/tier-models.js`, `src/cli/index.js`, `test/agent-model-coherence.test.js`,
+  `aspec/specs/agent-model-tiers/spec.md`.
 - **Ciclo SDD**: comandos `/cleto-*` que consumen `aspec/changes/<name>/` y las skills nativas;
   no requieren binario externo. Incluye `/cleto-review`, `/cleto-security`, `/cleto-update` y
   `/cleto-transplant`.
@@ -208,30 +219,33 @@ de datos propia más allá de `.ancleto/memory.db`. Evidencia: `package.json`, p
 
 ## Estado del repositorio
 
-Versión `0.18.7` en `package.json` y tope de `CHANGELOG.md` (fechado 2026-11-03). HEAD
-`bd903d2` (`docs(specs): archive ch-09 curation change`) en `development`; `git describe --tags`
-= `v0.18.5-19-gbd903d2`. El tag `v0.18.7` existe (anotado, en `main`) y no aparece en `describe`
-porque `main` no es ancestro de `development`. `0.18.7` publicó el **protocolo canónico de
-memoria**, la reconciliación gateada de texto plano legado, `memory gc` por `superseded_at` y el
-seed regenerado; `0.18.6` publicó el **recall task-aware**; `0.18.5` `memory consolidate`;
-`0.18.4` el ranking por anclaje y las omisiones visibles; `0.18.3` `resolveNodeRefs`.
+Versión `0.18.9` en `package.json` y tope de `CHANGELOG.md` (fechado 2026-11-03). HEAD
+`aa7943f` (`chore(release): 0.18.9`) en `development`; `git describe --tags` =
+`v0.18.8-4-gaa7943f`. El tag `v0.18.9` **no existe todavía**; `v0.18.8` sí existe y es ancestro de
+`development`. `0.18.9` alineó los modelos canónicos de `agents/*.md` a
+`commandcode/deepseek/deepseek-v4.1-flash`, mudó `TIERS` a `src/core/tier-models.js` y agregó el
+guard de coherencia y el contraste de mirrors en `check`. `0.18.8` publicó **`memory curate`** y
+`includeNearDuplicates`; `0.18.7` el **protocolo canónico de memoria**, la reconciliación gateada
+de texto plano legado y `memory gc` por `superseded_at`; `0.18.6` el **recall task-aware**;
+`0.18.5` `memory consolidate`; `0.18.4` el ranking por anclaje y las omisiones visibles; `0.18.3`
+`resolveNodeRefs`.
 
-El único change activo es **`ancleto-vscode-extension`**. Hay **42 archivados**; el más reciente,
-`2026-11-03-ch-09-curaduria-recurrente`, introduce `memory curate`, que todavía **no** figura en
-el CHANGELOG de `0.18.7` (capacidad archivada, sin release). El corpus de memoria tiene **129
-nodos activos** (34 rules `project`, 82 decisions `project`, 13 decisions `feature`), **232 filas
-totales**, **360 refs verificadas** y **0 refs rotas**. `memory consolidate` reporta **0 grupos
-exactos** y **0 near-dups**; `memory curate --json` devuelve `status: ok` con `0` refs rotas,
-`0` no verificables y `0` duplicados exactos. Quedan abiertos: el **overflow** del bloque
+El único change activo es **`ancleto-vscode-extension`**. Hay **43 archivados**; el más reciente,
+`2026-11-03-align-agent-models-commandcode`. `memory curate` figura en el CHANGELOG de `0.18.8`.
+El corpus de memoria —observado en la generación anterior y **no re-verificado en esta corrida**—
+tiene **129 nodos activos** (34 rules `project`, 82 decisions `project`, 13 decisions `feature`),
+**232 filas totales**, **360 refs verificadas** y **0 refs rotas**. `memory consolidate` reportó
+**0 grupos exactos** y **0 near-dups**; `memory curate --json` devolvió `status: ok` con `0` refs
+rotas, `0` no verificables y `0` duplicados exactos. Quedan abiertos: el **overflow** del bloque
 proactivo (**20 reglas omitidas**) y la **discrepancia de raíz de DB** entre `cwd` y el
 `projectRoot` del MCP (no reproducida).
 
 El `ancleto` global del `PATH` está desactualizado respecto del checkout (**0.17.1**): no
 reconoce `memory consolidate` ni `memory curate` ni el contrato nuevo de `searchMemory`; la
 versión local se invoca con `node src/cli/index.js`. El tier resuelto es **`minimo`**
-(`.opencode/.ancleto-tier`). `.ancleto/machine-env.md` existe (generado el 2026-11-03, declara
-`ancleto: 0.18.6`, es decir generado por el CLI anterior); `.ancleto/working-context.md` está
-`desactualizado`. El árbol de trabajo está limpio salvo los artefactos derivados del discovery.
-Evidencia: `git log`, `git tag`, `ancleto discovery --check`,
-`node src/cli/index.js memory {doctor,list,consolidate,curate}`, `.gitignore`,
+(`.opencode/.ancleto-tier`). `.ancleto/machine-env.md` existe (generado el 2026-11-03T14:46:10Z,
+declara `ancleto: 0.18.8`, es decir generado por el CLI anterior); `.ancleto/working-context.md`
+está `desactualizado`. El árbol de trabajo está limpio salvo los artefactos derivados del
+discovery. Evidencia: `git log`, `git tag`, `ancleto discovery --check`,
+`node src/cli/index.js memory {doctor,list,consolidate,curate}` (generación anterior), `.gitignore`,
 `.discovery-map.json`.

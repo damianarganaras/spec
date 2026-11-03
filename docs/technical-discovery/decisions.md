@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-03T13:54:02Z
-pluginVersion: 0.18.7
+generatedAt: 2026-11-03T18:16:04Z
+pluginVersion: 0.18.9
 skillVersion: '2.3'
 ---
 
@@ -81,12 +81,17 @@ skillVersion: '2.3'
     `tools` emite `tools: "*"`. El MCP vive en `.mcp.json`. Evidencia:
     `src/core/adapters/frontmatter.js`, `README.md`, `CHANGELOG.md` (`0.12.1`),
     `aspec/specs/commandcode-support/spec.md`.
-12. **`ancleto check` valida el frontmatter real contra el adaptador.** Compara cada `.md` de un
-    directorio de agents contra `adaptFrontmatter(origen, host, 'agents', name)` (con la
-    simulación de `model:` del tier en opencode y la nota de picker en copilot). La divergencia
-    es **warning (⚠), no bloqueante**; sólo los faltantes cambian el exit code. Deriva el host
-    de cada directorio del manifiesto multi-host (`installedHostsFromPaths`). Evidencia:
-    `src/cli/index.js` (`checkAgentsFrontmatter`), `test/adapters-frontmatter.test.js`.
+12. **`ancleto check` es el oráculo del frontmatter y del tier.** Para cada `.md` de un
+    directorio de agents compara el instalado contra `adaptFrontmatter(fuente, host, 'agents',
+    name)`, donde la fuente es la canónica `agents/*.md` o el overlay del perfil activo
+    (`profiles/test/agents/{tester,reviewer}.md`). En `opencode` calcula además los **estados
+    esperados del tier** (la misma sustitución de `model:` de `applyTier`; en `gratis` acepta los
+    dos modelos gratis conocidos). Un mirror que coincide con la canónica/perfil **o** con un
+    estado del tier no es divergencia. Si el tier aplicaría un modelo distinto al de la fuente,
+    emite **un aviso por directorio**, no bloqueante. La divergencia es **warning (⚠)**; sólo los
+    faltantes cambian el exit code. Deriva el host de cada directorio del manifiesto multi-host
+    (`installedHostsFromPaths`). Evidencia: `src/cli/index.js` (`checkAgentsFrontmatter`,
+    `checkTierOrphan`), `test/adapters-frontmatter.test.js`, `test/agent-model-coherence.test.js`.
 13. **Export/import/gc de memoria (`memory-ops`).** `exportActive()` devuelve sólo activos con
     `{memory_key, type, content, justification, scope, createdAt}` y **sanitiza paths
     absolutos**; los superseded no se exportan. `importNodes(json)` valida el schema y **aborta
@@ -345,10 +350,12 @@ skillVersion: '2.3'
     merge de specs y **nunca en paralelo**. Evidencia: `skills/ancleto-archive/SKILL.md`,
     `agents/memory-keeper.md`, `agents/orchestrator.md`,
     `aspec/specs/memory-engine/spec.md`.
-46. **`opencode.json` en la raíz: override del host, fuera del paquete.** Fija
-    `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los 10 subagentes.
-    `package.json` → `files` no lo publica. Es configuración del checkout, no contrato del
-    producto. Evidencia: `opencode.json`, `package.json`, `CHANGELOG.md` (`0.18.1`).
+46. **`opencode.json` en la raíz: override del host, fuera del paquete.** Declara
+    `agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los 10 agentes; según
+    `AGENTS.md`, el override surte efecto en el agente **primario** y no alcanza a los
+    subagentes. `package.json` → `files` no lo publica. Es configuración del checkout, no
+    contrato del producto. Evidencia: `opencode.json`, `package.json`, `AGENTS.md`,
+    `CHANGELOG.md` (`0.18.1`).
 47. **Retiro de `design.md` y `context.md` sin artifact sucesor** (archivado el 2026-10-30;
     **publicado en `0.17.1`**). El flujo nuevo produce **sólo** `proposal.md`, `tasks.md` y
     `specs/`; ningún generador emite los retirados. Una decisión durable va a
@@ -372,13 +379,15 @@ skillVersion: '2.3'
     bloque repetido también. En escritura `validateRefsForWrite` **lanza**; en el doctor
     `inspectRefs` **reporta** sin abortar. Un bloque vacío no aporta refs y no es falla.
     Evidencia: `src/core/memory/engine.js`, `aspec/specs/memory-engine/spec.md`.
-50. **Modelo de agentes: tres superficies y precedencia limitada.** `agents/*.md` (canónica y
-    publicada), `.opencode/agents/*.md` (mirror que regenera `upgrade`) y
-    `~/.config/opencode/agents/*.md` (global que carga el runtime). `opencode.json` →
-    `agent.<nombre>.model` aplica al agente **primario**, no a los subagentes. `install`/`update`
-    reescriben `model:` por tier; `upgrade` no aplica tier. Verificación con `Select-String`;
-    `ancleto check` reporta divergencias del adaptador. Evidencia: `AGENTS.md`,
-    `src/cli/index.js`.
+50. **Modelo de agentes: canónica publicada, mirror del proyecto y global.** `agents/*.md` es la
+    fuente canónica y **publicada**; fija el default
+    `commandcode/deepseek/deepseek-v4.1-flash`. `.opencode/agents/*.md` es el mirror del proyecto
+    que regenera `upgrade` y **gana sobre** `~/.config/opencode/agents/*.md` (instalación global
+    distinta). `opencode.json` → `agent.<nombre>.model` aplica al agente **primario**, no a los
+    subagentes. `install`/`update` reescriben `model:` cuando el tier difiere de la canónica,
+    **sólo en opencode**; `upgrade` no aplica tier. `check` contrasta mirror vs canónica/perfil y
+    vs estados del tier, con aviso no bloqueante. Evidencia: `AGENTS.md`,
+    `src/cli/index.js`, `aspec/specs/agent-model-tiers/spec.md`.
 51. **Resolver de refs navegables: una sola API read-only (`MEM-04b`, publicado en `0.18.3`).**
     `resolveNodeRefs({ content, projectRoot })` se exporta desde `src/core/memory/engine.js` y es
     la **única** superficie de resolución para recall. Reutiliza `parseRefsBlock` y
@@ -484,6 +493,17 @@ skillVersion: '2.3'
     `aspec/specs/memory-ops/spec.md`, `test/curation.test.js`,
     `aspec/changes/archive/2026-11-03-ch-09-curaduria-recurrente/`.
 
+61. **Modelos canónicos uniformes y `TIERS` con dueño único (`0.18.9`).** Los 10 `agents/*.md`
+    declaran el mismo `model:` (`commandcode/deepseek/deepseek-v4.1-flash`) y `TIERS.minimo` mapea
+    los 10 al mismo valor, de modo que `applyTier` es **no-op** sobre la canónica. `TIERS` se
+    declara y exporta **sólo** en `src/core/tier-models.js`; `src/cli/index.js` lo importa y
+    ningún otro `src/**/*.js` lo declara. `test/agent-model-coherence.test.js` deriva ambos lados
+    de archivos versionados (no codifica proveedores), exige igualdad de conjunto y de modelo por
+    agente, verifica el dueño único de `TIERS` y afirma que el overlay
+    `profiles/test/agents/{tester,reviewer}.md` existe y queda fuera del conjunto canónico. No
+    depende de `.opencode/**`. Evidencia: `src/core/tier-models.js`, `src/cli/index.js`,
+    `test/agent-model-coherence.test.js`, `aspec/specs/agent-model-tiers/spec.md`.
+
 ## Seed incremental (contrato del discovery)
 
 - `ancleto discovery --check` devuelve `state` + `impact`:
@@ -492,11 +512,13 @@ skillVersion: '2.3'
   - `material` → cambió un config de runtime, entry point o apareció/desapareció un directorio
     raíz nuevo (o un archivo material como `package.json`).
 - **Reporte que originó esta regeneración**: `STALE` / `impact: material`;
-  `changedAreas: [".ancleto", "CHANGELOG.md", "PRODUCT.md", "README.md", "aspec", "docs",
-  "package.json", "src", "test"]`; `materialReasons: ["archivo material modificado:
-  package.json"]`; los 11 documentos del seed en `affectedDocs`. La causa es el salto a `0.18.7`
-  y la curaduría CH-09 (`curation.js`, CLI, spec `memory-ops`, `curation.test.js`, README y
-  backlog) más los artefactos derivados del discovery; `.ancleto` es estado local, no producto
+  `changedAreas: [".ancleto", ".ancletorc", ".opencode", "AGENTS.md", "CHANGELOG.md", "README.md",
+  "agents", "aspec", "package.json", "src", "test"]`; `materialReasons: ["archivo material
+  modificado: package.json"]`; los 11 documentos del seed en `affectedDocs`. La causa es el salto
+  a `0.18.9` —modelos canónicos alineados, `TIERS` mudado a `src/core/tier-models.js`, `check`
+  como oráculo con aviso de tier y guard `agent-model-coherence`—, la nueva spec
+  `agent-model-tiers`, el change archivado `2026-11-03-align-agent-models-commandcode` y el
+  estado local del discovery; `.ancleto`/`.opencode`/`.ancletorc` son estado local, no producto
   versionado.
 - Con `impact: minor` y `affectedDocs` no vacío, el seed-writer reescribe **sólo** esos
   documentos; con `impact: material` se regenera el seed completo. El mapeo vive en
@@ -512,7 +534,7 @@ skillVersion: '2.3'
   recorre el disco con `DEFAULT_IGNORES` + `exclude` y **no** aplica `.gitignore`.
 - **Detección material por archivo, no por contrato**: cualquier bump de `package.json` marca
   `impact: material` aunque no cambie comportamiento. En esta corrida el motivo fue
-  `0.18.5` → `0.18.7`.
+  `0.18.7` → `0.18.9`.
 - `EXPECTED_DOCS` = 8 documentos raíz (`index`, `overview`, `setup`, `inventory`, `integrations`,
   `decisions`, `unknowns`, `units/_map`).
 - Evidencia: `README.md`, `src/cli/index.js` (`checkDiscovery`, `computeImpact`,
@@ -520,12 +542,12 @@ skillVersion: '2.3'
 
 ## Riesgos, deuda y acoplamiento
 
-- **Publicación `0.18.3`–`0.18.7`.** `0.18.3` publicó MEM-04b; `0.18.4` el orden por anclaje y
-  las omisiones visibles; `0.18.5` la consolidación; `0.18.6` el recall task-aware y el protocolo
-  canónico de memoria; `0.18.7` el protocolo canónico en `AGENTS.md`, la reconciliación legacy
-  gateada, `memory gc` por `superseded_at` y el seed regenerado. `memory curate` (CH-09) queda
-  archivado pero no figura en un release. Los changes están archivados y sus specs fuente
-  mergeadas. Evidencia:
+- **Publicación `0.18.3`–`0.18.9`.** `0.18.3` publicó MEM-04b; `0.18.4` el orden por anclaje y
+  las omisiones visibles; `0.18.5` la consolidación; `0.18.6` el recall task-aware; `0.18.7` el
+  protocolo canónico en `AGENTS.md`, la reconciliación legacy gateada y `memory gc` por
+  `superseded_at`; `0.18.8` **`memory curate`** y `includeNearDuplicates`; `0.18.9` la coherencia
+  de modelos canónicos/tier, el dueño único de `TIERS` y el guard estructural. Los changes están
+  archivados y sus specs fuente mergeadas. Evidencia:
   `git log`, `CHANGELOG.md`, `aspec/changes/archive/`.
 - **`memory consolidate` no es reversible por CLI.** No hay "unsupersede": revertir exige un
   `memory snapshot` previo. `--apply` conserva `id` y `superseded_by`, así que el historial es
@@ -552,22 +574,26 @@ skillVersion: '2.3'
   en `recordNode` ni auto-merge semántico. La calibración queda para una medición futura.
   Evidencia: proposal de `2026-11-02-memory-consolidacion-autonoma`.
 - **El bloque proactivo sigue desbordado.** El presupuesto ahora se cumple, pero entran 14 de 34
-  reglas de scope `project` y **20 quedan omitidas**; el aviso las nombra. El working-context
-  está `desactualizado`. No es una falla de integridad: es presión de contenido. Evidencia:
-  `node src/cli/index.js memory doctor`, `src/core/memory/engine.js`.
+  reglas de scope `project` y **20 quedan omitidas** (observado en la generación anterior; **no
+  re-verificado en esta corrida**); el aviso las nombra. El working-context está
+  `desactualizado`. No es una falla de integridad: es presión de contenido. Evidencia:
+  `node src/cli/index.js memory doctor` (generación anterior), `src/core/memory/engine.js`.
 - **Discrepancia de raíz de DB (abierta).** `defaultMemoryDbPath(cwd)` resuelve desde el `cwd`
   del proceso, mientras el MCP usa `context.projectRoot`; si ambos difieren, las superficies
   pueden leer/escribir bases distintas. No se reprodujo en esta corrida; el riesgo sigue
   registrado. Evidencia: `src/core/memory/engine.js`, `src/core/memory/mcp-server.js`.
 - **CLI global desactualizado.** El `ancleto` del `PATH` de esta máquina es **0.17.1** y no
   conoce `memory consolidate` ni `memory curate` ni el contrato nuevo de `searchMemory`; el
-  checkout sí (0.18.7). Un
+  checkout sí (0.18.9). Un
   agente que sólo use el binario global puede concluir erróneamente que la capacidad no existe.
   Verificar `ancleto --version` y, si difiere, usar `node src/cli/index.js`. Evidencia: ejecución
   local.
 - **Tres superficies del `model:`.** Cambiar el modelo exige revisar `agents/*.md`,
-  `.opencode/agents/*` y `~/.config/opencode/agents/*`; `opencode.json` sólo alcanza al agente
-  primario. Evidencia: `AGENTS.md`, `opencode.json`.
+  `.opencode/agents/*` y `~/.config/opencode/agents/*`; el mirror del proyecto **gana** sobre la
+  instalación global y `opencode.json` sólo alcanza al agente primario. El tier reescribe
+  `model:` sólo en opencode; en los demás hosts el adaptador lo quita o emite `inherit`.
+  `check` es el oráculo y `agent-model-coherence` guarda la coherencia canónica/`TIERS`.
+  Evidencia: `AGENTS.md`, `opencode.json`, `src/cli/index.js`, `test/agent-model-coherence.test.js`.
 - **Pack comprimido y sesgado a código.** El tier `minimo` ignora `test/**`, `docs/**` y
   `**/*.md`; Repomix respeta `.gitignore`. Por eso `agents/`, `commands/`, `skills/`,
   `templates/`, `docs/` y `documentation/` no aparecen en el pack. `audit logs/*.txt` sí entra,
@@ -667,23 +693,27 @@ skillVersion: '2.3'
   `desactualizado`.
 - **Docs de producto con deriva menor.** `PRODUCT.md` ya no declara conteos obsoletos de
   commands/skills y su sección de memoria apunta al bloque `LOCKED: memory-protocol`; `README.md`
-  documenta preview/`expand`/`keys`/`required` y `memory curate`, pero su badge declara **18
-  skills** cuando el árbol tiene **21** directorios. `CHANGELOG.md` llega a `0.18.7` y **no**
-  menciona `memory curate` (archivado, aún sin release). El seed refleja el estado observado; no
-  se editaron esos archivos.
+  documenta preview/`expand`/`keys`/`required`, `memory curate`, el default canónico y el oráculo
+  de `check`, pero su badge declara **18 skills** cuando el árbol tiene **21** directorios.
+  `CHANGELOG.md` llega a `0.18.9` e incluye `memory curate` desde `0.18.8`. El seed refleja el
+  estado observado; no se editaron esos archivos.
 - **Sin backlog raíz.** `BACKLOG.md` no existe. El backlog P0 de memoria vive en
   `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`; `§5.2` conserva la deuda de I/O de `inspectRefs`
   y el conteo de no verificables con rotas.
-- **Versión y publicación.** `package.json` marca `0.18.7`; HEAD `bd903d2`
-  (`docs(specs): archive ch-09 curation change`) en `development`; `git describe --tags` da
-  `v0.18.5-19-gbd903d2`. El tag `v0.18.7` **existe** (anotado, en `main`) y no aparece en
-  `describe` porque `main` no es ancestro de `development`; la ausencia en `describe` no implica
-  que el tag falte. Evidencia: `package.json`, `git log`, `git tag`.
+- **Versión y publicación.** `package.json` marca `0.18.9`; HEAD `aa7943f`
+  (`chore(release): 0.18.9`) en `development`; `git describe --tags` da
+  `v0.18.8-4-gaa7943f`. El tag `v0.18.9` **no existe todavía**: el commit de release no se
+  taggeó. `v0.18.8` sí existe y es ancestro de `development`; la ausencia de `v0.18.9` en
+  `describe` refleja que aún no hay tag, no un problema de ancestría. Evidencia: `package.json`,
+  `git log`, `git tag`.
 
 ## Decisiones registradas en memoria del repo
 
-> Registradas/actualizadas en `.ancleto/memory.db`. En esta corrida se inspeccionó la memoria
-> en modo read-only (`memory doctor`/`memory list`): 129 nodos activos, 360 refs, 0 refs rotas.
+> Registradas/actualizadas en `.ancleto/memory.db`. La inspección read-only
+> (`memory doctor`/`memory list`: 129 nodos activos, 360 refs, 0 refs rotas) corresponde a la
+> generación anterior; en esta corrida **no** se ejecutaron comandos `ancleto memory`, así que
+> las claves de `0.18.9` no se pudieron enumerar desde la base. La coherencia de modelos se
+> documenta desde `aspec/specs/agent-model-tiers/spec.md` y `test/agent-model-coherence.test.js`.
 
 - `dogfooding-versionado-init`: versionar `AGENTS.md`, `PRODUCT.md` y `aspec/`; ignorar
   `.opencode/`, `.ancletorc`, `.ancleto/`.

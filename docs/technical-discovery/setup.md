@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "instalar, ejecutar, comandos CLI, entorno, tiers, contrato de validaciones"
-generatedAt: 2026-11-03T13:54:02Z
-pluginVersion: 0.18.7
+generatedAt: 2026-11-03T18:16:04Z
+pluginVersion: 0.18.9
 skillVersion: '2.3'
 ---
 
@@ -58,7 +58,7 @@ también y sólo funciona con la base de sesiones de opencode.
 
 **Versión del CLI**: el `ancleto` global del `PATH` en esta máquina es **0.17.1** y **no
 reconoce `memory consolidate` ni `memory curate`** ni el contrato nuevo de `searchMemory`; la
-versión `0.18.7` se invoca con `node src/cli/index.js`. Antes de concluir que una capacidad
+versión `0.18.9` se invoca con `node src/cli/index.js`. Antes de concluir que una capacidad
 falta, verificar `ancleto --version` contra `package.json`.
 
 **Contrato de `searchMemory` (`0.18.6`)**: el modo por defecto devuelve **preview** (prefijo
@@ -128,9 +128,10 @@ del `DELETE` limpia el `superseded_by` de los elegibles para no violar la FK. `V
 son best-effort post-commit. Evidencia: `src/core/memory/database.js`,
 `src/core/memory/engine.js`, `aspec/specs/memory-ops/spec.md`.
 
-**Estado observado de la memoria** (local, read-only): **129 nodos activos** (34 rules
-`project`, 82 decisions `project`, 13 decisions `feature`) sobre **232 filas** en
-`memory_nodes`; **360 refs verificadas, 0 no resueltas**; FTS5 con **232 filas indexadas**, que
+**Estado observado de la memoria** (local, read-only; **observado en la generación anterior y no
+re-verificado en esta corrida** por la restricción de no ejecutar `ancleto memory`): **129 nodos
+activos** (34 rules `project`, 82 decisions `project`, 13 decisions `feature`) sobre **232 filas**
+en `memory_nodes`; **360 refs verificadas, 0 no resueltas**; FTS5 con **232 filas indexadas**, que
 coinciden con los 232 nodos. `consolidate` reporta 0 grupos exactos y 0 near-dups; `curate
 --json` devuelve `status: ok` con 0 refs rotas, 0 no verificables y 0 duplicados exactos. El
 bloque proactivo omite **20 reglas** de scope `project` (entran 14 de 34);
@@ -145,15 +146,16 @@ bloque proactivo omite **20 reglas** de scope `project` (entran 14 de 34);
   realmente escritos**; para antigravity `commands` queda vacío. **No editar a mano durante el
   seed**; se consume resuelto desde `ancleto discovery --check`. En este checkout existe
   (gitignored).
-- **`opencode.json`** (raíz): fija `agent.model = commandcode/deepseek/deepseek-v4.1-flash`
-  para los 10 subagentes. Es override del host y **no** forma parte del paquete publicado
-  (`package.json` → `files` lista `agents`, `commands`, `skills`, `templates`, `profiles`,
-  `src`). Evidencia: `opencode.json`, `package.json`.
+- **`opencode.json`** (raíz): declara `agent.model = commandcode/deepseek/deepseek-v4.1-flash`
+  para los 10 agentes; según `AGENTS.md`, el override surte efecto en el primario y no en los
+  subagentes. **No** forma parte del paquete publicado (`package.json` → `files` lista `agents`,
+  `commands`, `skills`, `templates`, `profiles`, `src`). Evidencia: `opencode.json`,
+  `package.json`, `AGENTS.md`.
 - **Perfil `test`** (`--profile test`, `profiles/test/`): overlay de tester/reviewer ampliados,
   comandos `cleto-test-*`, estructura `testspec/` y bloque LOCKED de convenciones Playwright.
 - **Tier del proyecto**: `readProjectTier` lee `.ancleto-tier` en la raíz o en `.opencode/`.
   Aquí `.opencode/.ancleto-tier` contiene **`minimo`** (`--compress`, ignora `test/**`,
-  `docs/**`, `**/*.md`, sin token budget; el pack de esta corrida: **745 archivos / ~20.536
+  `docs/**`, `**/*.md`, sin token budget; el pack de esta corrida: **751 archivos / ~20.893
   tokens**). Evidencia: `src/core/repomix-tier.js`, `ancleto discovery --check`.
 - **Destinos por host (`AGENT_TARGETS`)**: fuente única de rutas de skills/agents/commands por
   IDE (`.opencode/*`, `.claude/*`, `.github/*`, `.agents/*`, `.cursor/skills`, `.roo/skills`,
@@ -196,10 +198,10 @@ sondean por `process.env.ComSpec`; la guarda `EINVAL` de Node es **inconclusa**,
 `bloqueado`. Un fallo real se publica con sufijo saneado (sin ANSI/OSC, espacios colapsados,
 tope de 200 caracteres); un veredicto inconcluso no lleva sufijo.
 
-**Estado en este checkout**: el artefacto existe (generado el 2026-11-03): `win32` /
+**Estado en este checkout**: el artefacto existe (generado el 2026-11-03T14:46:10Z): `win32` /
 `10.0.26200` / `x64`, shell `Windows PowerShell 5.1` (`shell_source: PSModulePath`), EOL `lf`
 (`eol_source: gitattributes`), `rg` **no disponible** (fallback: `Select-String`),
-`node`/`npm`/`git`/`python` disponibles, `ancleto: 0.18.6` (generado por el CLI anterior; no se
+`node`/`npm`/`git`/`python` disponibles, `ancleto: 0.18.8` (generado por el CLI anterior; no se
 regeneró en esta corrida). La exclusión local está en `info/exclude`. Evidencia:
 `.ancleto/machine-env.md`.
 
@@ -217,13 +219,15 @@ Evidencia: `agents/*.md`, `agents/technical-discovery.md`, `aspec/specs/prompt-c
 
 | Tier | Modelos y empaquetado |
 |---|---|
-| `normal` | Modelos balanceados (`qwen3.7-plus`, `minimax-m3`, etc.), pack sin comprimir ni ignores extra, sin token budget. |
-| `minimo` | Un único modelo `opencode-go/deepseek-v4.1-flash` para los 10 agents; pack comprimido (`--compress`), excluye `test/**`, `docs/**`, `**/*.md`, sin token budget. **Tier resuelto aquí.** |
+| `normal` | Modelos balanceados (`opencode-go/qwen3.7-plus`, `minimax-m3`, etc.), pack sin comprimir ni ignores extra, sin token budget. |
+| `minimo` | Un único modelo `commandcode/deepseek/deepseek-v4.1-flash` para los 10 agents, idéntico a la canónica (aplicarlo es no-op); pack comprimido (`--compress`), excluye `test/**`, `docs/**`, `**/*.md`, sin token budget. **Tier resuelto aquí.** |
 | `gratis` | Muse Spark 1.3 Free si está habilitado; fallback `opencode/big-pickle`; mismo empaquetado que `minimo` + token budget estricto (50k). |
 
-Evidencia: `src/core/tier-models.js`, `src/core/repomix-tier.js` (`TIER_PACK_CONFIG`),
-`README.md`. `readProjectTier` cae en `gratis` por default cuando no existe `.ancleto-tier`;
-aquí existe `.opencode/.ancleto-tier` con `minimo`.
+Evidencia: `src/core/tier-models.js` (dueño único de `TIERS`), `src/core/repomix-tier.js`
+(`TIER_PACK_CONFIG`), `README.md`. `readProjectTier` cae en `gratis` por default cuando no existe
+`.ancleto-tier`; aquí existe `.opencode/.ancleto-tier` con `minimo`. El tier reescribe `model:`
+**sólo en opencode**; claude/vscode/copilot/commandcode quitan `model:` y antigravity emite
+`model: inherit`.
 
 ## Variables de entorno
 
@@ -255,12 +259,15 @@ El contrato es **declarativo**:
 - **Typecheck**: no aplica — JavaScript sin `tsconfig.json` (aunque `AGENTS.md` conserva la
   regla genérica "TypeScript strict" del template).
 - **Tests acotados**: pasar **rutas explícitas**; **nunca** `node --test` sin acotar.
-- **Suite**: 16 archivos (`adapters-frontmatter`, `affected-set`, `cli`, `content-guards`,
-  **`curation`**, `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`,
-  `memory-engine`, `memory-fixtures`, `memory-pr1-contract`, `stats-failures`, `tier-models`,
-  `working-context`) y tres fixtures en `test/fixtures/memory/`: `seed.json`, `golden.json` y
-  `golden-refs-seed.json`, más `refs-root/`. Esta regeneración es **state-only**: no re-ejecutó
-  la suite. Evidencia: `test/`.
+- **Suite**: 17 archivos (`adapters-frontmatter`, `affected-set`, **`agent-model-coherence`**,
+  `cli`, `content-guards`, **`curation`**, `discovery-tier`, `discovery-topology`,
+  `linter-config`, `machine-env`, `mcp`, `memory-engine`, `memory-fixtures`,
+  `memory-pr1-contract`, `stats-failures`, `tier-models`, `working-context`) y tres fixtures en
+  `test/fixtures/memory/`: `seed.json`, `golden.json` y `golden-refs-seed.json`, más
+  `refs-root/`. `agent-model-coherence` deriva ambos lados de los archivos versionados (no
+  codifica proveedores) y exige que `TIERS.minimo` coincida con `agents/*.md` y que `TIERS` se
+  declare sólo en `src/core/tier-models.js`. Esta regeneración es **state-only**: no re-ejecutó la
+  suite. Evidencia: `test/`, `aspec/specs/agent-model-tiers/spec.md`.
 - **CI**: `.github/workflows/publish.yml` corre `npm ci` + `npm run lint` +
   `node --test test/*.test.js` y publica al pushear un tag `v*` (o `workflow_dispatch`), con
   canary no bloqueante y creación del Release. El lint bloquea el publish.
@@ -270,23 +277,32 @@ El contrato es **declarativo**:
 `AGENTS.md` → `## Cambiar el modelo de los agentes` fija el procedimiento. El `model:` existe en
 **tres superficies**:
 
-- `agents/*.md` — fuente canónica y **publicada**; no es donde se cambia el modelo de una
-  máquina concreta.
-- `.opencode/agents/*.md` — mirror que regenera `ancleto upgrade`; **no se edita a mano**.
-- `~/.config/opencode/agents/*.md` — instalación **global**; en este setup es la copia que carga
-  el runtime.
+- `agents/*.md` — fuente canónica y **publicada**; fija el **default publicado**
+  `commandcode/deepseek/deepseek-v4.1-flash`. No es el tier que un `install` sin `--tier`
+  selecciona (ése es `normal`) ni donde se cambia el modelo de una máquina concreta.
+- `.opencode/agents/*.md` — mirror del proyecto que regenera `ancleto upgrade`; **no se edita a
+  mano**. En este setup es la copia que carga el runtime y **gana sobre la instalación global**.
+- `~/.config/opencode/agents/*.md` — instalación **global** del CLI; es una instalación distinta
+  y **no gana** sobre el mirror del proyecto.
 
 `opencode.json` → `agent.<nombre>.model` aplica al agente **primario**, pero **no** a los
-subagentes. `ancleto install`/`update` reescriben las líneas `model:`; `ancleto upgrade` **no**
-aplica tier. Verificación en las tres superficies:
+subagentes. `ancleto install`/`update` reescriben las líneas `model:` cuando el tier difiere de
+la canónica, **sólo en opencode**; `ancleto upgrade` **no** aplica tier y materializa la
+canónica. El tier `minimo` coincide con la canónica: aplicarlo es un no-op. `TIERS` tiene dueño
+único en `src/core/tier-models.js` y `test/agent-model-coherence.test.js` guarda esa coherencia.
+Verificación en las tres superficies:
 
 ```powershell
 Select-String -Path <directorio>/*.md -Pattern '^model:'
 ```
 
-`ancleto check` reporta `frontmatter diverge del adaptador` cuando un mirror se apartó de su
-fuente. Si el modelo está bien y el proveedor responde `Insufficient account funds`, el problema
-es la cuenta. Evidencia: `AGENTS.md`, `agents/*.md`, `opencode.json`, `src/cli/index.js`.
+`ancleto check` es el oráculo: compara cada mirror contra el adaptador de la canónica (o del
+overlay del perfil activo) **y** contra los estados que el tier configurado aplicaría. Reporta
+`frontmatter diverge del adaptador` si el archivo no coincide con ninguno, y emite además un
+aviso separado —no bloqueante— cuando el tier aplicaría un modelo distinto al de la fuente
+esperada. Si el modelo está bien y el proveedor responde `Insufficient account funds`, el
+problema es la cuenta. Evidencia: `AGENTS.md`, `agents/*.md`, `opencode.json`,
+`src/cli/index.js`, `aspec/specs/agent-model-tiers/spec.md`.
 
 ## Convenciones de trabajo
 

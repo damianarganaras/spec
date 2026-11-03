@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.6] - 2026-11-02
+
+### Added
+- **MEM-05 recall task-aware**: `searchMemory` ordena de forma total y determinística (requerido, ref declarada, scope, bm25 y `memory_key`, sin `rowid`), devuelve por defecto un preview como prefijo literal de hasta 240 caracteres con `content_truncated` y `limit` 5, expande el payload completo con `expand: true` y claves puntuales con `keys`.
+- **`required` como entrada de llamada**: promueve `memory_key` al frente del orden y falla explícitamente cuando excede el `limit` o no entra en el presupuesto del bloque, en vez de degradarse a una omisión.
+- **`buildWorkingContext` acepta `{ required }`**: una requerida ausente, inactiva o fuera de presupuesto produce un error diagnóstico con `memory_key` y la ruta de sus refs resueltas.
+
+### Changed
+- **Specs `memory-engine` y `prompt-contracts`**: nuevo requirement `Recall task-aware con orden total, preview expandible y keys requeridas`; actualizados el fallback OR-prefijo, el aviso de overflow, el orden de inyección y el render del bloque proactivo sin el bloque `refs:`. `prompt-contracts` declara que el bloque de 8.000 chars y el campo destilado de ≤5 reglas / 1.500 B son superficies separadas.
+- **Skills de recall**: `ancleto-recall`, `new`, `propose` y `ff` usan `expand: true`; `explore` y `onboard` corrigen la firma documentada.
+- **Backlog**: nueva fila `MEM-05b` (gc por fecha de supersesión), nota de la ventana del piso del aviso y de `README`.
+
 ## [0.18.5] - 2026-11-02
 
 ### Added

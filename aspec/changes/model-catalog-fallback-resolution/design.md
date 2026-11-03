@@ -89,9 +89,22 @@ un string y, para los tiers con cadena, es la cabeza de esa lista. El resolver:
 5. Si ningún candidato de un agente está disponible, lanza un error explícito que nombra el agente y
    la cadena completa. No existe fallback silencioso ni valor por defecto inventado.
 
-Errores de resolución en `install`/`init`/`import` son fatales: el comando aborta con exit code no
-cero antes de escribir agentes. En `check` no son fatales: el oráculo acepta los candidatos estáticos
-y avisa que no hay candidato resoluble (ver abajo).
+Errores de resolución en `install`/`init`/`import` son fatales cuando el host escribe `model:`
+(`opencode`): el comando aborta con exit code no cero antes de escribir agentes. En hosts cuyo
+adaptador elimina `model:` o emite `model: inherit`, el tier no se resuelve ni puede abortar por
+catálogo. En `check` no son fatales: el oráculo acepta los candidatos estáticos y avisa que no hay
+candidato resoluble (ver abajo).
+
+### `import` (paridad con `init`)
+
+`ancleto import` lee el bundle, resuelve el tier contra el catálogo y calcula el mapa de modelos antes
+de la primera escritura: manifiesto, templates, assets y agents se escriben sólo después de que la
+resolución tuvo éxito, así que un fallo de catálogo no deja un import a medio aplicar. Cuando el tier
+se aplica (host `opencode`), el comando escribe `.opencode/.ancleto-tier` con el tier, igual que
+`init`, para que el `check` posterior use el mismo oráculo y no produzca divergencias falsas. El
+`gratisModel` se persiste sólo si el bundle declaraba la clave y se normaliza al único gratis
+conocido; una clave ausente no se agrega. En hosts cuyo adaptador elimina `model:` o emite
+`model: inherit`, el tier no se resuelve ni se escribe: no hay `model:` que materializar.
 
 ### Oráculo de `check`
 

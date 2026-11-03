@@ -1240,6 +1240,20 @@ describe('CLI export/import (cross-machine-export-import)', () => {
       assert.equal(existsSync(join(dst, '.opencode', 'agents', 'orchestrator.md')), false, 'sin agents escritos')
     })
   })
+
+  it('import con un host que no escribe model: no resuelve el catálogo ni escribe tier', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const r = run(['import', writeBundle(dir, { agent: 'claude' })], dst, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0, 'claude: import no aborta')
+      assert.doesNotMatch(r.stderr, /no hay ningún candidato disponible/)
+      assert.ok(existsSync(join(dst, '.claude', 'agents', 'orchestrator.md')), 'layout del host instalado')
+      assert.equal(existsSync(join(dst, '.opencode', '.ancleto-tier')), false, 'sin tier aplicado')
+    })
+  })
 })
 
 describe('CLI import openspec externo (import-legacy-openspec)', () => {
@@ -1686,6 +1700,26 @@ describe('CLI check (G3)', () => {
       const ini = run(['init', '--tier', 'minimo', '--agent', 'claude', '--no-mcp'], initDir, { ANCLETO_MODEL_CATALOG: catalog })
       assert.equal(ini.status, 0)
       assert.doesNotMatch(ini.stderr, /no hay ningún candidato disponible/)
+    })
+  })
+
+  it('install con antigravity/vscode/copilot no resuelve el catálogo ni aborta', () => {
+    const layouts = {
+      antigravity: ['.agents', 'agents', 'orchestrator.md'],
+      vscode: ['.github', 'agents', 'orchestrator.agent.md'],
+      copilot: ['.github', 'prompts', 'orchestrator.prompt.md']
+    }
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      for (const [agent, segments] of Object.entries(layouts)) {
+        const target = join(dir, agent)
+        mkdirSync(target)
+        const r = run(['install', '--project', target, '--no-mcp', '--tier', 'minimo', '--agent', agent], target, { ANCLETO_MODEL_CATALOG: catalog })
+        assert.equal(r.status, 0, `${agent}: install no aborta`)
+        assert.doesNotMatch(r.stderr, /no hay ningún candidato disponible/)
+        assert.ok(existsSync(join(target, ...segments)), `${agent}: layout del host instalado`)
+      }
     })
   })
 

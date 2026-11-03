@@ -19,7 +19,10 @@ cambiar esa interfaz.
 Si ningún candidato de la cadena de un agente figura en el catálogo, el sistema SHALL fallar con un
 error explícito que nombre el agente y la cadena completa. NO SHALL escribir un identificador
 inventado, NO SHALL usar un candidato fuera de la cadena y NO SHALL continuar en silencio.
-`install`, `init` e `import` SHALL abortar con exit code no cero cuando la resolución falla.
+`install`, `init` e `import` SHALL abortar con exit code no cero cuando la resolución falla en un host
+que escribe `model:`; en los hosts que eliminan el campo o emiten un valor propio, el tier NO SHALL
+resolverse ni abortar por catálogo (ver el requirement "La resolución de tier sólo aplica a hosts que
+escriben `model:`").
 
 #### Scenario: La cabeza de la cadena está disponible
 
@@ -43,7 +46,7 @@ inventado, NO SHALL usar un candidato fuera de la cadena y NO SHALL continuar en
 
 - **WHEN** el catálogo no contiene ninguno de los candidatos de la cadena de un agente
 - **THEN** la resolución falla con un error explícito que nombra el agente y la cadena completa
-- **AND** `install`, `init` e `import` abortan con exit code no cero
+- **AND** `install`, `init` e `import` sobre `opencode` abortan con exit code no cero
 - **AND** ningún agente se escribe con un identificador inventado
 
 _Testeable con `test/model-catalog.test.js`: catálogos inyectados con distintas combinaciones de
@@ -171,6 +174,108 @@ conservarse y una clave ausente NO SHALL agregarse.
 - **WHEN** se ejecuta cualquier comando con tier `gratis`
 - **THEN** el sistema no ejecuta `opencode models` para detectar Muse Spark
 - **AND** la variable `ANCLETO_MUSE_SPARK` no altera el modelo resuelto
+
+### Requirement: `import` persiste el estado de tier que aplica
+
+Cuando `ancleto import` aplique un tier porque el host escribe `model:` (`opencode`), el comando SHALL
+escribir `.opencode/.ancleto-tier` con el nombre del tier aplicado, con paridad con `init`: el archivo
+SHALL contener una única línea con el tier y un salto de línea. Un `ancleto check` inmediatamente
+posterior NO SHALL reportar `frontmatter diverge del adaptador` por ese motivo. Si el proyecto destino
+ya tenía otro tier, el archivo SHALL quedar con el tier nuevo del bundle, no con el viejo. Cuando el
+host no escribe `model:`, el comando NO SHALL escribir un estado de tier que no aplicó.
+
+#### Scenario: El check posterior no diverge tras un import
+
+- **WHEN** se ejecuta `ancleto import <bundle>` con un tier sobre un proyecto destino y luego
+  `ancleto check`
+- **THEN** `.opencode/.ancleto-tier` contiene el tier aplicado
+- **AND** el check NO SHALL reportar `frontmatter diverge del adaptador`
+- **AND** el exit code del check es 0
+
+#### Scenario: Un import sobre un proyecto inicializado reemplaza el tier viejo
+
+- **WHEN** el proyecto destino ya tenía `.opencode/.ancleto-tier` con otro tier y se importa un bundle
+  con tier `minimo`
+- **THEN** el archivo queda en `minimo`
+- **AND** el check posterior NO SHALL reportar divergencia por el tier anterior
+
+_Testeable con `test/cli.test.js`: import sobre un proyecto vacío y sobre uno instalado con otro tier;
+afirma el contenido de `.opencode/.ancleto-tier`, la ausencia de `frontmatter diverge` y exit 0._
+
+### Requirement: `import` resuelve el tier antes de la primera escritura
+
+`ancleto import` SHALL leer el bundle, resolver el catálogo y calcular el mapa de modelos del tier
+ANTES de escribir cualquier archivo en el proyecto destino (manifiesto, templates, assets o agents).
+Si la resolución falla por ausencia total de candidatos en un host que escribe `model:`, el comando
+SHALL abortar con un error explícito y exit code no cero sin dejar estado parcial: NO SHALL escribir
+`.ancletorc`, NO SHALL escribir templates y NO SHALL escribir agents. El error SHALL nombrar el agente
+y la cadena completa.
+
+#### Scenario: Un fallo de resolución no deja estado parcial
+
+- **WHEN** se ejecuta `ancleto import <bundle>` con un catálogo que no contiene ningún candidato de la
+  cadena del tier
+- **THEN** el comando sale con exit code 1 y un error que nombra el agente y la cadena
+- **AND** `.ancletorc`, los templates y `.opencode/agents/*.md` no existen en el destino
+
+_Testeable con `test/cli.test.js`: bundle con template y `ANCLETO_MODEL_CATALOG` sin ningún candidato;
+afirma exit 1, el mensaje y la ausencia de manifiesto, template y agents._
+
+### Requirement: `import` persiste `gratisModel` sólo cuando el bundle declara la clave
+
+`ancleto import` SHALL persistir `gratisModel` en `.ancletorc` sólo si la clave existía en el bundle.
+El valor persistido SHALL ser el `gratisModel` resuelto: un valor conocido SHALL conservarse y un valor
+desconocido SHALL normalizarse a `GRATIS_FALLBACK_MODEL`. Si el bundle no declara la clave, el import
+NO SHALL agregarla, aunque el tier sea `gratis`. La normalización NO SHALL fallar ni emitir error por
+un valor desconocido.
+
+#### Scenario: Un `gratisModel` desconocido del bundle se normaliza
+
+- **WHEN** el bundle declara `gratisModel` desconocido y tier `gratis`
+- **THEN** `.ancletorc.gratisModel` queda en `GRATIS_FALLBACK_MODEL`
+- **AND** los agents instalados declaran ese modelo
+- **AND** el comando completa sin error
+
+#### Scenario: Una clave ausente no se agrega
+
+- **WHEN** el bundle no declara `gratisModel`
+- **THEN** `.ancletorc` del destino no tiene la clave `gratisModel`
+- **AND** el import completa sin error
+
+_Testeable con `test/cli.test.js`: bundle con valor legacy desconocido y bundle sin la clave; afirma
+la normalización y la ausencia de la clave._
+
+### Requirement: La resolución de tier sólo aplica a hosts que escriben `model:`
+
+`install`, `init` e `import` SHALL resolver el tier y SHALL abortar por ausencia total de candidatos
+sólo cuando el host destino escriba `model:` (`opencode`). En los hosts cuyo adaptador elimina
+`model:` (`commandcode`, `claude`, `vscode`, `copilot`) o emite un valor propio (`antigravity`:
+`model: inherit`), el comando NO SHALL resolver el catálogo, NO SHALL abortar por falta de candidatos
+y NO SHALL escribir un modelo de tier. La instalación global (sin `--project`) SHALL resolver siempre,
+porque copia los assets de `opencode` con independencia del flag `--agent`.
+
+#### Scenario: Un host que dropea `model:` no resuelve ni aborta
+
+- **WHEN** se ejecuta `install --project --agent claude` o `init --agent claude` con tier `minimo` y
+  un catálogo sin ningún candidato
+- **THEN** el comando completa con exit 0 y sin el error de falta de candidatos
+- **AND** el layout del host se instala
+
+#### Scenario: `antigravity` emite `model: inherit` y no resuelve
+
+- **WHEN** se instala con `--agent antigravity` y un catálogo sin candidatos
+- **THEN** el comando NO SHALL abortar por catálogo
+- **AND** los agents instalados declaran `model: inherit` y ningún modelo de tier
+
+#### Scenario: opencode sigue abortando
+
+- **WHEN** se ejecuta `install --project --tier minimo` o `init --tier minimo` con `agent` `opencode`
+  y un catálogo sin ningún candidato
+- **THEN** el comando aborta con exit code no cero y un error que nombra el agente y la cadena
+- **AND** no se escribe un agent con un ID inventado ni el estado de tier
+
+_Testeable con `test/cli.test.js`: `install`/`init` con `--agent claude` y un catálogo vacío completan
+sin abortar; `install`/`init` con `opencode` y el mismo catálogo salen con exit 1._
 
 ## MODIFIED Requirements
 

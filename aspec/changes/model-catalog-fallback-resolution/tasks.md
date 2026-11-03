@@ -80,6 +80,16 @@
       desconocido NO SHALL producir divergencia ni error.
 - [x] Mantener el exit code de `check` sin cambios por divergencias de frontmatter, aviso de tier o
       aviso de catálogo no resoluble.
+- [x] En `importCmd` (`src/cli/index.js:4151-4158`), escribir `.opencode/.ancleto-tier` con el tier
+      aplicado tras `applyTier`, con paridad con `init`. Listo cuando un import sobre un proyecto vacío
+      y sobre uno con otro tier dejan el archivo con el tier nuevo y el `check` posterior no diverge.
+- [x] En `importCmd`, leer el bundle y resolver el catálogo antes de la primera escritura: si el
+      resolver falla, abortar con exit 1 sin escribir `.ancletorc`, templates ni agents.
+- [x] En `importCmd`, persistir `gratisModel` normalizado sólo si el bundle declaraba la clave; no
+      agregar una clave ausente y no fallar por un valor desconocido.
+- [x] En `install`/`init`/`import`, resolver y abortar por catálogo sólo cuando el host escribe
+      `model:` (`opencode`); no resolver ni abortar para hosts que dropean el campo o emiten
+      `model: inherit`.
 
 ## Fase 4 — Perfil y documentación (implementación)
 
@@ -134,6 +144,11 @@
 - [x] En `test/cli.test.js`, agregar el caso sin candidato disponible en el check usando
       `ANCLETO_MODEL_CATALOG` con un snapshot sin ningún candidato de la cadena: no hay divergencia,
       hay aviso no bloqueante de catálogo no resoluble y exit code sin cambios.
+- [x] En `test/cli.test.js`, cubrir el import con tier: escritura de `.opencode/.ancleto-tier`, check
+      sin divergencia, normalización condicional de `gratisModel` y aborto sin estado parcial.
+- [x] En `test/cli.test.js`, cubrir el host que no escribe `model:`: `install`/`init --agent claude` y
+      `--agent antigravity` con un catálogo sin candidatos no resuelven, no abortan y no calculan
+      estados de tier en `check`.
 - [x] En `test/cli.test.js`, agregar el caso de resolución durante `install` con la cabeza ausente:
       los diez agentes escriben el segundo candidato; y con cabeza y segundo ausentes: escriben el
       tercero. Usar `ANCLETO_MODEL_CATALOG` con snapshots temporales. Agregar el caso sin ningún

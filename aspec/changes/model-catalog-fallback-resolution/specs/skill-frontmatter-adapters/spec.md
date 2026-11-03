@@ -22,6 +22,12 @@ cuando el catálogo tenía otro candidato sigue siendo un estado aceptado. Un in
 que difiera de todos SHALL reportarse como warning (⚠), no como faltante (✖). Una instalación sana con
 `profile: test` y cualquier tier NO SHALL reportarse como divergencia.
 
+El conjunto de estados de tier y el aviso de tier SHALL calcularse sólo para un directorio cuyo host
+sea `opencode`. Para un directorio de un host cuyo adaptador elimina `model:` (`commandcode`, `claude`,
+`vscode`, `copilot`) o emite un valor propio (`antigravity`: `model: inherit`), el check NO SHALL
+resolver el catálogo, NO SHALL construir estados de tier y NO SHALL emitir el aviso de tier: compara
+sólo contra `esperado`, que ya refleja el `model:` del adaptador.
+
 El contenido esperado (`esperado`) de cada agente SHALL derivarse de `profiles/test/agents/<n>.md`
 (la fuente del overlay del perfil) cuando el perfil activo sea `test` y ese archivo exista, y de
 `agents/<n>.md` en caso contrario. El perfil es dueño del contenido y del `model:` sólo en `upgrade`;
@@ -38,10 +44,10 @@ aceptación, de modo que el aviso siga siendo único por directorio. El aviso SH
 mirror está en estado esperado como si está en estado del tier: una diferencia de modelo introducida
 por un tier o por un cambio de catálogo entre `install` y `check` NO SHALL quedar silenciosa.
 
-Si en el momento del check ningún candidato de la cadena de `minimo` figura en el catálogo, el check
-NO SHALL abortar: SHALL aceptar los candidatos estáticos como estados válidos y SHALL emitir un aviso
-no bloqueante distinto que indique que no hay candidato resoluble. El exit code NO SHALL cambiar por
-ese aviso.
+Si en el momento del check ningún candidato de la cadena de `minimo` figura en el catálogo para un
+directorio `opencode`, el check NO SHALL abortar: SHALL aceptar los candidatos estáticos como estados
+válidos y SHALL emitir un aviso no bloqueante distinto que indique que no hay candidato resoluble. El
+exit code NO SHALL cambiar por ese aviso.
 
 Para el tier `gratis`, el check SHALL aceptar como estado esperado la adaptación con
 `GRATIS_FALLBACK_MODEL`, único modelo gratis conocido. Un `.ancletorc.gratisModel` desconocido NO
@@ -119,6 +125,23 @@ presencia del aviso de tier junto con la ausencia de divergencia._
 - **AND** SHALL aplicar el adaptador de ese host para la validación
 - **AND** `installedHostsFromPaths(ip)` sólo SHALL determinar la unión de hosts instalados usada para
   el conjunto esperado de skills, no el host de un directorio de agents
+
+#### Scenario: Un directorio de un host que dropea `model:` no calcula estados de tier
+
+- **WHEN** el proyecto tiene agents instalados para `claude` y el tier configurado es `minimo`, con un
+  catálogo sin ningún candidato
+- **THEN** el check NO SHALL resolver la cadena ni abortar
+- **AND** NO SHALL emitir el aviso de tier
+- **AND** NO SHALL reportar `frontmatter diverge` si el mirror coincide con la adaptación de la fuente
+- **AND** el exit code NO SHALL cambiar
+
+#### Scenario: `antigravity` se valida contra `model: inherit`
+
+- **WHEN** el proyecto tiene agents instalados para `antigravity` y `.opencode/.ancleto-tier` declara
+  un tier conocido
+- **THEN** el check NO SHALL emitir el aviso de tier
+- **AND** SHALL aceptar el frontmatter adaptado con `model: inherit` como estado esperado
+- **AND** el check NO SHALL resolver el catálogo
 
 #### Scenario: Un `profile: test` sano no se reporta como divergencia
 

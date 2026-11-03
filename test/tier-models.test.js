@@ -6,7 +6,8 @@ import {
   TIER_CHAINS,
   isKnownGratisModel,
   gratisModel,
-  tierModels
+  tierModels,
+  resolveTierModels
 } from '../src/core/tier-models.js'
 
 describe('tier models (gratis)', () => {
@@ -61,5 +62,23 @@ describe('cadenas de preferencia', () => {
     ]
     assert.equal(all.includes('opencode/muse-spark-1.3-contributor-free'), false)
     assert.equal(all.includes('opencode-go/qwen3.6-plus'), false)
+  })
+
+  it('TIERS es agente->string en los tres tiers y el mapa resuelto también', () => {
+    assert.deepEqual(Object.keys(TIERS).sort(), ['gratis', 'minimo', 'normal'])
+    for (const [tier, models] of Object.entries(TIERS)) {
+      for (const [agent, model] of Object.entries(models)) {
+        assert.equal(typeof model, 'string', `${tier}.${agent} es string`)
+        assert.ok(model.length > 0, `${tier}.${agent} no está vacío`)
+      }
+    }
+    // El mapa resuelto es lo que recibe applyTier: también agente->string.
+    const catalog = { providers: { test: TIER_CHAINS.minimo.orchestrator } }
+    for (const tier of ['normal', 'minimo', 'gratis']) {
+      const resolved = resolveTierModels(tier, catalog, { gratisOverride: GRATIS_FALLBACK_MODEL })
+      for (const [agent, model] of Object.entries(resolved.models)) {
+        assert.equal(typeof model, 'string', `${tier}.${agent} resuelto es string`)
+      }
+    }
   })
 })

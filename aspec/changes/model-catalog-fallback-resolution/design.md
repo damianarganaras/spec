@@ -15,14 +15,17 @@ el oráculo, los guards ni el spec vigente.
 
 | Módulo | Responsabilidad | Prohibiciones |
 |---|---|---|
-| `src/core/model-catalog.json` | Datos del catálogo verificado: `generated_at`, `method`, `providers`. | No se genera en tiempo de ejecución. |
-| `src/core/model-catalog.js` | Cargar el snapshot, responder disponibilidad y validar IDs. | Sin red, sin procesos, sin estado global mutable. |
-| `src/core/tier-models.js` | `TIERS`, `TIER_CHAINS`, resolver puro de tier, `gratis`. | Sin `node:child_process`; sin E/S. |
+| `src/core/model-catalog.json` | Datos del catálogo verificado: `generated_at`, `source.method`, `source.providers` y `providers` (proveedor → entradas `{ id, cost, limit }`). Es el único archivo del catálogo separado del código. | No se genera en tiempo de ejecución. |
+| `src/core/tier-models.js` | `TIERS`, `TIER_CHAINS`, resolver puro de tier, `gratis`, y el loader/validador del catálogo (`loadModelCatalog`, `modelIdsFromCatalog`, `missingModelIds`). | Sin `node:child_process`; sin E/S salvo la lectura del snapshot en el loader; sin estado global mutable. |
 | `scripts/refresh-model-catalog.mjs` | Único punto que ejecuta `opencode models` y reescribe el snapshot. | Sólo manual; nunca en CI ni en `install`/`check`. |
 | `src/cli/index.js` | Orquestación: resolver en `install`/`init`/`import`, oráculo de `check`, normalización de `.ancletorc`. | No reimplementa resolución ni validación de catálogo. |
 
 El límite es deliberado: la resolución es pura y testeable; el único borde con efectos es el loader
-(lectura de un JSON versionado) y el script de refresco (proceso externo).
+(lectura de un JSON versionado) y el script de refresco (proceso externo). El loader y la validación de
+forma viven en `src/core/tier-models.js`; **no existe un módulo `src/core/model-catalog.js` separado**:
+sólo el snapshot es un JSON aparte. La regla `tiers-owned-by-tier-models` exige un único dueño de
+`TIERS` y de las constantes nuevas en `tier-models.js`, y no se refactorizó después con la validación ya
+verde.
 
 El loader resuelve el catálogo en este orden: catálogo inyectado explícitamente, ruta alternativa
 declarada en `ANCLETO_MODEL_CATALOG`, y snapshot commiteado. La ruta alternativa es un seam de
@@ -34,18 +37,42 @@ configuración de producto; sin la variable, el CLI usa siempre el snapshot vers
 ```json
 {
   "generated_at": "2026-11-03",
-  "method": "opencode models <provider> --verbose",
+  "source": {
+    "method": "opencode models <provider> --verbose",
+    "providers": ["opencode-go", "commandcode", "opencode"]
+  },
   "providers": {
-    "opencode-go": ["opencode-go/qwen3.7-plus", "opencode-go/qwen3.8-max", "..."],
-    "commandcode": ["commandcode/deepseek/deepseek-v4.1-flash", "..."],
-    "opencode": ["opencode/big-pickle", "opencode/deepseek-v4.1-flash-free", "..."]
+    "opencode-go": [
+      {
+        "id": "opencode-go/qwen3.8-max",
+        "cost": { "input": 2, "output": 6 },
+        "limit": { "context": 1000000, "output": 131072 }
+      }
+    ],
+    "commandcode": [
+      {
+        "id": "commandcode/deepseek/deepseek-v4.1-flash",
+        "cost": { "input": 0.15, "output": 0.6 },
+        "limit": { "context": 1000000, "output": 384000 }
+      }
+    ],
+    "opencode": [
+      {
+        "id": "opencode/big-pickle",
+        "cost": { "input": 0, "output": 0 },
+        "limit": { "context": 200000, "output": 32000 }
+      }
+    ]
   }
 }
 ```
 
-Los IDs se guardan completos (proveedor incluido) para que la comparación con `model:` sea directa.
-El snapshot no incluye metadatos de costo en esta iteración: el guard sólo verifica existencia. La
-fortaleza del reviewer se sostiene en la decisión registrada, no en un cálculo del guard.
+`source.providers` lista los proveedores relevados y `providers[proveedor]` es la lista de entradas
+`{ id, cost, limit }` normalizadas por `scripts/refresh-model-catalog.mjs`; `cost` y `limit` admiten
+`null` cuando el proveedor no los reporta. Los IDs se guardan completos (proveedor incluido) para que
+la comparación con `model:` sea directa. El guard sólo verifica existencia por `id`; no evalúa costo
+ni límites. La fortaleza del reviewer se sostiene en la decisión registrada, no en un cálculo del
+guard.
 
 ### Resolución por cadena
 

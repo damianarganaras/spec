@@ -63,7 +63,8 @@ contrato.
 
 - `src/core/tier-models.js`: reviewer corregido, `TIER_CHAINS`, resolver puro e inyectable, error
   explícito, eliminación de Muse Spark.
-- `src/core/model-catalog.json` (nuevo) y `src/core/model-catalog.js` (loader + validación pura).
+- `src/core/model-catalog.json` (nuevo); el loader y la validación pura del catálogo viven en
+  `src/core/tier-models.js`.
 - `src/cli/index.js`: resolver la cadena en `install`, `init` y `import`; oráculo por conjunto de
   aceptación completo; normalización de `gratisModel` desconocido.
 - `profiles/test/agents/reviewer.md`: `model: opencode-go/qwen3.8-max`. `tester.md` se mantiene.
@@ -85,7 +86,6 @@ contrato.
 ## Paths autorizados del change
 
 - `src/core/tier-models.js`
-- `src/core/model-catalog.js` (nuevo)
 - `src/core/model-catalog.json` (nuevo)
 - `src/cli/index.js`
 - `profiles/test/agents/reviewer.md`

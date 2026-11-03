@@ -3,7 +3,7 @@
 > Implementación y tests quedan en fases separadas; cada fase es verificable por sí sola.
 > Los comandos usan el runner declarado: `node C:/nvm4w/nodejs/node_modules/npm/bin/npm-cli.js run <script>`.
 
-## Fase 1 — Snapshot y módulo de catálogo (implementación)
+## Fase 1 — Snapshot y loader/validador de catálogo (implementación)
 
 - [x] Crear `src/core/model-catalog.json` con la forma `{ generated_at, method, providers }`, donde
       `providers` mapea proveedor → lista de IDs completos (`opencode-go/...`, `commandcode/...`,
@@ -16,16 +16,21 @@
       `commandcode/deepseek/deepseek-v4.1-flash`, `opencode/big-pickle` y
       `opencode/deepseek-v4.1-flash-free`. No incluir IDs inexistentes (`opencode-go/qwen3.6-plus`,
       `opencode/muse-spark-1.3-contributor-free`).
-- [x] Crear `src/core/model-catalog.js` con E/S sólo en el loader: un loader que lee el snapshot
-      commiteado sin red, un predicado de disponibilidad y un validador de IDs que reporte los IDs
-      ausentes. El loader SHALL aceptar un catálogo o una ruta explícita y, si no se proveen, usar
-      `ANCLETO_MODEL_CATALOG` cuando esté definida y el snapshot commiteado en caso contrario. La
-      variable es un seam de test/manual, no una configuración de producto. La resolución SHALL ser
-      una función pura que recibe el catálogo como argumento; NO SHALL leer archivos ni consultar
-      procesos.
+- [x] En `src/core/tier-models.js`, implementar el loader y el validador del catálogo con E/S sólo en
+      el loader: un loader que lee el snapshot commiteado sin red, un predicado de disponibilidad y un
+      validador de IDs que reporte los IDs ausentes. El loader SHALL aceptar un catálogo o una ruta
+      explícita y, si no se proveen, usar `ANCLETO_MODEL_CATALOG` cuando esté definida y el snapshot
+      commiteado en caso contrario. La variable es un seam de test/manual, no una configuración de
+      producto. La resolución SHALL ser una función pura que recibe el catálogo como argumento; NO
+      SHALL leer archivos ni consultar procesos.
+      > Nota de implementación: el loader/validador quedó en `src/core/tier-models.js` (no en un
+      > `src/core/model-catalog.js` separado) porque la regla `tiers-owned-by-tier-models` exige un
+      > único dueño de `TIERS` y de las constantes nuevas allí; se evitó un refactor posterior con la
+      > validación ya en verde (843 tests). Sólo el snapshot es un JSON aparte.
 - [x] Crear `scripts/refresh-model-catalog.mjs`: script manual que recorre los proveedores del
       snapshot, corre `opencode models <provider> --verbose`, normaliza los IDs y reescribe el JSON
-      preservando `generated_at`/`method`. Documentar en el encabezado del script que no corre en CI
+      con `generated_at` igual a la fecha del refresco, conservando `source.method` y la lista de
+      proveedores del snapshot vigente. Documentar en el encabezado del script que no corre en CI
       y que su salida se revisa antes de commitear. Listo cuando el script falla de forma explícita
       si `opencode` no está disponible, sin escribir un snapshot vacío.
 

@@ -69,7 +69,7 @@ un método nuevo `consolidate({ dryRun = true } = {})` del engine de memoria:
 - `src/cli/index.js`
 - `test/memory-engine.test.js`
 - `test/cli.test.js`
-- `aspec/changes/memory-consolidacion-autonoma/**` (este directorio)
+- `aspec/changes/archive/2026-11-02-memory-consolidacion-autonoma/**` (este directorio)
 
 ## Riesgos
 
@@ -121,7 +121,7 @@ un método nuevo `consolidate({ dryRun = true } = {})` del engine de memoria:
   distinto. Los criterios fijos hacen el resultado reproducible y auditable.
   **Refs:** `change:memory-consolidacion-autonoma`; `path:src/core/memory/engine.js`;
   `spec:memory-ops#Merge de nodos por supersesión`;
-  `path:aspec/changes/memory-consolidacion-autonoma/specs/memory-ops/spec.md`
+  `path:aspec/changes/archive/2026-11-02-memory-consolidacion-autonoma/specs/memory-ops/spec.md`
   **Estado:** aprobado
 
 - **memory_key:** `memory-consolidate-dry-run-default`
@@ -156,5 +156,5 @@ un método nuevo `consolidate({ dryRun = true } = {})` del engine de memoria:
   calibración bloquearía escrituras legítimas y un auto-merge perdería matices que sólo un
   humano puede decidir. El reporte genera los datos para calibrar más adelante.
   **Refs:** `change:memory-consolidacion-autonoma`;
-  `path:aspec/changes/memory-consolidacion-autonoma/specs/memory-ops/spec.md`
+  `path:aspec/changes/archive/2026-11-02-memory-consolidacion-autonoma/specs/memory-ops/spec.md`
   **Estado:** aprobado

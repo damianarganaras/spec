@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-11-02T12:11:50Z
-pluginVersion: 0.18.2
+generatedAt: 2026-11-02T18:45:50Z
+pluginVersion: 0.18.5
 skillVersion: '2.3'
 ---
 
@@ -19,11 +19,11 @@ skillVersion: '2.3'
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **npm registry** | Publicación del paquete `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.2` (`package.json`); el tag `v0.18.2` es **anotado** y vive en `main` (`41d2313`, merge de `development`). `0.18.0` publicó el quinto check del doctor (MEM-04); `0.18.1` el discovery map + orquestador en `opencode.json`; `0.18.2` es docs-only. MEM-04b (`resolveNodeRefs`) no está publicado. | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log`, `CHANGELOG.md` |
+| **npm registry** | Publicación de `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.5`. Tag `v0.18.5` → merge `dbf7df5` (`merge development: 0.18.5`, en `main`). `0.18.3` publicó MEM-04b; `0.18.4` el ranking/omisiones; `0.18.5` `memory consolidate`. | `.github/workflows/publish.yml`, `package.json`, `git tag`, `git log`, `CHANGELOG.md` |
 | **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
-| **ESLint 10 + globals** | Dependencias **solo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
-| **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Verifica `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
-| **Git** | Necesario para `machine-env` (`rev-parse`, `check-ignore`, `info/exclude`), para el ciclo SDD y para el publish. Además es la única fuente del estado del árbol que consume el intake de sesión del orquestador, vía `git status --short` delegado a `@technical-discovery` (literal permitido en su allowlist de `bash`, sobre `'*': deny`). Si falta, el CLI degrada con warning no bloqueante. | `src/core/machine-env.js`, `.gitattributes`, `AGENTS.md`, `agents/technical-discovery.md` |
+| **ESLint 10 + globals** | Dependencias **sólo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
+| **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Usa `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
+| **Git** | Necesario para `machine-env` (`rev-parse`, `check-ignore`, `info/exclude`), el ciclo SDD y el publish. Es la única fuente del estado del árbol para el intake del orquestador, vía `git status --short` delegado a `@technical-discovery`. Si falta, el CLI degrada con warning. | `src/core/machine-env.js`, `.gitattributes`, `AGENTS.md`, `agents/technical-discovery.md` |
 
 ## IDEs / agentes consumidores (contrato de instalación)
 
@@ -50,32 +50,30 @@ host. `ancleto check` valida que el frontmatter instalado coincida con la salida
 ## Configuración del host opencode (raíz del repo)
 
 `opencode.json` es configuración **del checkout**, no del paquete: fija
-`agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los **10 subagentes** (incluye
-`orchestrator` desde `0.18.1`) y `package.json` → `files` no lo publica. No hay cambios
-pendientes en ese archivo en el árbol de trabajo. Evidencia: `opencode.json`, `package.json`,
-`CHANGELOG.md`.
+`agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los **10 subagentes** y
+`package.json` → `files` no lo publica. Es configuración local, no contrato del producto.
+Evidencia: `opencode.json`, `package.json`.
 
 ## Entorno de máquina (integración local con git)
 
 `.ancleto/machine-env.md` no es un servicio externo: es un artefacto derivado y local por
-máquina. Su única integración externa es **git**, usada de forma read-only/best-effort:
+máquina. Su única integración externa es **git**, usada read-only/best-effort:
 
 - `git rev-parse --is-inside-work-tree` y `--show-toplevel` para saber si hay repo y su raíz.
-- `git rev-parse --show-prefix` para el path repo-root-relative del proyecto (subdirectorios,
-  worktrees y symlinks).
-- `git check-ignore --no-index` para decidir si ya está ignorado y para verificar la exclusión.
+- `git rev-parse --show-prefix` para el path repo-root-relative del proyecto.
+- `git check-ignore --no-index` para decidir si ya está ignorado y verificar la exclusión.
 - `git rev-parse --git-path info/exclude` para localizar la exclusión local del clon.
-- `git ls-files` (solo en `ancleto check`) para advertir si el artefacto quedó trackeado.
+- `git ls-files` (sólo en `ancleto check`) para advertir si el artefacto quedó trackeado.
 
-Todas esas invocaciones están **acotadas a 5 s** (`GIT_TIMEOUT_MS`): una llamada a `git`
-bloqueada no puede colgar `init`/`install`/`upgrade`. Nunca modifica `.gitignore` ni archivos
-del repo. Si git no está disponible o falla, el artefacto se escribe igual y la exclusión se
-reporta como warning no bloqueante.
+Todas las invocaciones están **acotadas a 5 s** (`GIT_TIMEOUT_MS`): una llamada bloqueada no
+puede colgar `init`/`install`/`upgrade`. Nunca modifica `.gitignore` ni archivos del repo. Si
+git no está disponible o falla, el artefacto se escribe igual y la exclusión se reporta como
+warning no bloqueante.
 
 La misma dependencia de procesos externos cubre la **sonda de invocabilidad**: el módulo lanza
 los candidatos de `rg`/`node`/`npm`/`git`/`python` con `node:child_process` para comprobar que
-son invocables (2 s por intento, 10 s acumulados por corrida). La dependencia es del **runtime
-local**, no de un servicio externo. Evidencia: `src/core/machine-env.js`,
+son invocables (2 s por intento, 10 s acumulados). Es una dependencia del **runtime local**, no
+de un servicio externo. Evidencia: `src/core/machine-env.js`,
 `aspec/specs/machine-environment/spec.md`.
 
 ## Memoria local (sin servicios externos)
@@ -83,62 +81,59 @@ local**, no de un servicio externo. Evidencia: `src/core/machine-env.js`,
 `.ancleto/memory.db` es SQLite nativo (`node:sqlite`): no hay servidor ni dependencia de red.
 Las operaciones de memoria son **locales y sincrónicas**:
 
-- `memory snapshot` usa `VACUUM INTO` de SQLite sobre una conexión read-only y reemplaza el
-  destino con `renameSync` del runtime (`node:fs`). No invoca herramientas externas.
-- `memory merge` usa el mismo motor transaccional. No escribe archivos; el CLI refresca el
-  working-context derivado.
-- `memory doctor` usa `PRAGMA quick_check`, la tabla sombra `memory_fts_docsize` y, en el check
+- `memory snapshot` usa `VACUUM INTO` sobre una conexión read-only y reemplaza el destino con
+  `node:fs`. No invoca herramientas externas.
+- `memory merge` y `memory consolidate --apply` usan el motor transaccional. No escriben
+  archivos; el CLI refresca el working-context derivado.
+- `memory doctor` usa `PRAGMA quick_check`, la tabla sombra `memory_fts_docsize` y, en
   `Refs de nodos activos`, sólo lectura local de `aspec/specs/**/spec.md` y listado de
   `aspec/changes/**` con `existsSync`/`statSync`; no hay chequeo remoto ni escritura. Las refs
   `commit:`/`workitem:` no se resuelven contra ningún servicio.
-- `resolveNodeRefs` (`MEM-04b`) resuelve `spec:`/`change:`/`path:` contra el **filesystem
-  local** del repo, sin abrir la DB ni escribir. No invoca git para `commit:` ni un tracker
-  para `workitem:`: esas refs quedan `verifiable: false`. Evidencia:
-  `src/core/memory/engine.js`, `aspec/changes/mem-04b-resolver-referencias-navegables/`.
+- `resolveNodeRefs` resuelve `spec:`/`change:`/`path:` contra el **filesystem local**, sin abrir
+  la DB ni escribir. No invoca git para `commit:` ni un tracker para `workitem:`.
+- `memory consolidate` agrupa y compara contenido localmente; los near-dups se calculan con
+  Jaccard sobre tokens, sin servicio externo.
 
 Evidencia: `src/core/memory/snapshot.js`, `src/core/memory/doctor.js`,
 `src/core/memory/engine.js`.
 
 ## MCP (Model Context Protocol)
 
-Configurados por `setupHostMcp` (dueño único) con **excepciones de host-MCP**: antigravity
-en `.agents/mcp_config.json`, commandcode en `.mcp.json` y copilot en `copilot-mcp.json`; el
-resto en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp` lo evita.
-`import` regenera entradas rotas con rutas locales.
+Configurados por `setupHostMcp` (dueño único) con **excepciones host-MCP**: antigravity en
+`.agents/mcp_config.json`, commandcode en `.mcp.json` y copilot en `copilot-mcp.json`; el resto
+en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp` lo evita. `import`
+regenera entradas rotas con rutas locales.
 
 | MCP | Tipo | Rol | Default |
 |---|---|---|---|
-| `ancleto-memory` | local (stdio) | Memoria propia del repo: expone `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. Escribe con `source: 'mcp:ancleto-memory'`, por lo que **sus escrituras pasan por la validación fail-closed de refs** (excepto que la procedencia resuelta sea `runtime`). El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. La tool sigue disponible para el IDE: el orquestador no la invoca y el `<ContextOverflowWarning>` ya no la nombra. | Habilitado |
-| `caveman` | local (binario) | Compresión de salida del agente (`caveman-mcp.exe`). Su **directiva de uso es host-scoped**: se materializa solo donde la config MCP del host incluye la tool (`opencode`/`antigravity`); revertible a opt-in por compuerta de medición. | Habilitado si está en `PATH` |
-| `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`), no se agrega por defecto por su costo (~4.900 tokens/request). | Deshabilitado |
-| `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Solo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
+| `ancleto-memory` | local (stdio) | Memoria propia del repo: `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. Escribe con `source: 'mcp:ancleto-memory'`, por lo que sus escrituras pasan por la validación fail-closed de refs. El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. | Habilitado |
+| `caveman` | local (binario) | Compresión de salida del agente (`caveman-mcp.exe`). Su directiva es host-scoped: se materializa sólo donde la config MCP incluye la tool (`opencode`/`antigravity`). | Habilitado si está en `PATH` |
+| `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`) por su costo (~4.900 tokens/request). | Deshabilitado |
+| `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Sólo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
 
-Del lado del motor, la procedencia de escritura se fija en `createMemoryServer`:
+La procedencia de escritura se fija en `createMemoryServer`:
 `createMemoryToolHandlers(engine, { source: 'mcp:ancleto-memory', projectRoot })`. El
 `cli:import` **no** usa esa ruta: `importNodes` queda fuera de `recordNode` y conserva LWW sin
 validar refs.
 
-Adicionalmente, `ancleto memory doctor` emite un **chequeo de staleness advisory** sobre el
-working-context (línea `Working-context: <ok|ausente|desactualizado>`,
-`checkWorkingContextFreshness`). Es read-only y **no** es un MCP: vive dentro del propio CLI y
-no agrega dependencias. Evidencia: `src/core/memory/working-context.js`, `src/cli/index.js`,
-`aspec/specs/memory-engine/spec.md`.
-
-Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-routing/spec.md`.
+`memory doctor` emite además un **chequeo de staleness advisory** del working-context
+(`Working-context: <ok|ausente|desactualizado>`). Es read-only y no es un MCP. En el estado
+actual reporta `desactualizado`. Evidencia: `src/core/memory/working-context.js`,
+`src/cli/index.js`, `aspec/specs/memory-engine/spec.md`.
 
 ## Observabilidad / telemetría
 
 | Sistema | Uso | Evidencia |
 |---|---|---|
-| **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Solo opencode. Es la fuente de la compuerta de medición del default de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
-| **`ancleto stats failures`** | Reporte **read-only** de tool parts fallidos de opencode: clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y enmascara secretos/rutas. No imprime `output` ni `state.error`. Es la medición de la mejora de `machine-env`. | `src/cli/index.js` (`statsFailuresCommand`), `aspec/specs/session-failure-report/spec.md` |
-| **Working-context advisory** | `ancleto memory doctor` expone `Working-context: <estado>` tras los cinco checks de integridad/refs. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
+| **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Sólo opencode. Es la fuente de la compuerta de medición de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
+| **`ancleto stats failures`** | Reporte read-only de tool parts fallidos de opencode: clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y enmascara secretos/rutas. No imprime `output` ni `state.error`. | `src/cli/index.js`, `aspec/specs/session-failure-report/spec.md` |
+| **`memory doctor`** | Cinco checks read-only; en la corrida local: 212 filas indexadas, 112 nodos activos, 292 refs verificadas, 0 no resueltas, WAL presente. | `src/cli/index.js`, `src/core/memory/doctor.js` |
+| **Working-context advisory** | `memory doctor` expone `Working-context: <estado>` tras los checks. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
 
 ## Azure DevOps (opcional, apagado)
 
-- Gate en `.ancletorc` → en este checkout `.ancletorc` existe pero su contenido no se lee
-  durante el seed (contrato: se consume resuelto vía `--check`); `PRODUCT.md` declara el estado
-  apagado en este repositorio.
+- Gate en `.ancletorc` → `azure.enabled`; `PRODUCT.md` declara el estado apagado en este
+  repositorio.
 - El comando `/cleto-pr` usa GitHub por defecto; con Azure habilitado cambia el flujo. Setup:
   `az extension add --name azure-devops` + `az login` (extensión, no dependencia del paquete).
   Evidencia: `README.md`, `PRODUCT.md`.
@@ -146,13 +141,11 @@ Evidencia de MCP: `src/cli/index.js`, `README.md`, `aspec/specs/agent-install-ro
 ## Dependencias internas y de runtime
 
 - Módulos nativos: `node:sqlite` (motor de memoria), `node:test` (suite), `node:fs`,
-  `node:crypto`, `node:child_process` (spawn de Repomix, de `git` y de las sondas de
-  invocabilidad de herramientas), `node:os`, `node:path`, `node:url`. Evidencia: pack `src/**`.
-- Dependencias de desarrollo: `eslint` y `globals` (lint). Los lockfiles
-  (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) están **excluidos de las fuentes del
-  discovery y del pack**; `package-lock.json` existe en el checkout. No son dependencias del
-  paquete publicado. Evidencia: `package.json`, `ancleto discovery --check`
-  (`config.exclude`), `.discovery-map.json` (`root_files`).
+  `node:crypto`, `node:child_process` (spawn de Repomix, de `git` y de las sondas), `node:os`,
+  `node:path`, `node:url`. Evidencia: pack `src/**`.
+- Dependencias de desarrollo: `eslint` y `globals` (lint). Los lockfiles están excluidos de las
+  fuentes del discovery y del pack; `package-lock.json` existe en el checkout. No son
+  dependencias del paquete publicado. Evidencia: `package.json`,
+  `ancleto discovery --check` (`config.exclude`), `.discovery-map.json`.
 - `documentation/lnx-cli/` es material legado de otro CLI (`lnx`) usado como fuente de
-  relevamiento; no es dependencia de runtime y está gitignored. Evidencia: `.gitignore`,
-  listado del directorio.
+  relevamiento; no es dependencia de runtime y está gitignored.

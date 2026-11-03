@@ -97,7 +97,7 @@ function readState(dbPath) {
 }
 
 function goldenOutcome(engine, entry, refsRoot) {
-  const results = engine.searchMemory({ query: entry.query, limit: 10 })
+  const results = engine.searchMemory({ query: entry.query, limit: 10, expand: entry.expected.mode === 'refs' })
   if (entry.expected.mode === 'topK') {
     return { id: entry.id, mode: 'topK', keys: results.slice(0, entry.expected.k).map((r) => r.memory_key) }
   }

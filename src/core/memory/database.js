@@ -14,7 +14,8 @@ const MIGRATIONS = [
     superseded_by TEXT REFERENCES memory_nodes(id) DEFERRABLE INITIALLY DEFERRED,
     source TEXT NOT NULL,
     confidence REAL NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    superseded_at TEXT
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_nodes_key_active
     ON memory_nodes(memory_key) WHERE status = 'active'`,
@@ -50,6 +51,29 @@ export function openDatabase(dbPath, { migrate = true, readonly = false } = {}) 
   db.exec('PRAGMA busy_timeout = 5000')
   if (migrate) {
     for (const sql of MIGRATIONS) db.exec(sql)
+    // Migracion aditiva guardada: una base previa no tiene la columna. El
+    // backfill reproduce la elegibilidad historica de gc (created_at), sin
+    // otorgar gracia retroactiva, y no toca los nodos activos.
+    const columns = db.prepare('PRAGMA table_info(memory_nodes)').all()
+    if (!columns.some((column) => column.name === 'superseded_at')) {
+      try {
+        db.exec('ALTER TABLE memory_nodes ADD COLUMN superseded_at TEXT')
+      } catch (err) {
+        // Carrera con otra apertura concurrente: si la columna ya existe, la
+        // migracion se considera aplicada.
+        const after = db.prepare('PRAGMA table_info(memory_nodes)').all()
+        if (!after.some((column) => column.name === 'superseded_at')) throw err
+      }
+    }
+    try {
+      db.exec(
+        `UPDATE memory_nodes SET superseded_at = created_at WHERE status = 'superseded' AND superseded_at IS NULL`
+      )
+    } catch (err) {
+      console.warn(
+        `ancleto: backfill de superseded_at omitido: ${err.message}. Ejecutá "ancleto memory doctor --rebuild" si el indice FTS esta desalineado.`
+      )
+    }
   }
   return db
 }

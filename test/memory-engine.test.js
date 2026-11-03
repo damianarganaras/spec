@@ -1308,17 +1308,19 @@ describe('importNodes', () => {
 })
 
 describe('gcSuperseded', () => {
-  function insertSuperseded(dbPath, id, memory_key, daysAgo) {
+  // Simula "superseded hace N dias" fijando `superseded_at` (la metrica real) y
+  // un `created_at` decididamente anterior. Con el contrato viejo (created_at
+  // como proxy) estos nodos serian elegibles, asi que cada caso discrimina.
+  function insertSuperseded(dbPath, id, memory_key, daysAgo, { createdDaysAgo = daysAgo + 100 } = {}) {
     const db = openDatabase(dbPath)
-    // Simulamos "superseded hace N dias" usando created_at antiguo.
-    // El schema no expone superseded_at, asi que created_at es el proxy temporal.
-    const ts = new Date(Date.now() - daysAgo * 86400000).toISOString()
-    db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
-      VALUES (?, ?, 'rule', 'project', 'superseded', 'historia', '', 'test', 1, ?)`).run(`${id}-old`, `${memory_key}-old`, ts)
+    const supersededAt = new Date(Date.now() - daysAgo * 86400000).toISOString()
+    const createdAt = new Date(Date.now() - createdDaysAgo * 86400000).toISOString()
+    db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at, superseded_at)
+      VALUES (?, ?, 'rule', 'project', 'superseded', 'historia', '', 'test', 1, ?, ?)`).run(`${id}-old`, `${memory_key}-old`, createdAt, supersededAt)
     db.close()
   }
 
-  it('purga solo superseded con antiguedad mayor al umbral', () => {
+  it('purga solo superseded con antiguedad de supersesion mayor al umbral', () => {
     withFreshEngine((eng, dbPath, rawAt) => {
       insertSuperseded(dbPath, 'gc1', 'gc-1', 40)
       insertSuperseded(dbPath, 'gc2', 'gc-2', 10)
@@ -1344,8 +1346,41 @@ describe('gcSuperseded', () => {
       const result = eng.gcSuperseded({ days: 30 })
       // Solo se purga el superseded de hace 365 dias. El active viejo NO.
       assert.equal(result.removed, 1)
-      const activeCount = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes WHERE status = 'active'`)
-      assert.equal(activeCount[0].c, 2)
+      const activeRows = rawAt(`SELECT memory_key, superseded_at FROM memory_nodes WHERE status = 'active' ORDER BY memory_key`)
+      assert.deepEqual(activeRows.map((row) => row.memory_key), ['gc-act', 'gc-act2'])
+      assert.ok(activeRows.every((row) => row.superseded_at === null), 'los activos conservan superseded_at NULL')
+    })
+  })
+
+  it('un nodo creado hace 40 dias y superseded hace 2 sobrevive; superseded hace 40 se purga', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      insertSuperseded(dbPath, 'gc-age-new', 'gc-age-new', 2, { createdDaysAgo: 40 })
+      insertSuperseded(dbPath, 'gc-age-old', 'gc-age-old', 40, { createdDaysAgo: 40 })
+
+      const result = eng.gcSuperseded({ days: 30 })
+      assert.equal(result.removed, 1)
+
+      const remaining = rawAt(`SELECT memory_key, created_at FROM memory_nodes WHERE status = 'superseded'`)
+      assert.deepEqual(remaining.map((row) => row.memory_key), ['gc-age-new-old'])
+      // Discriminante: su created_at esta fuera del umbral; sobrevive por superseded_at.
+      assert.ok(Date.parse(remaining[0].created_at) < Date.now() - 30 * 86400000)
+    })
+  })
+
+  it('dryRun y purge real reportan la misma cantidad sobre el mismo estado', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      insertSuperseded(dbPath, 'gc-sync-1', 'gc-sync-1', 40)
+      insertSuperseded(dbPath, 'gc-sync-2', 'gc-sync-2', 35)
+      insertSuperseded(dbPath, 'gc-sync-3', 'gc-sync-3', 2, { createdDaysAgo: 200 })
+
+      const dry = eng.gcSuperseded({ days: 30, dryRun: true })
+      assert.equal(dry.nodes, 2)
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes WHERE status = 'superseded'`)[0].c, 3)
+
+      const real = eng.gcSuperseded({ days: 30 })
+      assert.equal(real.removed, dry.nodes)
+      const left = rawAt(`SELECT memory_key FROM memory_nodes WHERE status = 'superseded'`)
+      assert.deepEqual(left.map((row) => row.memory_key), ['gc-sync-3-old'])
     })
   })
 
@@ -1370,6 +1405,231 @@ describe('gcSuperseded', () => {
       const result = eng.gcSuperseded()
       assert.equal(result.days, 30)
       assert.equal(result.removed, 1)
+    })
+  })
+})
+
+// MEM-05b: toda ruta de supersesion persiste el instante en `superseded_at`.
+describe('superseded_at - registro del instante (MEM-05b)', () => {
+  const isRecent = (value) => {
+    const ts = Date.parse(value)
+    return Number.isFinite(ts) && Math.abs(Date.now() - ts) < 60 * 1000
+  }
+
+  it('recordNode escribe superseded_at en el nodo previo', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'ts-record', type: 'rule', scope: 'project', content: 'vieja', createdAt: '2020-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ts-record', type: 'rule', scope: 'project', content: 'nueva' })
+
+      const rows = rawAt(`SELECT status, created_at, superseded_at FROM memory_nodes WHERE memory_key = 'ts-record' ORDER BY rowid`)
+      assert.equal(rows.length, 2)
+      assert.equal(rows[0].status, 'superseded')
+      assert.equal(rows[0].created_at, '2020-01-01T00:00:00.000Z')
+      assert.ok(isRecent(rows[0].superseded_at))
+      assert.notEqual(rows[0].superseded_at, rows[0].created_at)
+      assert.equal(rows[1].status, 'active')
+      assert.equal(rows[1].superseded_at, null)
+    })
+  })
+
+  it('importNodes escribe superseded_at en el nodo previo al actualizar', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.importNodes([{ memory_key: 'ts-import', type: 'rule', scope: 'project', content: 'vieja', justification: '', createdAt: '2020-01-01T00:00:00.000Z' }])
+      eng.importNodes([{ memory_key: 'ts-import', type: 'rule', scope: 'project', content: 'nueva', justification: '', createdAt: '2021-01-01T00:00:00.000Z' }])
+
+      const rows = rawAt(`SELECT status, created_at, superseded_at FROM memory_nodes WHERE memory_key = 'ts-import' ORDER BY rowid`)
+      assert.equal(rows.length, 2)
+      assert.equal(rows[0].status, 'superseded')
+      assert.equal(rows[0].created_at, '2020-01-01T00:00:00.000Z')
+      assert.ok(isRecent(rows[0].superseded_at))
+      assert.equal(rows[1].status, 'active')
+      assert.equal(rows[1].superseded_at, null)
+    })
+  })
+
+  it('merge escribe superseded_at en cada source sin insertar nodos', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'ts-target', type: 'rule', scope: 'project', content: 'target', createdAt: '2020-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ts-src-1', type: 'rule', scope: 'project', content: 'source uno', createdAt: '2020-01-02T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ts-src-2', type: 'rule', scope: 'project', content: 'source dos', createdAt: '2020-01-03T00:00:00.000Z' })
+      const before = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c
+
+      eng.merge({ target: 'ts-target', sources: ['ts-src-1', 'ts-src-2'] })
+
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c, before, 'merge no inserta nodos')
+      const sources = rawAt(`SELECT status, superseded_at FROM memory_nodes WHERE memory_key IN ('ts-src-1', 'ts-src-2')`)
+      assert.equal(sources.length, 2)
+      for (const source of sources) {
+        assert.equal(source.status, 'superseded')
+        assert.ok(isRecent(source.superseded_at))
+      }
+      const target = rawAt(`SELECT status, superseded_at FROM memory_nodes WHERE memory_key = 'ts-target'`)[0]
+      assert.equal(target.status, 'active')
+      assert.equal(target.superseded_at, null)
+    })
+  })
+
+  it('consolidate --apply escribe superseded_at en los sources sin insertar nodos', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'ts-cons-a', type: 'rule', scope: 'project', content: 'duplicado exacto', createdAt: '2020-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ts-cons-b', type: 'rule', scope: 'project', content: 'duplicado exacto', createdAt: '2021-01-01T00:00:00.000Z' })
+      const before = rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c
+
+      const result = eng.consolidate({ dryRun: false })
+      assert.equal(result.exactGroups.length, 1)
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes`)[0].c, before, 'consolidate no inserta nodos')
+
+      const rows = rawAt(`SELECT memory_key, status, superseded_at FROM memory_nodes ORDER BY memory_key`)
+      const canonical = rows.find((row) => row.memory_key === 'ts-cons-b')
+      const source = rows.find((row) => row.memory_key === 'ts-cons-a')
+      assert.equal(canonical.status, 'active')
+      assert.equal(canonical.superseded_at, null)
+      assert.equal(source.status, 'superseded')
+      assert.ok(isRecent(source.superseded_at))
+      assert.notEqual(source.superseded_at, '2020-01-01T00:00:00.000Z')
+    })
+  })
+})
+
+// MEM-05b: base con el schema previo a la columna. Incluye tabla, indices, FTS y
+// los triggers completos. Los triggers deben existir ANTES de insertar filas: si
+// el backfill dispara `memory_fts_au` sobre una FTS vacia/inconsistente, SQLite
+// falla con "database disk image is malformed".
+function createLegacyMemoryDb(dbPath) {
+  const db = openDatabase(dbPath, { migrate: false })
+  db.exec(`CREATE TABLE memory_nodes (
+    id TEXT PRIMARY KEY,
+    memory_key TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('rule', 'decision')),
+    scope TEXT NOT NULL DEFAULT 'project',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'deleted')),
+    content TEXT NOT NULL,
+    justification TEXT NOT NULL DEFAULT '',
+    superseded_by TEXT REFERENCES memory_nodes(id) DEFERRABLE INITIALLY DEFERRED,
+    source TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    created_at TEXT NOT NULL
+  )`)
+  db.exec(`CREATE UNIQUE INDEX idx_memory_nodes_key_active ON memory_nodes(memory_key) WHERE status = 'active'`)
+  db.exec(`CREATE INDEX idx_memory_nodes_scope_type ON memory_nodes(scope, type, status)`)
+  db.exec(`CREATE VIRTUAL TABLE memory_fts USING fts5(
+    content,
+    content = 'memory_nodes',
+    content_rowid = 'rowid',
+    tokenize = 'unicode61 remove_diacritics 1'
+  )`)
+  db.exec(`CREATE TRIGGER memory_fts_ai AFTER INSERT ON memory_nodes BEGIN
+    INSERT INTO memory_fts(rowid, content) VALUES (new.rowid, new.content);
+  END`)
+  db.exec(`CREATE TRIGGER memory_fts_ad AFTER DELETE ON memory_nodes BEGIN
+    INSERT INTO memory_fts(memory_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+  END`)
+  db.exec(`CREATE TRIGGER memory_fts_au AFTER UPDATE ON memory_nodes BEGIN
+    INSERT INTO memory_fts(memory_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+    INSERT INTO memory_fts(rowid, content) VALUES (new.rowid, new.content);
+  END`)
+  return db
+}
+
+describe('migracion aditiva de superseded_at (MEM-05b)', () => {
+  function withLegacyDir(fn) {
+    const root = mkdtempSync(join(tmpdir(), 'ancleto-mem-legacy-'))
+    const legacyPath = join(root, '.ancleto', 'memory.db')
+    try {
+      return fn(legacyPath)
+    } finally {
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+    }
+  }
+
+  function readAt(dbPath, sql, ...params) {
+    const db = openDatabase(dbPath)
+    try {
+      return db.prepare(sql).all(...params)
+    } finally {
+      db.close()
+    }
+  }
+
+  it('agrega la columna, backfillea superseded y no incorpora objetos a sqlite_master', () => {
+    withLegacyDir((legacyPath) => {
+      const daysAgo = (days) => new Date(Date.now() - days * 86400000).toISOString()
+      const legacy = createLegacyMemoryDb(legacyPath)
+      legacy.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('legacy-old', 'legacy-old', 'rule', 'project', 'superseded', 'vieja', '', 'test', 1, ?)`).run(daysAgo(40))
+      legacy.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('legacy-recent', 'legacy-recent', 'rule', 'project', 'superseded', 'reciente', '', 'test', 1, ?)`).run(daysAgo(10))
+      legacy.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('legacy-active', 'legacy-active', 'rule', 'project', 'active', 'activa vieja', '', 'test', 1, ?)`).run(daysAgo(365))
+
+      const columnsBefore = legacy.prepare('PRAGMA table_info(memory_nodes)').all().map((c) => c.name)
+      assert.equal(columnsBefore.includes('superseded_at'), false, 'la base previa no tiene la columna')
+      const objectsBefore = legacy.prepare(`SELECT type, name FROM sqlite_master ORDER BY type, name`).all()
+      legacy.close()
+
+      const migrated = openDatabase(legacyPath)
+      const columnsAfter = migrated.prepare('PRAGMA table_info(memory_nodes)').all().map((c) => c.name)
+      assert.equal(columnsAfter.includes('superseded_at'), true)
+      const objectsAfter = migrated.prepare(`SELECT type, name FROM sqlite_master ORDER BY type, name`).all()
+      assert.deepEqual(
+        objectsAfter,
+        objectsBefore,
+        'el ALTER TABLE no agrega objetos; solo cambia el DDL de memory_nodes'
+      )
+      migrated.close()
+
+      const superseded = readAt(legacyPath, `SELECT memory_key, created_at, superseded_at FROM memory_nodes WHERE status = 'superseded' ORDER BY memory_key`)
+      assert.equal(superseded.length, 2)
+      for (const row of superseded) {
+        assert.equal(row.superseded_at, row.created_at, `backfill = created_at para ${row.memory_key}`)
+      }
+
+      const active = readAt(legacyPath, `SELECT created_at, superseded_at FROM memory_nodes WHERE memory_key = 'legacy-active'`)
+      assert.equal(active[0].superseded_at, null, 'el backfill no toca los activos')
+      assert.ok(Date.parse(active[0].created_at) < Date.now() - 30 * 86400000)
+
+      const eng = createMemoryEngine(legacyPath)
+      try {
+        const gc = eng.gcSuperseded({ days: 30 })
+        assert.equal(gc.removed, 1, 'solo el superseded de hace 40 dias es elegible')
+      } finally {
+        eng.close()
+      }
+      const left = readAt(legacyPath, `SELECT memory_key FROM memory_nodes WHERE status = 'superseded'`)
+      assert.deepEqual(left.map((row) => row.memory_key), ['legacy-recent'])
+    })
+  })
+
+  it('el engine read-only sobre una base previa construye sin preparar statements de superseded_at', () => {
+    withLegacyDir((legacyPath) => {
+      const legacy = createLegacyMemoryDb(legacyPath)
+      legacy.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('legacy-active', 'legacy-active', 'rule', 'project', 'active', 'legible sin la columna', '', 'test', 1, ?)`).run(new Date().toISOString())
+      legacy.close()
+
+      let ro
+      assert.doesNotThrow(() => {
+        ro = createReadonlyMemoryEngine(legacyPath)
+      }, 'buildEngine no debe preparar statements que referencien superseded_at')
+      try {
+        const nodes = ro.listNodes()
+        assert.equal(nodes.length, 1)
+        assert.equal(nodes[0].memory_key, 'legacy-active')
+        // Si `supersede`/`gcSelect`/`gcDelete` fueran eager, el constructor ya
+        // habria fallado. El error recien al invocar gc confirma que son lazy.
+        assert.throws(() => ro.gcSuperseded({ days: 30, dryRun: true }), /superseded_at|no such column/i)
+      } finally {
+        ro.close()
+      }
+
+      // El read-only no migro: la base previa sigue sin la columna.
+      const probe = openDatabase(legacyPath, { migrate: false, readonly: true })
+      try {
+        const columns = probe.prepare('PRAGMA table_info(memory_nodes)').all().map((c) => c.name)
+        assert.equal(columns.includes('superseded_at'), false)
+      } finally {
+        probe.close()
+      }
     })
   })
 })

@@ -457,7 +457,7 @@ cobertura sea confiable, e intake read-only fresco.
 | **#4** | Serializar subagentes que escriben | Invariante de exclusión mutua para escritores: hoy el cierre paraleliza archive y memoria sin prohibir dos `@documenter`. | — |
 | **#6** | Presupuesto de verificación y orden archive/merge | Tope de corridas por punto de integración + orden canónico archive→merge. | CH-06 |
 | **#18** | Seed `STALE`/`material` sistemático | `package.json` es material ⇒ todo bump deja el seed stale; `.ancleto` cuenta como área cambiada ⇒ cada `init`/`upgrade` deja stale su propio seed. Decidir: ¿el bump de `version` deja de contar como material, o la regeneración pasa a formar parte del checklist de release? | — |
-| **MEM-05b** | GC por fecha de supersesión | [`memory gc`](src/core/memory/engine.js) purga `superseded` por `created_at` ORIGINAL, no por la fecha de supersesión: un nodo antiguo consolidado o re-grabado queda elegible para borrado físico antes de lo esperado. Requiere `superseded_at` (o proxy equivalente) y su test. | MEM-05 |
+| **MEM-05b** | GC por fecha de supersesión — **cerrado** (change `mem-05b-gc-superseded-age`) | [`memory gc`](src/core/memory/engine.js) ya no purga por `created_at` ORIGINAL: `memory_nodes` incorpora la columna aditiva `superseded_at`, toda supersesión (`recordNode`, `importNodes`, `merge`, `consolidate`) la escribe, y dry-run y purge miden `COALESCE(superseded_at, created_at)`. El backfill histórico usa `created_at` para preservar la elegibilidad previa. | MEM-05 |
 
 ---
 

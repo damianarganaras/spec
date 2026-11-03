@@ -2,6 +2,17 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.8] - 2026-11-03
+
+### Added
+- **`memory curate`**: nuevo subcomando de curación de sólo lectura (`ancleto memory curate [--json] [--strict]`) que reporta refs `spec:`/`change:`/`path:` sin resolver, `commit:`/`workitem:` como no verificables y grupos de duplicados exactos con su nodo canónico. Compone las primitivas existentes (`resolveNodeRefs` y `consolidate`); es consultivo con exit 0 por defecto, `--strict` es opt-in y un `no-db` nunca se reporta como reporte limpio.
+
+### Changed
+- **`consolidate` acepta `includeNearDuplicates`**: opción aditiva (default `true`, comportamiento sin cambios) para que la ruta de curación no pague el escaneo O(n²) de near-duplicates que descarta.
+- **Specs `memory-ops`**: la spec ganó el requirement `curate` fusionado y se corrigió la enumeración de su Purpose, que había omitido `consolidate` desde 0.18.5.
+- **Seed regenerado** (estado READY).
+- **Backlog**: registradas las nuevas deudas `CH-09e…h`.
+
 ## [0.18.7] - 2026-11-03
 
 ### Added

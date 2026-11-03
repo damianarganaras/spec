@@ -1722,11 +1722,15 @@ async function install(args) {
   if (!tier) tier = TIERS[storedTier] ? storedTier : 'normal'
 
   // `gratis` tiene un unico modelo conocido (costo 0): no hay deteccion automatica ni
-  // wizard. Un valor guardado desconocido se ignora y se normaliza al fallback; una
-  // clave ausente no se agrega al manifiesto.
-  const gratisModelChoice = tier === 'gratis' ? gratisModel(existingRc?.gratisModel) : null
-  const persistGratisModel = tier === 'gratis' && existingRc !== null && existingRc !== undefined
+  // wizard. Un `gratisModel` persistido desconocido se normaliza al fallback en
+  // install/update/init con cualquier tier (el manifest lo conserva por merge si no se
+  // reescribe); una clave ausente no se agrega al manifiesto.
+  const hasPersistedGratisModel = existingRc !== null && existingRc !== undefined
     && Object.prototype.hasOwnProperty.call(existingRc, 'gratisModel')
+  const gratisModelChoice = tier === 'gratis' || hasPersistedGratisModel
+    ? gratisModel(existingRc?.gratisModel)
+    : null
+  const persistGratisModel = hasPersistedGratisModel
 
   // Resolver antes de escribir agents: si ningun candidato del tier esta disponible,
   // el comando aborta sin materializar un ID inventado.
@@ -1913,10 +1917,15 @@ async function initProject(args) {
 
   // Paridad con install: el tier elegido tambien reescribe los modelos de los
   // agentes locales. Antes quedaba huerfano (tier declarado, modelos de otro tier).
-  // `gratis` tiene un unico modelo conocido: no hay wizard ni deteccion.
-  const gratisModelChoice = tier === 'gratis' ? gratisModel(existing?.gratisModel) : null
-  const persistGratisModel = tier === 'gratis' && existing !== null && existing !== undefined
+  // `gratis` tiene un unico modelo conocido: no hay wizard ni deteccion. Un
+  // `gratisModel` persistido desconocido se normaliza en cualquier tier (paridad con
+  // install), porque el manifest lo conserva por merge.
+  const hasPersistedGratisModel = existing !== null && existing !== undefined
     && Object.prototype.hasOwnProperty.call(existing, 'gratisModel')
+  const gratisModelChoice = tier === 'gratis' || hasPersistedGratisModel
+    ? gratisModel(existing?.gratisModel)
+    : null
+  const persistGratisModel = hasPersistedGratisModel
 
   // Resolver antes de escribir agents/tier: sin candidato disponible se aborta.
   let tierModelMap = null
@@ -2916,6 +2925,7 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
   let tierCandidates = {}
   let tierResolved = {}
   let tierUnresolved = []
+  let catalogUnavailable = false
   if (host === 'opencode') {
     const tierFile = join(cwd, '.opencode', '.ancleto-tier')
     if (await exists(tierFile)) {
@@ -2923,10 +2933,28 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
       if (TIERS[rawTier]) {
         tier = rawTier
         const persisted = isKnownGratisModel(rc?.gratisModel) ? rc.gratisModel : null
-        const resolved = resolveTierMap(tier, persisted, { allowUnresolved: true })
-        tierCandidates = resolved.candidates
-        tierResolved = resolved.models
-        tierUnresolved = resolved.unresolved
+        try {
+          const resolved = resolveTierMap(tier, persisted, { allowUnresolved: true })
+          tierCandidates = resolved.candidates
+          tierResolved = resolved.models
+          tierUnresolved = resolved.unresolved
+        } catch {
+          // El snapshot puede faltar, ser ilegible o venir de un
+          // `ANCLETO_MODEL_CATALOG` invalido. `check` no aborta: acepta los
+          // candidatos estaticos de la cadena contra un catalogo vacio y avisa que
+          // no pudo verificar. install/init/import siguen fallando con error.
+          catalogUnavailable = true
+          const fallback = resolveTierModels(tier, { providers: {} }, {
+            chains: TIER_CHAINS,
+            gratisOverride: persisted,
+            allowUnresolved: true
+          })
+          tierCandidates = fallback.candidates
+          tierResolved = fallback.models
+          // "Ilegible" no es lo mismo que "sin candidato resoluble": ese aviso
+          // queda a cargo del caso con catalogo valido y vacio.
+          tierUnresolved = []
+        }
       }
     }
   }
@@ -2978,6 +3006,9 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
   }
   if (tierDiff > 0) {
     console.log(`  ⚠ ${dirRel} (tier '${tier}' aplica un modelo distinto al de su fuente en ${tierDiff} agentes; install/update reescribirá model:)`)
+  }
+  if (catalogUnavailable) {
+    console.log(`  ⚠ ${dirRel} (no se pudo verificar el catálogo de modelos; se aceptan los candidatos estáticos del tier '${tier}')`)
   }
   const ext = fileExt || '.md'
   if (tierUnresolved.some((name) => actual.includes(name + ext))) {

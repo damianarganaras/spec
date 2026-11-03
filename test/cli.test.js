@@ -1416,6 +1416,32 @@ describe('CLI check (G3)', () => {
     })
   })
 
+  it('install con tier normal normaliza un gratisModel desconocido', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'normal'], dir).status, 0)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.gratisModel = 'opencode/muse-spark-1.3-contributor-free'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'normal'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
+    })
+  })
+
+  it('init con tier normal normaliza un gratisModel desconocido', () => {
+    withDir((dir) => {
+      assert.equal(run(['init', '--tier', 'normal'], dir).status, 0)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.gratisModel = 'opencode/muse-spark-1.3-contributor-free'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['init', '--tier', 'normal'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
+    })
+  })
+
   it('mirror canónico con tier distinto: anuncia la diferencia aunque no haya divergencia', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
@@ -1480,6 +1506,7 @@ describe('CLI check (G3)', () => {
       assert.equal(r.status, 0)
       assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
       assert.match(r.stdout, /tier 'minimo' aplica un modelo distinto al de su fuente en [1-9]\d* agentes/)
+      assert.equal((r.stdout.match(/aplica un modelo distinto al de su fuente en/g) || []).length, 1)
     })
   })
 
@@ -1500,6 +1527,7 @@ describe('CLI check (G3)', () => {
       assert.equal(r.status, 0)
       assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
       assert.match(r.stdout, /tier 'minimo' aplica un modelo distinto al de su fuente en [1-9]\d* agentes/)
+      assert.equal((r.stdout.match(/aplica un modelo distinto al de su fuente en/g) || []).length, 1)
     })
   })
 
@@ -1512,6 +1540,22 @@ describe('CLI check (G3)', () => {
       assert.equal(r.status, 0)
       assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
       assert.match(r.stdout, /no tiene ningún candidato resoluble/)
+    })
+  })
+
+  it('check no crashea cuando el catálogo falta o es ilegible: avisa y no diverge', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const inexistente = join(dir, 'no-existe.json')
+      const corrupto = join(dir, 'corrupto.json')
+      writeFileSync(corrupto, '{ esto no es JSON')
+      for (const catalog of [inexistente, corrupto]) {
+        const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+        assert.equal(r.status, 0, `exit 0 con catálogo ${catalog}`)
+        assert.doesNotMatch(r.stderr, /\n\s+at /, `sin stack trace con catálogo ${catalog}`)
+        assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+        assert.match(r.stdout, /no se pudo verificar el catálogo de modelos/)
+      }
     })
   })
 

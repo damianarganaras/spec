@@ -113,20 +113,51 @@ omitidos).
 ### Requirement: Garbage collection de nodos superseded
 
 El sistema SHALL exponer un método `gcSuperseded(opts)` en el engine que purga nodos con
-`status='superseded'` y antigüedad mayor al umbral (default 30 días). La antigüedad SHALL
-medirse usando `created_at` como proxy de la edad del nodo (la columna `superseded_at` no
-existe en el schema y los cambios de schema están fuera de scope). El umbral SHALL ser
-configurable vía `opts.days`. Después del purge, el sistema SHALL ejecutar `VACUUM` y
-`REINDEX` post-commit (SQLite no permite VACUUM dentro de una transacción). Los nodos con
-`status='active'` NO SHALL ser afectados bajo ninguna condición.
+`status='superseded'` y **antigüedad de supersesión** mayor al umbral (default 30 días). La
+antigüedad SHALL medirse como `COALESCE(superseded_at, created_at)`, donde `superseded_at` es el
+instante en que el nodo dejó de estar activo. `created_at` es la fecha de creación original del nodo
+y NO SHALL usarse como medida principal de la edad de supersesión. La misma expresión de antigüedad
+SHALL gobernar tanto el dry-run como el purge real, de modo que el conteo del dry-run coincida con
+la cantidad de nodos efectivamente borrados para el mismo estado de la base. El umbral SHALL ser
+configurable vía `opts.days`. Después del purge, el sistema SHALL ejecutar `VACUUM` y `REINDEX`
+post-commit (SQLite no permite `VACUUM` dentro de una transacción). Los nodos con `status='active'`
+NO SHALL ser afectados bajo ninguna condición.
 
-#### Scenario: GC purga solo superseded antiguos
+**Registro del instante.** Toda supersesión SHALL escribir `superseded_at` con el instante de la
+operación, en el mismo statement que marca `status='superseded'` y `superseded_by`. El registro
+SHALL aplicar a todas las rutas de supersesión del engine: `recordNode`, `importNodes`, `merge` y
+`consolidate`. Ninguna ruta SHALL insertar un nodo sucesor con el único fin de registrar el
+instante.
 
-- **WHEN** hay 2 nodos superseded, uno con `created_at` de hace 40 días y otro de hace
-  10 días
+**Schema aditivo.** `memory_nodes` SHALL incorporar la columna `superseded_at TEXT`. Para una base
+nueva, la columna SHALL declararse en la creación de la tabla. Para una base existente, la
+migración SHALL ser aditiva y guardada: consultar `PRAGMA table_info(memory_nodes)` y ejecutar
+`ALTER TABLE memory_nodes ADD COLUMN superseded_at TEXT` sólo si la columna falta. La migración NO
+SHALL crear tablas, índices, triggers ni vistas: el conjunto de objetos de `sqlite_master` (nombre y
+tipo) SHALL ser idéntico antes y después. El texto DDL de `memory_nodes` sí cambia por el `ALTER
+TABLE`, y eso NO SHALL interpretarse como un objeto nuevo.
+
+**Backfill.** Las filas existentes con `status='superseded'` y `superseded_at` NULL SHALL recibir
+`superseded_at = created_at`. El backfill NO SHALL extender ni acortar la elegibilidad de las filas
+históricas: un nodo que era elegible antes de la migración SHALL seguir siendo elegible con el mismo
+umbral, y uno que no lo era SHALL seguir sin serlo. El cambio de semántica SHALL ser forward-looking.
+
+**Preparación lazy.** Ningún statement que referencie `superseded_at` SHALL prepararse en el
+constructor de `buildEngine`. El statement `supersede` —que escribe
+`status='superseded', superseded_by, superseded_at`— SHALL prepararse de forma lazy y memoizada
+mediante un helper interno (p. ej. `getSupersede()`), y ese helper SHALL ser la única vía usada por
+`recordNode`, `importNodes`, `merge` y `consolidate`. Los statements de selección y borrado de GC
+(`gcSelect`, `gcDelete`) SHALL prepararse dentro de la invocación de `gcSuperseded`. El objetivo es
+que un engine read-only abierto con `migrate: false` sobre una base previa a la columna no falle al
+construirse, de modo que `memory doctor` y `memory list` sigan funcionando sobre esa base.
+
+#### Scenario: GC mide la edad de supersesión, no la de creación
+
+- **WHEN** hay dos nodos superseded: uno creado hace 40 días y superseded hace 2 días, y otro
+  superseded hace 40 días
 - **AND** se invoca `gcSuperseded({ days: 30 })`
-- **THEN** solo el nodo de 40 días es purgado
-- **AND** el nodo de 10 días permanece
+- **THEN** sólo el nodo superseded hace 40 días es purgado
+- **AND** el nodo superseded hace 2 días permanece, aunque su `created_at` sea anterior al umbral
 
 #### Scenario: GC no toca nodos activos
 
@@ -134,11 +165,51 @@ configurable vía `opts.days`. Después del purge, el sistema SHALL ejecutar `VA
 - **AND** se invoca `gcSuperseded({ days: 30 })`
 - **THEN** todos los nodos activos permanecen intactos
 
-#### Scenario: Dry-run reporta sin borrar
+#### Scenario: Dry-run coincide con el purge real
 
-- **WHEN** se invoca `gcSuperseded({ days: 30, dryRun: true })`
-- **THEN** se reporta la cantidad de nodos que serían purgados y el tamaño estimado a liberar
-- **AND** ningún nodo es borrado
+- **WHEN** coexisten nodos superseded que cumplen y que no cumplen el umbral
+- **AND** se invoca `gcSuperseded({ days: 30, dryRun: true })` y luego `gcSuperseded({ days: 30 })`
+  sobre el mismo estado
+- **THEN** la cantidad reportada por el dry-run coincide con la cantidad de nodos borrados
+- **AND** los nodos que sobreviven son exactamente los que no eran elegibles
+
+#### Scenario: La supersesión registra el instante
+
+- **WHEN** un nodo activo con `created_at` de hace 100 días es superseded por una escritura nueva
+- **THEN** el nodo queda con `status='superseded'`, `superseded_by` del sucesor y `superseded_at`
+  igual al instante de la operación
+- **AND** `gcSuperseded({ days: 30 })` no lo purga
+
+#### Scenario: Merge y consolidate registran el instante sin insertar sucesor
+
+- **WHEN** `merge` o `consolidate --apply` supersede un nodo source cuya `created_at` es antigua
+- **THEN** el source queda con `superseded_at` igual al instante de la operación
+- **AND** no se inserta ningún nodo nuevo para registrar ese instante
+- **AND** `gcSuperseded({ days: 30 })` no lo purga
+
+#### Scenario: Migración aditiva sobre una base existente
+
+- **WHEN** se abre una base creada antes de este change, sin la columna `superseded_at`
+- **AND** se abre con migraciones habilitadas
+- **THEN** `memory_nodes` incorpora la columna `superseded_at`
+- **AND** el conjunto de objetos de `sqlite_master` no incorpora tablas, índices, triggers ni vistas
+
+#### Scenario: Backfill preserva la elegibilidad histórica
+
+- **WHEN** una base previa tiene un nodo `superseded` con `created_at` de hace 40 días y otro con
+  `created_at` de hace 10 días
+- **AND** se aplica la migración con backfill
+- **THEN** ambos quedan con `superseded_at` igual a su `created_at`
+- **AND** `gcSuperseded({ days: 30 })` purga sólo el de 40 días, igual que antes de la migración
+- **AND** los nodos `active` conservan `superseded_at` NULL
+
+#### Scenario: Engine read-only sobre una base previa no falla al construirse
+
+- **WHEN** se construye un engine con `openDatabase(dbPath, { migrate: false, readonly: true })`
+  sobre una base que no tiene la columna `superseded_at`
+- **THEN** el engine se construye sin error
+- **AND** la construcción no prepara ningún statement que referencie `superseded_at`
+- **AND** las lecturas que no tocan GC siguen funcionando
 
 ### Requirement: Comando CLI `ancleto memory gc`
 
@@ -411,16 +482,19 @@ El contrato SHALL ser:
   un mensaje que nombre la `memory_key` y el motivo.
 - El `type` del target y el de cada source SHALL ser idéntico. Si difiere, la operación SHALL fallar
   nombrando las `memory_key` involucradas y sus tipos, sin modificar ninguna fila.
-- La corrida real SHALL marcar cada source con `status='superseded'` y
-  `superseded_by=<id del nodo target>` en una sola transacción. Si una source deja de estar activa al
-  momento de escribir, la transacción SHALL hacer rollback total.
+- La corrida real SHALL marcar cada source con `status='superseded'`,
+  `superseded_by=<id del nodo target>` y `superseded_at=<instante de la operación>` en una sola
+  transacción. Si una source deja de estar activa al momento de escribir, la transacción SHALL hacer
+  rollback total.
 - Con `dryRun`, la operación NO SHALL escribir nada en la base y SHALL reportar el plan: target, sources y
   cantidad de nodos que se supersederían.
 - El nodo target SHALL permanecer activo y con su contenido sin cambios.
 - El método SHALL operar únicamente sobre la base de datos y NO SHALL tener efectos sobre el filesystem. El
   refresco del bloque de contexto inyectado NO SHALL ser responsabilidad de este método.
-- NO SHALL crearse tablas nuevas (`memory_refs` ni ninguna otra). La columna `superseded_by` ya existe y
-  NO SHALL requerirse migración de schema; `superseded_at` NO SHALL agregarse.
+- NO SHALL crearse tablas nuevas (`memory_refs` ni ninguna otra). La única estructura de schema
+  admitida es la columna aditiva `superseded_at` de `memory_nodes`, cuyo contrato se fija en
+  `Garbage collection de nodos superseded` y NO se re-enuncia acá. La operación NO SHALL crear
+  objetos nuevos en `sqlite_master`.
 - Ningún nodo cuya `memory_key` no esté en `sources` SHALL ser modificado; en particular
   `node-test-scope-explicit-paths` SHALL permanecer intacta en todo merge que no la nombre.
 
@@ -428,13 +502,14 @@ El contrato SHALL ser:
 
 - **WHEN** se invoca el merge con `dryRun` sobre un target activo y dos sources activas
 - **THEN** el plan reporta el target, las dos sources y la cantidad a superseder
-- **AND** ninguna de las tres filas cambia de estado ni de `superseded_by`
+- **AND** ninguna de las tres filas cambia de estado ni de `superseded_by` ni de `superseded_at`
 
 #### Scenario: Merge real crea el vínculo
 
 - **WHEN** se ejecuta el merge sin `dryRun` sobre un target activo y dos sources activas
 - **THEN** cada source queda con `status='superseded'`
 - **AND** cada source queda con `superseded_by` igual al `id` del nodo target
+- **AND** cada source queda con `superseded_at` igual al instante de la operación
 - **AND** el target permanece activo y con el mismo contenido
 
 #### Scenario: Target inexistente
@@ -961,12 +1036,12 @@ refs declaradas; (2) `created_at` más reciente; (3) scope más amplio, con el o
 SHALL depender del orden de iteración de la base ni del orden de llegada de los nodos.
 
 **Aplicación.** Con `--apply`, el sistema SHALL superseder a todos los miembros no canónicos
-de cada grupo exacto, dejándolos con `status='superseded'` y `superseded_by` igual al `id`
-del canónico. La operación NO SHALL borrar filas, NO SHALL crear nodos y NO SHALL modificar
-`memory_key` ni `content` del canónico. Todos los grupos SHALL aplicarse en una sola
-transacción atómica: si un miembro dejó de estar activo al momento de escribir, la
-transacción SHALL hacer rollback total. Una segunda corrida sobre el mismo estado SHALL
-reportar cero grupos aplicables.
+de cada grupo exacto, dejándolos con `status='superseded'`, `superseded_by` igual al `id`
+del canónico y `superseded_at` igual al instante de la operación. La operación NO SHALL borrar
+filas, NO SHALL crear nodos y NO SHALL modificar `memory_key` ni `content` del canónico. Todos
+los grupos SHALL aplicarse en una sola transacción atómica: si un miembro dejó de estar activo
+al momento de escribir, la transacción SHALL hacer rollback total. Una segunda corrida sobre el
+mismo estado SHALL reportar cero grupos aplicables.
 
 **Near-duplicates.** El reporte SHALL incluir, de forma informativa y separada de los grupos
 exactos, los pares de nodos activos que cumplan simultáneamente: mismo `type`, mismo `scope`,
@@ -992,15 +1067,17 @@ SHALL usar la conexión read-only.
 (`refreshWorkingContextOnWrite`), derivando la raíz del directorio de la base
 (`resolveMemoryProjectRoot(dbPath)`). El dry-run NO SHALL escribir ese archivo.
 
-**Sin schema.** La operación NO SHALL crear tablas, columnas, índices ni migraciones. El
-conjunto de objetos de `sqlite_master` SHALL ser idéntico antes y después de `--apply`.
+**Sin schema.** La operación NO SHALL crear objetos nuevos (tablas, índices, triggers ni
+vistas). El conjunto de objetos de `sqlite_master` SHALL ser idéntico antes y después de
+`--apply`. La columna aditiva `superseded_at` de `memory_nodes` pertenece al contrato de
+`Garbage collection de nodos superseded` y NO se re-enuncia acá.
 
 #### Scenario: Dry-run no escribe
 
 - **WHEN** se ejecuta `ancleto memory consolidate` sobre una base con un grupo de duplicados
   exactos
 - **THEN** el reporte incluye el grupo y su canónico
-- **AND** ningún nodo cambia `status` ni `superseded_by`
+- **AND** ningún nodo cambia `status`, `superseded_by` ni `superseded_at`
 - **AND** el bloque de contexto derivado no se reescribe
 
 #### Scenario: Grupo exacto elige canónico por refs y supersede el resto
@@ -1010,6 +1087,7 @@ conjunto de objetos de `sqlite_master` SHALL ser idéntico antes y después de `
 - **THEN** el nodo con dos refs permanece activo como canónico
 - **AND** los otros dos quedan con `status='superseded'`
 - **AND** el `superseded_by` de cada uno es igual al `id` del canónico
+- **AND** el `superseded_at` de cada uno es igual al instante de la operación
 - **AND** ninguna fila es borrada
 
 #### Scenario: Mismo texto en `type` distinto no se agrupa
@@ -1057,4 +1135,4 @@ conjunto de objetos de `sqlite_master` SHALL ser idéntico antes y después de `
 
 - **WHEN** se ejecuta `--apply` sobre una base con grupos exactos
 - **THEN** el conjunto de objetos de `sqlite_master` es idéntico antes y después
-- **AND** no se creó ninguna tabla, columna ni índice
+- **AND** no se creó ninguna tabla ni índice

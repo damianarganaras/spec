@@ -2,6 +2,16 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.7] - 2026-11-03
+
+### Added
+- **Protocolo de memoria canónico**: el contrato vive en `LOCKED: memory-protocol` de `AGENTS.md` y `PRODUCT.md` sólo lo referencia como puntero único; `searchMemory` queda documentado con preview, `expand`, `keys` y `required`.
+
+### Changed
+- **Reconciliación del texto plano legado**: el gate por `source` hace la comparación exacta, enmascara bloques `LOCKED` y fences y separa correctamente los bloques, evitando falsos positivos.
+- **`memory gc` mide supersesión con `superseded_at`**: usa un cutoff único y detacha `superseded_by` al purgar.
+- **Seed regenerado** y nueva deuda `MEM-05c…05g` registrada en el backlog.
+
 ## [0.18.6] - 2026-11-02
 
 ### Added

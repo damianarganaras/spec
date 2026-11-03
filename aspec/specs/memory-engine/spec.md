@@ -38,6 +38,14 @@ decisions SHALL permanecer reactiva vía `searchMemory`.
 
 La documentación de producto y la descripción del campo `scope` de las tools MCP SHALL describir con precisión qué nodos se inyectan proactivamente: las `rule` activas con scope `project`. Las `decision` son reactivas. NO SHALL afirmarse que toda entrada de scope `project` (incluidas las `decision`) entra en `<ProjectMemoryRules>`. La documentación SHALL describir además la inyección día-cero: el bloque `<ProjectTopology>` se materializa e inyecta desde el día cero aunque no haya reglas ni base de memoria, y la descripción de la materialización del working-context SHALL coincidir con el comportamiento real de la CLI.
 
+La documentación de producto (`README.md`) SHALL describir `searchMemory` de forma consistente con
+`Recall task-aware con orden total, preview expandible y keys requeridas`: SHALL indicar que el
+modo por defecto devuelve una previsualización —prefijo literal de hasta 240 caracteres, `limit` 5
+y `content_truncated`— y NO SHALL presentar el `content` completo como resultado por defecto.
+SHALL nombrar `expand`, `keys` y `required` como las entradas de llamada que habilitan el
+contenido completo, la expansión selectiva y la promoción de claves. La documentación de uso para
+agentes SHALL remitirse al bloque canónico `LOCKED: memory-protocol` de `AGENTS.md`.
+
 #### Scenario: El README no promete inyección de decisiones
 
 - **WHEN** se revisa la descripción de scopes en `README.md`
@@ -56,6 +64,25 @@ La documentación de producto y la descripción del campo `scope` de las tools M
 - **WHEN** se comparan las secciones del README que describen la materialización del working-context
 - **THEN** ambas coinciden con la implementación: la topología se inyecta desde el día cero (con o sin reglas)
 - **AND** ninguna condiciona la materialización a la existencia previa de memoria
+
+#### Scenario: El README describe el modo preview por defecto
+
+- **WHEN** se revisa la fila de `searchMemory` en `README.md`
+- **THEN** indica que el modo por defecto devuelve una previsualización con `limit` 5 y
+  `content_truncated`
+- **AND** no presenta el `content` completo como resultado por defecto
+
+#### Scenario: El README nombra las entradas de expansión y requisitos
+
+- **WHEN** se revisa la fila de `searchMemory` en `README.md`
+- **THEN** nombra `expand`, `keys` y `required`
+- **AND** describe el preview como un prefijo literal de hasta 240 caracteres
+
+#### Scenario: El README remite al protocolo canónico
+
+- **WHEN** se revisa la descripción de uso de `searchMemory` en `README.md`
+- **THEN** remite al bloque `LOCKED: memory-protocol` de `AGENTS.md` como fuente del protocolo para
+  agentes
 
 ### Requirement: Frescura del working-context tras escrituras MCP
 
@@ -542,7 +569,9 @@ change**, sin el prefijo `YYYY-MM-DD-`. El prefijo de fecha lo aporta únicament
 directorio archivado (`aspec/changes/archive/YYYY-MM-DD-<slug>`) y NO SHALL incluirse en la ref.
 
 `commit:` y `workitem:` son opcionales. Las refs NO SHALL materializarse en una tabla ni en una
-columna nueva: NO SHALL crearse `memory_refs` ni una migración de schema. La consulta inversa por
+columna: NO SHALL crearse `memory_refs` ni ninguna migración de schema para refs. La columna
+operativa `superseded_at` de `memory_nodes` pertenece al contrato de GC de `memory-ops` y NO SHALL
+interpretarse como materialización de refs. La consulta inversa por
 `spec:` o `change:` SHALL resolverse sobre el texto indexado de `content`. El bloque `refs:` es el
 único elemento estructurado admitido en `content`.
 
@@ -563,11 +592,11 @@ fail-closed y NO se re-enuncia acá.
 - **THEN** el nodo persistido mantiene esas refs dentro de `content`
 - **AND** el conjunto de objetos de `sqlite_master` es idéntico antes y después de la escritura
 
-#### Scenario: Sin tabla ni columna nueva
+#### Scenario: Sin tabla ni columna de refs
 
 - **WHEN** se escribe un nodo con refs
 - **THEN** no existe la tabla `memory_refs` ni una columna de refs
-- **AND** la lectura de `memory_nodes` conserva su DDL actual
+- **AND** `memory_nodes` no incorpora ninguna columna derivada de las refs
 
 #### Scenario: Items sin indentar se parsean
 

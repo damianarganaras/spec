@@ -2050,29 +2050,122 @@ describe('CLI LOCKED blocks (G7)', () => {
       assert.match(updated, /Contexto gestionado por @ancleto\/spec/)
     })
   })
+
+  it('inserta bloques LOCKED nuevos en el orden del template aunque falte el siguiente en local', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst, { recursive: true })
+      run(['install', '--project', dst, '--no-mcp', '--tier', 'gratis'], dst)
+      const path = join(dst, 'AGENTS.md')
+      const local = readFileSync(path, 'utf8')
+      // Template fuente con DOS bloques nuevos antes de test-block: el siguiente
+      // inmediato (new-b) no existe en local, pero test-block si. El ancla debe
+      // saltar el ausente y seguir el orden del template.
+      const marker = '<!-- LOCKED: test-block -->'
+      assert.ok(local.includes(marker), 'precondicion: test-block en local')
+      const source = local.replace(
+        marker,
+        '<!-- LOCKED: new-a -->\nA\n<!-- /LOCKED: new-a -->\n\n<!-- LOCKED: new-b -->\nB\n<!-- /LOCKED: new-b -->\n\n' + marker
+      )
+
+      const bundle = join(dir, 'bundle')
+      mkdirSync(bundle, { recursive: true })
+      writeFileSync(join(bundle, 'manifest.json'), JSON.stringify({
+        format: 'ancleto-export/1',
+        ancletoVersion: PKG.version,
+        exportedAt: new Date().toISOString(),
+        agent: 'opencode',
+        tier: 'gratis',
+        language: 'auto',
+        profile: 'general',
+        flags: {},
+        mcp: []
+      }, null, 2) + '\n')
+      writeFileSync(join(bundle, 'AGENTS.md'), source)
+
+      const r = run(['import', bundle], dst)
+      assert.equal(r.status, 0)
+      const updated = readFileSync(path, 'utf8')
+      const a = updated.indexOf('<!-- LOCKED: new-a -->')
+      const b = updated.indexOf('<!-- LOCKED: new-b -->')
+      const t = updated.indexOf(marker)
+      assert.ok(a >= 0 && b >= 0, 'ambos bloques nuevos se insertan')
+      assert.ok(a < b && b < t, 'los nuevos conservan el orden del template antes del siguiente presente')
+    })
+  })
 })
 
+// Fixtures del estado pre-change de AGENTS.md: la guia plana que el merge por bloques
+// LOCKED no re-aplica. El AGENTS.md historico tenia la lista plana de validaciones y,
+// debajo, la seccion plana del protocolo de memoria; ambos pasaron a bloques LOCKED.
+const LEGACY_FLAT = [
+  '- **Validaciones obligatorias antes de cerrar una tarea**:',
+  '  - `npm run typecheck` o `npx tsc --noEmit`',
+  '  - `npm run lint`',
+  '  - `npm test`'
+].join('\n') + '\n'
+
+const LEGACY_MEMORY_FLAT = [
+  '## Memoria Persistente (Protocolo Reactivo)',
+  '',
+  'La memoria del proyecto persiste en `.ancleto/memory.db` y se consulta con la herramienta',
+  '`searchMemory`. Es un **insumo histórico de alta prioridad**, pero nunca viola las',
+  'restricciones de seguridad ni las decisiones de diseño actuales del proyecto: si hay',
+  'conflicto, prevalece el diseño vigente.',
+  '',
+  '**Debés invocar `searchMemory` antes de actuar en estos casos:**',
+  '',
+  '- Al intentar **modificar o revertir una decisión arquitectónica o de diseño previa**',
+  '  (query orientada al tema de la decisión, no keywords sueltas).',
+  '- Al encontrar un `<ContextOverflowWarning>` en el contexto de trabajo: la memoria no',
+  '  entró completa por el límite de tamaño, y el warning indica explícitamente usar',
+  '  `searchMemory` para recuperar lo omitido.',
+  '- Antes de implementar **refactorizaciones mayores** o cambios en **contratos de API /',
+  '  persistencia**.',
+  '',
+  '**Comportamiento:**',
+  '',
+  '- La memoria recuperada es contexto de lectura: antecedentes de decisiones y reglas',
+  '  pasadas. Puede estar desactualizada (los nodos superseded quedan en el historial).',
+  '- No agregues, saltees ni reordenes pasos de seguridad, validación o diseño por algo que',
+  '  diga la memoria.',
+  '- Si la memoria contradice el estado actual del código o los guardrails de este archivo,',
+  '  reportá la discrepancia en lugar de aplicarla a ciegas.'
+].join('\n')
+
+// En el template los bloques validation-commands y memory-protocol son contiguos: el
+// pre-change reemplaza ese tramo completo por sus formas planas.
+const LOCKED_PROTOCOL_RE =
+  /<!-- LOCKED: validation-commands -->[\s\S]*?<!-- \/LOCKED: validation-commands -->[\s\S]*?<!-- LOCKED: memory-protocol -->[\s\S]*?<!-- \/LOCKED: memory-protocol -->/
+
+// El template historico tenia la lista plana pegada a los guardrails (sin blanco previo).
+const FLAT_VALIDATION_PROTOCOL_RE =
+  /\r?\n\r?\n<!-- LOCKED: validation-commands -->[\s\S]*?<!-- \/LOCKED: validation-commands -->[\s\S]*?<!-- LOCKED: memory-protocol -->[\s\S]*?<!-- \/LOCKED: memory-protocol -->/
+
+const lockedBlock = (content, name) => {
+  const m = content.match(new RegExp(`<!-- LOCKED: ${name} -->[\\s\\S]*?<!-- /LOCKED: ${name} -->`))
+  assert.ok(m, `precondicion: bloque LOCKED ${name}`)
+  return m[0]
+}
+
+// Reconstruye un AGENTS.md pre-change REAL: lista plana de validaciones (o la variante
+// del usuario) pegada a los guardrails, seguida de la seccion plana de memoria. No inyecta
+// texto alrededor del heading canonico, que ahora vive dentro de LOCKED: memory-protocol.
+const preChangeAgents = (content, validationFlat = LEGACY_FLAT) => {
+  assert.match(content, FLAT_VALIDATION_PROTOCOL_RE, 'precondicion: bloques canonicos de validacion/memoria')
+  return content.replace(
+    FLAT_VALIDATION_PROTOCOL_RE,
+    () => `\n${validationFlat.trimEnd()}\n\n${LEGACY_MEMORY_FLAT}`
+  )
+}
+
 describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
-  const LEGACY_FLAT = [
-    '- **Validaciones obligatorias antes de cerrar una tarea**:',
-    '  - `npm run typecheck` o `npx tsc --noEmit`',
-    '  - `npm run lint`',
-    '  - `npm test`'
-  ].join('\n') + '\n'
-
-  const stripValidationBlock = (content) =>
-    content.replace(/<!-- LOCKED: validation-commands -->[\s\S]*?<!-- \/LOCKED: validation-commands -->\r?\n?/, '')
-
   it('upgrade elimina la lista plana legada, deja el bloque LOCKED y preserva el resto', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
       const path = join(dir, 'AGENTS.md')
-      // simular instalacion pre-change: sin el bloque nuevo, con la lista plana vieja
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${LEGACY_FLAT}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
+      // simular instalacion pre-change: protocolo plano y lista plana vieja
+      let content = preChangeAgents(readFileSync(path, 'utf8'))
       content = content.replace(
         '## Flujo Spec-Driven (aspec)',
         '## MI_SECCION_PERSONALIZADA\n\ntexto propio del usuario\n\n## Flujo Spec-Driven (aspec)'
@@ -2095,12 +2188,7 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
       const path = join(dir, 'AGENTS.md')
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${LEGACY_FLAT}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
-      writeFileSync(path, content)
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8')))
 
       const first = run(['upgrade'], dir)
       assert.equal(first.status, 0)
@@ -2118,12 +2206,7 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
       const path = join(dir, 'AGENTS.md')
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${LEGACY_FLAT}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
-      writeFileSync(path, content.replace(/\r?\n/g, '\r\n'))
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8')).replace(/\r?\n/g, '\r\n'))
 
       const r = run(['upgrade'], dir)
       assert.equal(r.status, 0)
@@ -2144,19 +2227,14 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
         '  - `npm test`',
         '  - `npm run build` (agregado por el usuario)'
       ].join('\n') + '\n'
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${personalized}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
-      writeFileSync(path, content)
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8'), personalized))
 
       const r = run(['upgrade'], dir)
       assert.equal(r.status, 0)
       const updated = readFileSync(path, 'utf8')
       assert.match(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'conserva el bloque personalizado')
       assert.match(updated, /npm run build/, 'no elimina contenido personalizado')
-      assert.match(r.stderr, /bloque legado de validaciones no reconocido/)
+      assert.match(r.stderr, /ancleto: bloque legado de validaciones no reconocido en AGENTS\.md; revisar/)
     })
   })
 
@@ -2170,19 +2248,14 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
         '  - `npm run format`',
         '  - `pytest`'
       ].join('\n') + '\n'
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${unknown}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
-      writeFileSync(path, content)
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8'), unknown))
 
       const r = run(['upgrade'], dir)
       assert.equal(r.status, 0)
       const updated = readFileSync(path, 'utf8')
       assert.match(updated, /make check/, 'conserva la firma no reconocida')
       assert.match(updated, /pytest/, 'no elimina contenido ajeno a la firma')
-      assert.match(r.stderr, /bloque legado de validaciones no reconocido/)
+      assert.match(r.stderr, /ancleto: bloque legado de validaciones no reconocido en AGENTS\.md; revisar/)
       assert.match(updated, /<!-- LOCKED: validation-commands -->/, 'igual inserta el bloque canonico')
     })
   })
@@ -2191,12 +2264,7 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
       const path = join(dir, 'AGENTS.md')
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${LEGACY_FLAT}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
-      writeFileSync(path, content)
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8')))
 
       const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
       assert.equal(r.status, 0)
@@ -2212,12 +2280,9 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
       const path = join(dir, 'AGENTS.md')
-      // Reconstruccion fiel del estado pre-change: el blanco que precede al bloque y el
-      // propio bloque se reemplazan por la lista plana, tal como estaba en el template viejo.
-      const preChange = readFileSync(path, 'utf8').replace(
-        /\r?\n<!-- LOCKED: validation-commands -->[\s\S]*?<!-- \/LOCKED: validation-commands -->\r?\n/,
-        LEGACY_FLAT
-      )
+      // Reconstruccion fiel del estado pre-change: lista plana de validaciones y seccion
+      // plana de memoria, tal como estaban en el template viejo.
+      const preChange = preChangeAgents(readFileSync(path, 'utf8'))
       assert.match(preChange, /Validaciones obligatorias antes de cerrar una tarea/, 'precondicion: estado pre-change')
       writeFileSync(path, preChange)
 
@@ -2282,16 +2347,12 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
       run(['install', '--project', src, '--no-mcp', '--tier', 'gratis'], src)
       assert.equal(run(['export', '--tar', join(dir, 'b.tgz')], src).status, 0)
 
-      // Destino en estado pre-change: sin bloque nuevo, con la lista plana vieja.
+      // Destino en estado pre-change: protocolo plano y lista plana vieja.
       const dst = join(dir, 'destino')
       mkdirSync(dst, { recursive: true })
       run(['install', '--project', dst, '--no-mcp', '--tier', 'gratis'], dst)
       const path = join(dst, 'AGENTS.md')
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${LEGACY_FLAT}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
+      let content = preChangeAgents(readFileSync(path, 'utf8'))
       content = content.replace(
         '## Flujo Spec-Driven (aspec)',
         '## MI_SECCION_IMPORT\n\ntexto propio del usuario\n\n## Flujo Spec-Driven (aspec)'
@@ -2321,19 +2382,14 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
           '  - `npm test`',
           `${marker} item extra agregado por el usuario`
         ].join('\n') + '\n'
-        let content = stripValidationBlock(readFileSync(path, 'utf8'))
-        content = content.replace(
-          '## Memoria Persistente (Protocolo Reactivo)',
-          `${extended}\n## Memoria Persistente (Protocolo Reactivo)`
-        )
-        writeFileSync(path, content)
+        writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8'), extended))
 
         const r = run(['upgrade'], dir)
         assert.equal(r.status, 0)
         const updated = readFileSync(path, 'utf8')
         assert.match(updated, /item extra agregado por el usuario/, 'el item extra no queda huerfano')
         assert.match(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'no borra la firma extendida')
-        assert.match(r.stderr, /bloque legado de validaciones no reconocido/)
+        assert.match(r.stderr, /ancleto: bloque legado de validaciones no reconocido en AGENTS\.md; revisar/)
       })
     })
   }
@@ -2349,19 +2405,14 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
         '  - `npm test`',
         '    (continuacion del ultimo item)'
       ].join('\n') + '\n'
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${extended}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
-      writeFileSync(path, content)
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8'), extended))
 
       const r = run(['upgrade'], dir)
       assert.equal(r.status, 0)
       const updated = readFileSync(path, 'utf8')
       assert.match(updated, /continuacion del ultimo item/, 'la continuacion no queda huerfana')
       assert.match(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'no borra la firma extendida')
-      assert.match(r.stderr, /bloque legado de validaciones no reconocido/)
+      assert.match(r.stderr, /ancleto: bloque legado de validaciones no reconocido en AGENTS\.md; revisar/)
     })
   })
 
@@ -2377,19 +2428,14 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
         '    - sub item anidado',
         '      - sub sub item anidado'
       ].join('\n') + '\n'
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${extended}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
-      writeFileSync(path, content)
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8'), extended))
 
       const r = run(['upgrade'], dir)
       assert.equal(r.status, 0)
       const updated = readFileSync(path, 'utf8')
       assert.match(updated, /sub sub item anidado/, 'la continuacion anidada no queda huerfana')
       assert.match(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'no borra la firma extendida')
-      assert.match(r.stderr, /bloque legado de validaciones no reconocido/)
+      assert.match(r.stderr, /ancleto: bloque legado de validaciones no reconocido en AGENTS\.md; revisar/)
     })
   })
 
@@ -2401,17 +2447,12 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
       run(['install', '--project', src, '--no-mcp', '--tier', 'gratis'], src)
       assert.equal(run(['export', '--tar', join(dir, 'b.tgz')], src).status, 0)
 
-      // Destino en estado pre-change: sin bloque nuevo, con la lista plana vieja.
+      // Destino en estado pre-change: protocolo plano y lista plana vieja.
       const dst = join(dir, 'destino')
       mkdirSync(dst, { recursive: true })
       run(['install', '--project', dst, '--no-mcp', '--tier', 'gratis'], dst)
       const path = join(dst, 'AGENTS.md')
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${LEGACY_FLAT}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
-      writeFileSync(path, content)
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8')))
 
       const first = run(['import', join(dir, 'b.tgz')], dst)
       assert.equal(first.status, 0)
@@ -2427,17 +2468,12 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
 
   it('import de bundle sin AGENTS.md no toca el AGENTS.md del destino', () => {
     withDir((dir) => {
-      // Destino pre-change con la lista plana legada.
+      // Destino pre-change con el protocolo plano y la lista plana legada.
       const dst = join(dir, 'destino')
       mkdirSync(dst, { recursive: true })
       run(['install', '--project', dst, '--no-mcp', '--tier', 'gratis'], dst)
       const path = join(dst, 'AGENTS.md')
-      let content = stripValidationBlock(readFileSync(path, 'utf8'))
-      content = content.replace(
-        '## Memoria Persistente (Protocolo Reactivo)',
-        `${LEGACY_FLAT}\n## Memoria Persistente (Protocolo Reactivo)`
-      )
-      writeFileSync(path, content)
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8')))
       const before = readFileSync(path, 'utf8')
 
       // Bundle minimo sin AGENTS.md (solo manifest + PRODUCT.md): no hay bloque canonico
@@ -2462,6 +2498,321 @@ describe('CLI reconciliacion de bloques legados (Fase 7)', () => {
       const after = readFileSync(path, 'utf8')
       assert.equal(after, before, 'sin AGENTS.md en el bundle, el AGENTS.md del destino no se toca')
       assert.doesNotMatch(after, /LOCKED: validation-commands/, 'el bundle no aporta el bloque canonico')
+    })
+  })
+})
+
+describe('CLI reconciliacion del protocolo de memoria (MEM-05a)', () => {
+  // Pre-change con el protocolo plano. Con memoryFirst reproduce el orden del AGENTS.md
+  // raiz historico (plano, validation-commands, memory-boundary); si no, el del template.
+  const preChangeMemory = (content, { memoryFirst = false, memoryFlat = LEGACY_MEMORY_FLAT } = {}) => {
+    assert.match(content, LOCKED_PROTOCOL_RE, 'precondicion: bloques canonicos de validacion/memoria')
+    const validationBlock = lockedBlock(content, 'validation-commands')
+    const replacement = memoryFirst
+      ? `${memoryFlat}\n\n${validationBlock}`
+      : `${validationBlock}\n\n${memoryFlat}`
+    return content.replace(LOCKED_PROTOCOL_RE, () => replacement)
+  }
+
+  const countBlock = (content, name) =>
+    (content.match(new RegExp(`<!-- LOCKED: ${name} -->`, 'g')) || []).length
+  const blockStart = (content, name) => content.indexOf(`<!-- LOCKED: ${name} -->`)
+
+  it('upgrade elimina el protocolo plano y deja el bloque canonico sin duplicar (T5.2)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const pre = preChangeMemory(readFileSync(path, 'utf8'))
+      assert.match(pre, /Debés invocar `searchMemory`/, 'precondicion: protocolo plano')
+      writeFileSync(path, pre)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      const updated = readFileSync(path, 'utf8')
+      assert.doesNotMatch(updated, /Debés invocar `searchMemory`/, 'se elimina el protocolo plano')
+      assert.doesNotMatch(updated, /el warning indica explícitamente usar/, 'no queda la guia vieja del warning')
+      assert.equal(countBlock(updated, 'memory-protocol'), 1, 'bloque canonico sin duplicar')
+      assert.equal(countBlock(updated, 'memory-boundary'), 1, 'memory-boundary se conserva')
+      assert.ok(blockStart(updated, 'validation-commands') < blockStart(updated, 'memory-protocol'))
+      assert.ok(blockStart(updated, 'memory-protocol') < blockStart(updated, 'memory-boundary'))
+      assert.match(updated, /prefijo literal de hasta 240 caracteres/, 'bloque canonico con el contrato vigente')
+      assert.doesNotMatch(r.stderr, /bloque legado de protocolo de memoria no reconocido/)
+    })
+  })
+
+  it('upgrade elimina el protocolo plano aunque validation-commands lo separe de memory-boundary (T5.3)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const pre = preChangeMemory(readFileSync(path, 'utf8'), { memoryFirst: true })
+      assert.match(pre, /Debés invocar `searchMemory`/)
+      assert.ok(
+        pre.indexOf('Debés invocar `searchMemory`') < blockStart(pre, 'validation-commands'),
+        'precondicion: plano antes de validation-commands'
+      )
+      assert.ok(blockStart(pre, 'validation-commands') < blockStart(pre, 'memory-boundary'))
+      writeFileSync(path, pre)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      const updated = readFileSync(path, 'utf8')
+      assert.doesNotMatch(updated, /Debés invocar `searchMemory`/, 'se elimina el protocolo plano')
+      assert.equal(countBlock(updated, 'validation-commands'), 1, 'validation-commands se conserva')
+      assert.equal(countBlock(updated, 'memory-protocol'), 1, 'memory-protocol sin duplicar')
+      assert.equal(countBlock(updated, 'memory-boundary'), 1, 'memory-boundary se conserva')
+      assert.ok(blockStart(updated, 'validation-commands') < blockStart(updated, 'memory-protocol'))
+      assert.ok(blockStart(updated, 'memory-protocol') < blockStart(updated, 'memory-boundary'))
+      assert.doesNotMatch(r.stderr, /bloque legado de protocolo de memoria no reconocido/)
+    })
+  })
+
+  it('PRODUCT.md pierde el blockquote legado y preserva las secciones del usuario (T5.4)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'PRODUCT.md')
+      const fresh = readFileSync(path, 'utf8')
+      assert.match(fresh, /see the `LOCKED: memory-protocol` block in `AGENTS\.md`/, 'instalacion nueva: puntero de una linea')
+      assert.doesNotMatch(fresh, /Memory for this repository is persisted locally/)
+
+      const legacyBlockquote = [
+        '> Memory for this repository is persisted locally in `.ancleto/memory.db` (SQLite + FTS5).',
+        '> Agents store architectural decisions and rules here automatically. It never leaves the repo.',
+        '> Consult via the `searchMemory` tool when modifying prior decisions, after a',
+        '> `<ContextOverflowWarning>`, or before major refactors / contract changes.'
+      ].join('\n')
+      let content = fresh.replace(/> Usage and recovery contract:[^\n]*/, legacyBlockquote)
+      content += '\n## Seccion del usuario\n\ntexto propio que debe sobrevivir\n'
+      writeFileSync(path, content)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      const updated = readFileSync(path, 'utf8')
+      assert.doesNotMatch(updated, /Memory for this repository is persisted locally/, 'blockquote legado eliminado')
+      assert.doesNotMatch(updated, /Consult via the `searchMemory` tool/, 'no queda la guia vieja')
+      assert.match(updated, /## Seccion del usuario/, 'seccion del usuario preservada')
+      assert.match(updated, /texto propio que debe sobrevivir/)
+      assert.match(updated, /- \*\*Repository App ID\*\*: ancleto\.\[Product Name\]/, 'linea project-specific intacta')
+      assert.match(updated, /- \*\*Scope\*\*: `project:\[Product Name\]`/, 'linea project-specific intacta')
+      assert.doesNotMatch(r.stderr, /bloque legado de blockquote de memoria no reconocido/)
+    })
+  })
+
+  it('el protocolo personalizado no se elimina, avisa y el segundo upgrade es no-op (T5.5)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const personalized = LEGACY_MEMORY_FLAT.replace(
+        'conflicto, prevalece el diseño vigente.',
+        'conflicto, prevalece el criterio del usuario.'
+      )
+      assert.notEqual(personalized, LEGACY_MEMORY_FLAT, 'precondicion: run editado')
+      writeFileSync(path, preChangeMemory(readFileSync(path, 'utf8'), { memoryFlat: personalized }))
+
+      const first = run(['upgrade'], dir)
+      assert.equal(first.status, 0)
+      const afterFirst = readFileSync(path, 'utf8')
+      assert.match(afterFirst, /prevalece el criterio del usuario/, 'no elimina el run personalizado')
+      assert.match(first.stderr, /ancleto: bloque legado de protocolo de memoria no reconocido en AGENTS\.md; revisar/)
+      assert.equal(countBlock(afterFirst, 'memory-protocol'), 1, 'inserta el bloque canonico sin duplicar')
+      assert.equal(countBlock(afterFirst, 'memory-boundary'), 1, 'memory-boundary se conserva')
+
+      const second = run(['upgrade'], dir)
+      assert.equal(second.status, 0)
+      const afterSecond = readFileSync(path, 'utf8')
+      assert.equal(afterSecond, afterFirst, 'el segundo upgrade no cambia el archivo')
+      assert.match(second.stderr, /ancleto: bloque legado de protocolo de memoria no reconocido en AGENTS\.md; revisar/, 'el aviso es por el run personalizado')
+      assert.equal(countBlock(afterSecond, 'memory-protocol'), 1, 'el bloque canonico no se duplica')
+    })
+  })
+
+  it('el bloque canonico no dispara avisos en un segundo upgrade (idempotencia)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      writeFileSync(path, preChangeMemory(readFileSync(path, 'utf8')))
+
+      const first = run(['upgrade'], dir)
+      assert.equal(first.status, 0)
+      assert.doesNotMatch(first.stderr, /bloque legado de/, 'la migracion no emite avisos')
+      const afterFirst = readFileSync(path, 'utf8')
+
+      const second = run(['upgrade'], dir)
+      assert.equal(second.status, 0)
+      assert.equal(readFileSync(path, 'utf8'), afterFirst, 'segundo upgrade no-op')
+      assert.doesNotMatch(second.stderr, /bloque legado de protocolo de memoria no reconocido/, 'el heading canonico dentro de LOCKED no es firma legada')
+      assert.doesNotMatch(second.stderr, /bloque legado de validaciones no reconocido/)
+    })
+  })
+
+  it('import de bundle reconcilia el protocolo plano del destino (T5.6)', () => {
+    withDir((dir) => {
+      const src = join(dir, 'origen')
+      mkdirSync(src, { recursive: true })
+      run(['install', '--project', src, '--no-mcp', '--tier', 'gratis'], src)
+      assert.equal(run(['export', '--tar', join(dir, 'b.tgz')], src).status, 0)
+
+      const dst = join(dir, 'destino')
+      mkdirSync(dst, { recursive: true })
+      run(['install', '--project', dst, '--no-mcp', '--tier', 'gratis'], dst)
+      const path = join(dst, 'AGENTS.md')
+      let content = preChangeMemory(readFileSync(path, 'utf8'))
+      content = content.replace(
+        '## Flujo Spec-Driven (aspec)',
+        '## MI_SECCION_IMPORT\n\ntexto propio del usuario\n\n## Flujo Spec-Driven (aspec)'
+      )
+      writeFileSync(path, content)
+
+      const r = run(['import', join(dir, 'b.tgz')], dst)
+      assert.equal(r.status, 0)
+      const updated = readFileSync(path, 'utf8')
+      assert.doesNotMatch(updated, /Debés invocar `searchMemory`/, 'import elimina el protocolo plano')
+      assert.equal(countBlock(updated, 'memory-protocol'), 1, 'queda solo el bloque canonico')
+      assert.equal(countBlock(updated, 'memory-boundary'), 1, 'memory-boundary se conserva')
+      assert.match(updated, /MI_SECCION_IMPORT/, 'preserva contenido personalizado')
+      assert.doesNotMatch(r.stderr, /bloque legado de protocolo de memoria no reconocido/)
+    })
+  })
+})
+
+describe('CLI merge y reconciliacion (parche de bordes)', () => {
+  const countBlock = (content, name) =>
+    (content.match(new RegExp(`<!-- LOCKED: ${name} -->`, 'g')) || []).length
+
+  const writeBundle = (dir, files) => {
+    const bundle = join(dir, 'bundle')
+    mkdirSync(bundle, { recursive: true })
+    writeFileSync(join(bundle, 'manifest.json'), JSON.stringify({
+      format: 'ancleto-export/1',
+      ancletoVersion: PKG.version,
+      exportedAt: new Date().toISOString(),
+      agent: 'opencode',
+      tier: 'gratis',
+      language: 'auto',
+      profile: 'general',
+      flags: {},
+      mcp: []
+    }, null, 2) + '\n')
+    for (const [name, body] of Object.entries(files)) writeFileSync(join(bundle, name), body)
+    return bundle
+  }
+
+  it('inserta un bloque LOCKED al final de un archivo sin newline sin incrustar el marcador', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const fresh = readFileSync(path, 'utf8')
+      const head = fresh.slice(0, fresh.indexOf('<!-- LOCKED: validation-commands -->')).replace(/\s+$/, '')
+      writeFileSync(path, head)
+
+      const first = run(['upgrade'], dir)
+      assert.equal(first.status, 0, first.stderr)
+      const updated = readFileSync(path, 'utf8')
+      const lines = updated.split('\n')
+      assert.ok(lines.includes('<!-- LOCKED: validation-commands -->'), 'el marcador queda al inicio de linea')
+      assert.ok(lines.includes('<!-- LOCKED: memory-protocol -->'), 'el siguiente bloque tambien')
+
+      const second = run(['upgrade'], dir)
+      assert.equal(second.status, 0, second.stderr)
+      assert.doesNotMatch(second.stderr, /bloque legado de/, 'un segundo upgrade no emite avisos falsos')
+    })
+  })
+
+  it('un source sin los bloques canonicos preserva los runs planos del destino', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8')))
+      // Source sintetico minimo: solo el bloque LOCKED del perfil. Desacopla el test
+      // de profiles/test/templates/AGENTS.md si el perfil gana bloques en el futuro.
+      const profileAgents = '<!-- LOCKED: test-profile -->\nperfil sintetico\n<!-- /LOCKED: test-profile -->\n'
+      const bundle = writeBundle(dir, { 'AGENTS.md': profileAgents })
+
+      const r = run(['import', bundle], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const updated = readFileSync(path, 'utf8')
+      assert.match(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'el run plano se conserva')
+      assert.match(updated, /Debés invocar `searchMemory`/, 'el protocolo plano se conserva')
+      assert.equal(countBlock(updated, 'validation-commands'), 0, 'el source no trae el bloque canonico')
+      assert.match(updated, /LOCKED: test-profile/, 'el bloque del source si se mergea')
+      assert.doesNotMatch(r.stderr, /bloque legado de/, 'un source sin los bloques canonicos no emite aviso')
+    })
+  })
+
+  it('un source raiz sigue reconciliando los runs planos del destino', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      writeFileSync(path, preChangeAgents(readFileSync(path, 'utf8')))
+      const rootAgents = readFileSync(join(TEST_DIR, '..', 'templates', 'AGENTS.md'), 'utf8')
+      const bundle = writeBundle(dir, { 'AGENTS.md': rootAgents })
+
+      const r = run(['import', bundle], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const updated = readFileSync(path, 'utf8')
+      assert.doesNotMatch(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'run plano eliminado')
+      assert.doesNotMatch(updated, /Debés invocar `searchMemory`/, 'protocolo plano eliminado')
+      assert.equal(countBlock(updated, 'validation-commands'), 1)
+      assert.equal(countBlock(updated, 'memory-protocol'), 1)
+    })
+  })
+
+  it('sin run legado y con EOL mixto, el archivo se devuelve byte a byte', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--profile', 'test', '--no-mcp', '--tier', 'minimo'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const before = readFileSync(path, 'utf8') + '\n## Seccion del usuario\r\n\r\nlinea CRLF\r\nlinea LF\n'
+      writeFileSync(path, before)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.equal(readFileSync(path, 'utf8'), before, 'no se normaliza el EOL mixto')
+    })
+  })
+
+  it('no borra un run legado documentado dentro de un code fence', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const fresh = readFileSync(path, 'utf8')
+      const fenced = [
+        '## Documentacion de la migracion',
+        '',
+        '```markdown',
+        LEGACY_FLAT.trimEnd(),
+        '',
+        LEGACY_MEMORY_FLAT,
+        '```'
+      ].join('\n')
+      const content = fresh.replace(LOCKED_PROTOCOL_RE, () => fenced)
+      assert.notEqual(content, fresh, 'precondicion: snippet en fence')
+      writeFileSync(path, content)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const updated = readFileSync(path, 'utf8')
+      assert.match(updated, /Validaciones obligatorias antes de cerrar una tarea/, 'el snippet documentado sobrevive')
+      assert.match(updated, /Debés invocar `searchMemory`/, 'el protocolo documentado sobrevive')
+      assert.equal(countBlock(updated, 'validation-commands'), 1, 'igual se inserta el bloque canonico')
+      assert.equal(countBlock(updated, 'memory-protocol'), 1)
+      assert.doesNotMatch(r.stderr, /bloque legado de/, 'un snippet en fence no avisa')
+    })
+  })
+
+  it('reconcilia un archivo que termina con el protocolo plano', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const fresh = readFileSync(path, 'utf8')
+      const head = fresh.slice(0, fresh.indexOf('<!-- LOCKED: validation-commands -->')).replace(/\s+$/, '')
+      writeFileSync(path, `${head}\n\n${LEGACY_FLAT.trimEnd()}\n\n${LEGACY_MEMORY_FLAT}`)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const updated = readFileSync(path, 'utf8')
+      assert.doesNotMatch(updated, /Debés invocar `searchMemory`/, 'el run plano final se elimina')
+      assert.doesNotMatch(updated, /Validaciones obligatorias antes de cerrar una tarea/)
+      assert.equal(countBlock(updated, 'memory-protocol'), 1, 'queda el bloque canonico')
+      assert.doesNotMatch(r.stderr, /bloque legado de/, 'sin aviso de firma no reconocida')
     })
   })
 })

@@ -696,20 +696,58 @@ function buildEngine(db, dbPath) {
   const findActiveRow = db.prepare(`SELECT id, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
   const findLatestStatus = db.prepare(`SELECT status FROM memory_nodes WHERE memory_key = ? ORDER BY rowid DESC LIMIT 1`)
   const countSuperseded = db.prepare(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = ? AND status = 'superseded'`)
-  const supersede = db.prepare(`UPDATE memory_nodes SET status = 'superseded', superseded_by = ? WHERE id = ? AND status = 'active'`)
+  // Statements que referencian `superseded_at`: preparacion lazy. Una base previa
+  // sin la columna debe poder construir el engine read-only (migrate:false) para
+  // que `memory doctor`/`memory list` funcionen; prepararlos eager romperia eso.
+  let supersedeStmt = null
+  let gcSelectStmt = null
+  let gcDeleteStmt = null
+  let gcDetachStmt = null
+  function getSupersede() {
+    if (!supersedeStmt) {
+      supersedeStmt = db.prepare(
+        `UPDATE memory_nodes SET status = 'superseded', superseded_by = ?, superseded_at = ? WHERE id = ? AND status = 'active'`
+      )
+    }
+    return supersedeStmt
+  }
+  function getGcSelect() {
+    if (!gcSelectStmt) {
+      gcSelectStmt = db.prepare(
+        `SELECT id, length(content) + length(justification) AS size FROM memory_nodes
+         WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < ?`
+      )
+    }
+    return gcSelectStmt
+  }
+  function getGcDelete() {
+    if (!gcDeleteStmt) {
+      gcDeleteStmt = db.prepare(
+        `DELETE FROM memory_nodes WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < ?`
+      )
+    }
+    return gcDeleteStmt
+  }
+  // Suelta las referencias (superseded_by) que apuntan a nodos elegibles antes del
+  // DELETE; la subquery evita materializar un placeholder por id. Mismo cutoff.
+  function getGcDetach() {
+    if (!gcDetachStmt) {
+      gcDetachStmt = db.prepare(
+        `UPDATE memory_nodes SET superseded_by = NULL
+         WHERE status = 'superseded'
+           AND superseded_by IN (
+             SELECT id FROM memory_nodes WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < ?
+           )`
+      )
+    }
+    return gcDetachStmt
+  }
   const insertNode = db.prepare(
     `INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, superseded_by, source, confidence, created_at)
      VALUES (?, ?, ?, ?, 'active', ?, ?, NULL, ?, ?, ?)`
   )
   const listActiveAll = db.prepare(
     `SELECT memory_key, type, scope, content, justification, created_at FROM memory_nodes WHERE status = 'active' ORDER BY created_at, rowid`
-  )
-  const gcSelect = db.prepare(
-    `SELECT id, length(content) + length(justification) AS size FROM memory_nodes
-     WHERE status = 'superseded' AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' days')`
-  )
-  const gcDelete = db.prepare(
-    `DELETE FROM memory_nodes WHERE status = 'superseded' AND created_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' days')`
   )
   const listActiveForConsolidate = db.prepare(
     `SELECT id, memory_key, type, scope, content, created_at FROM memory_nodes WHERE status = 'active'`
@@ -896,7 +934,7 @@ function buildEngine(db, dbPath) {
     let prev = null
     try {
       prev = findActive.get(memory_key)
-      if (prev) supersede.run(id, prev.id)
+      if (prev) getSupersede().run(id, new Date().toISOString(), prev.id)
       insertNode.run(id, memory_key, type, scope, content, justification, source, confidence, created_at)
       db.exec('COMMIT')
     } catch (err) {
@@ -985,7 +1023,7 @@ function buildEngine(db, dbPath) {
           const existingTs = Date.parse(active.created_at)
           if (incomingTs > existingTs) {
             const newId = randomUUID()
-            supersede.run(newId, active.id)
+            getSupersede().run(newId, new Date().toISOString(), active.id)
             insertNode.run(
               newId, memory_key, entry.type, entry.scope,
               String(entry.content), String(entry.justification || ''),
@@ -1018,18 +1056,23 @@ function buildEngine(db, dbPath) {
     return summary
   }
 
-  // Purga nodos superseded cuya antiguedad (proxy: created_at, ya que el
-  // schema no expone superseded_at) supere `opts.days`. Con `opts.dryRun` solo
-  // reporta conteo y tamano estimado sin modificar la DB. Sin dryRun ejecuta
-  // el DELETE en transaccion propia y luego VACUUM + REINDEX fuera (SQLite no
-  // permite VACUUM dentro de una transaccion; si falla la compactacion la BD
-  // sigue consistente, solo no se reempaqueta).
+  // Purga nodos superseded cuya edad de supersesion (`superseded_at`, con
+  // `created_at` como fallback para filas historicas sin el dato) supere
+  // `opts.days`. Dry-run y purge real usan el mismo cutoff, de modo que el
+  // conteo coincide. Con `opts.dryRun` solo reporta conteo y tamano estimado sin
+  // modificar la DB. Sin dryRun ejecuta el DELETE en transaccion propia y luego
+  // VACUUM + REINDEX fuera (SQLite no permite VACUUM dentro de una transaccion;
+  // si falla la compactacion la BD sigue consistente, solo no se reempaqueta).
   function gcSuperseded(opts = {}) {
     const days = Number.isFinite(opts.days) && opts.days > 0 ? Math.floor(opts.days) : GC_DEFAULT_DAYS
     const dryRun = !!opts.dryRun
+    // `'now'` se evalua por sentencia: un cutoff por sentencia dejaria que una fila
+    // cruce el umbral entre el SELECT y el DELETE. Se calcula una sola vez, con el
+    // mismo formato que SQLite (segundos, sin milisegundos).
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z')
 
     if (dryRun) {
-      const rows = gcSelect.all(days)
+      const rows = getGcSelect().all(cutoff)
       const nodes = rows.length
       const estimated_bytes = rows.reduce((acc, r) => acc + Number(r.size || 0), 0)
       return { dryRun: true, days, nodes, estimated_bytes }
@@ -1038,7 +1081,11 @@ function buildEngine(db, dbPath) {
     db.exec('BEGIN IMMEDIATE')
     let removed = 0
     try {
-      const result = gcDelete.run(days)
+      // Un nodo retenido puede referenciar (superseded_by) a uno elegible: hay que
+      // soltar la referencia antes del DELETE o el COMMIT falla por la FK diferida.
+      // La subquery usa el mismo cutoff que el DELETE: ambos evaluan el mismo conjunto.
+      getGcDetach().run(cutoff)
+      const result = getGcDelete().run(cutoff)
       removed = Number(result.changes || 0)
       db.exec('COMMIT')
     } catch (err) {
@@ -1115,8 +1162,9 @@ function buildEngine(db, dbPath) {
       if (!lockedTarget) {
         throw new Error(`merge: el target "${targetKey}" dejo de estar activo durante la transaccion`)
       }
+      const supersededAt = new Date().toISOString()
       for (const id of sourceIds) {
-        const result = supersede.run(lockedTarget.id, id)
+        const result = getSupersede().run(lockedTarget.id, supersededAt, id)
         superseded += Number(result.changes || 0)
       }
       // Si una source dejo de estar activa entre la validacion y el UPDATE,
@@ -1204,12 +1252,13 @@ function buildEngine(db, dbPath) {
 
     db.exec('BEGIN IMMEDIATE')
     try {
+      const supersededAt = new Date().toISOString()
       for (const { canonical, superseded } of plans) {
         if (!findActiveById.get(canonical.id)) {
           throw new Error(`consolidate: el canonico "${canonical.memory_key}" dejo de estar activo durante la transaccion`)
         }
         for (const node of superseded) {
-          const result = supersede.run(canonical.id, node.id)
+          const result = getSupersede().run(canonical.id, supersededAt, node.id)
           if (Number(result.changes || 0) !== 1) {
             throw new Error(`consolidate: el nodo "${node.memory_key}" dejo de estar activo durante la transaccion`)
           }

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createMemoryEngine } from '../src/core/memory/engine.js'
+import { openDatabase } from '../src/core/memory/database.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const CLI = join(TEST_DIR, '..', 'src', 'cli', 'index.js')
@@ -348,7 +349,7 @@ describe('CLI memory export/import (memory-ops-export-import-gc)', () => {
 })
 
 describe('CLI memory gc (memory-ops-export-import-gc)', () => {
-  it('dry-run no borra; gc purga superseded antiguos y preserva los activos', async () => {
+  it('gc mide la supersesion: un nodo viejo re-grabado sobrevive y el purge usa superseded_at', async () => {
     await withDir(async (dir) => {
       const dbPath = join(dir, '.ancleto', 'memory.db')
       const eng = createMemoryEngine(dbPath)
@@ -357,11 +358,26 @@ describe('CLI memory gc (memory-ops-export-import-gc)', () => {
       eng.recordNode({ memory_key: 'gc-keep', type: 'rule', scope: 'project', content: 'activa' })
       eng.close()
 
+      // El nodo fue creado hace 40 dias pero superseded recien: NO es elegible.
       const dry = runCli(['memory', 'gc', '--dry-run'], dir)
       assert.equal(dry.status, 0)
-      assert.match(dry.stdout, /1 nodo\(s\), ~\d+ bytes a liberar/)
+      assert.match(dry.stdout, /0 nodo\(s\), ~\d+ bytes a liberar/)
       let all = JSON.parse(runCli(['memory', 'list', '--all', '--json'], dir).stdout)
       assert.equal(all.filter((n) => n.status === 'superseded').length, 1)
+
+      // Para probar el purge, la edad de supersesion se fija en la DB: no hay
+      // flag de CLI para simularla.
+      const backdate = new Date(Date.now() - 40 * 86400000).toISOString()
+      const db = openDatabase(dbPath)
+      try {
+        db.prepare(`UPDATE memory_nodes SET superseded_at = ? WHERE memory_key = 'gc-old' AND status = 'superseded'`).run(backdate)
+      } finally {
+        db.close()
+      }
+
+      const dryOld = runCli(['memory', 'gc', '--dry-run'], dir)
+      assert.equal(dryOld.status, 0)
+      assert.match(dryOld.stdout, /1 nodo\(s\), ~\d+ bytes a liberar/)
 
       const real = runCli(['memory', 'gc', '--days', '30'], dir)
       assert.equal(real.status, 0)

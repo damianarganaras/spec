@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, la validación de refs, el resolver de refs navegables, la promoción al archivar, el working-context, el refresh on-write, la procedencia source, las ops export/import/gc, snapshot, merge, consolidate, el doctor read-only, el orden de inyección, el presupuesto/aviso de overflow y su consumo por el orquestador"
-covers: [motor de memoria, tools, refs normalizadas, validación fail-closed, indentación de refs, rechazo de secretos, resolver de refs navegables, resolveNodeRefs, orden de inyección, anclaje, presupuesto, manifiesto de omitidas, promoción al archivar, working-context, día-cero, procedencia source, export/import/gc, snapshot consistente, merge por supersesión, consolidate, doctor read-only, auditoría de refs, inspectRefs, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware (preview/expand/keys/required), la validación de refs, el resolver de refs navegables, la promoción al archivar, el working-context, el refresh on-write, la procedencia source, las ops export/import/gc por supersesión, snapshot, merge, consolidate, el doctor read-only, el orden de inyección, el presupuesto/aviso de overflow y su consumo por el orquestador"
+covers: [motor de memoria, tools, recall task-aware, preview, expand, keys, required, refs normalizadas, validación fail-closed, indentación de refs, rechazo de secretos, resolver de refs navegables, resolveNodeRefs, orden de inyección, anclaje, presupuesto, manifiesto de omitidas, promoción al archivar, working-context, día-cero, procedencia source, export/import/gc, superseded_at, snapshot consistente, merge por supersesión, consolidate, doctor read-only, auditoría de refs, inspectRefs, refresh on-write CLI, staleness advisory, aviso de overflow, Recall delegado]
 sources: ["src/core/memory/**"]
-generatedAt: 2026-11-02T18:45:50Z
-pluginVersion: 0.18.5
+generatedAt: 2026-11-03T10:45:00Z
+pluginVersion: 0.18.6
 skillVersion: '2.3'
 ---
 
@@ -15,15 +15,17 @@ skillVersion: '2.3'
 
 Retener reglas y decisiones del proyecto entre sesiones de IA, en una base SQLite **local**
 (`.ancleto/memory.db`), sin bases vectoriales. Un mismo motor soporta cinco consumidores: tools
-MCP del LLM, subcomandos CLI (mantenimiento, snapshot, merge, **consolidate** e integridad), el
-working-context inyectado al system prompt, el doctor y un **resolver read-only de refs para
-recall**. Desde `MEM-03`, `recordNode` es el punto único de **validación de refs** y **rechazo de
-secretos**. Desde `MEM-04` (`0.18.0`), `memory doctor` audita esas refs con `inspectRefs`, sin un
-segundo parser. `MEM-04b` (`0.18.3`) expone `resolveNodeRefs` sobre el mismo parser y resolvedor.
-`0.18.4` agrega el **orden por anclaje** y el **manifiesto de omitidas**; `0.18.5` agrega
-**`consolidate`**. Evidencia: `README.md`, `DESIGN-memory-engine-v0.2.0.md`,
-`aspec/specs/memory-ops/spec.md`, `aspec/specs/memory-engine/spec.md`,
-`aspec/changes/archive/2026-11-02-*`.
+MCP del LLM, subcomandos CLI (mantenimiento, snapshot, merge, **consolidate**, **gc** e
+integridad), el working-context inyectado al system prompt, el doctor y un **resolver read-only
+de refs para recall**. Desde `MEM-03`, `recordNode` es el punto único de **validación de refs** y
+**rechazo de secretos**. Desde `MEM-04` (`0.18.0`), `memory doctor` audita esas refs con
+`inspectRefs`, sin un segundo parser. `MEM-04b` (`0.18.3`) expone `resolveNodeRefs` sobre el
+mismo parser y resolvedor. `0.18.4` agrega el **orden por anclaje** y el **manifiesto de
+omitidas**; `0.18.5` agrega **`consolidate`**; `0.18.6` agrega el **recall task-aware**
+(preview/`expand`/`keys`/`required`) y publica el **protocolo canónico** en `AGENTS.md`;
+`MEM-05b` agrega **`superseded_at`** para que `gc` mida la edad de supersesión. Evidencia:
+`README.md`, `DESIGN-memory-engine-v0.2.0.md`, `aspec/specs/memory-ops/spec.md`,
+`aspec/specs/memory-engine/spec.md`, `aspec/changes/archive/2026-11-02-*`.
 
 ## Recorrido relevante
 
@@ -49,8 +51,8 @@ segundo parser. `MEM-04b` (`0.18.3`) expone `resolveNodeRefs` sobre el mismo par
 
 | Archivo | Rol |
 |---|---|
-| `src/core/memory/database.js` | Abre la DB (`openDatabase`, con opción `readonly`), PRAGMAs (`WAL`, `foreign_keys`, `busy_timeout=5000`), migraciones idempotentes, FTS5 external-content, triggers, `checkpointDatabase`. |
-| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext` (orden, presupuesto, aviso), `searchMemory` (BM25, escape FTS5, fallback AND→OR), `recordNode` (procedencia, refs, secretos), `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`, `inspectRefs`, `resolveNodeRefs`, `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `validateMerge`/`merge`, **`consolidate`**, `sanitizePaths`, `checkpoint`, `close`. Presupuesto: `CHARS_PER_TOKEN = 4`, `MAX_TOKENS = 2000`, `MAX_OMITTED_KEYS = 40`. |
+| `src/core/memory/database.js` | Abre la DB (`openDatabase`, con opción `readonly`), PRAGMAs (`WAL`, `foreign_keys`, `busy_timeout=5000`), migraciones idempotentes (incl. `superseded_at` aditiva con backfill), FTS5 external-content, triggers, `checkpointDatabase`. |
+| `src/core/memory/engine.js` | Núcleo: `defaultMemoryDbPath`, `createMemoryEngine`, `createReadonlyMemoryEngine`, `buildWorkingContext` (orden, presupuesto, aviso, `required`), `searchMemory` (BM25, escape FTS5, fallback AND→OR, preview/`expand`/`keys`/`required`), `recordNode` (procedencia, refs, secretos), `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`, `inspectRefs`, `resolveNodeRefs`, `listNodes`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `validateMerge`/`merge`, **`consolidate`**, `sanitizePaths`, `checkpoint`, `close`. Presupuesto: `CHARS_PER_TOKEN = 4`, `MAX_TOKENS = 2000`, `MAX_OMITTED_KEYS = 40`. |
 | `src/core/memory/snapshot.js` | Dueño único de la copia binaria: `realpathish`/`sameFile`, `vacuumInto`, `verifySnapshot`, `replaceDestination` y `snapshotDatabase(dbPath, outPath, { overwrite })`. |
 | `src/core/memory/tools.js` | `createMemoryToolHandlers` (JSON Schema de las 3 tools) y `createMemoryToolkit`; tras `recordNode`, evalúa `shouldRefreshWorkingContext(result)` y llama `writeWorkingContext` en `try/catch`. |
 | `src/core/memory/mcp-server.js` | `createMemoryServer`/`serveMemoryMcp`: MCP stdio sin dependencias; fija `{ source: 'mcp:ancleto-memory', projectRoot }`. |
@@ -141,6 +143,50 @@ comando CLI, tool MCP, tabla ni migración. Evidencia: `src/core/memory/engine.j
 `refs-root/`. M04 valida `spec:`; M05 un `change:` archivado único; M06 un `change:` ambiguo.
 Evidencia: `test/fixtures/memory/`, `test/memory-fixtures.test.js`.
 
+## Recall task-aware (`MEM-05`, `0.18.6`)
+
+`searchMemory` deja de devolver siempre el payload completo. El requirement
+`Recall task-aware con orden total, preview expandible y keys requeridas` fija el contrato.
+Evidencia: `src/core/memory/engine.js`, `src/core/memory/tools.js`,
+`aspec/specs/memory-engine/spec.md`, `README.md`, `AGENTS.md` (`LOCKED: memory-protocol`).
+
+**Orden total y determinístico** (sin `rowid`):
+
+1. `required` en el orden declarado por el llamador.
+2. Anclaje declarado (`spec:`/`change:`/`path:` en el bloque `refs:`).
+3. Jerarquía de scope `task` → `feature` → `project`.
+4. `bm25` ascendente (negativo: mejor primero).
+5. `memory_key` lexicográfico ascendente.
+
+El subconjunto devuelto es **el prefijo del orden total**: se rankea antes de recortar por
+`limit`. El fallback OR-prefijo corre sólo cuando la pasada AND no devolvió nada. Evidencia:
+`compareRecall`, `run`, `searchMemory`.
+
+**Proyección de la página** (`projectSearchPage`):
+
+- **Default: preview.** `previewNode` devuelve un prefijo **literal** de 239 caracteres más `…`
+  (hasta 240) sin colapsar whitespace; `content_truncated` es `true` exactamente cuando el
+  `content` excede 240 caracteres. `limit` por defecto 5. El preview **no** es el texto íntegro
+  y no debe citarse como fuente de una regla. El corte no parte un par sustituto (emoji).
+- **`expand: true`**: payload completo con el shape heredado de seis campos.
+- **`keys: [...]`**: expande sólo las claves pedidas, presentes en la página; si una clave no
+  está en la página, la llamada **falla**.
+- **`required: [...]`**: entrada de la llamada (**no** se persiste en el nodo). Promueve las
+  `memory_key` al frente del orden; una requerida ausente, inactiva o fuera del `type` falla
+  nombrando la clave. Si el `limit` efectivo no alcanza para todas, la llamada falla en vez de
+  omitirlas en silencio.
+
+**`buildWorkingContext({ required })`**: resuelve las requeridas **antes** del early return y
+del piso estructural. Una requerida no se trunca ni se degrada al aviso de overflow: falla con
+un error diagnóstico que nombra la `memory_key` y la ubicación repo-relativa de sus refs
+resueltas (o `sin refs resolubles`). Evidencia: `requiredBudgetError`.
+
+**Consumo canónico**: `@memory-keeper` en Modo 1 pasa sólo `query` + `expand: true` (sin
+`type`), porque sin `expand` recibiría previews no legibles como precedente. Las skills
+`ancleto-recall`, `new`, `propose` y `ff` usan `expand: true`; `explore` y `onboard` corrigen la
+firma documentada. El aviso de overflow **no** menciona `searchMemory`: delega un Recall a
+`@memory-keeper`. Evidencia: `agents/memory-keeper.md`, `CHANGELOG.md` (`0.18.6`).
+
 ## Orden determinístico de inyección (`0.18.4`)
 
 `buildWorkingContext` ordena las `rule` activas del scope y su jerarquía con un orden **total**:
@@ -177,8 +223,8 @@ before delegating any other stage.</ContextOverflowWarning>
   listadas son siempre un prefijo del orden de inyección.
 - **Conserva** el conteo, el registro por consola y la delegación de **un** Recall a
   `@memory-keeper`; **no menciona** `searchMemory`.
-- **Estado actual**: la base real omite **18 reglas** de scope `project`; el aviso las nombra
-  (hasta el tope/reserva). Es presión de contenido, no una falla de integridad.
+- **Estado actual**: la base real omite **20 reglas** de scope `project` (entran 14 de 34); el
+  aviso las nombra (hasta el tope/reserva). Es presión de contenido, no una falla de integridad.
 - Evidencia: `src/core/memory/engine.js` (`formatOverflowWarning`),
   `aspec/specs/memory-engine/spec.md`, `test/memory-engine.test.js`.
 
@@ -237,10 +283,11 @@ el presupuesto. Una regla sin `refs:` se renderiza completa. Evidencia:
   `createdAt` del JSON es más reciente (empate/no más nuevo = no-op), y **no reactiva**
   superseded. **No aplica la validación de refs**. Tras importar, `memoryImport` invoca
   `refreshWorkingContextOnWrite` en `try/catch`.
-- **`memory gc [--dry-run] [--days N]`** → `gcSuperseded({days, dryRun})`: purga superseded con
-  antigüedad mayor al umbral (default 30 días) usando **`created_at` original** (no existe
-  `superseded_at`). Tras el DELETE hace `VACUUM`+`REINDEX` best-effort; `--dry-run` sólo reporta.
-  Los activos nunca se tocan. **`memory gc` no dispara refresh**.
+- **`memory gc [--dry-run] [--days N]`** → `gcSuperseded({days, dryRun})`: purga superseded
+  cuya **edad de supersesión** (`COALESCE(superseded_at, created_at)`) supere el umbral (default
+  30 días). Antes del `DELETE` limpia el `superseded_by` de los elegibles para no violar la FK;
+  después hace `VACUUM`+`REINDEX` best-effort; `--dry-run` sólo reporta. Los activos nunca se
+  tocan. **`memory gc` no dispara refresh**. Detalle en «GC por edad de supersesión».
 - **`memory list [--type X] [--scope X] [--all] [--json]`** y **`memory context [--scope X]
   [--out <archivo>]`** completan la superficie. `list` es read-only; `context` materializa
   `.ancleto/working-context.md` por el render único.
@@ -276,6 +323,39 @@ el presupuesto. Una regla sin `refs:` se renderiza completa. Evidencia:
 - Evidencia: `src/core/memory/engine.js` (`consolidate`, `compareCanonical`,
   `consolidationScopeRank`), `src/cli/index.js` (`memoryConsolidate`),
   `aspec/specs/memory-ops/spec.md`.
+
+## GC por edad de supersesión (`MEM-05b`)
+
+`memory gc` deja de usar `created_at` como proxy: ahora mide la **antigüedad de supersesión**.
+Evidencia: `src/core/memory/{database,engine}.js`, `src/cli/index.js`,
+`aspec/specs/memory-ops/spec.md` (requirement
+`Garbage collection de nodos superseded`).
+
+- **Schema aditivo**: `memory_nodes` incorpora `superseded_at TEXT`. En bases nuevas se declara
+  al crear la tabla; en bases existentes la migración sólo ejecuta
+  `ALTER TABLE memory_nodes ADD COLUMN superseded_at TEXT` si `PRAGMA table_info` no la ve. No
+  crea tablas, índices, triggers ni vistas. Una apertura concurrente que ya encuentre la columna
+  considera la migración aplicada.
+- **Backfill**: las filas `superseded` con `superseded_at` NULL reciben `created_at`. Se ejecuta
+  sólo cuando esa apertura agregó la columna (evita un `UPDATE` con scan completo en cada
+  apertura), preserva la elegibilidad histórica de `gc` y deja `NULL` en los activos. El cambio
+  de semántica es forward-looking.
+- **Registro del instante**: las cuatro rutas de supersesión —`recordNode`, `importNodes`,
+  `merge`, `consolidate`— escriben `superseded_at` en el mismo statement que
+  `status='superseded'` y `superseded_by`. Ninguna inserta un nodo sucesor sólo para registrar la
+  fecha.
+- **Medición**: `COALESCE(superseded_at, created_at)` con **un único cutoff calculado en JS**
+  (segundos, sin milisegundos, mismo formato que SQLite), compartido por el `SELECT` y el
+  `DELETE`. Un cutoff por sentencia dejaría que una fila cruce el umbral entre ambos.
+- **Integridad referencial**: antes del `DELETE`, `getGcDetach` limpia el `superseded_by` de los
+  nodos elegibles; un nodo retenido puede apuntar a uno elegible y el `COMMIT` fallaría por la FK
+  diferida. La subquery usa el mismo cutoff.
+- **Preparación lazy**: ningún statement que referencie `superseded_at` se prepara en el
+  constructor del engine (`getSupersede`, `getGcSelect`, `getGcDelete`, `getGcDetach`). Así un
+  engine read-only con `migrate: false` sobre una base previa sigue construyendo para
+  `memory doctor`/`memory list`.
+- **Dry-run**: mismo cutoff que el purge real, de modo que el conteo reportado coincide con los
+  nodos efectivamente borrados. `VACUUM`/`REINDEX` son best-effort post-commit.
 
 ## Snapshot consistente con historial
 
@@ -335,11 +415,11 @@ Evidencia: `src/core/memory/snapshot.js`, `src/core/memory/database.js`,
   `checkWorkingContextFreshness`; no altera el exit code. En el estado actual reporta
   `desactualizado`.
 
-**Estado observado** (`node src/cli/index.js memory doctor`): integridad OK, 212 filas FTS
-indexadas, unicidad OK, **292 refs verificadas en 112 nodos activos, 0 no resueltas**, WAL
-presente (4.161.232 bytes) y `Working-context: desactualizado`; 18 reglas omitidas por tamaño.
-Evidencia: `src/core/memory/doctor.js`, `src/core/memory/engine.js`, `src/cli/index.js`,
-`aspec/specs/memory-ops/spec.md`.
+**Estado observado** (`node src/cli/index.js memory doctor`): integridad OK, **228 filas FTS
+indexadas** (228 nodos totales), unicidad OK, **344 refs verificadas en 125 nodos activos, 0 no
+resueltas**, WAL presente (4.161.232 bytes) y `Working-context: desactualizado`; **20 reglas
+omitidas** por tamaño. Evidencia: `src/core/memory/doctor.js`, `src/core/memory/engine.js`,
+`src/cli/index.js`, `aspec/specs/memory-ops/spec.md`.
 
 ## Merge por supersesión
 
@@ -393,8 +473,9 @@ Evidencia: `src/core/memory/engine.js`, `src/cli/index.js`,
 - **Guardas**: `test/memory-engine.test.js` aserta la mención de `@memory-keeper`/`Recall`, la
   ausencia de `searchMemory`, el presupuesto y el manifiesto; `test/content-guards.test.js` fija
   el trigger y la unicidad del Recall.
-- **Deuda abierta**: `AGENTS.md`, `PRODUCT.md`, `templates/AGENTS.md` y `templates/PRODUCT.md`
-  siguen dando el consejo viejo de invocar `searchMemory`. Es el ítem `#17` del backlog.
+- **Protocolo canónico (resuelto en `0.18.6`)**: `AGENTS.md` → `LOCKED: memory-protocol` fija el
+  contrato de `searchMemory` y el uso del aviso; `PRODUCT.md` y `templates/PRODUCT.md` sólo
+  apuntan a ese bloque. Ya no queda la guía vieja de invocar `searchMemory` ante el aviso.
 
 ## Cierre del pipeline: memoria en un paso + promoción
 
@@ -449,7 +530,9 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
 ## Flujo
 
 1. `ancleto mcp` arranca `serveMemoryMcp`, abre la DB y publica 3 tools.
-2. `searchMemory(query)`: AND preciso; si no hay resultados, OR con prefijos. Devuelve activos.
+2. `searchMemory(query, { expand, keys, required, limit, type, scope })`: AND preciso; si no hay
+   resultados, OR con prefijos. Ordena de forma total y devuelve preview por defecto (o payload
+   completo con `expand`/`keys`); `required` promueve claves y falla si no entran.
 3. `recordRule`/`recordDecision`: `recordNode` resuelve `source`, rechaza secretos y (si
    `source !== 'runtime'`) valida `refs:`. Luego `BEGIN IMMEDIATE`, supersede el activo con la
    misma `memory_key` e inserta el nuevo.
@@ -474,6 +557,9 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
   tabla ni superficie de comando/MCP. `commit:`/`workitem:` son `verifiable: false`.
 - **Orden de inyección total**: scope → anclaje → recencia → `memory_key`; el anclaje se decide
   sin I/O.
+- **Recall sin degradación**: `searchMemory` devuelve preview por defecto; el consumo canónico
+  usa `expand: true` (o `keys`). `required` nunca se omite en silencio: falla por límite,
+  presupuesto o inexistencia/inactividad.
 - **Presupuesto completo**: wrapper + etiqueta + reglas + aviso ≤ `maxTokens × CHARS_PER_TOKEN`;
   reserva `min(1.500, 15 %)`; manifiesto ≤ 40 claves + `+N`.
 - **Secretos rechazados sin eco**: `content` y `justification` se inspeccionan antes de la
@@ -490,6 +576,8 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
 - **Read-only significa sin escritura**: `createReadonlyMemoryEngine` no migra ni toca el WAL; lo
   usan `list`, el advisory, `merge --dry-run` y `consolidate` dry-run.
 - **Doctor no muta por defecto**; `--rebuild` es el único camino que escribe.
+- **GC mide supersesión, no creación**: `COALESCE(superseded_at, created_at)`, cutoff único,
+  detach de `superseded_by` antes del `DELETE`; los activos no se tocan.
 - **Snapshot no comparte código de escritura**: fuente read-only + `VACUUM INTO` + `quick_check`
   + reemplazo con backup/restore; nunca `fs.copyFile`.
 - **Merge no crea nodos ni cambia schema**: enlaza sources activas del mismo `type` al target;
@@ -507,19 +595,22 @@ El bloque se regenera tras cualquier escritura que pueda alterarlo, por el **mis
 
 | Path | Rol |
 |---|---|
-| `src/core/memory/database.js` | Conexión (con `readonly`), PRAGMAs, migraciones, FTS5. |
-| `src/core/memory/engine.js` | `buildWorkingContext` (orden, presupuesto, aviso), `searchMemory`, `recordNode`, `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`/`inspectRefs`/`resolveNodeRefs`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded`, `validateMerge`/`merge`, `consolidate`, `sanitizePaths`. |
+| `src/core/memory/database.js` | Conexión (con `readonly`), PRAGMAs, migraciones (incl. `superseded_at`), FTS5. |
+| `src/core/memory/engine.js` | `buildWorkingContext` (orden, presupuesto, aviso, `required`), `searchMemory` (preview/`expand`/`keys`/`required`), `recordNode`, `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite`/`renderRuleContent`/`inspectRefs`/`resolveNodeRefs`, `formatTopologyBlock`, `exportActive`, `importNodes`, `gcSuperseded` (+ `getGcDetach`), `validateMerge`/`merge`, `consolidate`, `sanitizePaths`. |
 | `src/core/memory/snapshot.js` | `snapshotDatabase`, `vacuumInto`, `verifySnapshot`, `replaceDestination`, `realpathish`/`sameFile`. |
 | `src/core/memory/doctor.js` | `memoryDoctor` read-only, `observeWal`, cinco checks, rebuild explícito. |
 | `src/core/memory/working-context.js` | Render único, persistencia, refresh MCP/CLI, frescura, raíz, día-cero. |
-| `src/core/memory/tools.js` | Handlers, schemas, refresh on-write MCP. |
+| `src/core/memory/tools.js` | Handlers, schemas (incl. `expand`/`keys`/`required`), refresh on-write MCP. |
 | `src/core/memory/mcp-server.js` | Transporte MCP stdio; `source: 'mcp:ancleto-memory'` y `projectRoot`. |
 | `src/cli/index.js` | `memoryExport`, `memoryImport`, `memoryGc`, `memorySnapshot`, `memoryMerge`, `memoryConsolidate`, `memoryContext`, `memoryListCmd`, `memoryDoctorCmd`, `memoryCmd`. |
 | `skills/ancleto-archive/SKILL.md` | Gate de promoción: preflight, cero candidatos ⇒ cero escrituras. |
-| `agents/memory-keeper.md` | Modo Promotion: un `recordDecision` por bloque. |
+| `agents/memory-keeper.md` | Modo Recall con `query` + `expand: true`; Modo Promotion: un `recordDecision` por bloque. |
 | `agents/orchestrator.md` | Consumidor del overflow, presupuesto de Automatic Record y orden de promoción. |
-| `aspec/specs/memory-ops/spec.md` | Contrato de export/import/gc, snapshot, doctor read-only, `--rebuild`, merge, **consolidate**, harness golden y diagnóstico de refs. |
-| `aspec/specs/memory-engine/spec.md` | Contrato de refs, promoción, día-cero, refresh, staleness, **orden de inyección**, **presupuesto/aviso**, `resolveNodeRefs` y render sin `refs:`. |
+| `aspec/specs/memory-ops/spec.md` | Contrato de export/import/gc por supersesión, snapshot, doctor read-only, `--rebuild`, merge, **consolidate**, harness golden y diagnóstico de refs. |
+| `aspec/specs/memory-engine/spec.md` | Contrato de refs, promoción, día-cero, refresh, staleness, **orden de inyección**, **presupuesto/aviso**, **recall task-aware**, `resolveNodeRefs` y render sin `refs:`. |
+| `aspec/changes/archive/2026-11-02-mem-05-recall-task-aware/` | Recall task-aware: preview/`expand`/`keys`/`required` (`0.18.6`). |
+| `aspec/changes/archive/2026-11-02-mem-05a-searchmemory-docs-contract/` | Protocolo canónico en `AGENTS.md` y puntero desde `PRODUCT.md`. |
+| `aspec/changes/archive/2026-11-02-mem-05b-gc-superseded-age/` | GC por edad de supersesión (`superseded_at`). |
 | `aspec/changes/archive/2026-11-02-mem-04b-resolver-referencias-navegables/` | MEM-04b (publicado en `0.18.3`). |
 | `aspec/changes/archive/2026-11-02-memory-ranking-y-omisiones-visibles/` | Orden por anclaje, presupuesto y manifiesto (publicado en `0.18.4`). |
 | `aspec/changes/archive/2026-11-02-memory-consolidacion-autonoma/` | `memory consolidate` (publicado en `0.18.5`). |

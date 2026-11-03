@@ -189,6 +189,8 @@ describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () =
       assert.match(r.stdout, /0 huerfanos/)
       assert.match(r.stdout, /✔ \.opencode\/agents/)
       assert.match(r.stdout, /✔ \.github\/agents/)
+      // Con `minimo` el tier coincide con la canónica: no hay aviso de tier.
+      assert.doesNotMatch(r.stdout, /aplica un modelo distinto/)
     })
   })
 
@@ -203,7 +205,7 @@ describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () =
 
       const coderSrc = readFileSync(AGENT_SRC('coder'), 'utf8')
       assert.match(coderSrc, /^mode: /m)
-      assert.match(coderSrc, /^model: opencode-go\//m)
+      assert.match(coderSrc, /^model: .+$/m)
       assert.match(coderSrc, /^tools:/m)
 
       const coderOut = readFileSync(join(dir, '.claude', 'agents', 'coder.md'), 'utf8')
@@ -212,7 +214,7 @@ describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () =
       assert.doesNotMatch(coderOut, /^temperature:/m)
       assert.doesNotMatch(coderOut, /^permission:/m)
       assert.doesNotMatch(coderOut, /^tools:/m)
-      assert.doesNotMatch(coderOut, /opencode-go/)
+      assert.doesNotMatch(coderOut, /^model:/m)
       assert.match(coderOut, /^description: Implements approved changes/m)
     })
   })
@@ -224,7 +226,7 @@ describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () =
 
       const coderSrc = readFileSync(AGENT_SRC('coder'), 'utf8')
       assert.match(coderSrc, /^mode: /m)
-      assert.match(coderSrc, /^model: opencode-go\//m)
+      assert.match(coderSrc, /^model: .+$/m)
       assert.match(coderSrc, /^tools:/m)
 
       const coderOut = readFileSync(join(dir, '.github', 'agents', 'coder.agent.md'), 'utf8')
@@ -233,7 +235,7 @@ describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () =
       assert.doesNotMatch(coderOut, /^temperature:/m)
       assert.doesNotMatch(coderOut, /^permission:/m)
       assert.doesNotMatch(coderOut, /^tools:/m)
-      assert.doesNotMatch(coderOut, /opencode-go/)
+      assert.doesNotMatch(coderOut, /^model:/m)
       assert.match(coderOut, /^description: Implements approved changes/m)
     })
   })
@@ -383,7 +385,7 @@ describe('CLI antigravity full support (add-antigravity-full-support)', () => {
       assert.equal(r.status, 0)
       const src = readFileSync(AGENT_SRC('coder'), 'utf8')
       assert.match(src, /^mode: subagent$/m)
-      assert.match(src, /^model: opencode-go\//m)
+      assert.match(src, /^model: .+$/m)
       assert.match(src, /^tools:$/m)
 
       const out = readFileSync(join(dir, '.agents', 'agents', 'coder.md'), 'utf8')
@@ -400,7 +402,6 @@ describe('CLI antigravity full support (add-antigravity-full-support)', () => {
       assert.doesNotMatch(out, /^color:/m)
       assert.doesNotMatch(out, /^temperature:/m)
       assert.doesNotMatch(out, /^permission:/m)
-      assert.doesNotMatch(out, /opencode-go/)
       // task: false no viaja: no hay aviso y la lista no cambia.
       assert.doesNotMatch(r.stderr, /skip tool 'task': no verified Antigravity id for agent 'coder'/)
 
@@ -486,7 +487,6 @@ describe('CLI antigravity full support (add-antigravity-full-support)', () => {
         assert.match(out, /^  custom:$/m)
         assert.doesNotMatch(out, /nombre-declarado-en-la-fuente/)
         assert.doesNotMatch(out, /Segunda description gestionada/)
-        assert.doesNotMatch(out, /opencode-go/)
       } finally {
         rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
       }
@@ -811,10 +811,30 @@ describe('CLI install', () => {
       assert.deepEqual(rc.installedPaths.commands, ['.opencode/commands'])
       assert.deepEqual(rc.installedPaths.skills, ['.opencode/skills'])
 
-      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
-      assert.match(orchestrator, /model: opencode-go\/deepseek-v4\.1-flash/)
+      for (const f of readdirSync(join(TEST_DIR, '..', 'agents'))) {
+        assert.ok(
+          readFileSync(join(dir, '.opencode', 'agents', f)).equals(readFileSync(join(TEST_DIR, '..', 'agents', f))),
+          `tier minimo deja ${f} byte-idéntico a la canónica`
+        )
+      }
 
       assert.equal(readFileSync(join(dir, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'minimo')
+    })
+  })
+
+  it('update --tier minimo deja los diez mirrors byte-idénticos sin duplicar el campo model:', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir).status, 0)
+      const r = run(['update', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(r.status, 0)
+      for (const f of readdirSync(join(TEST_DIR, '..', 'agents'))) {
+        const mirror = readFileSync(join(dir, '.opencode', 'agents', f), 'utf8')
+        assert.ok(
+          readFileSync(join(dir, '.opencode', 'agents', f)).equals(readFileSync(join(TEST_DIR, '..', 'agents', f))),
+          `update con minimo deja ${f} byte-idéntico a la canónica`
+        )
+        assert.equal((mirror.match(/^model: /gm) || []).length, 1, `${f}: una sola línea model:`)
+      }
     })
   })
 
@@ -932,6 +952,78 @@ describe('CLI test profile (test-automation-profile)', () => {
       assert.equal(r.status, 0)
       assert.equal(readRc(dir).profile, 'test')
       assert.ok(existsSync(join(dir, '.opencode', 'commands', 'cleto-test-heal.md')), 'overlay sobrevive upgrade')
+    })
+  })
+
+  it('upgrade materializa la canónica base y reemplaza tester/reviewer por el overlay', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--profile', 'test', '--no-mcp', '--tier', 'minimo'], dir)
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      const overlayDir = join(TEST_DIR, '..', 'profiles', 'test', 'agents')
+      for (const name of ['tester', 'reviewer']) {
+        const installed = readFileSync(join(dir, '.opencode', 'agents', `${name}.md`))
+        assert.ok(
+          installed.equals(readFileSync(join(overlayDir, `${name}.md`))),
+          `${name} coincide byte a byte con el overlay del perfil`
+        )
+      }
+      for (const f of readdirSync(join(TEST_DIR, '..', 'agents'))) {
+        const name = f.replace(/\.md$/, '')
+        if (name === 'tester' || name === 'reviewer') continue
+        const installed = readFileSync(join(dir, '.opencode', 'agents', f))
+        assert.ok(
+          installed.equals(readFileSync(join(TEST_DIR, '..', 'agents', f))),
+          `${f} coincide byte a byte con la canónica`
+        )
+      }
+    })
+  })
+
+  it('check con profile test: tester/reviewer no divergen del overlay y exit 0', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--profile', 'test', '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(run(['upgrade'], dir).status, 0)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /0 faltantes/)
+      assert.doesNotMatch(r.stdout, /\.opencode\/agents\/(tester|reviewer)\.md \(frontmatter diverge del adaptador/)
+      // Tras upgrade el overlay conserva el modelo del perfil; install/update lo
+      // reescribiria con el tier, asi que el aviso es cierto para esos 2 agentes.
+      assert.match(
+        r.stdout,
+        /⚠ \.opencode\/agents \(tier 'minimo' aplica un modelo distinto al de su fuente en 2 agentes; install\/update reescribirá model:\)/
+      )
+    })
+  })
+
+  it('check sin upgrade: profile test + gratis no diverge y anuncia los 10 agentes del tier', () => {
+    withDir((dir) => {
+      assert.equal(run(['init', '--profile', 'test', '--tier', 'gratis'], dir).status, 0)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /0 faltantes/)
+      // Un install sano aplica el tier tambien al overlay: no hay falso positivo.
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      assert.match(
+        r.stdout,
+        /⚠ \.opencode\/agents \(tier 'gratis' aplica un modelo distinto al de su fuente en 10 agentes; install\/update reescribirá model:\)/
+      )
+    })
+  })
+
+  it('check sin upgrade: profile test + minimo solo reescribiria el modelo del overlay (2 agentes)', () => {
+    withDir((dir) => {
+      assert.equal(run(['init', '--profile', 'test', '--tier', 'minimo'], dir).status, 0)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /0 faltantes/)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      // `minimo` coincide con la canónica: solo el overlay del perfil difiere.
+      assert.match(
+        r.stdout,
+        /⚠ \.opencode\/agents \(tier 'minimo' aplica un modelo distinto al de su fuente en 2 agentes; install\/update reescribirá model:\)/
+      )
     })
   })
 
@@ -1274,6 +1366,78 @@ describe('CLI check (G3)', () => {
       )
       // La copia de opencode (identity, no editada) no debe reportar divergencia.
       assert.doesNotMatch(r.stdout, /\.opencode\/agents\/.*diverge del adaptador/)
+    })
+  })
+
+  it('tier gratis: acepta el estado del tier sin falso positivo y anuncia la diferencia (exit 0)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      assert.match(
+        r.stdout,
+        /⚠ \.opencode\/agents \(tier 'gratis' aplica un modelo distinto al de su fuente en [1-9]\d* agentes; install\/update reescribirá model:\)/
+      )
+    })
+  })
+
+  it('tier gratis legacy: el check acepta el otro modelo gratis conocido sin falso positivo', () => {
+    withDir((dir) => {
+      // install con el fallback (big-pickle) aplicado y persistido en .ancletorc
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '0' })
+      // estado legacy/importado: sin gratisModel persistido y con Muse Spark detectable,
+      // asi el check resuelve un modelo gratis distinto del que quedo instalado.
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      delete rc.gratisModel
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['check'], dir, { ANCLETO_MUSE_SPARK: '1' })
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      assert.match(
+        r.stdout,
+        /⚠ \.opencode\/agents \(tier 'gratis' aplica un modelo distinto al de su fuente en [1-9]\d* agentes; install\/update reescribirá model:\)/
+      )
+    })
+  })
+
+  it('mirror canónico con tier distinto: anuncia la diferencia aunque no haya divergencia', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      for (const f of readdirSync(join(TEST_DIR, '..', 'agents'))) {
+        copyFileSync(join(TEST_DIR, '..', 'agents', f), join(dir, '.opencode', 'agents', f))
+      }
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      assert.match(r.stdout, /⚠ \.opencode\/agents \(tier 'gratis' aplica un modelo distinto al de su fuente en [1-9]\d* agentes/)
+    })
+  })
+
+  it('mirror distinto de la canónica y del tier se reporta como divergencia (exit 0)', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const agentPath = join(dir, '.opencode', 'agents', 'orchestrator.md')
+      const edited = readFileSync(agentPath, 'utf8').replace(/^model: .*$/m, 'model: proveedor/modelo-ajeno')
+      writeFileSync(agentPath, edited)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(
+        r.stdout,
+        /⚠ \.opencode\/agents\/orchestrator\.md \(frontmatter diverge del adaptador para host 'opencode'\)/
+      )
+      assert.match(r.stdout, /tier 'gratis' aplica un modelo distinto/)
+    })
+  })
+
+  it('tier minimo: sin aviso de tier y sin divergencia', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      assert.doesNotMatch(r.stdout, /aplica un modelo distinto/)
     })
   })
 
@@ -2931,6 +3095,25 @@ describe('CLI upgrade (S3)', () => {
       assert.equal(r.status, 0)
       assert.match(r.stdout, /0 faltantes/)
       assert.match(r.stdout, /0 huerfanos/)
+      // Con `minimo` el tier coincide con la canónica: no hay aviso de tier.
+      assert.doesNotMatch(r.stdout, /aplica un modelo distinto/)
+    })
+  })
+
+  it('upgrade revierte un model: editado en el mirror a la canónica', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const agentPath = join(dir, '.opencode', 'agents', 'orchestrator.md')
+      const edited = readFileSync(agentPath, 'utf8').replace(/^model: .*$/m, 'model: proveedor/modelo-ajeno')
+      writeFileSync(agentPath, edited)
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0)
+      for (const f of readdirSync(join(TEST_DIR, '..', 'agents'))) {
+        assert.ok(
+          readFileSync(join(dir, '.opencode', 'agents', f)).equals(readFileSync(join(TEST_DIR, '..', 'agents', f))),
+          `upgrade materializa la canónica en ${f}`
+        )
+      }
     })
   })
 })
@@ -3038,8 +3221,13 @@ describe('CLI init --tier (v0.6.2)', () => {
     withDir((dir) => {
       const r = run(['init', '--tier', 'minimo'], dir)
       assert.equal(r.status, 0)
-      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
-      assert.match(orchestrator, /model: opencode-go\/deepseek-v4\.1-flash/)
+      // `coder` no recibe la nota de host que init agrega al orchestrator con compresión,
+      // así que el mirror queda byte-idéntico a la canónica.
+      const coder = readFileSync(join(dir, '.opencode', 'agents', 'coder.md'))
+      assert.ok(
+        coder.equals(readFileSync(join(TEST_DIR, '..', 'agents', 'coder.md'))),
+        'tier minimo deja el mirror byte-idéntico a la canónica'
+      )
     })
   })
 
@@ -3096,8 +3284,11 @@ describe('CLI init --tier (v0.6.2)', () => {
       const r = run(['init'], dir)
       assert.equal(r.status, 0)
       assert.match(r.stdout, /Tier: minimo/)
-      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
-      assert.match(orchestrator, /model: opencode-go\/deepseek-v4\.1-flash/)
+      const coder = readFileSync(join(dir, '.opencode', 'agents', 'coder.md'))
+      assert.ok(
+        coder.equals(readFileSync(join(TEST_DIR, '..', 'agents', 'coder.md'))),
+        'el tier guardado (minimo) no altera el modelo canónico'
+      )
     })
   })
 })

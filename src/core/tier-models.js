@@ -3,6 +3,46 @@ import { spawnSync } from 'node:child_process'
 export const MUSE_SPARK_MODEL = 'opencode/muse-spark-1.3-contributor-free'
 export const GRATIS_FALLBACK_MODEL = 'opencode/big-pickle'
 
+// Tabla de modelos por tier: unico dueno. `src/cli/index.js` la importa desde aca.
+export const TIERS = {
+  normal: {
+    orchestrator: 'opencode-go/qwen3.7-plus',
+    coder: 'opencode-go/minimax-m3',
+    tester: 'opencode-go/deepseek-v4.1-flash',
+    'spec-writer': 'opencode-go/qwen3.7-plus',
+    reviewer: 'opencode-go/qwen3.6-plus',
+    'technical-discovery': 'opencode-go/deepseek-v4.1-flash',
+    'technical-seed-writer': 'opencode-go/minimax-m3',
+    'memory-keeper': 'opencode-go/deepseek-v4.1-flash',
+    'context-resolver': 'opencode-go/deepseek-v4.1-flash',
+    documenter: 'opencode-go/deepseek-v4.1-flash'
+  },
+  minimo: {
+    orchestrator: 'commandcode/deepseek/deepseek-v4.1-flash',
+    coder: 'commandcode/deepseek/deepseek-v4.1-flash',
+    tester: 'commandcode/deepseek/deepseek-v4.1-flash',
+    'spec-writer': 'commandcode/deepseek/deepseek-v4.1-flash',
+    reviewer: 'commandcode/deepseek/deepseek-v4.1-flash',
+    'technical-discovery': 'commandcode/deepseek/deepseek-v4.1-flash',
+    'technical-seed-writer': 'commandcode/deepseek/deepseek-v4.1-flash',
+    'memory-keeper': 'commandcode/deepseek/deepseek-v4.1-flash',
+    'context-resolver': 'commandcode/deepseek/deepseek-v4.1-flash',
+    documenter: 'commandcode/deepseek/deepseek-v4.1-flash'
+  },
+  gratis: {
+    orchestrator: 'opencode/big-pickle',
+    coder: 'opencode/big-pickle',
+    tester: 'opencode/big-pickle',
+    'spec-writer': 'opencode/big-pickle',
+    reviewer: 'opencode/big-pickle',
+    'technical-discovery': 'opencode/big-pickle',
+    'technical-seed-writer': 'opencode/big-pickle',
+    'memory-keeper': 'opencode/big-pickle',
+    'context-resolver': 'opencode/big-pickle',
+    documenter: 'opencode/big-pickle'
+  }
+}
+
 let probed = null
 
 export function envGratisModel() {

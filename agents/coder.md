@@ -1,7 +1,7 @@
 ---
 description: Implements approved changes from aspec artifacts or orchestrator instructions
 mode: subagent
-model: opencode-go/minimax-m3
+model: commandcode/deepseek/deepseek-v4.1-flash
 temperature: 0.1
 color: '#10b981'
 tools:

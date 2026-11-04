@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-03T22:11:31Z
-pluginVersion: 0.18.10
+generatedAt: 2026-11-04T11:11:07Z
+pluginVersion: 0.18.11
 skillVersion: '2.3'
 ---
 
@@ -36,11 +36,29 @@ skillVersion: '2.3'
 | Re-aplicar templates/skills | `ancleto upgrade [--agent <nombre>]` | `src/cli/index.js` |
 | Verificar instalación | `ancleto check` | `src/cli/index.js` |
 | Diagnóstico de entorno | `ancleto doctor` | `src/cli/index.js` |
-| Refrescar catálogo de modelos | `node scripts/refresh-model-catalog.mjs` | `scripts/refresh-model-catalog.mjs` |
+| Descubrir catálogo (dry-run) | `node scripts/refresh-model-catalog.mjs` | `scripts/refresh-model-catalog.mjs` |
+| Reemplazar snapshot del catálogo | `node scripts/refresh-model-catalog.mjs --write` | `scripts/refresh-model-catalog.mjs` |
 | Bundle portable | `ancleto export [--tar <file>]` / `ancleto import <bundle>` | `src/cli/index.js` |
 
 No hay formatter ni typechecker declarados: el repo es JavaScript ESM sin `tsconfig.json` y
 `PRODUCT.md` registra `Format: not-configured` / typecheck no aplica.
+
+## Refresco del catálogo de modelos
+
+Procedimiento **manual**, con `opencode` instalado en una máquina de mantenimiento. Nunca corre en
+`install`, `update`, `init`, `import`, `check`, la suite de tests ni CI:
+
+1. Dry-run: enumera todos los proveedores de `opencode models --refresh` y consulta cada uno con
+   `opencode models <provider> --verbose --refresh`.
+2. Clasifica la corrida como `available`, `binary-missing`, `network-unavailable` o `partial`; solo
+   `available` habilita escritura.
+3. Con `available`, valida la forma, rechaza `opencode/big-pickle` si dejó de costar 0, imprime el
+   diff contra el snapshot y escribe el candidato en `.ancleto/model-catalog.candidate.json`
+   (local, no se commitea).
+4. Tras revisar el diff, `--write` reemplaza `src/core/model-catalog.json` de forma atómica
+   (temporal + rename).
+5. Correr los guards `test/model-catalog-discovery.test.js`, `test/model-catalog.test.js` y
+   `test/content-guards.test.js` antes de commitear el snapshot.
 
 ## CLI por áreas
 

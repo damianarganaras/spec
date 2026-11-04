@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-03T22:11:31Z
-pluginVersion: 0.18.10
+generatedAt: 2026-11-04T11:11:07Z
+pluginVersion: 0.18.11
 skillVersion: '2.3'
 ---
 
@@ -18,14 +18,15 @@ skillVersion: '2.3'
   (`src/cli/index.js`).
 - **ESM puro**: `"type": "module"`; no hay TypeScript ni `tsconfig.json` pese a la mención genérica
   de `AGENTS.md` (`PRODUCT.md` lo aclara).
-- **Un dueño por invariante**: la tabla de modelos y el resolver viven en
-  `src/core/tier-models.js`; la adaptación de frontmatter, en `src/core/adapters/frontmatter.js`;
-  la detección de entorno, en `src/core/machine-env.js`; el render del working-context, en
-  `src/core/memory/working-context.js`.
+- **Un dueño por invariante**: `TIERS`/`TIER_CHAINS` y el resolver viven en
+  `src/core/tier-models.js`; el parseo/diff/validación del catálogo, en
+  `src/core/model-catalog.js`; la adaptación de frontmatter, en
+  `src/core/adapters/frontmatter.js`; la detección de entorno, en `src/core/machine-env.js`; el
+  render del working-context, en `src/core/memory/working-context.js`.
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.18.10)
+## Modelos y tiers (estado 0.18.11)
 
 ### Tabla y cadenas
 
@@ -44,15 +45,36 @@ skillVersion: '2.3'
 
 ### Catálogo verificado
 
-- `src/core/model-catalog.json` es un **snapshot commiteado** con `generated_at`, método
-  (`opencode models <provider> --verbose`) y proveedores (`opencode-go`, `commandcode`, `opencode`).
-- `scripts/refresh-model-catalog.mjs` lo refresca **manualmente**; nunca corre en CI ni en
-  `install`/`check`. Si `opencode` falta, un proveedor falla o no se parsea ningún ID, aborta sin
-  escribir un snapshot vacío.
+- `src/core/model-catalog.json` es un **snapshot commiteado** con `generated_at: 2026-11-04`,
+  método `opencode models <provider> --verbose --refresh` y **5 proveedores / 211 IDs**:
+  `opencode` (10), `opencode-go` (30), `anthropic` (20), `commandcode` (71), `openai` (80).
+- `src/core/model-catalog.js` es el dueño único de los **helpers puros**: enumerar proveedores de
+  la salida plana, validar nombres de proveedor antes de spawnear, parsear la salida verbose, diff
+  de snapshots, validar la forma, clasificar la corrida, detectar violaciones de modelo gratuito y
+  calcular antigüedad. **No** importa `node:child_process`, no hace red y no escribe archivos.
 - `loadModelCatalog` acepta la ruta por `ANCLETO_MODEL_CATALOG` (seam de test/manual); no consulta
   red ni ejecuta procesos.
 - El guard estructural `test/agent-model-coherence.test.js` + `test/model-catalog.test.js` detecta
   IDs de `TIERS`, `agents/*.md` o `profiles/*/agents/*.md` ausentes del snapshot.
+
+### Descubrimiento dev-only
+
+- `scripts/refresh-model-catalog.mjs` es el **único punto que lanza procesos** (`opencode models`).
+  Es manual y vive fuera del tarball publicado (`package.json` → `files` no incluye `scripts/`).
+- Enumera **todos** los proveedores desde `opencode models --refresh` y consulta cada uno con
+  `opencode models <provider> --verbose --refresh`; los nombres inseguros se rechazan antes de
+  pasarlos como argumento.
+- Clasificación con precedencia fija:
+  `binary-missing` > `partial` (proveedor fallido o ninguno enumerado) >
+  `network-unavailable` (marcador `Failed to fetch models.dev`) > `available`.
+- Solo `available` habilita el candidato. Antes de escribir: valida la forma, rechaza
+  `opencode/big-pickle` si su `cost.input`/`cost.output` no es 0, imprime el diff (proveedores e
+  IDs altos/bajos y cambios de `cost`/`limit`) y escribe el candidato en
+  `.ancleto/model-catalog.candidate.json` (local, no se commitea).
+- El snapshot se reemplaza solo con `--write`, de forma **atómica** (temporal + rename); el dry-run
+  nunca toca `src/core/model-catalog.json`.
+- **Ni runtime ni CI descubren modelos ni acceden a la red**: el descubrimiento no se importa desde
+  `src/` y no corre en tests, `install`/`update`/`init`/`import`/`check`.
 
 ### `gratis` es free-only
 
@@ -63,16 +85,23 @@ skillVersion: '2.3'
 - **Eliminado**: `MUSE_SPARK_MODEL`, `detectMuseSpark()`, `envGratisModel()` y la rama
   `ANCLETO_MUSE_SPARK`. Los modelos `*-contributor` reales no son free tier (cuestan 0.1/0.2), por
   eso no se usan como `gratis`.
+- El refresh **rechaza** el candidato si `opencode/big-pickle` deja de costar 0: la invariante se
+  valida en el tooling, no solo en el tier.
 
-### Oráculo de `check`
+### Oráculo y avisos de `check`
 
-- Solo aplica a mirrors de `opencode` (el único host que escribe `model:`).
+- El oráculo de tier solo aplica a mirrors de `opencode` (el único host que escribe `model:`).
 - Para `minimo`, el **conjunto de aceptación** es la cadena estática completa, con el
   resuelto-ahora primero: un mirror escrito cuando el catálogo tenía otro candidato sigue siendo
   válido.
 - Si el catálogo falta, es ilegible o `ANCLETO_MODEL_CATALOG` es inválido, `check` **no aborta**:
   acepta los candidatos estáticos y emite un aviso no bloqueante
   (`no se pudo verificar el catálogo…`). `install`/`init`/`import` sí fallan con error.
+- **Deriva de modelo (0.18.11)**: si un `model:` del mirror de `opencode` no figura en el snapshot
+  legible, `check` emite un warning por archivo que nombra el ID y sugiere
+  `node scripts/refresh-model-catalog.mjs`. No cambia el exit code ni el conjunto de aceptación.
+- **Antigüedad (0.18.11)**: un único aviso informativo por ejecución cuando `generated_at` supera
+  **90 días** (`isCatalogStale`), sin TTL en runtime ni efecto en la resolución.
 - El aviso de deriva de tier se dispara si el mirror difiere del resuelto-ahora **o** si el
   resuelto-ahora difiere de la fuente esperada (ambas direcciones).
 
@@ -125,21 +154,26 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
+- **Pack actual**: tier `minimo`, 765 archivos, ~35.077 tokens (comprimido).
 
 ## Riesgos y deuda observada
 
 - **Snapshot del catálogo envejece**: es estático; si un proveedor retira un ID, `install` falla
-  recién en `ancleto` (no en el host). Mitigación: refresco manual + guard de tests.
+  recién en `ancleto` (no en el host). Mitigación: refresco manual con `--refresh`, aviso de
+  antigüedad a los 90 días y guards de tests.
 - **Costo de `reviewer`**: `qwen3.8-max` (2/6) es más caro que `qwen3.8-flash`; es el tradeoff
   aceptado para `normal` (el tier de modelos más capaces).
-- **Deriva de manifiesto**: `.ancletorc` declara `version: 0.18.8` y `package.json` `0.18.10`; no se
-  reescribió en el release. No bloquea el CLI, pero cualquier `check`/diagnóstico que compare
-  versiones puede reportar deriva.
-- **`scripts/` no se publica**: `package.json` → `files` no incluye `scripts/`, así que el refresco
-  del catálogo solo existe en el repo fuente, no en el tarball npm.
+- **Descubrimiento no publicado**: `scripts/` no está en `package.json` → `files`; el refresco del
+  catálogo solo existe en el repo fuente, no en el tarball npm.
+- **Un solo camino de spawn**: `scripts/refresh-model-catalog.mjs` es el único lugar con
+  `node:child_process`; cualquier intento de mover el descubrimiento a `src/` rompería el contrato
+  dev-only y el "cero red en runtime".
 - **Doble fuente de tier por host**: solo `opencode` materializa `model:`; otros hosts lo dropean
   (claude/vscode/copilot/commandcode) o emiten `model: inherit` (antigravity). Resolver el catálogo
   ahí no tendría efecto.
+- **Artefacto local desactualizado**: `.ancleto/machine-env.md` registra `ancleto: 0.18.8` mientras
+  `package.json` está en `0.18.11`; es un derivado que se regenera en `init`/`install`/`upgrade`, no
+  un manifiesto versionado.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene
   documentación del framework y el seed.
 

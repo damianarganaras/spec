@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-03T22:11:31Z
-pluginVersion: 0.18.10
+generatedAt: 2026-11-04T11:11:07Z
+pluginVersion: 0.18.11
 skillVersion: '2.3'
 ---
 
@@ -17,7 +17,7 @@ skillVersion: '2.3'
 | GitHub Actions | CI de lint/tests y release | Salida | `.github/workflows/publish.yml` |
 | GitHub Releases | Notas del release por tag | Salida | `.github/workflows/publish.yml` |
 | Repomix | Empaquetado de contexto para discovery | Salida | `src/cli/index.js` → `runRepomix` |
-| opencode | Host del IDE; base de sesiones para `stats` | Entrada | `src/cli/index.js` → `opencodeDbPath` |
+| opencode | Host del IDE; base de sesiones para `stats`; `opencode models` solo en mantenimiento | Entrada | `src/cli/index.js` → `opencodeDbPath`, `scripts/refresh-model-catalog.mjs` |
 | MCP de memoria (`ancleto-memory`) | Tools `searchMemory`, `recordRule`, `recordDecision` | Salida/entrada | `src/core/memory/mcp-server.js` |
 | MCP caveman | Compresión de contexto en hosts que la exponen | Salida | `src/cli/index.js`, AGENTS.md |
 | MCP engram | Memoria de sesión opcional (opt-in) | Salida | `src/cli/index.js` → `buildDefaultMcp` |
@@ -32,6 +32,7 @@ skillVersion: '2.3'
   (`npm view @ancleto/spec@<v>`).
 - `NPM_TOKEN` y `GITHUB_TOKEN` son secretos del workflow; sus valores no están en el repo.
 - El canary del tarball es **no bloqueante**: reintenta 3 veces y avisa si npm aún no propagó.
+- CI **no** ejecuta descubrimiento de modelos ni accede a la red de proveedores.
 
 ## Repomix
 
@@ -43,13 +44,16 @@ skillVersion: '2.3'
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand.
 
-## opencode (host y telemetría local)
+## opencode (host, telemetría local y catálogo)
 
 - `stats` y `stats failures` leen la base de sesiones de opencode, por defecto
   `~/.local/share/opencode/opencode.db`; se puede cambiar con `ANCLETO_OPENCODE_DB`.
 - `stats failures` clasifica fallos de tool parts en `env`/`check`/`tool`/`unknown`, agrupa por
   comando-esqueleto, enmascara paths y secretos, y nunca proyecta `output`/`error` completos.
-- La integración es **solo lectura** sobre la base de opencode.
+- La integración con la base es **solo lectura**.
+- `scripts/refresh-model-catalog.mjs` invoca `opencode models --refresh` y
+  `opencode models <provider> --verbose --refresh` en una máquina de mantenimiento. Es la única vía
+  de descubrimiento; el runtime consume el snapshot commiteado y no ejecuta procesos ni red.
 
 ## MCP propios
 
@@ -74,9 +78,9 @@ skillVersion: '2.3'
 
 ## Dependencias privadas observables
 
-- `src/core/model-catalog.json` es un snapshot **commiteado** del catálogo de proveedores; no hay
-  llamada de red en runtime. `scripts/refresh-model-catalog.mjs` es la única vía de refresco y
-  requiere `opencode` local.
+- `src/core/model-catalog.json` es un snapshot **commiteado** del catálogo de proveedores (5
+  proveedores, 211 IDs, `generated_at: 2026-11-04`); no hay llamada de red en runtime.
+  `scripts/refresh-model-catalog.mjs` es la única vía de refresco y requiere `opencode` local.
 - Las bases SQLite (`.ancleto/memory.db` y la de opencode) son dependencias de datos locales; no se
   versionan.
 - `documentation/` es material legado de lnx-cli, gitignored y fuera del runtime (`PRODUCT.md`,

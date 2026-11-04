@@ -1,23 +1,24 @@
 ---
 node: units/discovery-engine
 kind: dossier
-read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y la resolución de modelos por tier"
-covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos]
-sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-sourcesSha: 62c97ff2f1f342f5
-generatedAt: 2026-11-03T22:11:31Z
-pluginVersion: 0.18.10
+read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
+covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, descubrimiento dev-only]
+sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
+generatedAt: 2026-11-04T11:11:07Z
+pluginVersion: 0.18.11
 skillVersion: '2.3'
 ---
 
-# Unidad: discovery, affected-set y resolución de modelos
+# Unidad: discovery, affected-set, resolución de modelos y catálogo
 
 ## Propósito
 
 Separar el descubrimiento técnico del barrido manual: producir un mapa topológico estable
 (`.discovery-map.json`), empaquetar el contexto con el presupuesto del tier, medir si el seed sigue
-fresco y calcular qué archivos dependen de un cambio. En 0.18.10 el mismo módulo de tiers resuelve
-la cadena de `minimo` contra un catálogo verificado, en lugar de escribir IDs fijos.
+fresco y calcular qué archivos dependen de un cambio. En `0.18.11` el catálogo de modelos se puede
+refrescar de forma completa y auditable desde una máquina de mantenimiento, sin introducir
+descubrimiento en runtime: se enumeran todos los proveedores, se fuerza `--refresh`, se clasifica
+la corrida, se calcula el diff y se escribe de forma atómica.
 
 ## Recorrido relevante
 
@@ -63,12 +64,52 @@ explícito. `readProjectTier` lee `.opencode/.ancleto-tier` (o `.ancleto-tier` e
   está; `check` usa `allowUnresolved: true` y degrada con aviso.
 - `gratis` no tiene cadena: usa `opencode/big-pickle`; un `gratisModel` desconocido se normaliza.
 
-### Catálogo
+### Catálogo de modelos
 
-`src/core/model-catalog.json` guarda `generated_at`, `source.method`, `source.providers` y los IDs
-con costo y límites. `scripts/refresh-model-catalog.mjs` lo regenera **manualmente** ejecutando
-`opencode models <provider> --verbose`; si falla, no escribe un snapshot vacío. `loadModelCatalog`
-permite override por `ANCLETO_MODEL_CATALOG`.
+`src/core/model-catalog.json` guarda `generated_at: 2026-11-04`, `source.method`
+(`opencode models <provider> --verbose --refresh`), `source.providers` y los IDs con costo y
+límites: **5 proveedores / 211 IDs** — `opencode` 10, `opencode-go` 30, `anthropic` 20,
+`commandcode` 71, `openai` 80.
+
+`src/core/model-catalog.js` es el dueño único de los helpers puros:
+
+| Helper | Contrato |
+|---|---|
+| `providersFromFlatOutput(raw)` | Enumera proveedores desde una línea `provider/model`; dedup y orden |
+| `isSafeProviderName(name)` | Solo `[a-z0-9][a-z0-9._-]*`; rechaza espacios, `/` y metacaracteres |
+| `parseVerboseProviderOutput(provider, raw)` | `{ id, cost, limit }` con `null` si faltan datos; dedup por `id` |
+| `diffCatalogSnapshots(current, next)` | Altas/bajas de proveedores e IDs y cambios de `cost`/`limit` |
+| `validateCatalogSnapshot(snapshot)` | Fecha real, `source` no vacío, prefijo de proveedor, sin IDs duplicados |
+| `discoveryStatus({...})` | `binary-missing` > `partial` > `network-unavailable` > `available` |
+| `freeModelViolations(snapshot, ids)` | IDs ausentes o con costo distinto de 0 |
+| `catalogAgeDays` / `isCatalogStale` | Edad UTC; stale si supera 90 días |
+
+El módulo **no** importa `node:child_process`, no hace red y no escribe archivos.
+
+### Descubrimiento dev-only
+
+`scripts/refresh-model-catalog.mjs` es el único punto que lanza procesos:
+
+1. `opencode models --refresh` enumera todos los proveedores (salida plana).
+2. Filtra nombres inseguros y consulta cada proveedor con
+   `opencode models <provider> --verbose --refresh`.
+3. Detecta `Failed to fetch models.dev` (marcador offline) y clasifica la corrida.
+4. Solo con `available`: valida la forma, rechaza `opencode/big-pickle` si no cuesta 0, imprime el
+   diff y escribe el candidato en `.ancleto/model-catalog.candidate.json` (local, no se commitea).
+5. `--write` reemplaza `src/core/model-catalog.json` con escritura atómica (temporal + rename); sin
+   `--write` el snapshot commiteado no se toca.
+
+Nunca corre en `install`/`update`/`init`/`import`/`check`, en la suite ni en CI.
+
+### Aviso de deriva/antigüedad en `check`
+
+`check` carga el catálogo una vez (solo si `opencode` está instalado) y lo descarta si la forma es
+inválida. Con snapshot legible:
+
+- reporta cada `model:` de mirror ausente del catálogo, con el archivo y el ID;
+- emite un aviso único de antigüedad si `generated_at` supera 90 días.
+
+Ambos son no bloqueantes: no alteran el exit code ni el conjunto de aceptación del oráculo.
 
 ### Affected-set
 
@@ -84,10 +125,12 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **El pack actual**: 759 archivos, ~28.428 tokens, tier `minimo` (comprimido). El estado quedó
+- **Pack actual**: 765 archivos, ~35.077 tokens, tier `minimo` (comprimido). El estado quedó
   guardado en `docs/technical-discovery/.discovery-state.json`.
+- **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
+  runtime/CI" y la separación `model-catalog.js` (puro) / `scripts/` (procesos).
 - **Riesgo de catálogo**: el snapshot puede envejecer; `install` falla recién en `ancleto`, no en el
-  host. Refresco manual + guard de tests es la mitigación declarada.
+  host. Mitigación: refresco manual con `--refresh`, aviso a los 90 días y guards de tests.
 - **Riesgo de alcance**: `affected-set` acota por diseño las formas dinámicas no literales; no es un
   análisis semántico.
 
@@ -99,8 +142,9 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 | `src/core/repomix-tier.js` | Args de Repomix, ignores y presupuesto por tier |
 | `src/core/affected-set.js` | Grafo de imports y clausura de dependientes |
 | `src/core/tier-models.js` | `TIERS`, `TIER_CHAINS`, resolver y catálogo |
-| `src/core/model-catalog.json` | Snapshot verificado de modelos |
-| `scripts/refresh-model-catalog.mjs` | Refresco manual del snapshot |
-| `src/cli/index.js` (`packDiscovery`, `checkDiscovery`) | Empaquetado y estado del seed |
+| `src/core/model-catalog.js` | Helpers puros de parseo, diff, validación y clasificación |
+| `src/core/model-catalog.json` | Snapshot verificado de modelos (5 proveedores / 211 IDs) |
+| `scripts/refresh-model-catalog.mjs` | Descubrimiento dev-only y escritura atómica |
+| `src/cli/index.js` (`packDiscovery`, `checkDiscovery`, `checkAgentsFrontmatter`) | Empaquetado, estado del seed y avisos de `check` |
 | `docs/technical-discovery/.discovery-state.json` | Último hash/pack del seed |
 | `docs/technical-discovery/seed-map.json` | Documento → áreas de evidencia |

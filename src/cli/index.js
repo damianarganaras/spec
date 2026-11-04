@@ -1070,6 +1070,16 @@ async function hostConfigHasCompression(projectDir, host) {
   return false
 }
 
+// Decision de la nota de compresion: misma fuente de verdad que `check` (la config
+// MCP en disco) mas la escritura MCP que este comando va a materializar durante la
+// corrida. La config final es la union de ambas, sin volver a detectar el binario.
+async function resolvesHostCompression(projectDir, host, { writesCaveman = false, intendedNames = null } = {}) {
+  if (!hostSupportsCompression(host)) return false
+  if (await hostConfigHasCompression(projectDir, host)) return true
+  if (!writesCaveman) return false
+  return intendedNames === null || intendedNames.includes('caveman')
+}
+
 // Solo Command Code: los tiers tampoco cambian modelos (el agent no fija `model`,
 // hereda el de la sesión); la nota lo recuerda al empezar.
 const COMMANDCODE_MODEL_NOTE = `
@@ -1766,7 +1776,9 @@ async function install(args) {
     await refreshWorkingContext(projectDir)
     await refreshMachineEnv(projectDir)
     const written = await installAgentAssets(projectDir, agent, {
-      compression: hostSupportsCompression(agent) && Boolean(mcpMap.caveman)
+      compression: await resolvesHostCompression(projectDir, agent, {
+        writesCaveman: Boolean(mcpMap && mcpMap.caveman)
+      })
     })
     if (profile === 'test') await installProfileOverlay(projectDir, agent)
     await writeManifest(projectDir, {
@@ -1967,7 +1979,9 @@ async function initProject(args) {
   // los agents para materializar la directiva host-scoped solo donde hay la tool.
   const mcpMap = withMcp ? buildDefaultMcp({}) : {}
   const written = await installAgentAssets(projectDir, agent, {
-    compression: hostSupportsCompression(agent) && Boolean(mcpMap.caveman)
+    compression: await resolvesHostCompression(projectDir, agent, {
+      writesCaveman: Boolean(mcpMap && mcpMap.caveman)
+    })
   })
   if (profile === 'test') await installProfileOverlay(projectDir, agent)
   const manifest = await writeManifest(projectDir, {
@@ -4168,6 +4182,11 @@ async function importCmd(args) {
     process.exit(1)
   }
   let manifest = null
+  // `repairProjectMcp` materializa el MCP default del proyecto y su resultado tambien
+  // decide, junto con la config en disco, si este import escribe la nota de compresion.
+  // Se resuelve una sola vez antes de instalar los assets y se reutiliza en el repair.
+  let freshProjectMcp = null
+  let intendedMcpNames = null
   if (bundleArg) {
     const resolved = resolve(bundleArg)
     if (!existsSync(resolved)) {
@@ -4245,8 +4264,15 @@ async function importCmd(args) {
       await cp(src, join(projectDir, '.opencode', d), { recursive: true, force: false })
       copiedAssets[d].push(`.opencode/${d}`)
     }
+    freshProjectMcp = buildDefaultMcp({ withEngram: manifest?.flags?.engram === true })
+    intendedMcpNames = (manifest.mcp ?? []).map((m) => m.name)
     const written = await installAgentAssets(projectDir, agent, {
-      compression: hostSupportsCompression(agent) && Boolean(buildDefaultMcp({ withEngram: manifest?.flags?.engram === true }).caveman)
+      // `repairProjectMcp` solo escribe `.opencode/opencode.json`: para el resto de
+      // los hosts la nota depende exclusivamente de su config ya presente en disco.
+      compression: await resolvesHostCompression(projectDir, agent, {
+        writesCaveman: agent === 'opencode' && Boolean(freshProjectMcp && freshProjectMcp.caveman),
+        intendedNames: intendedMcpNames
+      })
     })
     if (importProfile === 'test') await installProfileOverlay(projectDir, agent)
     if (tierModelMap) {
@@ -4286,11 +4312,11 @@ async function importCmd(args) {
   const withEngram = manifest
     ? manifest.flags?.engram === true
     : Boolean((await readProjectMcp(projectDir)).cfg.mcp?.engram)
-  const fresh = buildDefaultMcp({ withEngram })
+  const fresh = freshProjectMcp ?? buildDefaultMcp({ withEngram })
   if (manifest?.flags?.azure) {
     fresh['azure-devops'] = { type: 'local', enabled: true, command: ['npx', '-y', '@davstack/mcp-azure-devops'] }
   }
-  const intended = manifest ? manifest.mcp.map((m) => m.name) : null
+  const intended = manifest ? intendedMcpNames : null
   const { file, fixed } = await repairProjectMcp(projectDir, fresh, intended)
   console.log(fixed.length
     ? `ancleto: MCP regenerados en ${file}: ${fixed.join(', ')}`

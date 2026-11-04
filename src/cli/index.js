@@ -4212,6 +4212,12 @@ async function importCmd(args) {
       console.error(`ancleto: formato de bundle no soportado: ${manifest.format}`)
       process.exit(1)
     }
+    // `manifest.mcp` se consume despues del primer write (nombres intencionados del MCP):
+    // un valor no-array reventaria ahi y dejaria el import a medio aplicar.
+    if (manifest.mcp !== undefined && !Array.isArray(manifest.mcp)) {
+      console.error('ancleto: bundle invalido (manifest.mcp no es un arreglo)')
+      process.exit(1)
+    }
     const localVersion = await packageVersion()
     if (manifest.ancletoVersion && manifest.ancletoVersion !== localVersion) {
       console.warn(`ancleto: el bundle es de v${manifest.ancletoVersion} y el CLI es v${localVersion} (se continua igual)`)

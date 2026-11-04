@@ -21,7 +21,7 @@ import { computeAffectedSet } from '../core/affected-set.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
 import { TIERS, TIER_CHAINS, resolveTierModels, loadModelCatalog, modelIdsFromCatalog, gratisModel, isKnownGratisModel } from '../core/tier-models.js'
-import { catalogAgeDays, isCatalogStale } from '../core/model-catalog.js'
+import { catalogAgeDays, isCatalogStale, validateCatalogSnapshot } from '../core/model-catalog.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -2844,7 +2844,11 @@ async function checkCommand() {
   let modelCatalog = null
   if (installedHosts.includes('opencode')) {
     try {
-      modelCatalog = loadModelCatalog()
+      const loaded = loadModelCatalog()
+      // Un JSON parseable pero con forma inválida (`{}`, `{providers:{}}`, un array,
+      // un string) no es un catálogo verificable: se descarta para no derivar deriva
+      // falsa por modelo. Queda el mismo camino que cuando la carga lanza.
+      modelCatalog = validateCatalogSnapshot(loaded).ok ? loaded : null
     } catch {
       modelCatalog = null
     }

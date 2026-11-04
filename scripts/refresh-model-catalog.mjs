@@ -38,9 +38,9 @@ const CANDIDATE = join(ROOT, '.ancleto', 'model-catalog.candidate.json')
 const METHOD = 'opencode models <provider> --verbose --refresh'
 const OFFLINE_MARKER = 'Failed to fetch models.dev'
 
-function readCurrent() {
+function readCurrent(path) {
   try {
-    return JSON.parse(readFileSync(CATALOG, 'utf8'))
+    return JSON.parse(readFileSync(path, 'utf8'))
   } catch {
     return { providers: {} }
   }
@@ -64,10 +64,10 @@ function runOpencode(args) {
   }
 }
 
-function looksBinaryMissing(result) {
-  if (result.error) return true
-  if (result.status === 0) return false
-  return /(?:not recognized|not found|no se reconoce|ENOENT)/i.test(result.stderr)
+export function looksBinaryMissing(result) {
+  if (result.error?.code === 'ENOENT') return true
+  const output = `${result.stderr || ''}\n${result.stdout || ''}`
+  return /is not recognized|no se reconoce|command not found|: not found/i.test(output)
 }
 
 function statusLine(result) {
@@ -112,9 +112,12 @@ function printDiff(current, candidate) {
   }
 }
 
-export function main(argv = process.argv.slice(2)) {
+export async function main(argv = process.argv.slice(2), options = {}) {
+  const run = options.run ?? runOpencode
+  const catalogPath = options.catalogPath ?? CATALOG
+  const candidatePath = options.candidatePath ?? CANDIDATE
   const today = new Date().toISOString().slice(0, 10)
-  const flat = runOpencode(['models', '--refresh'])
+  const flat = run(['models', '--refresh'])
   const binaryMissing = looksBinaryMissing(flat)
   const enumerated = binaryMissing ? [] : providersFromFlatOutput(flat.stdout)
   const providers = enumerated.filter(isSafeProviderName)
@@ -132,7 +135,7 @@ export function main(argv = process.argv.slice(2)) {
   const nextProviders = {}
   if (!binaryMissing) {
     for (const provider of providers) {
-      const result = runOpencode(['models', provider, '--verbose', '--refresh'])
+      const result = run(['models', provider, '--verbose', '--refresh'])
       networkMarker = networkMarker || result.offline
       const entries = parseVerboseProviderOutput(provider, result.stdout)
       if (result.error || result.status !== 0) {
@@ -193,15 +196,15 @@ export function main(argv = process.argv.slice(2)) {
     return 1
   }
 
-  printDiff(readCurrent(), candidate)
+  printDiff(readCurrent(catalogPath), candidate)
 
-  mkdirSync(dirname(CANDIDATE), { recursive: true })
-  writeJsonAtomic(CANDIDATE, candidate)
-  console.log(`  candidato: ${CANDIDATE} (no se commitea)`)
+  mkdirSync(dirname(candidatePath), { recursive: true })
+  writeJsonAtomic(candidatePath, candidate)
+  console.log(`  candidato: ${candidatePath} (no se commitea)`)
 
   if (argv.includes('--write')) {
-    writeJsonAtomic(CATALOG, candidate)
-    console.log(`  snapshot actualizado: ${CATALOG}`)
+    writeJsonAtomic(catalogPath, candidate)
+    console.log(`  snapshot actualizado: ${catalogPath}`)
   } else {
     console.log('  dry-run: usá --write para reemplazar el snapshot commiteado')
   }
@@ -210,9 +213,9 @@ export function main(argv = process.argv.slice(2)) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    process.exit(main())
+    process.exitCode = await main()
   } catch (error) {
     console.error(`ancleto: refresh-model-catalog: ${error.message}`)
-    process.exit(1)
+    process.exitCode = 1
   }
 }

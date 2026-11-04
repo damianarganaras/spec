@@ -564,13 +564,15 @@ en `install`, `update`, `init`, `import`, `check`, la suite de tests ni CI.
    snapshot.
 3. **Candidato.** Con `available` y validaciones en verde, el reporte candidato queda en
    `.ancleto/model-catalog.candidate.json`. Ese archivo **no se commitea**: `.ancleto/` es local.
-4. **Revisión.** Revisá el diff impreso (altas, bajas y cambios de `cost`/`limit`), confirmá que
-   `opencode/big-pickle` sigue con costo 0 y que no hay IDs duplicados ni sin prefijo de proveedor.
+4. **Revisión.** Revisá el diff impreso (altas, bajas y cambios de `cost`/`limit`) y confirmá que no
+   hay IDs duplicados ni sin prefijo de proveedor. El script rechaza el candidato automáticamente si
+   `opencode/big-pickle` deja de costar 0; no es una verificación manual.
 5. **Escritura explícita.** Sólo después de revisar, ejecutá
    `node scripts/refresh-model-catalog.mjs --write` para reemplazar el snapshot de forma atómica
    (temporal + rename). El dry-run nunca modifica `src/core/model-catalog.json`.
 6. **Commit.** Versioná el snapshot actualizado junto con el diff revisado y corré los guards
-   (`test/model-catalog.test.js`, `test/content-guards.test.js`) antes de cerrar.
+   (`test/model-catalog-discovery.test.js`, `test/model-catalog.test.js`, `test/content-guards.test.js`)
+   antes de cerrar.
 
 Mini-sesión de investigación para cambios de catálogo: usá `technical-discovery` para el análisis
 acotado del diff (proveedores/IDs/costos que cambian y su impacto en los tiers) y `memory-keeper`

@@ -8,6 +8,16 @@
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 const DAY_MS = 24 * 60 * 60 * 1000
 
+// `ISO_DATE` acepta cualquier forma `YYYY-MM-DD`, incluidas fechas que no existen en
+// el calendario (`2026-13-01`, `2026-02-31`). El round-trip por `toISOString()` en UTC
+// exige que el motor pueda representar exactamente esa fecha.
+function isRealIsoDate(value) {
+  if (typeof value !== 'string' || !ISO_DATE.test(value)) return false
+  const parsed = Date.parse(`${value}T00:00:00Z`)
+  if (Number.isNaN(parsed)) return false
+  return new Date(parsed).toISOString().slice(0, 10) === value
+}
+
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -163,8 +173,8 @@ export function validateCatalogSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
     return { ok: false, errors: ['el snapshot debe ser un objeto'] }
   }
-  if (typeof snapshot.generated_at !== 'string' || !ISO_DATE.test(snapshot.generated_at)) {
-    errors.push('generated_at debe ser una fecha YYYY-MM-DD')
+  if (!isRealIsoDate(snapshot.generated_at)) {
+    errors.push('generated_at debe ser una fecha YYYY-MM-DD válida')
   }
   if (!snapshot.source || typeof snapshot.source !== 'object' || Array.isArray(snapshot.source)) {
     errors.push('source debe ser un objeto')

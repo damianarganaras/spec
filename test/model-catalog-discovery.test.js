@@ -15,7 +15,7 @@ import {
   providersFromFlatOutput,
   validateCatalogSnapshot
 } from '../src/core/model-catalog.js'
-import { main, writeJsonAtomic } from '../scripts/refresh-model-catalog.mjs'
+import { looksBinaryMissing, main, readCurrent, writeJsonAtomic } from '../scripts/refresh-model-catalog.mjs'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(TEST_DIR, '..')
@@ -87,6 +87,13 @@ function availableRun() {
     return { status: 0, error: null, stdout, stderr: '', offline: false }
   }
 }
+
+// Declaraciones coherentes con el fixture mínimo: el gate de `--write` no depende
+// del repositorio real cuando `declaredIds` se inyecta.
+const FIXTURE_DECLARED_IDS = [
+  { id: 'alpha/a', source: 'TIERS.test.agent' },
+  { id: 'opencode/big-pickle', source: 'TIERS.test.gratis' }
+]
 
 // `main` imprime el estado en stdout; se captura sin tocar procesos ni red.
 async function captureLogs(fn) {
@@ -461,6 +468,124 @@ describe('catalogAgeDays e isCatalogStale', () => {
   })
 })
 
+describe('looksBinaryMissing', () => {
+  const enumeratedStdout = 'alpha/a\nopencode/big-pickle\n'
+
+  it('ENOENT se clasifica como binario ausente', () => {
+    assert.equal(
+      looksBinaryMissing({ status: null, error: { code: 'ENOENT', message: 'spawn opencode ENOENT' }, stdout: '', stderr: '' }),
+      true
+    )
+  })
+
+  it('reconoce el mensaje de shell en varios locales cuando stdout está vacío', () => {
+    const messages = [
+      "'opencode' is not recognized as an internal or external command",
+      'opencode: command not found',
+      'opencode: no se reconoce como un comando interno o externo',
+      "'opencode' wird nicht als Befehl erkannt: nicht erkannt",
+      "opencode: commande introuvable, n'est pas reconnu"
+    ]
+    for (const stderr of messages) {
+      assert.equal(
+        looksBinaryMissing({ status: 1, error: null, stdout: '', stderr }),
+        true,
+        `debe reconocer: ${stderr}`
+      )
+    }
+  })
+
+  it('una corrida exitosa con stdout válido no es binario ausente aunque stderr tenga ruido', () => {
+    assert.equal(
+      looksBinaryMissing({ status: 0, error: null, stdout: enumeratedStdout, stderr: 'not found' }),
+      false
+    )
+  })
+
+  it('ETIMEDOUT no es binario ausente', () => {
+    assert.equal(
+      looksBinaryMissing({ status: null, error: { code: 'ETIMEDOUT', message: 'timeout' }, stdout: '', stderr: '' }),
+      false
+    )
+  })
+
+  it('stdout vacío con status 0 y sin error no es binario ausente', () => {
+    assert.equal(looksBinaryMissing({ status: 0, error: null, stdout: '', stderr: '' }), false)
+  })
+
+  it('un error de la app como "provider not found" no es binario ausente', () => {
+    assert.equal(
+      looksBinaryMissing({ status: 1, error: null, stdout: '', stderr: 'provider not found' }),
+      false
+    )
+  })
+
+  it('un fallo con stdout que enumera proveedores no es binario ausente', () => {
+    assert.equal(
+      looksBinaryMissing({ status: 1, error: null, stdout: enumeratedStdout, stderr: 'not found' }),
+      false
+    )
+  })
+})
+
+describe('readCurrent', () => {
+  function capture(fn) {
+    const stdout = []
+    const stderr = []
+    const originalLog = console.log
+    const originalError = console.error
+    console.log = (...args) => { stdout.push(args.join(' ')) }
+    console.error = (...args) => { stderr.push(args.join(' ')) }
+    try {
+      return { value: fn(), output: [...stdout, ...stderr].join('\n') }
+    } finally {
+      console.log = originalLog
+      console.error = originalError
+    }
+  }
+
+  it('un JSON corrupto devuelve baseline vacío y avisa sin lanzar', () => {
+    withDir((dir) => {
+      const path = join(dir, 'catalogo.json')
+      const roto = '{ esto no es JSON'
+      writeFileSync(path, roto)
+      const { value, output } = capture(() => readCurrent(path))
+      assert.deepEqual(value, { providers: {} })
+      assert.match(output, /catálogo ilegible/, 'emite un aviso explícito de catálogo ilegible')
+      assert.equal(readFileSync(path, 'utf8'), roto, 'no reescribe el snapshot ilegible')
+    })
+  })
+
+  it('un archivo inexistente devuelve baseline vacío y avisa', () => {
+    withDir((dir) => {
+      const { value, output } = capture(() => readCurrent(join(dir, 'no-existe.json')))
+      assert.deepEqual(value, { providers: {} })
+      assert.match(output, /catálogo ilegible/)
+    })
+  })
+
+  it('el baseline vacío hace que el diff reporte todas las entradas del candidato como altas', () => {
+    withDir((dir) => {
+      const path = join(dir, 'catalogo.json')
+      writeFileSync(path, '{ roto')
+      const candidate = {
+        providers: {
+          alpha: [{ id: 'alpha/a', cost: null, limit: null }],
+          beta: [{ id: 'beta/b', cost: null, limit: null }]
+        }
+      }
+      const { value: current } = capture(() => readCurrent(path))
+      const diff = diffCatalogSnapshots(current, candidate)
+      assert.deepEqual(diff.providersAdded, ['alpha', 'beta'])
+      assert.deepEqual(diff.idsAdded, [
+        { provider: 'alpha', id: 'alpha/a' },
+        { provider: 'beta', id: 'beta/b' }
+      ])
+      assert.deepEqual(diff.idsRemoved, [])
+    })
+  })
+})
+
 describe('writeJsonAtomic', () => {
   it('escribe un archivo nuevo con JSON legible', () => {
     withDir((dir) => {
@@ -498,15 +623,14 @@ describe('writeJsonAtomic', () => {
 })
 
 describe('guards de contenido del descubrimiento', () => {
-  it('los helpers puros no importan procesos, E/S ni red y no ejecutan spawn', () => {
+  it('los módulos puros no importan procesos ni red; el script sí puede usar child_process', () => {
     assert.equal(SOURCE.includes('child_process'), false)
     assert.equal(SOURCE.includes('node:fs'), false)
     assert.equal(SOURCE.includes('spawn('), false)
     assert.equal(SOURCE.includes('node:http'), false)
-  })
-
-  it('tier-models.js sigue sin child_process', () => {
     assert.equal(TIER_SOURCE.includes('child_process'), false)
+    // `scripts/` es el borde de E/S: puede spawnear y cargar procesos de forma legítima.
+    assert.match(SCRIPT_SOURCE, /from 'node:child_process'/)
   })
 
   it('el script filtra con isSafeProviderName antes de spawnear un proveedor', () => {
@@ -549,9 +673,11 @@ describe('guards de contenido del descubrimiento', () => {
     )
   })
 
-  it('este test no importa child_process ni lanza procesos o red', () => {
+  it('este test no importa child_process directamente ni lanza procesos o red', () => {
     const self = readFileSync(fileURLToPath(import.meta.url), 'utf8')
     const specifiers = [...self.matchAll(/^import .* from '([^']+)'$/gm)].map((m) => m[1])
+    // El script importado sí carga `node:child_process`; el test sólo lo hace de forma
+    // transitiva y eso es legítimo.
     assert.equal(specifiers.some((s) => s === 'node:child_process'), false)
     assert.equal(specifiers.some((s) => s === 'node:http' || s === 'node:https'), false)
     assert.equal(/\bspawnSync\s*\(/.test(self), false)
@@ -638,7 +764,7 @@ describe('main con runner inyectado', () => {
       const { catalogPath, candidatePath, base } = catalogFixture(dir)
       const run = availableRun()
 
-      const dry = await captureLogs(() => main([], { run, catalogPath, candidatePath }))
+      const dry = await captureLogs(() => main([], { run, catalogPath, candidatePath, declaredIds: FIXTURE_DECLARED_IDS }))
       assert.equal(dry.value, 0)
       assert.match(dry.output, /estado: available/)
       assert.equal(readFileSync(catalogPath, 'utf8'), base, 'el dry-run no toca el snapshot')
@@ -652,7 +778,7 @@ describe('main con runner inyectado', () => {
         'sin temporales tras el dry-run'
       )
 
-      const write = await captureLogs(() => main(['--write'], { run, catalogPath, candidatePath }))
+      const write = await captureLogs(() => main(['--write'], { run, catalogPath, candidatePath, declaredIds: FIXTURE_DECLARED_IDS }))
       assert.equal(write.value, 0)
       assert.deepEqual(JSON.parse(readFileSync(catalogPath, 'utf8')), candidate)
       assert.deepEqual(
@@ -684,6 +810,49 @@ describe('main con runner inyectado', () => {
       assert.match(output, /modelo gratuito inválido: opencode\/big-pickle/)
       assert.equal(readFileSync(catalogPath, 'utf8'), base, 'el catálogo no cambia')
       assert.equal(existsSync(candidatePath), false, 'no se escribe el candidato')
+    })
+  })
+})
+
+describe('main --write y gate de IDs declarados', () => {
+  it('un ID declarado ausente del candidato rechaza sin escribir snapshot ni candidato', async () => {
+    await withDirAsync(async (dir) => {
+      const { catalogPath, candidatePath, base } = catalogFixture(dir)
+      const declaredIds = [...FIXTURE_DECLARED_IDS, { id: 'missing/model', source: 'TIERS.test.extra' }]
+
+      const { value, output } = await captureLogs(
+        () => main(['--write'], { run: availableRun(), catalogPath, candidatePath, declaredIds })
+      )
+
+      assert.equal(value, 1, 'exit code no cero')
+      assert.match(output, /missing\/model/)
+      assert.match(output, /TIERS\.test\.extra/, 'nombra el origen del ID ausente')
+      assert.equal(readFileSync(catalogPath, 'utf8'), base, 'el snapshot commiteado queda byte-idéntico')
+      assert.equal(existsSync(candidatePath), false, 'no se escribe el reporte candidato')
+    })
+  })
+
+  it('con todos los IDs declarados presentes escribe candidato y snapshot sin leer archivos', async () => {
+    await withDirAsync(async (dir) => {
+      const { catalogPath, candidatePath } = catalogFixture(dir)
+      // `declaredIds` inyectado gana: el `rootDir` conflictivo no se lee ni bloquea el gate.
+      const rootDir = join(dir, 'root')
+      mkdirSync(join(rootDir, 'agents'), { recursive: true })
+      writeFileSync(join(rootDir, 'agents', 'extra.md'), '---\nmodel: missing/agent-model\n---\n')
+
+      const { value } = await captureLogs(
+        () => main(['--write'], { run: availableRun(), catalogPath, candidatePath, rootDir, declaredIds: FIXTURE_DECLARED_IDS })
+      )
+
+      assert.equal(value, 0)
+      const candidate = JSON.parse(readFileSync(candidatePath, 'utf8'))
+      assert.deepEqual(validateCatalogSnapshot(candidate), { ok: true, errors: [] })
+      assert.deepEqual(JSON.parse(readFileSync(catalogPath, 'utf8')), candidate)
+      assert.deepEqual(
+        readdirSync(dir).filter((name) => name.endsWith('.tmp')),
+        [],
+        'sin temporales tras --write'
+      )
     })
   })
 })

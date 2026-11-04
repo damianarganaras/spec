@@ -539,7 +539,7 @@ El tier `minimo` resuelve cada agente por una cadena de preferencia contra el ca
 `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`. Se escribe el primer
 candidato disponible; con la cabeza disponible, aplicarlo sobre la canónica sigue siendo un no-op.
 Si ningún candidato está disponible, `install`/`init`/`import` abortan con un error explícito sin
-escribir un modelo inexistente. El snapshot se refresca manualmente con
+escribir un modelo inexistente. El snapshot se refresca manualmente desde el repositorio fuente con
 `node scripts/refresh-model-catalog.mjs`. Los tiers `normal` y `gratis` conservan sus proveedores
 actuales.
 
@@ -552,6 +552,9 @@ gratis resuelto; no se agrega la clave cuando no existía.
 El snapshot `src/core/model-catalog.json` es la fuente de disponibilidad que consume la resolución de
 tiers. Se refresca **a mano** desde una máquina de mantenimiento con `opencode` instalado; nunca corre
 en `install`, `update`, `init`, `import`, `check`, la suite de tests ni CI.
+
+`scripts/` vive sólo en el repositorio fuente y **no se publica** en el paquete instalado: todos los
+comandos de esta sección se ejecutan desde un clon del repositorio, no desde `node_modules`.
 
 1. **Descubrimiento (dry-run).** Ejecutá `node scripts/refresh-model-catalog.mjs`. El script enumera
    todos los proveedores de `opencode models --refresh`, consulta cada uno con

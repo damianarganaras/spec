@@ -40,11 +40,22 @@ describe('linter standard (add-standard-linter)', () => {
 
   it('package.json expone lint/test y eslint+globals como devDependencies sin runtime deps', () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-    assert.equal(pkg.scripts.lint, 'eslint src/ test/')
+    assert.equal(pkg.scripts.lint, 'eslint src/ test/ scripts/')
     assert.equal(pkg.scripts.test, 'node --test "test/*.test.js"')
     assert.ok(pkg.devDependencies.eslint, 'eslint debe ser devDependency')
     assert.ok(pkg.devDependencies.globals, 'globals debe ser devDependency')
     assert.ok(!pkg.dependencies || Object.keys(pkg.dependencies).length === 0, 'sin dependencias de runtime')
+  })
+
+  it('PRODUCT.md declara el mismo comando y alcance de lint que package.json', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+    const product = readFileSync(join(ROOT, 'PRODUCT.md'), 'utf8')
+    const index = product.indexOf('## Project Commands')
+    assert.ok(index >= 0, 'PRODUCT.md declara ## Project Commands')
+    const section = product.slice(index)
+    assert.ok(section.includes(`\`${pkg.scripts.lint}\``), 'el comando declarado coincide con package.json')
+    assert.match(section, /eslint src\/ test\/ scripts\//)
+    assert.match(section, /Format.*not-configured/)
   })
 
   it('publish.yml corre lint despues de npm ci y antes de los tests', () => {

@@ -20,8 +20,8 @@ import { writeDiscoveryMap } from '../core/discovery.js'
 import { computeAffectedSet } from '../core/affected-set.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
-import { TIERS, TIER_CHAINS, resolveTierModels, loadModelCatalog, modelIdsFromCatalog, gratisModel, isKnownGratisModel } from '../core/tier-models.js'
-import { catalogAgeDays, isCatalogStale, validateCatalogSnapshot } from '../core/model-catalog.js'
+import { TIERS, TIER_CHAINS, declaredModelIds, resolveTierModels, loadModelCatalog, modelIdsFromCatalog, gratisModel, isKnownGratisModel } from '../core/tier-models.js'
+import { catalogAgeDays, isCatalogStale, missingModelIdsInCatalog, validateCatalogSnapshot } from '../core/model-catalog.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -2828,6 +2828,43 @@ async function memoryCmd(args) {
   process.exit(1)
 }
 
+// Declaraciones `model:` de las fuentes versionadas del paquete (`agents/*.md` y
+// `profiles/*/agents/*.md`). Sólo lectura local: no ejecuta procesos ni usa red.
+async function declaredAgentModels(rootDir) {
+  const declarations = []
+  const collect = async (dirRel) => {
+    let files
+    try {
+      files = (await readdir(join(rootDir, dirRel))).filter((file) => file.endsWith('.md'))
+    } catch {
+      return
+    }
+    for (const file of files) {
+      // `check` es advisory: un `.md` ilegible no debe abortar la verificación; se
+      // omite el archivo y el resto del conjunto declarado sigue evaluándose.
+      let content
+      try {
+        content = await readFile(join(rootDir, dirRel, file), 'utf8')
+      } catch {
+        continue
+      }
+      const model = content.match(/^model:\s*(.+)$/m)?.[1]?.trim()
+      if (model) declarations.push({ id: model, source: `${dirRel}/${file}` })
+    }
+  }
+  await collect('agents')
+  let profiles = []
+  try {
+    profiles = (await readdir(join(rootDir, 'profiles'), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+  } catch {
+    profiles = []
+  }
+  for (const profile of profiles) await collect(`profiles/${profile}/agents`)
+  return declarations
+}
+
 async function checkCommand() {
   const cwd = process.cwd()
   const rc = await readAncletorc(cwd)
@@ -2853,6 +2890,14 @@ async function checkCommand() {
       modelCatalog = null
     }
   }
+  // Aviso advisory único por ejecución: sólo con catálogo válido, y distinguible del
+  // warning de deriva por `model:` del mirror (no altera contadores ni exit code).
+  const declaredMissing = modelCatalog
+    ? missingModelIdsInCatalog(
+      modelCatalog,
+      declaredModelIds({ agentModels: await declaredAgentModels(ROOT) })
+    )
+    : []
   let missing = 0
   let orphans = 0
 
@@ -2919,7 +2964,11 @@ async function checkCommand() {
   // Aviso informativo único por ejecución: no es TTL ni altera la resolución ni el exit code.
   if (modelCatalog && isCatalogStale(modelCatalog.generated_at, new Date())) {
     const age = catalogAgeDays(modelCatalog.generated_at, new Date())
-    warnings.push(`catálogo de modelos con ${age} días de antigüedad (${modelCatalog.generated_at}); considerá refrescarlo con \`node scripts/refresh-model-catalog.mjs\``)
+    warnings.push(`catálogo de modelos con ${age} días de antigüedad (${modelCatalog.generated_at}); considerá refrescarlo desde el repositorio fuente`)
+  }
+  if (declaredMissing.length > 0) {
+    const list = declaredMissing.map((item) => `${item.id} (${item.source || 'sin origen'})`).join(', ')
+    warnings.push(`IDs declarados ausentes del catálogo de modelos: ${list}; refrescá el catálogo desde el repositorio fuente`)
   }
 
   console.log(`ancleto: check -> ${missing} faltantes, ${orphans} huerfanos`)
@@ -3040,7 +3089,7 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt, mo
     if (installedCatalogIds) {
       const installedModel = instalado.match(/^model: (.+)$/m)?.[1]?.trim()
       if (installedModel && installedModel !== 'inherit' && !installedCatalogIds.has(installedModel)) {
-        console.log(`  ⚠ ${dirRel}/${f} (model '${installedModel}' ausente del catálogo de modelos; refrescalo con \`node scripts/refresh-model-catalog.mjs\`)`)
+        console.log(`  ⚠ ${dirRel}/${f} (model '${installedModel}' ausente del catálogo de modelos; refrescalo desde el repositorio fuente)`)
       }
     }
     // El aviso de tier cuenta si el mirror difiere del resuelto-ahora (el proximo

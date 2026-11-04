@@ -8,11 +8,12 @@ import {
   GRATIS_FALLBACK_MODEL,
   TIERS,
   TIER_CHAINS,
+  declaredModelIds,
   loadModelCatalog,
   missingModelIds,
   resolveTierModels
 } from '../src/core/tier-models.js'
-import { validateCatalogSnapshot } from '../src/core/model-catalog.js'
+import { missingModelIdsInCatalog, validateCatalogSnapshot } from '../src/core/model-catalog.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(TEST_DIR, '..')
@@ -24,26 +25,14 @@ function modelOf(file) {
   return match[1].trim()
 }
 
-// Todo ID versionado que el snapshot debe cubrir, con su archivo de origen.
-function declaredModels() {
-  const declared = []
-  for (const [tier, models] of Object.entries(TIERS)) {
-    for (const [agent, model] of Object.entries(models)) {
-      declared.push({ id: model, source: `TIERS.${tier}.${agent}` })
-    }
-  }
-  // Todos los candidatos de todas las cadenas, no sólo las cabezas: un fallback
-  // inexistente también debe romper el guard.
-  for (const [tier, chains] of Object.entries(TIER_CHAINS)) {
-    for (const [agent, chain] of Object.entries(chains)) {
-      chain.forEach((id, index) => {
-        declared.push({ id, source: `TIER_CHAINS.${tier}.${agent}[${index}]` })
-      })
-    }
-  }
+// Declaraciones `model:` leídas de las fuentes versionadas. El cálculo del conjunto
+// declarado y su deduplicación viven en `declaredModelIds` (tier-models); acá sólo se
+// recolectan los archivos para no duplicar esa lógica en el test.
+function agentModelEntries() {
+  const entries = []
   const agentsDir = join(ROOT, 'agents')
   for (const file of readdirSync(agentsDir).filter((f) => f.endsWith('.md'))) {
-    declared.push({ id: modelOf(join(agentsDir, file)), source: `agents/${file}` })
+    entries.push({ id: modelOf(join(agentsDir, file)), source: `agents/${file}` })
   }
   const profilesDir = join(ROOT, 'profiles')
   for (const profile of readdirSync(profilesDir)) {
@@ -55,10 +44,15 @@ function declaredModels() {
       continue
     }
     for (const file of files) {
-      declared.push({ id: modelOf(join(agentsDirProfile, file)), source: `profiles/${profile}/agents/${file}` })
+      entries.push({ id: modelOf(join(agentsDirProfile, file)), source: `profiles/${profile}/agents/${file}` })
     }
   }
-  return declared
+  return entries
+}
+
+// Resumen legible de los IDs ausentes que nombra el origen de cada declaración.
+function missingSummary(missing) {
+  return missing.map((item) => `${item.id} (${item.source || 'sin origen'})`).join(', ')
 }
 
 function clone(value) {
@@ -110,10 +104,19 @@ describe('snapshot de catálogo', () => {
     }
   })
 
-  it('todos los IDs de TIERS, agents/*.md y profiles/*/agents/*.md están en el snapshot', () => {
+  it('todos los IDs de TIERS, TIER_CHAINS, agents/*.md y profiles/*/agents/*.md están en el snapshot', () => {
     const catalog = loadModelCatalog()
-    const missing = missingModelIds(catalog, declaredModels().map((d) => d.id))
-    assert.deepEqual(missing, [], `IDs ausentes del snapshot: ${missing.join(', ')}`)
+    const tierIds = declaredModelIds()
+    const fileIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: agentModelEntries() })
+    assert.ok([...tierIds.values()].some((source) => source.startsWith('TIERS.')), 'TIERS aporta declaraciones')
+    assert.ok([...tierIds.values()].some((source) => source.startsWith('TIER_CHAINS.')), 'TIER_CHAINS aporta declaraciones')
+    assert.ok([...fileIds.values()].some((source) => source.startsWith('agents/')), 'agents/ aporta declaraciones')
+    assert.ok([...fileIds.values()].some((source) => source.startsWith('profiles/')), 'profiles/ aporta declaraciones')
+    assert.equal(fileIds.has('inherit'), false, 'inherit no se exige en el catálogo')
+    for (const [label, declared] of [['TIERS/TIER_CHAINS', tierIds], ['agents/profiles', fileIds]]) {
+      const missing = missingModelIdsInCatalog(catalog, declared)
+      assert.deepEqual(missing, [], `${label}: IDs ausentes del snapshot: ${missingSummary(missing)}`)
+    }
   })
 
   it('el guard falla cuando se retira un ID real del catálogo (sin mutar el snapshot)', () => {
@@ -125,28 +128,37 @@ describe('snapshot de catálogo', () => {
     assert.deepEqual(missingModelIds(loadModelCatalog(), [target]), [])
   })
 
-  it('un ID declarado en TIERS, agents/ o profiles/ ausente del snapshot rompe el guard', () => {
+  it('un ID declarado en TIERS, TIER_CHAINS, agents/ o profiles/ ausente del snapshot rompe el guard', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ancleto-catalog-guard-'))
     try {
-      const declared = declaredModels()
-      const sources = [
-        declared.find((d) => d.source.startsWith('TIERS.')),
-        declared.find((d) => d.source.startsWith('agents/')),
-        declared.find((d) => d.source.startsWith('profiles/'))
+      const tierIds = declaredModelIds()
+      const fileIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: agentModelEntries() })
+      const groups = [
+        ['TIERS.', tierIds],
+        ['TIER_CHAINS.', tierIds],
+        ['agents/', fileIds],
+        ['profiles/', fileIds]
       ]
-      assert.equal(sources.length, 3, 'hay declaraciones en TIERS, agents/ y profiles/')
-      sources.forEach((item, index) => {
-        const path = catalogWithout(dir, [item.id], `guard-${index}.json`)
+      groups.forEach(([prefix, declared], index) => {
+        const item = [...declared].find(([, source]) => source.startsWith(prefix))
+        assert.ok(item, `${prefix} aporta declaraciones`)
+        const [id, source] = item
+        const path = catalogWithout(dir, [id], `guard-${index}.json`)
         withCatalogEnv(path, () => {
-          assert.deepEqual(
-            missingModelIds(loadModelCatalog(), [item.id]),
-            [item.id],
-            `${item.source} declara ${item.id}, ausente del catálogo temporal`
+          const missing = missingModelIdsInCatalog(loadModelCatalog(), declared)
+          const hit = missing.find((entry) => entry.id === id && entry.source === source)
+          assert.ok(hit, `${source} declara ${id}, ausente del catálogo temporal`)
+          assert.ok(
+            missing.every((entry) => entry.id === id),
+            `el guard sólo reporta el ID retirado: ${missingSummary(missing)}`
           )
         })
       })
       // Las declaraciones siguen cubiertas por el snapshot commiteado.
-      assert.deepEqual(missingModelIds(loadModelCatalog(), declared.map((d) => d.id)), [])
+      for (const [label, declared] of [['TIERS/TIER_CHAINS', tierIds], ['agents/profiles', fileIds]]) {
+        const missing = missingModelIdsInCatalog(loadModelCatalog(), declared)
+        assert.deepEqual(missing, [], `${label}: IDs ausentes del snapshot: ${missingSummary(missing)}`)
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -158,22 +170,27 @@ describe('snapshot de catálogo', () => {
       const chain = TIER_CHAINS.minimo.coder
       const fallback = chain[chain.length - 1]
       assert.notEqual(fallback, chain[0], 'el candidato elegido no es la cabeza de la cadena')
-      const declared = declaredModels()
+      const declared = declaredModelIds()
       // Este ID no lo declaran TIERS, agents/ ni profiles/: sin la cobertura de las
       // cadenas, el guard quedaría ciego a su ausencia.
-      assert.ok(declared.some((d) => d.source.startsWith('TIER_CHAINS.') && d.id === fallback))
+      assert.ok(declared.has(fallback))
+      assert.match(declared.get(fallback), /^TIER_CHAINS\./)
       assert.equal(
-        declared.some((d) => !d.source.startsWith('TIER_CHAINS.') && d.id === fallback),
+        [...declared].some(([id, source]) => id === fallback && !source.startsWith('TIER_CHAINS.')),
         false,
         `${fallback} sólo se declara a través de TIER_CHAINS`
       )
       const path = catalogWithout(dir, [fallback], 'chain-fallback.json')
       withCatalogEnv(path, () => {
-        const missing = missingModelIds(loadModelCatalog(), declared.map((d) => d.id))
-        assert.ok(missing.includes(fallback), `el guard reporta ${fallback} ausente`)
+        const missing = missingModelIdsInCatalog(loadModelCatalog(), declared)
+        assert.ok(
+          missing.some((entry) => entry.id === fallback && entry.source.startsWith('TIER_CHAINS.')),
+          `el guard reporta ${fallback} ausente con su origen TIER_CHAINS`
+        )
       })
       // El snapshot commiteado sigue cubriendo todos los candidatos.
-      assert.deepEqual(missingModelIds(loadModelCatalog(), declared.map((d) => d.id)), [])
+      const missing = missingModelIdsInCatalog(loadModelCatalog(), declared)
+      assert.deepEqual(missing, [], `IDs ausentes del snapshot: ${missingSummary(missing)}`)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -213,6 +230,88 @@ describe('snapshot de catálogo', () => {
   })
 })
 
+describe('declaredModelIds', () => {
+  it('incluye los tres tiers y todos los candidatos de TIER_CHAINS, sin inherit', () => {
+    const declared = declaredModelIds()
+    assert.ok(declared instanceof Map)
+    for (const [tier, models] of Object.entries(TIERS)) {
+      for (const [agent, model] of Object.entries(models)) {
+        assert.ok(declared.has(model), `TIERS.${tier}.${agent} declara ${model}`)
+        assert.ok(declared.get(model).startsWith('TIERS.'), `${model} conserva un origen de TIERS`)
+      }
+    }
+    for (const [tier, chains] of Object.entries(TIER_CHAINS)) {
+      for (const [agent, chain] of Object.entries(chains)) {
+        chain.forEach((id, index) => {
+          assert.ok(declared.has(id), `TIER_CHAINS.${tier}.${agent}[${index}] declara ${id}`)
+        })
+      }
+    }
+    // `opencode/deepseek-v4.1-flash-free` sólo se declara a través de TIER_CHAINS.
+    const chainOnly = TIER_CHAINS.minimo.coder[TIER_CHAINS.minimo.coder.length - 1]
+    assert.match(declared.get(chainOnly), /^TIER_CHAINS\.minimo\..+\[2\]$/)
+    assert.equal(declared.has('inherit'), false)
+  })
+
+  it('suma los model: de agentes y perfiles, deduplica y conserva el primer origen', () => {
+    const declared = declaredModelIds({
+      tiers: {},
+      chains: {},
+      agentModels: [
+        { id: 'inherit', source: 'agents/inherit.md' },
+        { id: 'x/model', source: 'agents/a.md' },
+        { id: 'x/model', source: 'profiles/p/agents/a.md' },
+        { id: 'y/model' },
+        { id: 'inherit', source: 'profiles/p/agents/b.md' },
+        'z/model'
+      ]
+    })
+    assert.deepEqual([...declared.keys()], ['x/model', 'y/model', 'z/model'])
+    assert.equal(declared.get('x/model'), 'agents/a.md')
+    assert.equal(declared.get('y/model'), 'agents')
+    assert.equal(declared.get('z/model'), 'agents')
+  })
+})
+
+describe('missingModelIdsInCatalog', () => {
+  it('no reporta nada cuando TIERS y TIER_CHAINS existen en el snapshot real', () => {
+    assert.deepEqual(missingModelIdsInCatalog(loadModelCatalog(), declaredModelIds()), [])
+  })
+
+  it('reporta los IDs ausentes conservando su origen y acepta strings y Map', () => {
+    const catalog = { providers: { alpha: [{ id: 'alpha/a' }] } }
+    assert.deepEqual(
+      missingModelIdsInCatalog(catalog, [
+        { id: 'alpha/a', source: 'TIERS.a' },
+        { id: 'alpha/b', source: 'agents/x.md' }
+      ]),
+      [{ id: 'alpha/b', source: 'agents/x.md' }]
+    )
+    assert.deepEqual(
+      missingModelIdsInCatalog(catalog, ['alpha/a', 'beta/b']),
+      [{ id: 'beta/b', source: null }]
+    )
+    assert.deepEqual(
+      missingModelIdsInCatalog(catalog, new Map([['alpha/a', 'TIERS.a'], ['beta/b', 'agents/y.md']])),
+      [{ id: 'beta/b', source: 'agents/y.md' }]
+    )
+  })
+
+  it('un snapshot vacío reporta todas las entradas y no muta el snapshot', () => {
+    const catalog = { providers: {} }
+    const before = clone(catalog)
+    assert.deepEqual(missingModelIdsInCatalog(catalog, ['a/a']), [{ id: 'a/a', source: null }])
+    assert.deepEqual(catalog, before)
+  })
+
+  it('acepta entradas string en el snapshot', () => {
+    assert.deepEqual(
+      missingModelIdsInCatalog({ providers: { a: ['a/a'] } }, ['a/a', 'a/b']),
+      [{ id: 'a/b', source: null }]
+    )
+  })
+})
+
 describe('resolver puro de cadenas', () => {
   const chain = TIER_CHAINS.minimo.coder
 
@@ -233,6 +332,7 @@ describe('resolver puro de cadenas', () => {
       () => resolveTierModels('minimo', catalogWith([])),
       (err) => Object.keys(TIERS.minimo).some((name) => err.message.includes(`'${name}'`))
         && chain.every((id) => err.message.includes(id))
+        && !/scripts[\\/]/.test(err.message)
     )
   })
 
@@ -258,8 +358,10 @@ describe('resolver puro de cadenas', () => {
     )
   })
 
-  it('el módulo de tiers no importa node:child_process', () => {
-    const source = readFileSync(join(ROOT, 'src', 'core', 'tier-models.js'), 'utf8')
-    assert.equal(source.includes('child_process'), false)
+  it('los módulos puros de tiers y catálogo no importan node:child_process', () => {
+    for (const file of ['tier-models.js', 'model-catalog.js']) {
+      const source = readFileSync(join(ROOT, 'src', 'core', file), 'utf8')
+      assert.equal(source.includes('child_process'), false, `${file} no importa child_process`)
+    }
   })
 })

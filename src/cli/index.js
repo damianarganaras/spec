@@ -4218,6 +4218,14 @@ async function importCmd(args) {
       console.error('ancleto: bundle invalido (manifest.mcp no es un arreglo)')
       process.exit(1)
     }
+    // Los elementos se consumen como `m.name` despues del primer write: una entrada
+    // sin `name` string no vacio reventaria ahi y dejaria el import a medio aplicar.
+    if (Array.isArray(manifest.mcp) && manifest.mcp.some((m) => (
+      !m || typeof m !== 'object' || typeof m.name !== 'string' || m.name === ''
+    ))) {
+      console.error('ancleto: bundle invalido (manifest.mcp con entradas invalidas)')
+      process.exit(1)
+    }
     const localVersion = await packageVersion()
     if (manifest.ancletoVersion && manifest.ancletoVersion !== localVersion) {
       console.warn(`ancleto: el bundle es de v${manifest.ancletoVersion} y el CLI es v${localVersion} (se continua igual)`)

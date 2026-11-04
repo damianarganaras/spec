@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-04T19:22:37Z
-pluginVersion: 0.18.13
+generatedAt: 2026-11-04T22:24:31Z
+pluginVersion: 0.18.14
 skillVersion: '2.3'
 ---
 
@@ -95,7 +95,7 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 
 | Variable / archivo | Propósito | Referencia |
 |---|---|---|
-| `.ancletorc` | Manifiesto de instalación y configuración del proyecto (`agent`, `language`, `profile`, `discovery`, `gratisModel`, `azure`, `installedPaths`) | `src/cli/index.js` → `readAncletorc` |
+| `.ancletorc` | Manifiesto de instalación y configuración del proyecto (`agent`, `language`, `profile`, `discovery`, `gratisModel`, `azure`, `installedPaths`, `version`) | `src/cli/index.js` → `readAncletorc` |
 | `.opencode/.ancleto-tier` | Último tier aplicado; lo lee `check` y `repomix-tier` | `src/cli/index.js`, `src/core/repomix-tier.js` |
 | `ANCLETO_OPENCODE_DB` | Ruta alternativa a la base de sesiones de opencode para `stats` | `src/cli/index.js` → `opencodeDbPath` |
 | `ANCLETO_PROJECTS_FILE` | Ruta alternativa al registro global de proyectos | `src/cli/index.js` → `projectsRegistryPath` |
@@ -107,6 +107,10 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
+
+**Estado de este checkout (0.18.14)**: `.ancletorc` y `.ancleto/machine-env.md` registran
+`ancleto: 0.18.14`, alineados con `package.json` tras el `upgrade` local. Siguen siendo artefactos
+gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed.
 
 ## Entorno de máquina
 

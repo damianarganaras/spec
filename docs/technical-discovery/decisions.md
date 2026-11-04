@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-04T19:22:37Z
-pluginVersion: 0.18.13
+generatedAt: 2026-11-04T22:24:31Z
+pluginVersion: 0.18.14
 skillVersion: '2.3'
 ---
 
@@ -23,11 +23,12 @@ skillVersion: '2.3'
   catálogo y `modelIdsFromCatalog`/`missingModelIdsInCatalog`, en `src/core/model-catalog.js`; la
   adaptación de frontmatter y `frontmatterValue`, en `src/core/adapters/frontmatter.js`; la
   detección de entorno, en `src/core/machine-env.js`; el render del working-context, en
-  `src/core/memory/working-context.js`.
+  `src/core/memory/working-context.js`; la decisión de la nota de compresión, en
+  `src/cli/index.js` → `resolvesHostCompression`.
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.18.13)
+## Modelos y tiers (estado 0.18.14)
 
 ### Tabla y cadenas
 
@@ -194,6 +195,20 @@ skillVersion: '2.3'
 - El tier solo se aplica/resuelve en mirrors de `opencode`; en otros hosts no se resuelve ni se
   aborta.
 
+### Validación de `manifest.mcp` en `import` (0.18.14)
+
+- Antes de cualquier escritura, `importCmd` exige que `manifest.mcp` sea **array** cuando está
+  presente (`manifest.mcp !== undefined`). Un valor no-array aborta con
+  `ancleto: bundle invalido (manifest.mcp no es un arreglo)` y exit 1
+  (`src/cli/index.js` → `importCmd`).
+- Cada entrada del array debe ser un objeto con `name` **string no vacío**; si alguna no lo es,
+  aborta con `ancleto: bundle invalido (manifest.mcp con entradas invalidas)` y exit 1.
+- **Por qué antes del primer write**: `manifest.mcp` se consume después para derivar
+  `intendedMcpNames` (`m.name`). Sin la validación, un bundle malformado reventaría a mitad del
+  import y dejaría manifiesto, templates o assets ya escritos (import parcial).
+- Un bundle con `manifest.mcp` ausente sigue siendo válido; la validación solo se aplica cuando la
+  clave existe.
+
 ### `import` registra `installedPaths` (0.18.13)
 
 - **La regla**: cuando el bundle incluye `.ancletorc`, el manifiesto se escribe **después** de las
@@ -213,7 +228,44 @@ skillVersion: '2.3'
   faltantes u huérfanos reales antes ocultos por un `installedPaths` vacío. Es la consecuencia
   buscada. Decisión aprobada: `import-installed-paths-union-not-copy`.
 
-### Superficies del `model:` (nota operativa)
+## Nota de compresión host-scoped (0.18.14)
+
+- **Invariante**: para el orchestrator del **host activo** de la corrida (el host que el comando
+  está instalando o importando), `CAVEMAN_USAGE_NOTE` existe si y sólo si ese host soporta
+  compresión y la **config MCP final de ese mismo host** incluye `caveman`
+  (`aspec/specs/agent-install-routing/spec.md`, requirement
+  “Compresión por defecto con uso condicional host-scoped y compuerta de medición”).
+- **Helper único**: `resolvesHostCompression(projectDir, host, { writesCaveman = false, intendedNames = null })`
+  (`src/cli/index.js`, junto a `hostConfigHasCompression`):
+  1. `false` si `hostSupportsCompression(host)` es falso (`opencode` y `antigravity` son los únicos
+     hosts con soporte).
+  2. `true` si `hostConfigHasCompression(projectDir, host)` ya encuentra `caveman` en disco.
+  3. `false` si no hay escritura pendiente (`writesCaveman` falso).
+  4. `true` si hay escritura pendiente y `intendedNames` es `null` o incluye `'caveman'`.
+- **Fuente de verdad en disco**: `hostConfigHasCompression` lee `.agents/mcp_config.json`
+  (antigravity) o `.opencode/opencode.json` + `.opencode/opencode.jsonc` (opencode), acepta
+  `mcp`/`mcpServers` y busca la clave `caveman`; un archivo ausente o un JSON inválido no aporta la
+  tool. Es la misma fuente que usa `check`.
+- **Gates**: `install` pasa `writesCaveman: Boolean(mcpMap && mcpMap.caveman)`; `init` hace lo
+  mismo con su `mcpMap`; `import` pasa `writesCaveman: agent === 'opencode' && Boolean(freshProjectMcp.caveman)`
+  e `intendedNames` derivado de `manifest.mcp`. `repairProjectMcp` solo escribe
+  `.opencode/opencode.json`, por eso `import` no cuenta escritura pendiente para antigravity.
+- **Alcance excluido**: H3 (escrituras MCP en `.opencode` originadas por otro host), H9
+  (`installedPaths` multi-host) y la rama global de `install` sin `--project` quedan fuera. La
+  rama global copia `agents/**` verbatim y `check` no la evalúa. En proyectos mixtos, un aviso
+  advisory de `check` no invalida el invariante acotado.
+- **Excepción M2**: si la config MCP del host no es JSON parseable, `install`/`init` omiten esa
+  escritura y avisan; la nota se materializa igual por la escritura pendiente y `check` puede
+  divergir. `import <bundle>` en `opencode` queda fuera: `repairProjectMcp` sobrescribe la config.
+- **`import --repair` sin bundle**: no reescribe assets y, por lo tanto, **no sanea** una nota
+  legada; solo `import <bundle>` la re-materializa.
+- **Contrato de `check` intacto**: la divergencia de frontmatter sigue siendo advisory, la
+  comparación sigue siendo del archivo completo y el exit sigue siendo `missing > 0 ? 1 : 0`.
+- **Change archivado**: `aspec/changes/archive/2026-11-04-host-compression-note-consistency/`
+  (proposal con enmiendas R1/R2, tasks y deltas). Decisiones aprobadas:
+  `compression-note-gate`, `compression-note-active-host-scope`, `tier-applytest-overlay-guard`.
+
+## Superficies del `model:` (nota operativa)
 
 `AGENTS.md` describe tres superficies: `agents/*.md` (canónica publicada), `.opencode/agents/*.md`
 (mirror que regenera `ancleto upgrade`) y `~/.config/opencode/agents/*.md` (instalación global).
@@ -252,9 +304,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 773 archivos, ~36.040 tokens (comprimido). El
-  `.discovery-map.json` observado al empacar reportó 784 archivos; el archivo trackeado en HEAD
-  conserva 780 de una corrida previa (ver `unknowns.md`).
+- **Pack actual**: tier `minimo`, 778 archivos enumerados, ~36.310 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 788 archivos (aspec 220, docs 21, test 26, etc.).
 
 ## Lint y publicación
 
@@ -289,9 +340,14 @@ sin `--tier` es `normal`.
   `opencode.json → agent.<nombre>.model`; por eso el mensaje dice "puede", nunca garantiza el 403.
 - **Check post-import no vacuo**: al poblarse `installedPaths`, un import puede exponer faltantes u
   huérfanos reales. Es el comportamiento correcto y un cambio observable.
-- **Artefacto local desactualizado**: `.ancleto/machine-env.md` registra `ancleto: 0.18.8` mientras
-  `package.json` está en `0.18.13`; es un derivado gitignored que se regenera en
-  `init`/`install`/`upgrade` (correr `upgrade`), no una deriva de código.
+- **Nota de compresión y proyectos mixtos**: la consistencia cross-host (H3/H9) no está resuelta;
+  `check` puede seguir avisando en proyectos con varios hosts. El invariante 0.18.14 es acotado al
+  host activo y no promete más.
+- **Config MCP no parseable (M2)**: `install`/`init` no pueden leer el estado en disco y materializan
+  la nota por la escritura pendiente; `check` puede divergir. Es una limitación degenerada aceptada.
+- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.18.14` en este
+  checkout; siguen siendo derivados gitignored. Si se regeneran con otra versión, el seed no cambia
+  porque no los usa como fuente.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene
   documentación del framework y el seed.
 

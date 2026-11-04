@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-04T19:22:37Z
-pluginVersion: 0.18.13
+generatedAt: 2026-11-04T22:24:31Z
+pluginVersion: 0.18.14
 skillVersion: '2.3'
 ---
 
@@ -97,6 +97,12 @@ test/                   suite node --test
    `installedPaths` como unión acumulativa de lo declarado en el destino y lo que él mismo escribió
    (incluidos los directorios `.opencode/{agents,commands,skills}` copiados del bundle), sin heredar
    las rutas del bundle.
+8. **Consistencia de la nota de compresión (0.18.14)**: `install`, `init` e `import` deciden
+   `CAVEMAN_USAGE_NOTE` con `resolvesHostCompression(projectDir, host, { writesCaveman, intendedNames })`,
+   que combina la config MCP en disco con la escritura pendiente del comando. La nota existe para el
+   orchestrator del host activo si y sólo si ese host soporta compresión y la config MCP final
+   incluye `caveman`; `check` conserva su contrato advisory. `import` además valida `manifest.mcp`
+   antes del primer write.
 
 ## Recorrido de una instalación con tier `minimo`
 

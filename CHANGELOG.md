@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.14] - 2026-11-04
+
+### Fixed
+- **Nota de compresión decidida por el estado final de la config MCP del host**: `CAVEMAN_USAGE_NOTE` en `install`, `init` e `import` se decide por `hostConfigHasCompression` y la escritura pendiente en lugar de por detección de binario al vuelo; elimina falsos `frontmatter diverge del adaptador` en `check`.
+- **`import` valida `manifest.mcp` antes de escribir**: exige un array de entradas con `name` string no vacío antes de cualquier escritura, evitando imports parciales.
+
+### Added
+- **Cobertura de consistencia de la nota**: 19 casos, guard del overlay `profiles/test/agents` y escenario `import --repair`.
+
 ## [0.18.13] - 2026-11-04
 
 ### Added

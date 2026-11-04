@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-04T11:11:07Z
-pluginVersion: 0.18.11
+generatedAt: 2026-11-04T17:02:55Z
+pluginVersion: 0.18.12
 skillVersion: '2.3'
 ---
 
@@ -31,8 +31,8 @@ Restricciones declaradas: **cero dependencias de runtime** y **Node ≥ 24** (`P
 src/cli/index.js        entrada única; subcomandos, instalación, plantillas, MCP, stats
 src/cli/ui.js           banner y menús TTY propios (selectOption/selectMultiple)
 src/core/
-  tier-models.js        dueño de TIERS/TIER_CHAINS + resolver puro + catálogo
-  model-catalog.js      helpers puros: parseo, diff, validación, clasificación, antigüedad
+  tier-models.js        dueño de TIERS/TIER_CHAINS + resolver puro + declaredModelIds
+  model-catalog.js      helpers puros: parseo, diff, validación, clasificación, integridad
   model-catalog.json    snapshot verificado de IDs por proveedor
   discovery.js          mapa topológico (.discovery-map.json)
   repomix-tier.js       configuración de pack por tier (ignores/compresión/presupuesto)
@@ -48,9 +48,9 @@ test/                   suite node --test
 
 - **Sin framework**: la UI de terminal y los parsers (frontmatter, refs, imports) son propios.
 - **Separación por módulos**: el CLI orquesta; la lógica con invariantes vive en `src/core/*`.
-  `src/core/tier-models.js` es el único dueño de la tabla de modelos y del resolver;
-  `src/core/model-catalog.js` es el único dueño del parseo/diff/validación del snapshot. El CLI
-  importa ambos (ver `decisions.md`).
+  `src/core/tier-models.js` es el único dueño de la tabla de modelos, del resolver y de
+  `declaredModelIds`; `src/core/model-catalog.js` es el único dueño del parseo, diff, validación e
+  integridad del snapshot. El CLI importa ambos (ver `decisions.md`).
 - **Estado local por proyecto**: `.ancletorc` (manifiesto), `.opencode/.ancleto-tier` (tier
   aplicado), `.opencode/agents|commands|skills` (mirrors), `.ancleto/memory.db` y
   `.ancleto/machine-env.md` (artefactos locales).
@@ -61,7 +61,7 @@ test/                   suite node --test
 |---|---|---|
 | CLI / instalación | `init`, `install`/`update`, `upgrade`, `import`/`export`, `check`, `doctor` | `src/cli/index.js` |
 | Resolución de modelos | Tiers, cadenas de fallback, catálogo y oráculo de `check` | `src/core/tier-models.js` |
-| Catálogo de modelos | Snapshot versionado; helpers puros y refresco manual dev-only | `src/core/model-catalog.js`, `src/core/model-catalog.json`, `scripts/refresh-model-catalog.mjs` |
+| Catálogo de modelos | Snapshot versionado; helpers puros; integridad de IDs y refresco manual dev-only | `src/core/model-catalog.js`, `src/core/model-catalog.json`, `scripts/refresh-model-catalog.mjs` |
 | Discovery | Topología, fuentes, hashes, impacto y estado del seed | `src/core/discovery.js`, `src/cli/index.js` |
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
 | Memoria | Nodos, supersesión, refs, recall, working-context | `src/core/memory/*` |
@@ -84,6 +84,11 @@ test/                   suite node --test
 5. **Tiers**: `normal` usa modelos de `opencode-go`; `minimo` resuelve por cadena contra el catálogo;
    `gratis` usa únicamente `opencode/big-pickle`. El catálogo se refresca a mano con
    `scripts/refresh-model-catalog.mjs`; ni el runtime ni CI descubren modelos ni acceden a la red.
+6. **Integridad del catálogo (0.18.12)**: todo ID declarado en `TIERS`, `TIER_CHAINS`,
+   `agents/*.md` y `profiles/*/agents/*.md` se contrasta contra el snapshot. El guard de tests usa
+   `declaredModelIds` + `missingModelIdsInCatalog`; `refresh-model-catalog --write` bloquea la
+   escritura si falta un ID; `check` emite un aviso advisory no bloqueante si el catálogo válido no
+   contiene algún ID declarado.
 
 ## Recorrido de una instalación con tier `minimo`
 

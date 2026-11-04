@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate y doctor"
 covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor]
 sources: ["src/core/memory/**"]
-generatedAt: 2026-11-04T11:11:07Z
-pluginVersion: 0.18.11
+generatedAt: 2026-11-04T17:02:55Z
+pluginVersion: 0.18.12
 skillVersion: '2.3'
 ---
 

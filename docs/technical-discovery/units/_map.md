@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-11-04T11:11:07Z
-pluginVersion: 0.18.11
+generatedAt: 2026-11-04T17:02:55Z
+pluginVersion: 0.18.12
 skillVersion: '2.3'
 ---
 
@@ -12,8 +12,9 @@ skillVersion: '2.3'
 | Unidad | Propósito | Entry point | Dossier |
 |---|---|---|---|
 | CLI y ciclo de vida | `init`, `install`/`update`, `upgrade`, `check`, `doctor`, `export`/`import`, wizard TTY | `src/cli/index.js`, `src/cli/ui.js` | `units/cli-install.md` |
-| Resolución de modelos | `TIERS`, `TIER_CHAINS`, resolver puro, `gratis` free-only, oráculo de `check` | `src/core/tier-models.js` | `units/cli-install.md` |
-| Catálogo de modelos | Snapshot de 5 proveedores / 211 IDs; helpers puros; refresco manual | `src/core/model-catalog.js`, `src/core/model-catalog.json`, `scripts/refresh-model-catalog.mjs` | `units/discovery-engine.md` |
+| Resolución de modelos | `TIERS` agente→string, `TIER_CHAINS`, resolver puro, `gratis` free-only, oráculo de `check` | `src/core/tier-models.js` | `units/cli-install.md` |
+| Integridad de IDs | `declaredModelIds` + `missingModelIdsInCatalog`; guard de tiers/cadenas/agents/perfiles | `src/core/tier-models.js`, `src/core/model-catalog.js` | `units/discovery-engine.md` |
+| Catálogo de modelos | Snapshot de 5 proveedores / 211 IDs; helpers puros; refresco manual con gate de `--write` | `src/core/model-catalog.js`, `src/core/model-catalog.json`, `scripts/refresh-model-catalog.mjs` | `units/discovery-engine.md` |
 | Adaptación por host | Frontmatter de agents y layouts nativos (`AGENT_TARGETS`) | `src/core/adapters/frontmatter.js`, `src/cli/index.js` | `units/cli-install.md` |
 | Discovery y seed | Topología, hashes, impacto, `seed-map`, estado `READY/STALE` | `src/core/discovery.js`, `src/cli/index.js` | `units/discovery-engine.md` |
 | Empaquetado Repomix | Args e ignores por tier; presupuesto de tokens | `src/core/repomix-tier.js` | `units/discovery-engine.md` |
@@ -29,7 +30,7 @@ skillVersion: '2.3'
 | Skills | 21 skills del ciclo SDD/discovery/review | `skills/*/SKILL.md` | — |
 | Templates | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` | `templates/*.md` | — |
 | Perfil test | Overlay de tester/reviewer y commands de test | `profiles/test/**` | `units/cli-install.md` |
-| Specs y changes | Specs canónicos y ciclo de cambios (incl. archive) | `aspec/specs/**`, `aspec/changes/**` | — |
+| Specs y changes | Specs canónicos y ciclo de cambios (incl. archive de ch-13) | `aspec/specs/**`, `aspec/changes/**` | — |
 | Stats | Tokens por sesión y fallos de tool parts de opencode | `src/cli/index.js` (`stats`) | `units/cli-install.md` |
-| Publicación | Lint, tests, npm publish y GitHub Release | `.github/workflows/publish.yml` | — |
-| Suite de tests | Guards de modelos, catálogo, discovery, memoria, adapters y CLI | `test/*.test.js` | — |
+| Lint y publicación | `eslint src/ test/ scripts/`, npm publish y GitHub Release | `eslint.config.js`, `.github/workflows/publish.yml` | — |
+| Suite de tests | Guards de modelos, integridad del catálogo, discovery, memoria, adapters y CLI | `test/*.test.js` | — |

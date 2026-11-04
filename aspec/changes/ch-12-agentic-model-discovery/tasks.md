@@ -133,62 +133,62 @@
 
 ## Fase 6 — Tests de helpers puros y documentación (tests)
 
-- [ ] Crear `test/model-catalog-discovery.test.js` y cubrir `providersFromFlatOutput` con: cinco
+- [x] Crear `test/model-catalog-discovery.test.js` y cubrir `providersFromFlatOutput` con: cinco
       proveedores, IDs multisegmento (`commandcode/deepseek/deepseek-v4.1-flash`), duplicados,
       líneas vacías y líneas sin `/`.
-- [ ] Cubrir `parseVerboseProviderOutput` con un fixture de `--verbose`: IDs con `cost` y `limit`,
+- [x] Cubrir `parseVerboseProviderOutput` con un fixture de `--verbose`: IDs con `cost` y `limit`,
       entradas sin metadatos (`null`), JSON malformado y IDs duplicados.
-- [ ] Cubrir `diffCatalogSnapshots`: alta, baja, cambio de `cost`, cambio de `limit`, snapshot igual
+- [x] Cubrir `diffCatalogSnapshots`: alta, baja, cambio de `cost`, cambio de `limit`, snapshot igual
       (diff vacío) y orden determinista.
-- [ ] Cubrir `validateCatalogSnapshot`: snapshot válido; fecha inválida; `source.providers`
+- [x] Cubrir `validateCatalogSnapshot`: snapshot válido; fecha inválida; `source.providers`
       desalineado de las claves; proveedor vacío; ID sin prefijo; ID duplicado; `source` ausente.
-- [ ] Cubrir `discoveryStatus`: `available`, `binary-missing`, `network-unavailable`, `partial` por
+- [x] Cubrir `discoveryStatus`: `available`, `binary-missing`, `network-unavailable`, `partial` por
       proveedor fallido y `partial` por cero proveedores.
-- [ ] Cubrir `freeModelViolations`: `opencode/big-pickle` con costo 0 pasa; con costo no cero falla;
+- [x] Cubrir `freeModelViolations`: `opencode/big-pickle` con costo 0 pasa; con costo no cero falla;
       ausente del snapshot falla.
-- [ ] Cubrir `catalogAgeDays` e `isCatalogStale`: fecha fresca, fecha de 90 días, fecha anterior a 90
+- [x] Cubrir `catalogAgeDays` e `isCatalogStale`: fecha fresca, fecha de 90 días, fecha anterior a 90
       días, fecha inválida y cálculo en UTC.
-- [ ] Cubrir `writeJsonAtomic` importado desde `scripts/refresh-model-catalog.mjs`: escribe un archivo
+- [x] Cubrir `writeJsonAtomic` importado desde `scripts/refresh-model-catalog.mjs`: escribe un archivo
       nuevo, reemplaza uno existente, no deja temporales y, ante un destino inválido (p. ej. un
       directorio), falla sin truncar el contenido previo. El test no ejecuta `opencode`.
-- [ ] Agregar guards de contenido: `src/core/model-catalog.js` no contiene `child_process`, `node:fs`
+- [x] Agregar guards de contenido: `src/core/model-catalog.js` no contiene `child_process`, `node:fs`
       ni `spawn(`; `src/core/tier-models.js` sigue sin `child_process`; `README.md` contiene los
       tokens del procedimiento (`binary-missing`, `network-unavailable`, `partial`,
       `.ancleto/model-catalog.candidate.json`, `--write`).
-- [ ] Confirmar que `test/model-catalog-discovery.test.js` no invoca `opencode`, no usa red y no
+- [x] Confirmar que `test/model-catalog-discovery.test.js` no invoca `opencode`, no usa red y no
       escribe fuera de directorios temporales.
 
 ## Fase 7 — Tests de `check`: deriva y antigüedad (tests)
 
-- [ ] En `test/cli.test.js`, agregar el caso de deriva: proyecto temporal instalado; reemplazar un
+- [x] En `test/cli.test.js`, agregar el caso de deriva: proyecto temporal instalado; reemplazar un
       `model:` del mirror por un ID ausente de un snapshot inyectado con `ANCLETO_MODEL_CATALOG`;
       ejecutar `check`; afirmar el warning con archivo e ID, la sugerencia de refresco y exit code 0.
-- [ ] En `test/cli.test.js`, afirmar que el aviso de deriva no altera el conjunto de aceptación del
+- [x] En `test/cli.test.js`, afirmar que el aviso de deriva no altera el conjunto de aceptación del
       oráculo: un mirror con un estado de tier aceptado no gana un `frontmatter diverge` nuevo por la
       sola ausencia en el catálogo.
-- [ ] En `test/cli.test.js`, agregar el caso de catálogo ilegible: `ANCLETO_MODEL_CATALOG` apunta a
+- [x] En `test/cli.test.js`, agregar el caso de catálogo ilegible: `ANCLETO_MODEL_CATALOG` apunta a
       un archivo inexistente o inválido; afirmar el aviso existente de catálogo no verificable, la
       ausencia del warning de deriva y exit code 0.
-- [ ] En `test/cli.test.js`, agregar el caso de catálogo antiguo: snapshot inyectado con
+- [x] En `test/cli.test.js`, agregar el caso de catálogo antiguo: snapshot inyectado con
       `generated_at` anterior a 90 días; afirmar un único aviso informativo, la resolución normal y
       exit code 0.
-- [ ] En `test/cli.test.js`, agregar el caso de catálogo fresco: snapshot inyectado con
+- [x] En `test/cli.test.js`, agregar el caso de catálogo fresco: snapshot inyectado con
       `generated_at` reciente; afirmar que no hay aviso de antigüedad.
-- [ ] En `test/cli.test.js`, agregar el caso de host sin `model:` gestionado (`antigravity` con
+- [x] En `test/cli.test.js`, agregar el caso de host sin `model:` gestionado (`antigravity` con
       `model: inherit` y/o un host que elimina `model:`): afirmar que no se evalúa deriva.
-- [ ] Confirmar que los tests existentes del oráculo de tier y de `check` siguen pasando sin cambios
+- [x] Confirmar que los tests existentes del oráculo de tier y de `check` siguen pasando sin cambios
       de expectativas.
 
 ## Fase 8 — Validación declarada
 
-- [ ] Ejecutar `node C:/nvm4w/nodejs/node_modules/npm/bin/npm-cli.js run lint`.
-- [ ] Ejecutar `node C:/nvm4w/nodejs/node_modules/npm/bin/npm-cli.js test`.
-- [ ] Ejecutar la validación acotada con rutas explícitas:
+- [x] Ejecutar `node C:/nvm4w/nodejs/node_modules/npm/bin/npm-cli.js run lint`.
+- [x] Ejecutar `node C:/nvm4w/nodejs/node_modules/npm/bin/npm-cli.js test`.
+- [x] Ejecutar la validación acotada con rutas explícitas:
       `node --test test/model-catalog-discovery.test.js test/model-catalog.test.js test/cli.test.js test/agent-model-coherence.test.js test/content-guards.test.js`.
-- [ ] Registrar Format como `not-configured` y Typecheck como no aplicable, según `PRODUCT.md` →
+- [x] Registrar Format como `not-configured` y Typecheck como no aplicable, según `PRODUCT.md` →
       `## Project Commands`.
-- [ ] Confirmar que no se modificaron `.opencode/**`, `opencode.json`, `agents/*.md`,
+- [x] Confirmar que no se modificaron `.opencode/**`, `opencode.json`, `agents/*.md`,
       `profiles/**` ni `~/.cache/opencode/models.json`; que no se agregó un agente o skill nuevos; y
       que `.ancleto/model-catalog.candidate.json` no se commitea.
-- [ ] Reportar el diff del snapshot (proveedores, IDs, altas, bajas y cambios de costo) y el
+- [x] Reportar el diff del snapshot (proveedores, IDs, altas, bajas y cambios de costo) y el
       resultado de las validaciones.

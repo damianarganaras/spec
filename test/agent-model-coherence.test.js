@@ -123,6 +123,19 @@ describe('coherencia de modelos entre canónica y tiers', () => {
     assert.notEqual(overlayDir, join(ROOT, 'agents'))
   })
 
+  it('cada overlay de profiles/test/agents declara una línea model:', () => {
+    // Precondición del no-op `o === c` de applyTier: si el overlay no declarara
+    // `model:`, la sustitución del tier no sería un no-op y el contrato de
+    // coherencia de modelos quedaría sin cubrir por este guard.
+    const overlayDir = join(ROOT, 'profiles', 'test', 'agents')
+    const files = readdirSync(overlayDir).filter((f) => f.endsWith('.md')).sort()
+    assert.ok(files.length > 0, 'el overlay no está vacío')
+    for (const file of files) {
+      const content = readFileSync(join(overlayDir, file), 'utf8')
+      assert.match(content, /^model: .+$/m, `${file} declara una línea model:`)
+    }
+  })
+
   it('el guard no codifica identificadores de proveedor ni lee el mirror local', () => {
     const ownSource = readFileSync(fileURLToPath(import.meta.url), 'utf8')
     // El conjunto prohibido se deriva del catálogo real, no se escribe a mano.

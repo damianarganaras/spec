@@ -36,6 +36,53 @@ function withDir(fn) {
   }
 }
 
+// PATH aislado para las pruebas de la nota de compresión: un directorio temporal
+// con (o sin) el stub de `caveman-mcp` más los directorios de sistema donde vive
+// el resolvedor (`where`/`which`). No depende del PATH real de la máquina.
+function compressionEnv(dir, { caveman = false } = {}) {
+  const binDir = join(dir, 'fake-path')
+  mkdirSync(binDir, { recursive: true })
+  if (caveman) {
+    const binFile = join(binDir, process.platform === 'win32' ? 'caveman-mcp.cmd' : 'caveman-mcp')
+    writeFileSync(binFile, process.platform === 'win32' ? '@echo off\r\n' : '#!/bin/sh\n')
+    if (process.platform !== 'win32') chmodSync(binFile, 0o755)
+  }
+  const systemDirs = process.platform === 'win32'
+    ? [join(process.env.SystemRoot || 'C:\\Windows', 'System32')]
+    : ['/usr/bin', '/bin']
+  const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') || 'PATH'
+  // `buildDefaultMcp` también busca caveman en `~/.caveman/bin`: el HOME temporal
+  // hace que "binario ausente" sea determinista y no dependa de la máquina.
+  const homeDir = join(dir, 'home')
+  mkdirSync(homeDir, { recursive: true })
+  return {
+    ANCLETO_PROJECTS_FILE: join(dir, 'registry.json'),
+    HOME: homeDir,
+    USERPROFILE: homeDir,
+    [pathKey]: [binDir, ...systemDirs].join(delimiter)
+  }
+}
+
+// Bundle mínimo de import: manifiesto portable con agent/tier y la intención MCP
+// que el escenario declare. La config MCP real la escribe `repairProjectMcp`.
+function writeMcpBundle(dir, { agent = 'opencode', mcp = [], name = 'bundle' } = {}) {
+  const bundle = join(dir, name)
+  mkdirSync(bundle, { recursive: true })
+  writeFileSync(join(bundle, '.ancletorc'), JSON.stringify({ agent, language: 'auto', profile: 'general' }, null, 2))
+  writeFileSync(join(bundle, 'manifest.json'), JSON.stringify({
+    format: 'ancleto-export/1',
+    ancletoVersion: PKG.version,
+    exportedAt: new Date().toISOString(),
+    agent,
+    tier: 'minimo',
+    language: 'auto',
+    profile: 'general',
+    flags: { azure: false, engram: false },
+    mcp
+  }, null, 2))
+  return bundle
+}
+
 function readRc(dir) {
   return JSON.parse(readFileSync(join(dir, '.ancletorc'), 'utf8'))
 }
@@ -2746,6 +2793,346 @@ describe('CLI directiva de compresión host-scoped (token-budget)', () => {
       writeFileSync(cfgPath, JSON.stringify({ mcp: {} }) + '\n')
       assert.equal(run(['upgrade'], dir, env).status, 0)
       assert.doesNotMatch(readFileSync(orchPath, 'utf8'), /Compresión de contexto \(tool del host\)/)
+    })
+  })
+})
+
+// La decisión de la nota es estado-driven: config MCP en disco ∪ escritura MCP del
+// comando. Estos casos cubren install/init/import y la idempotencia del import; la
+// detección de binario se controla por PATH con `compressionEnv`.
+describe('CLI compression note consistency (host-compression-note-consistency)', () => {
+  const NOTE = /Compresión de contexto \(tool del host\)/
+  const CAVEMAN_CONFIG = JSON.stringify({
+    mcp: { caveman: { type: 'local', enabled: true, command: ['caveman-mcp'] } }
+  }, null, 2) + '\n'
+  const ORCH = (dir, host = 'opencode') => host === 'antigravity'
+    ? join(dir, '.agents', 'agents', 'orchestrator.md')
+    : join(dir, '.opencode', 'agents', 'orchestrator.md')
+  const noteCount = (text) => (text.match(/Compresión de contexto \(tool del host\)/g) || []).length
+
+  it('install conserva la nota con la config previa en caveman y --no-mcp', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.opencode'), { recursive: true })
+      writeFileSync(join(dir, '.opencode', 'opencode.json'), CAVEMAN_CONFIG)
+      const first = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, compressionEnv(dir))
+      assert.equal(first.status, 0)
+      const orchPath = ORCH(dir)
+      assert.match(readFileSync(orchPath, 'utf8'), NOTE)
+      assert.ok(JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8')).mcp.caveman)
+      const second = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, compressionEnv(dir))
+      assert.equal(second.status, 0)
+      assert.equal(noteCount(readFileSync(orchPath, 'utf8')), 1, 'idempotente: una sola nota')
+    })
+  })
+
+  it('install conserva la nota con la config previa aunque el binario no esté disponible', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.opencode'), { recursive: true })
+      writeFileSync(join(dir, '.opencode', 'opencode.json'), CAVEMAN_CONFIG)
+      const r = run(['install', '--project', dir, '--tier', 'minimo'], dir, compressionEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(readFileSync(ORCH(dir), 'utf8'), NOTE)
+      assert.ok(JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8')).mcp.caveman)
+    })
+  })
+
+  it('init conserva la nota con la config previa en caveman y --no-mcp', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.opencode'), { recursive: true })
+      writeFileSync(join(dir, '.opencode', 'opencode.json'), CAVEMAN_CONFIG)
+      const r = run(['init', '--agent', 'opencode', '--no-mcp', '--tier', 'minimo'], dir, compressionEnv(dir))
+      assert.equal(r.status, 0)
+      assert.match(readFileSync(ORCH(dir), 'utf8'), NOTE)
+      assert.ok(JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8')).mcp.caveman)
+    })
+  })
+
+  it('re-ejecutar install sanea la nota legada sin caveman y check no diverge', () => {
+    withDir((dir) => {
+      const env = compressionEnv(dir, { caveman: true })
+      assert.equal(run(['install', '--project', dir, '--tier', 'minimo'], dir, env).status, 0)
+      const orchPath = ORCH(dir)
+      assert.match(readFileSync(orchPath, 'utf8'), NOTE, 'estado inicial con nota')
+      // Estado legado: la config pierde caveman pero la nota sigue en el orchestrator.
+      writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({ mcp: {} }, null, 2) + '\n')
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, compressionEnv(dir))
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(readFileSync(orchPath, 'utf8'), NOTE, 'la nota se sanea')
+      const check = run(['check'], dir, compressionEnv(dir))
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+      assert.match(check.stdout, /0 faltantes/)
+    })
+  })
+
+  it('re-ejecutar init sanea la nota legada sin caveman y check no diverge', () => {
+    withDir((dir) => {
+      const env = compressionEnv(dir, { caveman: true })
+      assert.equal(run(['init', '--agent', 'opencode', '--tier', 'minimo'], dir, env).status, 0)
+      const orchPath = ORCH(dir)
+      assert.match(readFileSync(orchPath, 'utf8'), NOTE)
+      writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({ mcp: {} }, null, 2) + '\n')
+      const r = run(['init', '--agent', 'opencode', '--no-mcp', '--tier', 'minimo'], dir, compressionEnv(dir))
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(readFileSync(orchPath, 'utf8'), NOTE)
+      const check = run(['check'], dir, compressionEnv(dir))
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('import opencode con manifest.mcp vacío y binario presente no escribe la nota', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const env = compressionEnv(dir, { caveman: true })
+      const r = run(['import', writeMcpBundle(dir, { mcp: [] })], dst, env)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(readFileSync(ORCH(dst), 'utf8'), NOTE)
+      const cfg = JSON.parse(readFileSync(join(dst, '.opencode', 'opencode.json'), 'utf8'))
+      assert.equal(Boolean(cfg.mcp?.caveman), false, 'la config final no incluye caveman')
+      const check = run(['check'], dst, env)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  // La nota se decide por la config en disco: si el destino ya declara `caveman`,
+  // el import la materializa aunque el bundle no la declare y el binario no exista.
+  it('import opencode con caveman preexistente y manifest.mcp vacío conserva la config y materializa la nota', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(join(dst, '.opencode'), { recursive: true })
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), CAVEMAN_CONFIG)
+      const env = compressionEnv(dir) // binario ausente: la decisión no depende de PATH
+      const r = run(['import', writeMcpBundle(dir, { mcp: [] })], dst, env)
+      assert.equal(r.status, 0)
+      assert.match(readFileSync(ORCH(dst), 'utf8'), NOTE)
+      const cfg = JSON.parse(readFileSync(join(dst, '.opencode', 'opencode.json'), 'utf8'))
+      assert.ok(cfg.mcp?.caveman, 'la config existente con caveman se preserva')
+      const check = run(['check'], dst, env)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  // El bundle declara `caveman` pero no hay binario: la config del destino ya lo
+  // incluye, así que la config final lo conserva y la nota SHALL materializarse.
+  it('import opencode con caveman preexistente y bundle que lo declara sin binario materializa la nota', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(join(dst, '.opencode'), { recursive: true })
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), CAVEMAN_CONFIG)
+      const env = compressionEnv(dir)
+      const bundle = writeMcpBundle(dir, { mcp: [{ name: 'caveman', type: 'local', enabled: true }] })
+      const r = run(['import', bundle], dst, env)
+      assert.equal(r.status, 0)
+      assert.match(readFileSync(ORCH(dst), 'utf8'), NOTE)
+      const cfg = JSON.parse(readFileSync(join(dst, '.opencode', 'opencode.json'), 'utf8'))
+      assert.ok(cfg.mcp?.caveman, 'la config existente con caveman se preserva')
+      const check = run(['check'], dst, env)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('import opencode que declara caveman con binario presente escribe config y nota', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const env = compressionEnv(dir, { caveman: true })
+      const bundle = writeMcpBundle(dir, { mcp: [{ name: 'caveman', type: 'local', enabled: true }] })
+      const r = run(['import', bundle], dst, env)
+      assert.equal(r.status, 0)
+      assert.match(readFileSync(ORCH(dst), 'utf8'), NOTE)
+      const cfg = JSON.parse(readFileSync(join(dst, '.opencode', 'opencode.json'), 'utf8'))
+      assert.ok(cfg.mcp?.caveman, 'la config final incluye caveman')
+      const check = run(['check'], dst, env)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('import opencode que declara caveman sin binario no escribe la nota', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const env = compressionEnv(dir)
+      const bundle = writeMcpBundle(dir, { mcp: [{ name: 'caveman', type: 'local', enabled: true }] })
+      const r = run(['import', bundle], dst, env)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(readFileSync(ORCH(dst), 'utf8'), NOTE)
+      const cfg = JSON.parse(readFileSync(join(dst, '.opencode', 'opencode.json'), 'utf8'))
+      assert.equal(Boolean(cfg.mcp?.caveman), false, 'sin binario la config final no incluye caveman')
+    })
+  })
+
+  it('import antigravity con caveman en la config de workspace materializa la nota', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(join(dst, '.agents'), { recursive: true })
+      writeFileSync(join(dst, '.agents', 'mcp_config.json'), JSON.stringify({
+        mcpServers: { caveman: { command: 'caveman-mcp', args: [] } }
+      }, null, 2) + '\n')
+      const env = compressionEnv(dir, { caveman: true })
+      const r = run(['import', writeMcpBundle(dir, { agent: 'antigravity', mcp: [] })], dst, env)
+      assert.equal(r.status, 0)
+      assert.match(readFileSync(ORCH(dst, 'antigravity'), 'utf8'), NOTE)
+      const check = run(['check'], dst, env)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('import antigravity sin caveman en la config no materializa la nota aunque el binario exista', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const env = compressionEnv(dir, { caveman: true })
+      const r = run(['import', writeMcpBundle(dir, { agent: 'antigravity', mcp: [] })], dst, env)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(readFileSync(ORCH(dst, 'antigravity'), 'utf8'), NOTE)
+      const check = run(['check'], dst, env)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('re-importar no duplica la nota ni cambia la config y sanea el estado legado', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const env = compressionEnv(dir, { caveman: true })
+      const bundle = writeMcpBundle(dir, { mcp: [{ name: 'caveman', type: 'local', enabled: true }] })
+      assert.equal(run(['import', bundle], dst, env).status, 0)
+      const orchPath = ORCH(dst)
+      assert.equal(noteCount(readFileSync(orchPath, 'utf8')), 1)
+      const cfgPath = join(dst, '.opencode', 'opencode.json')
+      const firstCfg = readFileSync(cfgPath, 'utf8')
+      assert.equal(run(['import', bundle], dst, env).status, 0)
+      assert.equal(noteCount(readFileSync(orchPath, 'utf8')), 1, 'sin duplicar la nota')
+      assert.equal(readFileSync(cfgPath, 'utf8'), firstCfg, 'config final estable')
+      // Estado legado: la nota queda pero la config final deja de incluir caveman.
+      writeFileSync(cfgPath, JSON.stringify({ mcp: {} }, null, 2) + '\n')
+      const empty = writeMcpBundle(dir, { mcp: [], name: 'bundle-empty' })
+      assert.equal(run(['import', empty], dst, env).status, 0)
+      assert.doesNotMatch(readFileSync(orchPath, 'utf8'), NOTE, 're-import sanea la nota legada')
+      const check = run(['check'], dst, env)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  // `import --repair` sin bundle solo repara la config MCP: no reescribe los assets
+  // del host, asi que la nota legada persiste y el comando no promete sanearla.
+  it('import --repair sin bundle no sanea la nota legada', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const env = compressionEnv(dir, { caveman: true })
+      const bundle = writeMcpBundle(dir, { mcp: [{ name: 'caveman', type: 'local', enabled: true }] })
+      assert.equal(run(['import', bundle], dst, env).status, 0)
+      const orchPath = ORCH(dst)
+      assert.match(readFileSync(orchPath, 'utf8'), NOTE, 'estado inicial con nota')
+      // Estado legado: la config final pierde caveman pero la nota sigue en el orchestrator.
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({ mcp: {} }, null, 2) + '\n')
+      const before = readFileSync(orchPath, 'utf8')
+      const repair = run(['import', '--repair'], dst, env)
+      assert.equal(repair.status, 0)
+      assert.equal(readFileSync(orchPath, 'utf8'), before, 'los assets del host no se reescriben')
+      assert.match(readFileSync(orchPath, 'utf8'), NOTE, 'la nota legada persiste')
+    })
+  })
+
+  // El guard de `manifest.mcp` corre antes del primer write: un valor no-array
+  // aborta el import y no deja el destino a medio aplicar.
+  it('import rechaza manifest.mcp no-array sin escribir en el destino', () => {
+    withDir((dir) => {
+      const env = compressionEnv(dir)
+      for (const [label, mcp] of [['objeto', { caveman: {} }], ['numero', 42], ['string', 'caveman']]) {
+        const dst = join(dir, `destino-${label}`)
+        mkdirSync(dst)
+        const bundle = writeMcpBundle(dir, { mcp, name: `bundle-${label}` })
+        const r = run(['import', bundle], dst, env)
+        assert.equal(r.status, 1, `${label}: exit 1`)
+        assert.match(r.stderr, /manifest\.mcp no es un arreglo/, `${label}: mensaje`)
+        assert.deepEqual(readdirSync(dst), [], `${label}: sin writes parciales`)
+        assert.equal(existsSync(join(dst, '.ancletorc')), false, `${label}: sin .ancletorc`)
+        assert.equal(existsSync(join(dst, '.opencode', 'agents')), false, `${label}: sin agents`)
+      }
+    })
+  })
+
+  // El guard tambien valida cada entrada antes del primer write: una entrada sin
+  // `name` string no vacio aborta sin dejar el destino a medio aplicar.
+  it('import rechaza manifest.mcp con entradas invalidas sin escribir en el destino', () => {
+    withDir((dir) => {
+      const env = compressionEnv(dir)
+      for (const [label, mcp] of [
+        ['null', [null]],
+        ['objeto-vacio', [{}]],
+        ['nombre-vacio', [{ name: '' }]],
+        ['nombre-no-string', [{ name: 42 }]]
+      ]) {
+        const dst = join(dir, `destino-${label}`)
+        mkdirSync(dst)
+        const bundle = writeMcpBundle(dir, { mcp, name: `bundle-${label}` })
+        const r = run(['import', bundle], dst, env)
+        assert.equal(r.status, 1, `${label}: exit 1`)
+        assert.match(r.stderr, /manifest\.mcp con entradas invalidas/, `${label}: mensaje`)
+        assert.deepEqual(readdirSync(dst), [], `${label}: sin writes parciales`)
+        assert.equal(existsSync(join(dst, '.ancletorc')), false, `${label}: sin .ancletorc`)
+        assert.equal(existsSync(join(dst, '.opencode', 'agents')), false, `${label}: sin agents`)
+        assert.equal(existsSync(join(dst, 'aspec')), false, `${label}: sin aspec`)
+      }
+    })
+  })
+
+  it('import rechaza manifest.mcp null (definido y no array)', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const env = compressionEnv(dir)
+      const r = run(['import', writeMcpBundle(dir, { mcp: null })], dst, env)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /manifest\.mcp no es un arreglo/)
+      assert.deepEqual(readdirSync(dst), [], 'sin writes parciales')
+    })
+  })
+
+  it('import con manifest.mcp ausente completa y trata la lista como vacía', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      // Binario presente: la lista ausente igual debe quedar vacía (no se infiere caveman).
+      const env = compressionEnv(dir, { caveman: true })
+      const bundle = writeMcpBundle(dir, { mcp: [] })
+      const manifestPath = join(bundle, 'manifest.json')
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+      delete manifest.mcp
+      writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+      const r = run(['import', bundle], dst, env)
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dst, '.opencode', 'opencode.json'), 'utf8'))
+      assert.equal(Boolean(cfg.mcp?.caveman), false, 'sin intención declarada no agrega caveman')
+      assert.doesNotMatch(readFileSync(ORCH(dst), 'utf8'), NOTE)
+    })
+  })
+
+  it('check mantiene exit 0 en divergencia advisory y exit 1 con faltantes', () => {
+    withDir((dir) => {
+      const env = compressionEnv(dir)
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, env).status, 0)
+      const agentPath = join(dir, '.opencode', 'agents', 'orchestrator.md')
+      writeFileSync(agentPath, readFileSync(agentPath, 'utf8').replace(/^description: .*$/m, 'description: editado a mano'))
+      const advisory = run(['check'], dir, env)
+      assert.equal(advisory.status, 0)
+      assert.match(advisory.stdout, /frontmatter diverge del adaptador/)
+      assert.match(advisory.stdout, /0 faltantes/)
+      rmSync(join(dir, '.opencode', 'agents', 'coder.md'))
+      const missing = run(['check'], dir, env)
+      assert.equal(missing.status, 1)
+      assert.match(missing.stdout, /1 faltantes/)
     })
   })
 })

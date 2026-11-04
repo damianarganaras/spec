@@ -2,6 +2,22 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.12] - 2026-11-04
+
+### Added
+- **Integridad de IDs declarados del catálogo**: los IDs declarados por los agentes se validan contra el snapshot versionado.
+- **Gate pre-escritura en `refresh-model-catalog --write`**: la escritura se bloquea si la integridad de IDs no se puede verificar.
+- **Aviso advisory no bloqueante en `check`** cuando el catálogo no puede verificarse.
+
+### Changed
+- **Lint cubre `scripts/`**: el comando pasa a `eslint src/ test/ scripts/`.
+- **Remedio del catálogo**: la indicación apunta al repositorio fuente, ya que `scripts` no se publica.
+
+### Fixed
+- **`looksBinaryMissing` independiente de locale**: la detección ya no depende del idioma del entorno.
+- **Snapshot corrupto tratado como no verificable**: no produce una deriva falsa.
+- **Guard transitivo de `child_process` corregido**.
+
 ## [0.18.11] - 2026-11-04
 
 ### Added

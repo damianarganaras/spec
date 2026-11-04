@@ -2,10 +2,10 @@
 node: units/discovery-engine
 kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
-covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, descubrimiento dev-only]
-sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-generatedAt: 2026-11-04T17:02:55Z
-pluginVersion: 0.18.12
+covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
+sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-04-ch-14-tier-gratis-import-integrity/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-04T19:22:37Z
+pluginVersion: 0.18.13
 skillVersion: '2.3'
 ---
 
@@ -15,7 +15,7 @@ skillVersion: '2.3'
 
 Separar el descubrimiento técnico del barrido manual: producir un mapa topológico estable
 (`.discovery-map.json`), empaquetar el contexto con el presupuesto del tier, medir si el seed sigue
-fresco y calcular qué archivos dependen de un cambio. En `0.18.12` el catálogo de modelos se puede
+fresco y calcular qué archivos dependen de un cambio. En `0.18.13` el catálogo de modelos se puede
 refrescar de forma completa y auditable desde una máquina de mantenimiento, sin introducir
 descubrimiento en runtime: se enumeran todos los proveedores, se fuerza `--refresh`, se clasifica
 la corrida, se calcula el diff, se valida que todo ID declarado sobreviva y se escribe de forma
@@ -51,7 +51,8 @@ atómica.
 
 `buildRepomixArgs` combina las exclusiones del proyecto, los extras del tier y el `--ignore`
 explícito. `readProjectTier` lee `.opencode/.ancleto-tier` (o `.ancleto-tier` en la raíz) y cae a
-`gratis` si no hay tier válido.
+`gratis` si no hay tier válido. El pack comprimido conserva firmas y comentarios, pero elide los
+cuerpos de funciones.
 
 ### Resolución de modelos (`minimo`)
 
@@ -64,6 +65,9 @@ explícito. `readProjectTier` lee `.opencode/.ancleto-tier` (o `.ancleto-tier` e
 - Devuelve `models`, `candidates` y `unresolved`. En modo estricto lanza error si ningún candidato
   está; `check` usa `allowUnresolved: true` y degrada con aviso.
 - `gratis` no tiene cadena: usa `opencode/big-pickle`; un `gratisModel` desconocido se normaliza.
+- `freeTierOnPrimary(model, mode)` completa la semántica del tier gratis: cruza el modelo free con
+  `mode: primary` para los avisos de `applyTier` y `check` (ver `units/cli-install.md`). No recibe
+  tier ni depende del catálogo.
 
 ### Catálogo de modelos
 
@@ -103,6 +107,10 @@ excluye `inherit`.
 - El guard de tests cubre las cuatro fuentes y falla nombrando ID y origen. El guard de contenido
   exige que `model-catalog.js` y `tier-models.js` no importen `node:child_process`, y permite que
   el script lo haga.
+- **Consolidación (0.18.13)**: en `aspec/specs/agent-model-tiers/spec.md` los dos requirements
+  solapados de integridad de IDs se consolidaron con `MODIFIED Requirements`, conservando ambos
+  headings y dejando la regla estricta de `--write` como enunciación autoritativa. No cambió
+  comportamiento; evita reenunciar la misma obligación dos veces.
 
 ### Descubrimiento dev-only
 
@@ -137,11 +145,13 @@ inválido (`{}`, `{providers:{}}`, array, string) se descarta; un catálogo ileg
 - reporta cada `model:` de mirror ausente del catálogo, con el archivo y el ID;
 - emite como máximo un aviso advisory por ejecución si un ID declarado en `TIERS`, `TIER_CHAINS`,
   `agents/*.md` o `profiles/*/agents/*.md` no figura en el snapshot, listando ID y origen;
+- agrega una entrada advisory por agente instalado con `mode: primary` y `model:` gratis
+  (`freeTierOnPrimary`), derivada del frontmatter y no del nombre;
 - emite un aviso único de antigüedad si `generated_at` supera 90 días.
 
 Con catálogo no verificable conserva el aviso de catálogo no verificable y **no** emite deriva ni
-advisory: un snapshot corrupto o vacío no produce deriva falsa. Todos los avisos son no bloqueantes:
-no alteran el exit code, los contadores ni el conjunto de aceptación del oráculo.
+advisory de IDs: un snapshot corrupto o vacío no produce deriva falsa. Todos los avisos son no
+bloqueantes: no alteran el exit code, los contadores ni el conjunto de aceptación del oráculo.
 
 ### Affected-set
 
@@ -157,8 +167,9 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 769 archivos, ~35.730 tokens, tier `minimo` (comprimido). `.discovery-map.json`
-  reporta 780 archivos; el estado quedó en `docs/technical-discovery/.discovery-state.json`.
+- **Pack actual**: 773 archivos, ~36.040 tokens, tier `minimo` (comprimido). El
+  `.discovery-map.json` observado al empacar reportó 784 archivos; el archivo trackeado en HEAD
+  conserva 780. El estado quedó en `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
   runtime/CI" y la separación `model-catalog.js` (puro) / `scripts/` (procesos).
 - **Un solo dueño de la extracción de IDs**: `modelIdsFromCatalog` vive en `model-catalog.js` y
@@ -178,7 +189,7 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 | `src/core/discovery.js` | Mapa topológico y `readTopologySummary` |
 | `src/core/repomix-tier.js` | Args de Repomix, ignores y presupuesto por tier |
 | `src/core/affected-set.js` | Grafo de imports y clausura de dependientes |
-| `src/core/tier-models.js` | `TIERS`, `TIER_CHAINS`, resolver y `declaredModelIds` |
+| `src/core/tier-models.js` | `TIERS`, `TIER_CHAINS`, resolver, `declaredModelIds` y `freeTierOnPrimary` |
 | `src/core/model-catalog.js` | Helpers puros, IDs del catálogo e integridad |
 | `src/core/model-catalog.json` | Snapshot verificado de modelos (5 proveedores / 211 IDs) |
 | `scripts/refresh-model-catalog.mjs` | Descubrimiento dev-only, gate de IDs y escritura atómica |

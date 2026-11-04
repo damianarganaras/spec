@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
 import { snapshotDatabase } from '../core/memory/snapshot.js'
-import { adaptFrontmatter, parseFrontmatter } from '../core/adapters/frontmatter.js'
+import { adaptFrontmatter, parseFrontmatter, frontmatterValue } from '../core/adapters/frontmatter.js'
 import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite } from '../core/memory/working-context.js'
 import { materializeMachineEnv, checkMachineEnvTracked } from '../core/machine-env.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
@@ -20,7 +20,7 @@ import { writeDiscoveryMap } from '../core/discovery.js'
 import { computeAffectedSet } from '../core/affected-set.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
-import { TIERS, TIER_CHAINS, declaredModelIds, resolveTierModels, loadModelCatalog, modelIdsFromCatalog, gratisModel, isKnownGratisModel } from '../core/tier-models.js'
+import { TIERS, TIER_CHAINS, declaredModelIds, resolveTierModels, loadModelCatalog, modelIdsFromCatalog, gratisModel, isKnownGratisModel, freeTierOnPrimary } from '../core/tier-models.js'
 import { catalogAgeDays, isCatalogStale, missingModelIdsInCatalog, validateCatalogSnapshot } from '../core/model-catalog.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -597,7 +597,14 @@ async function applyTier(agentsDir, tier, models = null) {
     if (!(await exists(p))) continue
     const c = await readFile(p, 'utf8')
     const o = c.replace(/^model: .*$/m, `model: ${model}`)
-    if (o !== c) await writeFile(p, o)
+    if (o !== c) {
+      // Aviso advisory: sólo cuando el reemplazo cambia el contenido (idempotencia).
+      const mode = frontmatterValue(parseFrontmatter(c).entries?.find((e) => e.key === 'mode'))
+      if (freeTierOnPrimary(model, mode)) {
+        console.warn(`ancleto: tier gratis: ${name} es un agente primario (mode: primary) y usará el modelo free ${model}; OpenCode puede responder 403 "free tier can only be used from within OpenCode". Usá un modelo pago en el agente primario.`)
+      }
+      await writeFile(p, o)
+    }
   }
 }
 
@@ -2900,6 +2907,7 @@ async function checkCommand() {
     : []
   let missing = 0
   let orphans = 0
+  const agentWarnings = []
 
   for (const t of ip.templates || []) {
     if (await exists(join(cwd, t))) {
@@ -2949,7 +2957,7 @@ async function checkCommand() {
       // esperados (los huérfanos ya quedan avisados). Reporta como warning (⚠), no como
       // faltante (✖): el exit code NO se ve alterado por divergencias (solo por faltantes).
       if (cat === 'agents') {
-        await checkAgentsFrontmatter(cwd, dirRel, actual, expected, ext, modelCatalog)
+        agentWarnings.push(...await checkAgentsFrontmatter(cwd, dirRel, actual, expected, ext, modelCatalog))
       }
       if (missingFiles.length === 0 && orphanFiles.length === 0) {
         console.log(`  ✔ ${dirRel} (${actual.length} archivos)`)
@@ -2958,6 +2966,7 @@ async function checkCommand() {
   }
 
   const warnings = await checkTierOrphan(cwd)
+  warnings.push(...agentWarnings)
   if (checkMachineEnvTracked(cwd)) {
     warnings.push('.ancleto/machine-env.md (trackeado en git; deberia ser un artefacto local — corre `git rm --cached .ancleto/machine-env.md`)')
   }
@@ -2986,8 +2995,9 @@ async function checkCommand() {
 // Reporta divergencia y aviso de tier como warnings (no bloqueantes). No compara
 // archivos huérfanos (ya quedan avisados arriba) ni archivos sin origen comparable.
 async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt, modelCatalog = null) {
+  const advisories = []
   const host = hostForDir('agents', dirRel)
-  if (!host) return
+  if (!host) return advisories
   const rc = await readAncletorc(cwd)
   const profile = validProfile(rc?.profile) || DEFAULT_PROFILE
   // Overlay del perfil: para `test`, installProfileOverlay reemplaza tester/reviewer
@@ -3083,14 +3093,20 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt, mo
     const candidatos = tierCandidates[name] || []
     const conTierEstados = candidatos.map(conTier)
     const instalado = await readFile(join(cwd, dirRel, f), 'utf8')
+    const installedModel = instalado.match(/^model: (.+)$/m)?.[1]?.trim()
     // Aviso no bloqueante de deriva: un `model:` del mirror que no figura en el
     // snapshot legible sugiere refrescar el catálogo. No toca el exit code ni el
     // conjunto de aceptación del oráculo.
     if (installedCatalogIds) {
-      const installedModel = instalado.match(/^model: (.+)$/m)?.[1]?.trim()
       if (installedModel && installedModel !== 'inherit' && !installedCatalogIds.has(installedModel)) {
         console.log(`  ⚠ ${dirRel}/${f} (model '${installedModel}' ausente del catálogo de modelos; refrescalo desde el repositorio fuente)`)
       }
+    }
+    // Aviso advisory: modelo gratis sobre un agente primario. Se deriva sólo del
+    // `mode:` del frontmatter instalado, nunca del nombre ni de la posición en `TIERS`.
+    const installedMode = frontmatterValue(parseFrontmatter(instalado).entries?.find((e) => e.key === 'mode'))
+    if (freeTierOnPrimary(installedModel, installedMode)) {
+      advisories.push(`${dirRel}/${f} (modelo free ${installedModel} sobre un agente primario: puede responder 403 en OpenCode)`)
     }
     // El aviso de tier cuenta si el mirror difiere del resuelto-ahora (el proximo
     // install/update reescribiria `model:`) o si el resuelto-ahora difiere de la
@@ -3114,6 +3130,7 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt, mo
   if (tierUnresolved.some((name) => actual.includes(name + ext))) {
     console.log(`  ⚠ ${dirRel} (tier '${tier}': el catálogo no tiene ningún candidato resoluble; install/update abortará hasta refrescar el catálogo)`)
   }
+  return advisories
 }
 
 // Avisa si hay un tier del proyecto sin agentes locales donde aplicarlo:
@@ -4203,22 +4220,14 @@ async function importCmd(args) {
         process.exit(1)
       }
     }
-    if (bundleRc) {
-      await writeManifest(projectDir, {
-        ...(bundleRc.agent ? { agent: bundleRc.agent } : {}),
-        ...(bundleRc.language ? { language: bundleRc.language } : {}),
-        ...(bundleRc.profile ? { profile: bundleRc.profile } : {}),
-        ...(hasBundleGratisModel ? { gratisModel: bundleGratisModel } : {}),
-        ...(bundleRc.azure ? { azure: bundleRc.azure } : {}),
-        ...(bundleRc.discovery ? { discovery: bundleRc.discovery } : {})
-      })
-    }
     if (await exists(join(bundleDir, 'aspec'))) {
       await cp(join(bundleDir, 'aspec'), join(projectDir, 'aspec'), { recursive: true, force: false })
     }
+    const writtenTemplates = []
     for (const t of TEMPLATES) {
       const src = join(bundleDir, t)
       if (!(await exists(src))) continue
+      writtenTemplates.push(t)
       const target = join(projectDir, t)
       const content = await readFile(src, 'utf8')
       if (!(await exists(target))) {
@@ -4229,11 +4238,14 @@ async function importCmd(args) {
       const merged = mergeTemplateInto(content, current, t)
       if (merged !== current) await writeFile(target, merged)
     }
+    const copiedAssets = { agents: [], commands: [], skills: [] }
     for (const d of ASSETS) {
       const src = join(bundleDir, '.opencode', d)
-      if (await exists(src)) await cp(src, join(projectDir, '.opencode', d), { recursive: true, force: false })
+      if (!(await exists(src))) continue
+      await cp(src, join(projectDir, '.opencode', d), { recursive: true, force: false })
+      copiedAssets[d].push(`.opencode/${d}`)
     }
-    await installAgentAssets(projectDir, agent, {
+    const written = await installAgentAssets(projectDir, agent, {
       compression: hostSupportsCompression(agent) && Boolean(buildDefaultMcp({ withEngram: manifest?.flags?.engram === true }).caveman)
     })
     if (importProfile === 'test') await installProfileOverlay(projectDir, agent)
@@ -4244,6 +4256,29 @@ async function importCmd(args) {
       // dejaba el tier viejo y producia divergencias falsas.
       await mkdir(join(projectDir, '.opencode'), { recursive: true })
       await writeFile(tierStatePath(join(projectDir, '.opencode')), manifest.tier + '\n')
+    }
+    // El manifiesto se escribe después de los assets que registra: `installedPaths`
+    // es la unión de lo ya declarado en el destino y lo que este import escribió.
+    // Nunca se copian las rutas del bundle (describen la máquina origen): los
+    // `.opencode/<asset>` registrados arriba son destinos relativos del proyecto.
+    if (bundleRc) {
+      await writeManifest(projectDir, {
+        ...(bundleRc.agent ? { agent: bundleRc.agent } : {}),
+        ...(bundleRc.language ? { language: bundleRc.language } : {}),
+        ...(bundleRc.profile ? { profile: bundleRc.profile } : {}),
+        ...(hasBundleGratisModel ? { gratisModel: bundleGratisModel } : {}),
+        ...(bundleRc.azure ? { azure: bundleRc.azure } : {}),
+        ...(bundleRc.discovery ? { discovery: bundleRc.discovery } : {}),
+        // inner = installedPaths del destino ∪ lo escrito por este import (templates + assets);
+        // outer = eso ∪ los dirs del bundle copiados. `copiedAssets` no trae `templates`: la unión los conserva.
+        installedPaths: unionInstalledPaths(
+          unionInstalledPaths(existingRc?.installedPaths, {
+            templates: writtenTemplates,
+            ...written
+          }),
+          copiedAssets
+        )
+      })
     }
     await scaffoldAspec(projectDir)
     console.log(`ancleto: bundle aplicado (agente: ${agent}${manifest.tier ? `, tier: ${manifest.tier}` : ''})`)

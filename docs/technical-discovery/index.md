@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-04T17:02:55Z
-pluginVersion: 0.18.12
+generatedAt: 2026-11-04T19:22:37Z
+pluginVersion: 0.18.13
 skillVersion: '2.3'
 ---
 
@@ -11,14 +11,12 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (769 archivos, ~35.730 tokens), `package.json` (`0.18.12`), `CHANGELOG.md` (hasta
-`0.18.12`), `.discovery-map.json` (`total_files: 780`), el reporte `ancleto discovery --check`
-y lectura puntual de los archivos citados. El pack excluye `test/**`, `docs/**` y `**/*.md`;
-esas áreas se verificaron por lectura directa.
-
-> Nota de provenance: el CLI global que generó el pack y el estado es `ancleto 0.18.8`,
-> mientras el repo está en `0.18.12`. El snapshot y los cambios de `0.18.12` se leyeron del
-> árbol en `0.18.12`; ver `unknowns.md`.
+`minimo` (773 archivos, ~36.040 tokens), `package.json` (`0.18.13`), `src/core/model-catalog.json`
+y el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
+(`node src/cli/index.js discovery --compress`); el tier `minimo` excluye `test/**`, `docs/**` y
+`**/*.md`, y el pack llega comprimido (cuerpos de funciones elididos). Por eso las áreas Markdown
+—`aspec/specs/**`, `aspec/changes/**`, `README.md`, `CHANGELOG.md`— y los detalles finos de
+comportamiento se verificaron por lectura directa de los paths citados (ver `unknowns.md`).
 
 ## Ruteo por pregunta
 
@@ -30,10 +28,12 @@ esas áreas se verificaron por lectura directa.
 | Sistemas externos y dependencias observables (npm, GitHub, Repomix, git, MCP, opencode) | `integrations.md` |
 | Catálogo de unidades (módulos, agents, skills, commands) con propósito y entry point | `units/_map.md` |
 | **Modelos por tier**: `TIERS` agente→string, `TIER_CHAINS`, resolver contra catálogo, `gratis` free-only, oráculo de `check` | `decisions.md`, `setup.md`, `units/cli-install.md` |
+| **Modelo gratis sobre agente primario**: `freeTierOnPrimary(model, mode)`, aviso en `applyTier` (set-time) y en `check` (inspect-time) | `decisions.md`, `units/cli-install.md` |
 | **Catálogo de modelos**: snapshot de 5 proveedores / 211 IDs, helpers `declaredModelIds` / `modelIdsFromCatalog` / `missingModelIdsInCatalog`, guard de integridad | `decisions.md`, `units/discovery-engine.md` |
 | **Integridad de IDs declarados**: fuentes versionadas, helper puro, gate de `--write` y aviso advisory de `check` | `decisions.md`, `units/discovery-engine.md`, `units/cli-install.md` |
 | **Descubrimiento dev-only**: clasificaciones `available`/`binary-missing`/`network-unavailable`/`partial`, `looksBinaryMissing` locale-independent, diff y escritura atómica | `units/discovery-engine.md`, `integrations.md` |
-| CLI: `init`/`install`/`update`/`upgrade`, wizard TTY, rutas por host, adaptadores, MCP, portabilidad, `check` | `units/cli-install.md` |
+| CLI: `init`/`install`/`update`/`upgrade`, wizard TTY, rutas por host, adaptadores, MCP, `check` | `units/cli-install.md` |
+| Portabilidad `export`/`import`: bundle, `--repair`, `installedPaths` acumulativo | `units/cli-install.md`, `decisions.md` |
 | Discovery: mapa topológico, pack Repomix, estado del seed, `affectedDocs`, affected-set | `units/discovery-engine.md` |
 | Memoria persistente: SQLite+FTS5, tools MCP, recall, refs, working-context, ops, doctor, curate | `units/memory-engine.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
@@ -46,11 +46,14 @@ esas áreas se verificaron por lectura directa.
 - **Entry point**: `src/cli/index.js` (bins `ancleto` y `aspec` en `package.json`).
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local
   (`.ancleto/memory.db`, `node:sqlite`) y control explícito de costo por tier.
-- **Versión del repo**: `package.json` = `0.18.12`; `.ancleto/machine-env.md` (artefacto derivado)
-  registra `ancleto: 0.18.8`, que se regenera en `init`/`install`/`upgrade`.
-- **Change reciente archivado**: `aspec/changes/archive/2026-11-04-ch-13-model-catalog-integrity/`
-  (integridad de IDs declarados, gate de `--write`, aviso advisory de `check`, detección de
-  binario ausente independiente del locale y lint sobre `scripts/`).
+- **Versión del repo**: `package.json` = `0.18.13`. `.ancleto/machine-env.md` es un artefacto
+  derivado gitignored que aún registra `ancleto: 0.18.8`; se regenera con
+  `init`/`install`/`upgrade`.
+- **Change reciente archivado**: `aspec/changes/archive/2026-11-04-ch-14-tier-gratis-import-integrity/`
+  (aviso advisory de modelo gratis sobre agente primario, registro de `installedPaths` por `import`,
+  consolidación de dos requirements de `agent-model-tiers` y un requirement nuevo en
+  `project-portability`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
-- **Pack actual**: 769 archivos, ~35.730 tokens; `.discovery-map.json` reporta 780 archivos.
+- **Pack actual**: 773 archivos, ~36.040 tokens. El `.discovery-map.json` observado al empacar
+  reportó 784 archivos; el archivo trackeado en HEAD conserva una corrida previa (780).

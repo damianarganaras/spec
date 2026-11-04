@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-04T17:02:55Z
-pluginVersion: 0.18.12
+generatedAt: 2026-11-04T19:22:37Z
+pluginVersion: 0.18.13
 skillVersion: '2.3'
 ---
 
@@ -42,8 +42,8 @@ skillVersion: '2.3'
 
 No hay formatter ni typechecker declarados: el repo es JavaScript ESM sin `tsconfig.json` y
 `PRODUCT.md` registra `Format: not-configured` / typecheck no aplica. El lint cubre `src/`, `test/`
-y `scripts/` con las cuatro reglas de `eslint.config.js` (`no-undef`, `no-unused-vars`, `eqeqeq`,
-`no-dupe-keys`).
+y `scripts/` con `eslint.config.js`: globals de Node y cuatro reglas (`no-undef`, `no-unused-vars`
+con `argsIgnorePattern`/`caughtErrorsIgnorePattern` = `^_`, `eqeqeq`, `no-dupe-keys`).
 
 ## Refresco del catálogo de modelos
 
@@ -86,11 +86,16 @@ del paquete instalado.
   usa `normal`, mientras el default publicado de `agents/*.md` es
   `commandcode/deepseek/deepseek-v4.1-flash` (`README.md`).
 
+El tier `gratis` está pensado para subagentes: un modelo free sobre un agente con `mode: primary`
+(por ejemplo el `orchestrator`, cuyo frontmatter canónico declara `mode: primary`) puede responder
+`403` en OpenCode. `install --tier gratis` y `ancleto check` lo advierten sin bloquear; ver
+`units/cli-install.md`.
+
 ## Entornos y variables
 
 | Variable / archivo | Propósito | Referencia |
 |---|---|---|
-| `.ancletorc` | Manifiesto de instalación y configuración del proyecto (`agent`, `tier`, `discovery`, `gratisModel`, `azure`) | `src/cli/index.js` → `readAncletorc` |
+| `.ancletorc` | Manifiesto de instalación y configuración del proyecto (`agent`, `language`, `profile`, `discovery`, `gratisModel`, `azure`, `installedPaths`) | `src/cli/index.js` → `readAncletorc` |
 | `.opencode/.ancleto-tier` | Último tier aplicado; lo lee `check` y `repomix-tier` | `src/cli/index.js`, `src/core/repomix-tier.js` |
 | `ANCLETO_OPENCODE_DB` | Ruta alternativa a la base de sesiones de opencode para `stats` | `src/cli/index.js` → `opencodeDbPath` |
 | `ANCLETO_PROJECTS_FILE` | Ruta alternativa al registro global de proyectos | `src/cli/index.js` → `projectsRegistryPath` |

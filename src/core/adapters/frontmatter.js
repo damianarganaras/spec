@@ -5,7 +5,8 @@
 // Contrato publico: `adaptFrontmatter(content, host, assetKind, name)` retorna
 // el contenido completo (frontmatter adaptado + body verbatim). `parseFrontmatter`
 // y `serializeFrontmatter` se re-exportan para que `commandToSkill` en el CLI los
-// pueda usar sin redefinirlos.
+// pueda usar sin redefinirlos. `frontmatterValue` se exporta para que los avisos de
+// tier (`applyTier` y `check`) lean `mode:` sin duplicar el parseo.
 
 export const AGENT_ADAPTER_DROP = new Set(['mode', 'color', 'temperature', 'permission', 'model', 'tools'])
 
@@ -99,7 +100,8 @@ function parseToolFlags(entry) {
   return flags
 }
 
-function frontmatterValue(entry, fallback = null) {
+// Valor crudo de una entrada de frontmatter ya parseada; `fallback` si no existe.
+export function frontmatterValue(entry, fallback = null) {
   if (!entry) return fallback
   const m = /^[A-Za-z0-9_-]+:\s*(.*?)\s*$/.exec(entry.lines[0] || '')
   return m ? m[1] : fallback

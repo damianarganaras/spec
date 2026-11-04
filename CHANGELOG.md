@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.13] - 2026-11-04
+
+### Added
+- **Aviso advisory de modelo free sobre agente primario**: cuando un modelo free del tier `gratis` queda efectivo sobre un agente `mode: primary` (OpenCode puede responder 403), se emite un aviso no bloqueante en `applyTier` (set-time) y en `check` (inspect-time); nunca bloquea, nunca cambia el modelo escrito ni el exit code.
+- **`import` registra `installedPaths`**: se guarda la unión del destino y lo que escribió, incluidos los `.opencode/{agents,commands,skills}` copiados del bundle; nunca copia las rutas del `.ancletorc` del bundle.
+
+### Changed
+- **Requirements de integridad de catálogo consolidados**: dos requirements solapados se unifican en `agent-model-tiers` (coherencia documental, sin cambio de comportamiento).
+
+### Docs
+- **README**: documenta que el tier `gratis` está pensado para subagentes y que un modelo free sobre un agente primario custom puede responder 403.
+
 ## [0.18.12] - 2026-11-04
 
 ### Added

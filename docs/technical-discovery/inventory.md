@@ -2,8 +2,8 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-04T17:02:55Z
-pluginVersion: 0.18.12
+generatedAt: 2026-11-04T19:22:37Z
+pluginVersion: 0.18.13
 skillVersion: '2.3'
 ---
 
@@ -12,11 +12,11 @@ skillVersion: '2.3'
 | Alcance | Documento | Motivo |
 |---|---|---|
 | `src/cli/**` | `units/cli-install.md`, `overview.md` | Entry point único, subcomandos, instalación y MCP |
-| `src/core/tier-models.js` | `decisions.md`, `units/discovery-engine.md` | Dueño de tiers/cadenas, resolver y `declaredModelIds` |
+| `src/core/tier-models.js` | `decisions.md`, `units/discovery-engine.md` | Dueño de tiers/cadenas, resolver, `declaredModelIds` y `freeTierOnPrimary` |
 | `src/core/model-catalog.js`, `src/core/model-catalog.json` | `decisions.md`, `units/discovery-engine.md` | Helpers puros, extracción de IDs, integridad y snapshot |
 | `src/core/discovery.js`, `src/core/repomix-tier.js` | `units/discovery-engine.md` | Topología, impacto, args y presupuesto de pack |
 | `src/core/affected-set.js` | `units/discovery-engine.md` | Grafo de imports y clausura de dependientes |
-| `src/core/adapters/frontmatter.js` | `units/cli-install.md` | Adaptación pura de frontmatter por host |
+| `src/core/adapters/frontmatter.js` | `units/cli-install.md` | Adaptación pura de frontmatter por host y `frontmatterValue` |
 | `src/core/machine-env.js` | `units/cli-install.md`, `setup.md` | Detección de shell/EOL/tooling y exclusión local |
 | `src/core/memory/**` | `units/memory-engine.md` | Motor, DB, tools, MCP, doctor, curaduría, snapshot |
 | `scripts/**` | `decisions.md`, `units/discovery-engine.md` | Descubrimiento dev-only del catálogo; no se publica |
@@ -25,7 +25,7 @@ skillVersion: '2.3'
 | `skills/**` | `units/_map.md` | 21 skills del ciclo SDD/discovery/review |
 | `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
 | `profiles/**` | `units/cli-install.md`, `decisions.md` | Overlay del perfil `test` (agents/commands/templates) |
-| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos y changes (incl. archive de ch-13) |
+| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos y changes (incl. archive de ch-14) |
 | `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery y contenido |
 | `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
 | `eslint.config.js`, `package.json` | `setup.md`, `decisions.md` | Lint sobre `src/`, `test/`, `scripts/` y contrato de publicación |
@@ -36,12 +36,17 @@ skillVersion: '2.3'
 | `.ancleto/machine-env.md` | `setup.md` | Artefacto local derivado |
 | `package.json`, `.gitattributes`, `.gitignore` | `setup.md`, `decisions.md` | Contrato de runtime, EOL y exclusiones |
 
-## Áreas raíz observadas (`.discovery-map.json`)
+## Áreas raíz observadas (`.discovery-map.json` al empacar)
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (212), `audit logs` (9), `commands` (16),
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (216), `audit logs` (9), `commands` (16),
 `docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (18),
-`templates` (2), `test` (26). Total: 780 archivos.
+`templates` (2), `test` (26), más 15 archivos raíz. Total observado: **784 archivos**.
 
-Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime; el pack del
-tier `minimo` excluye `test/**`, `docs/**` y `**/*.md`, por lo que la evidencia de esas áreas se
-verificó por lectura directa. El pack de esta generación tiene 769 archivos y ~35.730 tokens.
+Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime. `skills/`
+tiene 21 directorios de skill que suman 35 archivos; `test/` tiene 26 archivos, de los cuales 19 son
+`*.test.js` en la raíz (el patrón declarado es `test/*.test.js`). El pack del tier `minimo` excluye
+`test/**`, `docs/**` y `**/*.md`, por lo que la evidencia de esas áreas se verificó por lectura
+directa. El pack de esta generación tiene 773 archivos y ~36.040 tokens.
+
+El archivo `.discovery-map.json` trackeado en HEAD conserva una corrida previa (780 archivos);
+durante esta generación el árbol observado tenía 784. Ver `unknowns.md`.

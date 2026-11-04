@@ -263,6 +263,45 @@ export function freeModelViolations(snapshot, ids) {
   })
 }
 
+// Conjunto de IDs disponibles del catálogo. Dueño natural del shape del snapshot:
+// acepta el snapshot completo (`{ providers }`) o un mapa proveedor->IDs, con entradas
+// string u `{ id }`. También es la única fuente de IDs de `missingModelIdsInCatalog`.
+export function modelIdsFromCatalog(catalog) {
+  if (catalog instanceof Set) return catalog
+  const ids = new Set()
+  const providers = catalog?.providers && typeof catalog.providers === 'object'
+    ? catalog.providers
+    : catalog
+  if (!providers || typeof providers !== 'object') return ids
+  for (const entries of Object.values(providers)) {
+    if (!Array.isArray(entries)) continue
+    for (const entry of entries) {
+      const id = typeof entry === 'string' ? entry : entry?.id
+      if (typeof id === 'string') ids.add(id)
+    }
+  }
+  return ids
+}
+
+function declaredEntries(ids) {
+  if (ids instanceof Map) return [...ids].map(([id, source]) => ({ id, source }))
+  const entries = []
+  for (const entry of ids ?? []) {
+    if (typeof entry === 'string') entries.push({ id: entry, source: null })
+    else if (entry && typeof entry === 'object' && typeof entry.id === 'string') {
+      entries.push({ id: entry.id, source: entry.source ?? null })
+    }
+  }
+  return entries
+}
+
+// Entradas declaradas (`{ id, source }`, strings o un Map id->origen) cuyo ID no
+// figura en el snapshot. No muta el snapshot ni depende de estado global.
+export function missingModelIdsInCatalog(snapshot, ids) {
+  const available = modelIdsFromCatalog(snapshot)
+  return declaredEntries(ids).filter((entry) => !available.has(entry.id))
+}
+
 // Días transcurridos (UTC) entre `generated_at` y `now`. Un `generated_at` inválido
 // devuelve `null`; no lanza.
 export function catalogAgeDays(generatedAt, now = new Date()) {

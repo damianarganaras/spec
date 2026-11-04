@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-04T11:11:07Z
-pluginVersion: 0.18.11
+generatedAt: 2026-11-04T17:02:55Z
+pluginVersion: 0.18.12
 skillVersion: '2.3'
 ---
 
@@ -27,12 +27,14 @@ skillVersion: '2.3'
 
 ## npm y CI
 
-- El workflow `Publish` se dispara con tags `v*` o manualmente. Corre `npm ci`, `npm run lint`,
-  `node --test test/*.test.js` y publica solo si la versión no existe en npm
-  (`npm view @ancleto/spec@<v>`).
+- El workflow `Publish` se dispara con tags `v*` o manualmente. Corre `npm ci`, `npm run lint`
+  (`eslint src/ test/ scripts/`), `node --test test/*.test.js` y publica solo si la versión no
+  existe en npm (`npm view @ancleto/spec@<v>`).
 - `NPM_TOKEN` y `GITHUB_TOKEN` son secretos del workflow; sus valores no están en el repo.
 - El canary del tarball es **no bloqueante**: reintenta 3 veces y avisa si npm aún no propagó.
 - CI **no** ejecuta descubrimiento de modelos ni accede a la red de proveedores.
+- El paquete publicado no incluye `scripts/` (`package.json` → `files`), por lo que el refresco del
+  catálogo solo existe en el repositorio fuente.
 
 ## Repomix
 
@@ -54,6 +56,11 @@ skillVersion: '2.3'
 - `scripts/refresh-model-catalog.mjs` invoca `opencode models --refresh` y
   `opencode models <provider> --verbose --refresh` en una máquina de mantenimiento. Es la única vía
   de descubrimiento; el runtime consume el snapshot commiteado y no ejecuta procesos ni red.
+- La detección de binario ausente es **independiente del locale**: `looksBinaryMissing` reconoce
+  `ENOENT` y mensajes de comando no encontrado/no reconocido en varios idiomas; una corrida exitosa
+  o con proveedores enumerados no se clasifica como `binary-missing`.
+- Con `--write`, el script valida que todo ID declarado sobreviva en el candidato antes de escribir;
+  si falta uno, no reemplaza el snapshot ni deja el reporte candidato.
 
 ## MCP propios
 
@@ -81,6 +88,9 @@ skillVersion: '2.3'
 - `src/core/model-catalog.json` es un snapshot **commiteado** del catálogo de proveedores (5
   proveedores, 211 IDs, `generated_at: 2026-11-04`); no hay llamada de red en runtime.
   `scripts/refresh-model-catalog.mjs` es la única vía de refresco y requiere `opencode` local.
+- La integridad de los IDs declarados depende del snapshot commiteado: `declaredModelIds` +
+  `missingModelIdsInCatalog` alimentan el guard de tests y el gate de `--write`; `check` agrega un
+  aviso advisory no bloqueante cuando el snapshot válido no contiene un ID declarado.
 - Las bases SQLite (`.ancleto/memory.db` y la de opencode) son dependencias de datos locales; no se
   versionan.
 - `documentation/` es material legado de lnx-cli, gitignored y fuera del runtime (`PRODUCT.md`,

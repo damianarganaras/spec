@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { createHash } from 'node:crypto'
 import { createMemoryEngine } from '../src/core/memory/engine.js'
+import { validateCatalogSnapshot } from '../src/core/model-catalog.js'
 import { TIER_CHAINS } from '../src/core/tier-models.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
@@ -1829,7 +1830,7 @@ describe('CLI check (G3)', () => {
       assert.equal(r.status, 0)
       assert.match(
         r.stdout,
-        /⚠ \.opencode\/agents\/orchestrator\.md \(model 'opencode\/big-pickle' ausente del catálogo de modelos; refrescalo con `node scripts\/refresh-model-catalog\.mjs`\)/
+        /⚠ \.opencode\/agents\/orchestrator\.md \(model 'opencode\/big-pickle' ausente del catálogo de modelos; refrescalo desde el repositorio fuente\)/
       )
       const installed = readdirSync(join(dir, '.opencode', 'agents')).filter((f) => f.endsWith('.md'))
       assert.equal((r.stdout.match(/ausente del catálogo de modelos/g) || []).length, installed.length)
@@ -1862,6 +1863,8 @@ describe('CLI check (G3)', () => {
         assert.equal(r.status, 0, `exit 0 con catálogo ${catalog}`)
         assert.match(r.stdout, /no se pudo verificar el catálogo de modelos/)
         assert.doesNotMatch(r.stdout, /ausente del catálogo de modelos/)
+        assert.doesNotMatch(r.stdout, /IDs declarados ausentes del catálogo de modelos:/)
+        assert.doesNotMatch(r.stdout, /días de antigüedad/)
       }
     })
   })
@@ -1873,13 +1876,30 @@ describe('CLI check (G3)', () => {
         'objeto-vacio.json': '{}',
         'proveedores-vacios.json': '{ "providers": {} }',
         'array.json': '[]',
-        'string.json': '"x"'
+        'string.json': '"x"',
+        // Parseable y casi con la forma real, pero inválido para `validateCatalogSnapshot`
+        // (fecha de calendario inexistente): no debe habilitar el advisory de IDs.
+        'fecha-invalida.json': JSON.stringify({
+          generated_at: '2026-13-01',
+          source: { method: 'x', providers: ['alpha'] },
+          providers: { alpha: [{ id: 'alpha/a', cost: null, limit: null }] }
+        })
       }
       for (const [name, content] of Object.entries(catalogos)) {
+        assert.equal(
+          validateCatalogSnapshot(JSON.parse(content)).ok,
+          false,
+          `${name}: validateCatalogSnapshot lo rechaza`
+        )
         const catalog = join(dir, name)
         writeFileSync(catalog, content)
         const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
         assert.equal(r.status, 0, `${name}: exit 0`)
+        assert.doesNotMatch(
+          r.stdout,
+          /IDs declarados ausentes del catálogo de modelos:/,
+          `${name}: sin advisory de IDs ausentes`
+        )
         assert.doesNotMatch(r.stdout, /ausente del catálogo de modelos/, `${name}: sin aviso de deriva`)
         assert.match(
           r.stdout,
@@ -1912,6 +1932,49 @@ describe('CLI check (G3)', () => {
       const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
       assert.equal(r.status, 0)
       assert.doesNotMatch(r.stdout, /días de antigüedad/)
+    })
+  })
+
+  // ch-13: aviso advisory de IDs declarados ausentes del catálogo válido.
+  it('un catálogo válido con un ID declarado ausente emite un único aviso advisory, exit 0 y sin divergencia', () => {
+    withDir((dir) => {
+      // El mirror gratis usa big-pickle: retirar qwen3.8-max (declarado en TIERS/agents)
+      // deja el advisory como único aviso nuevo, sin deriva por model: del mirror.
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const catalog = catalogSnapshot(dir, { removeIds: ['opencode-go/qwen3.8-max'] })
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0, 'el aviso advisory no bloquea')
+      assert.equal(
+        (r.stdout.match(/IDs declarados ausentes del catálogo de modelos:/g) || []).length,
+        1,
+        'como máximo un aviso advisory por ejecución'
+      )
+      assert.match(r.stdout, /opencode-go\/qwen3\.8-max \(TIERS\.normal\.reviewer\)/)
+      assert.doesNotMatch(r.stdout, /scripts[\\/]/, 'el remedio nombra el repositorio fuente, no una ruta instalada')
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      assert.doesNotMatch(r.stdout, /model '[^']+' ausente del catálogo de modelos/)
+      assert.doesNotMatch(r.stdout, /días de antigüedad/)
+    })
+  })
+
+  it('un catálogo válido sin IDs declarados ausentes no emite el aviso advisory', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const catalog = catalogSnapshot(dir, { generatedAt: daysAgo(0) })
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /IDs declarados ausentes del catálogo de modelos:/)
+    })
+  })
+
+  it('un proyecto sin host opencode no emite el aviso advisory de IDs ausentes', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis', '--agent', 'vscode'], dir)
+      const catalog = catalogSnapshot(dir, { removeIds: ['opencode-go/qwen3.8-max'] })
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /IDs declarados ausentes del catálogo de modelos:/)
+      assert.doesNotMatch(r.stdout, /ausente del catálogo de modelos/)
     })
   })
 

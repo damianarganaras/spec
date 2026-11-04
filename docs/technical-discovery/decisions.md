@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-04T11:11:07Z
-pluginVersion: 0.18.11
+generatedAt: 2026-11-04T17:02:55Z
+pluginVersion: 0.18.12
 skillVersion: '2.3'
 ---
 
@@ -18,15 +18,15 @@ skillVersion: '2.3'
   (`src/cli/index.js`).
 - **ESM puro**: `"type": "module"`; no hay TypeScript ni `tsconfig.json` pese a la mención genérica
   de `AGENTS.md` (`PRODUCT.md` lo aclara).
-- **Un dueño por invariante**: `TIERS`/`TIER_CHAINS` y el resolver viven en
-  `src/core/tier-models.js`; el parseo/diff/validación del catálogo, en
-  `src/core/model-catalog.js`; la adaptación de frontmatter, en
-  `src/core/adapters/frontmatter.js`; la detección de entorno, en `src/core/machine-env.js`; el
-  render del working-context, en `src/core/memory/working-context.js`.
+- **Un dueño por invariante**: `TIERS`/`TIER_CHAINS`, el resolver y `declaredModelIds` viven en
+  `src/core/tier-models.js`; el parseo/diff/validación/integridad del catálogo y
+  `modelIdsFromCatalog`/`missingModelIdsInCatalog`, en `src/core/model-catalog.js`; la adaptación de
+  frontmatter, en `src/core/adapters/frontmatter.js`; la detección de entorno, en
+  `src/core/machine-env.js`; el render del working-context, en `src/core/memory/working-context.js`.
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.18.11)
+## Modelos y tiers (estado 0.18.12)
 
 ### Tabla y cadenas
 
@@ -50,12 +50,32 @@ skillVersion: '2.3'
   `opencode` (10), `opencode-go` (30), `anthropic` (20), `commandcode` (71), `openai` (80).
 - `src/core/model-catalog.js` es el dueño único de los **helpers puros**: enumerar proveedores de
   la salida plana, validar nombres de proveedor antes de spawnear, parsear la salida verbose, diff
-  de snapshots, validar la forma, clasificar la corrida, detectar violaciones de modelo gratuito y
-  calcular antigüedad. **No** importa `node:child_process`, no hace red y no escribe archivos.
+  de snapshots, validar la forma, clasificar la corrida, detectar violaciones de modelo gratuito,
+  calcular antigüedad y contrastar IDs declarados. **No** importa `node:child_process`, no hace red
+  y no escribe archivos.
+- `modelIdsFromCatalog(catalog)` es la **única extracción de IDs** del snapshot: acepta el snapshot
+  completo o un mapa proveedor→IDs y es reutilizada por `missingModelIdsInCatalog`.
+  `src/core/tier-models.js` la re-exporta para conservar su API.
 - `loadModelCatalog` acepta la ruta por `ANCLETO_MODEL_CATALOG` (seam de test/manual); no consulta
   red ni ejecuta procesos.
 - El guard estructural `test/agent-model-coherence.test.js` + `test/model-catalog.test.js` detecta
-  IDs de `TIERS`, `agents/*.md` o `profiles/*/agents/*.md` ausentes del snapshot.
+  IDs de `TIERS`, `TIER_CHAINS`, `agents/*.md` o `profiles/*/agents/*.md` ausentes del snapshot.
+
+### Integridad de IDs declarados (0.18.12)
+
+- `declaredModelIds({ tiers, chains, agentModels })` (`src/core/tier-models.js`) deriva los IDs
+  declarados de `TIERS` (todos los tiers/agentes), `TIER_CHAINS` (todos los candidatos) y las
+  fuentes de frontmatter ya leídas (`agentModels: [{ id, source }]`). Deduplica conservando el
+  primer origen en un `Map` id→origen, excluye `inherit` y es **puro**: no lee archivos, no ejecuta
+  procesos ni hace red.
+- `missingModelIdsInCatalog(snapshot, ids)` (`src/core/model-catalog.js`) devuelve las entradas
+  declaradas (strings, `{ id, source }` o el `Map`) cuyo ID no figura en el snapshot; reutiliza
+  `modelIdsFromCatalog` y no muta el snapshot.
+- **Guard de tests**: la suite deriva con `declaredModelIds` y compara con
+  `missingModelIdsInCatalog`, cubriendo los tres tiers, todos los candidatos, `agents/*.md` y
+  `profiles/*/agents/*.md`. El mensaje nombra ID y origen. No usa red ni `.opencode/**`.
+- **Guard de contenido**: `model-catalog.js` y `tier-models.js` no importan `node:child_process`;
+  el script sí puede hacerlo, y el test no falla por su carga transitiva.
 
 ### Descubrimiento dev-only
 
@@ -67,10 +87,23 @@ skillVersion: '2.3'
 - Clasificación con precedencia fija:
   `binary-missing` > `partial` (proveedor fallido o ninguno enumerado) >
   `network-unavailable` (marcador `Failed to fetch models.dev`) > `available`.
+- `looksBinaryMissing(result)` es **independiente del locale**: devuelve verdadero solo con
+  `error.code === 'ENOENT'` o, si la corrida falló y `stdout` no enumera proveedores, cuando
+  `stderr` coincide con un mensaje de comando no encontrado/no reconocido en varios idiomas
+  (inglés, español, francés, alemán, portugués). Una corrida exitosa nunca es `binary-missing`
+  aunque `stderr` tenga ruido; un `provider not found` suelto es error de la app, no binario
+  faltante; timeout/buffer/permisos se clasifican `partial`.
 - Solo `available` habilita el candidato. Antes de escribir: valida la forma, rechaza
   `opencode/big-pickle` si su `cost.input`/`cost.output` no es 0, imprime el diff (proveedores e
   IDs altos/bajos y cambios de `cost`/`limit`) y escribe el candidato en
   `.ancleto/model-catalog.candidate.json` (local, no se commitea).
+- **Gate de `--write` (0.18.12)**: antes de cualquier escritura deriva los IDs declarados desde
+  `TIERS`, `TIER_CHAINS`, `agents/*.md` y `profiles/*/agents/*.md`, y los contrasta contra el
+  candidato. Si falta al menos uno, sale con exit 1, nombra ID y origen, y **no escribe ni el
+  snapshot commiteado ni el candidato**. Si las fuentes no se pueden leer, falla cerrado; el
+  dry-run no lee esas fuentes. `main(argv, options)` acepta `declaredIds` y `rootDir` inyectables.
+- `readCurrent(path)` de un snapshot ilegible devuelve `{ providers: {} }` con aviso explícito y
+  usa ese baseline solo para el diff; no lo trata como snapshot autoritativo.
 - El snapshot se reemplaza solo con `--write`, de forma **atómica** (temporal + rename); el dry-run
   nunca toca `src/core/model-catalog.json`.
 - **Ni runtime ni CI descubren modelos ni acceden a la red**: el descubrimiento no se importa desde
@@ -94,16 +127,23 @@ skillVersion: '2.3'
 - Para `minimo`, el **conjunto de aceptación** es la cadena estática completa, con el
   resuelto-ahora primero: un mirror escrito cuando el catálogo tenía otro candidato sigue siendo
   válido.
-- Si el catálogo falta, es ilegible o `ANCLETO_MODEL_CATALOG` es inválido, `check` **no aborta**:
-  acepta los candidatos estáticos y emite un aviso no bloqueante
-  (`no se pudo verificar el catálogo…`). `install`/`init`/`import` sí fallan con error.
-- **Deriva de modelo (0.18.11)**: si un `model:` del mirror de `opencode` no figura en el snapshot
-  legible, `check` emite un warning por archivo que nombra el ID y sugiere
-  `node scripts/refresh-model-catalog.mjs`. No cambia el exit code ni el conjunto de aceptación.
-- **Antigüedad (0.18.11)**: un único aviso informativo por ejecución cuando `generated_at` supera
-  **90 días** (`isCatalogStale`), sin TTL en runtime ni efecto en la resolución.
-- El aviso de deriva de tier se dispara si el mirror difiere del resuelto-ahora **o** si el
-  resuelto-ahora difiere de la fuente esperada (ambas direcciones).
+- El catálogo se carga **una sola vez por ejecución** y solo si `opencode` está instalado. Un JSON
+  parseable con forma inválida (`{}`, `{providers:{}}`, array, string) se descarta
+  (`validateCatalogSnapshot`), igual que un catálogo ilegible: **no produce deriva falsa**.
+- Si el catálogo no se puede verificar, `check` **no aborta**: acepta los candidatos estáticos y
+  emite un aviso no bloqueante por directorio de agents (`no se pudo verificar el catálogo…`).
+  `install`/`init`/`import` sí fallan con error.
+- **Deriva por archivo**: si un `model:` del mirror de `opencode` no figura en el snapshot legible,
+  `check` emite un warning por archivo que nombra el ID y refiere el refresco al repositorio fuente.
+  No cambia el exit code ni el conjunto de aceptación.
+- **Aviso advisory de IDs declarados (0.18.12)**: con catálogo válido, `check` emite como máximo
+  un aviso por ejecución si un ID declarado en `TIERS`, `TIER_CHAINS`, `agents/*.md` o
+  `profiles/*/agents/*.md` no figura en el snapshot. Lista ID y origen y es distinguible del
+  warning de deriva por `model:` del mirror. No altera contadores, oráculo ni exit code.
+- **Antigüedad**: un único aviso informativo por ejecución cuando `generated_at` supera **90 días**
+  (`isCatalogStale`), sin TTL en runtime ni efecto en la resolución.
+- El exit code de `check` solo cambia por faltantes; huérfanos, divergencias, deriva, advisory,
+  antigüedad y catálogo no verificable son warnings.
 
 ### `import` y `hosts`
 
@@ -154,13 +194,25 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 765 archivos, ~35.077 tokens (comprimido).
+- **Pack actual**: tier `minimo`, 769 archivos, ~35.730 tokens (comprimido); `.discovery-map.json`
+  reporta 780 archivos totales.
+
+## Lint y publicación
+
+- `npm run lint` ejecuta `eslint src/ test/ scripts/` con flat config y cuatro reglas
+  (`no-undef`, `no-unused-vars`, `eqeqeq`, `no-dupe-keys`); `scripts/` comparte exactamente la misma
+  configuración, sin plugin ni ignore nuevo (`eslint.config.js`, `PRODUCT.md`).
+- CI corre `npm ci` → `npm run lint` → `node --test test/*.test.js`; si lint falla no publica
+  (`.github/workflows/publish.yml`).
+- **`scripts/` no se publica**: `package.json` → `files` lista `agents`, `commands`, `skills`,
+  `templates`, `profiles`, `src`. El refresco del catálogo solo existe en el repositorio fuente; los
+  mensajes de remedio no ofrecen una ruta ejecutable de `scripts/` al usuario instalado.
 
 ## Riesgos y deuda observada
 
 - **Snapshot del catálogo envejece**: es estático; si un proveedor retira un ID, `install` falla
   recién en `ancleto` (no en el host). Mitigación: refresco manual con `--refresh`, aviso de
-  antigüedad a los 90 días y guards de tests.
+  antigüedad a los 90 días, guard de integridad y gate de `--write`.
 - **Costo de `reviewer`**: `qwen3.8-max` (2/6) es más caro que `qwen3.8-flash`; es el tradeoff
   aceptado para `normal` (el tier de modelos más capaces).
 - **Descubrimiento no publicado**: `scripts/` no está en `package.json` → `files`; el refresco del
@@ -168,11 +220,14 @@ sin `--tier` es `normal`.
 - **Un solo camino de spawn**: `scripts/refresh-model-catalog.mjs` es el único lugar con
   `node:child_process`; cualquier intento de mover el descubrimiento a `src/` rompería el contrato
   dev-only y el "cero red en runtime".
+- **Gate dependiente de fuentes legibles**: `--write` falla cerrado si no puede leer `agents/` o
+  `profiles/`; es intencional para no quedar ciego, pero exige correr el refresco desde el repo
+  fuente completo.
 - **Doble fuente de tier por host**: solo `opencode` materializa `model:`; otros hosts lo dropean
   (claude/vscode/copilot/commandcode) o emiten `model: inherit` (antigravity). Resolver el catálogo
   ahí no tendría efecto.
 - **Artefacto local desactualizado**: `.ancleto/machine-env.md` registra `ancleto: 0.18.8` mientras
-  `package.json` está en `0.18.11`; es un derivado que se regenera en `init`/`install`/`upgrade`, no
+  `package.json` está en `0.18.12`; es un derivado que se regenera en `init`/`install`/`upgrade`, no
   un manifiesto versionado.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene
   documentación del framework y el seed.

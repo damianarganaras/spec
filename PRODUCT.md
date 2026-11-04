@@ -111,7 +111,7 @@ Guardrails del repositorio (fuente: `AGENTS.md`):
 
 Comandos declarados de este repositorio (fuente única que consumen las validaciones declarativas de `AGENTS.md`):
 
-- **Lint**: `npm run lint` (`eslint src/ test/`; flat config `eslint.config.js`).
+- **Lint**: `npm run lint` (`eslint src/ test/ scripts/`; flat config `eslint.config.js`).
 - **Tests**: `npm test` (`node --test "test/*.test.js"`). Para validaciones acotadas, pasar **rutas explícitas** al archivo relevante; nunca `node --test` sin acotar (descubre archivos fuera de la suite declarada).
 - **Format**: no configurado (`not-configured`) — el repo no declara formatter.
 - **Typecheck**: no aplica (paquete JavaScript, sin `tsconfig.json`).

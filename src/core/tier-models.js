@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { modelIdsFromCatalog } from './model-catalog.js'
 
 export const GRATIS_FALLBACK_MODEL = 'opencode/big-pickle'
 
@@ -69,28 +70,44 @@ export function loadModelCatalog({ path } = {}) {
   return JSON.parse(readFileSync(path || process.env.ANCLETO_MODEL_CATALOG || CATALOG_PATH, 'utf8'))
 }
 
-// Conjunto de IDs disponibles. Acepta el snapshot completo (`{ providers }`) o un
-// mapa proveedor->IDs; cada entrada puede ser un string o `{ id, ... }`.
-export function modelIdsFromCatalog(catalog) {
-  if (catalog instanceof Set) return catalog
-  const ids = new Set()
-  const providers = catalog?.providers && typeof catalog.providers === 'object'
-    ? catalog.providers
-    : catalog
-  if (!providers || typeof providers !== 'object') return ids
-  for (const entries of Object.values(providers)) {
-    if (!Array.isArray(entries)) continue
-    for (const entry of entries) {
-      const id = typeof entry === 'string' ? entry : entry?.id
-      if (typeof id === 'string') ids.add(id)
-    }
-  }
-  return ids
-}
+// `modelIdsFromCatalog` vive en `model-catalog.js` (dueño del shape del snapshot) y se
+// re-exporta acá para no romper la API pública ni los imports existentes.
+export { modelIdsFromCatalog }
 
 export function missingModelIds(catalog, ids) {
   const available = modelIdsFromCatalog(catalog)
   return [...ids].filter((id) => !available.has(id))
+}
+
+// Declaraciones versionadas de modelo del repositorio: todos los valores de `TIERS`,
+// todos los candidatos de `TIER_CHAINS` y los `model:` de agentes/perfiles que el
+// caller ya leyó (`agentModels: [{ id, source }]`). Puro: no lee archivos, no ejecuta
+// procesos ni hace red. Devuelve un Map id->origen deduplicado (primera aparición) y
+// excluye `inherit`.
+export function declaredModelIds({ tiers = TIERS, chains = TIER_CHAINS, agentModels = [] } = {}) {
+  const declared = new Map()
+  const add = (id, source) => {
+    if (typeof id !== 'string') return
+    const value = id.trim()
+    if (value === '' || value === 'inherit' || declared.has(value)) return
+    declared.set(value, source)
+  }
+  for (const [tier, models] of Object.entries(tiers || {})) {
+    for (const [agent, model] of Object.entries(models || {})) {
+      add(model, `TIERS.${tier}.${agent}`)
+    }
+  }
+  for (const [tier, chainsOfTier] of Object.entries(chains || {})) {
+    for (const [agent, candidates] of Object.entries(chainsOfTier || {})) {
+      const list = Array.isArray(candidates) ? candidates : []
+      list.forEach((id, index) => add(id, `TIER_CHAINS.${tier}.${agent}[${index}]`))
+    }
+  }
+  for (const entry of Array.isArray(agentModels) ? agentModels : []) {
+    if (typeof entry === 'string') add(entry, 'agents')
+    else add(entry?.id, entry?.source || 'agents')
+  }
+  return declared
 }
 
 export function isKnownGratisModel(model) {
@@ -143,7 +160,7 @@ export function resolveTierModels(tier, catalog, {
     if (!allowUnresolved) {
       throw new Error(
         `ancleto: no hay ningún candidato disponible para el agente '${name}' en el tier '${tier}' ` +
-        `(cadena: ${chainIds.join(' -> ')}); actualizá el catálogo con scripts/refresh-model-catalog.mjs`
+        `(cadena: ${chainIds.join(' -> ')}); actualizá el catálogo desde el repositorio fuente`
       )
     }
   }

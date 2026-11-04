@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-04T11:11:07Z
-pluginVersion: 0.18.11
+generatedAt: 2026-11-04T17:02:55Z
+pluginVersion: 0.18.12
 skillVersion: '2.3'
 ---
 
@@ -25,7 +25,7 @@ skillVersion: '2.3'
 | Objetivo | Comando | Fuente |
 |---|---|---|
 | Instalar dependencias de desarrollo | `npm ci` | `.github/workflows/publish.yml` |
-| Lint | `npm run lint` (`eslint src/ test/`) | `package.json`, `PRODUCT.md` |
+| Lint | `npm run lint` (`eslint src/ test/ scripts/`) | `package.json`, `PRODUCT.md` |
 | Tests | `npm test` (`node --test "test/*.test.js"`) | `package.json`, `PRODUCT.md` |
 | Tests acotados | `node --test test/<archivo>.test.js` | `PRODUCT.md` (rutas explícitas) |
 | CLI local | `node src/cli/index.js <comando>` | `package.json` (`bin`) |
@@ -41,7 +41,9 @@ skillVersion: '2.3'
 | Bundle portable | `ancleto export [--tar <file>]` / `ancleto import <bundle>` | `src/cli/index.js` |
 
 No hay formatter ni typechecker declarados: el repo es JavaScript ESM sin `tsconfig.json` y
-`PRODUCT.md` registra `Format: not-configured` / typecheck no aplica.
+`PRODUCT.md` registra `Format: not-configured` / typecheck no aplica. El lint cubre `src/`, `test/`
+y `scripts/` con las cuatro reglas de `eslint.config.js` (`no-undef`, `no-unused-vars`, `eqeqeq`,
+`no-dupe-keys`).
 
 ## Refresco del catálogo de modelos
 
@@ -51,14 +53,26 @@ Procedimiento **manual**, con `opencode` instalado en una máquina de mantenimie
 1. Dry-run: enumera todos los proveedores de `opencode models --refresh` y consulta cada uno con
    `opencode models <provider> --verbose --refresh`.
 2. Clasifica la corrida como `available`, `binary-missing`, `network-unavailable` o `partial`; solo
-   `available` habilita escritura.
+   `available` habilita escritura. `looksBinaryMissing` es independiente del locale: reconoce
+   `ENOENT` y mensajes de comando no encontrado/no reconocido en varios idiomas; una corrida
+   exitosa o con proveedores enumerados nunca es `binary-missing`.
 3. Con `available`, valida la forma, rechaza `opencode/big-pickle` si dejó de costar 0, imprime el
    diff contra el snapshot y escribe el candidato en `.ancleto/model-catalog.candidate.json`
    (local, no se commitea).
-4. Tras revisar el diff, `--write` reemplaza `src/core/model-catalog.json` de forma atómica
-   (temporal + rename).
-5. Correr los guards `test/model-catalog-discovery.test.js`, `test/model-catalog.test.js` y
+4. Con `--write`, antes de cualquier escritura el script deriva los IDs declarados en `TIERS`,
+   `TIER_CHAINS`, `agents/*.md` y `profiles/*/agents/*.md` y los contrasta contra el candidato. Si
+   falta uno, sale con exit 1, nombra ID y origen, y **no escribe ni el snapshot ni el candidato**.
+   Si las fuentes no se pueden leer, falla cerrado. El dry-run no depende de que esas fuentes sean
+   legibles.
+5. Si el gate pasa, `--write` reemplaza `src/core/model-catalog.json` de forma atómica
+   (temporal + rename). Sin `--write`, el snapshot commiteado no se toca.
+6. Correr los guards `test/model-catalog-discovery.test.js`, `test/model-catalog.test.js` y
    `test/content-guards.test.js` antes de commitear el snapshot.
+
+`scripts/` **no se publica** en el paquete (`package.json` → `files` incluye `agents`, `commands`,
+`skills`, `templates`, `profiles`, `src`). El refresco solo existe en el repositorio fuente; los
+avisos de remedio de `check` y del resolver refieren al repositorio fuente, no a una ruta ejecutable
+del paquete instalado.
 
 ## CLI por áreas
 

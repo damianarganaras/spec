@@ -19,7 +19,7 @@
  * script termina con exit code no cero y NO escribe el snapshot commiteado.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
@@ -27,23 +27,67 @@ import {
   discoveryStatus,
   freeModelViolations,
   isSafeProviderName,
+  missingModelIdsInCatalog,
   parseVerboseProviderOutput,
   providersFromFlatOutput,
   validateCatalogSnapshot
 } from '../src/core/model-catalog.js'
+import { declaredModelIds } from '../src/core/tier-models.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CATALOG = join(ROOT, 'src', 'core', 'model-catalog.json')
 const CANDIDATE = join(ROOT, '.ancleto', 'model-catalog.candidate.json')
 const METHOD = 'opencode models <provider> --verbose --refresh'
 const OFFLINE_MARKER = 'Failed to fetch models.dev'
+const MODEL_LINE = /^model:\s*(.+)$/m
 
-function readCurrent(path) {
+export function readCurrent(path) {
   try {
     return JSON.parse(readFileSync(path, 'utf8'))
   } catch {
+    console.log(`  catálogo ilegible en ${path}: el diff usa un baseline vacío (no es un snapshot autoritativo)`)
     return { providers: {} }
   }
+}
+
+// Declaraciones de las fuentes versionadas bajo `rootDir`: `agents/*.md` y
+// `profiles/*/agents/*.md`. Sólo lectura local; el cálculo posterior es puro.
+// Falla cerrado: si una fuente no se puede leer no hay conjunto declarado confiable y
+// el gate `--write` quedaría ciego, así que aborta con un mensaje con contexto (nunca
+// un stack crudo) en lugar de asumir cero declaraciones.
+function readAgentModels(rootDir) {
+  const declarations = []
+  const collect = (dirRel) => {
+    const dir = join(rootDir, dirRel)
+    let files
+    try {
+      files = readdirSync(dir).filter((file) => file.endsWith('.md'))
+    } catch (error) {
+      throw new Error(`no se pudo leer ${dirRel} para el gate de IDs declarados: ${error.message}`)
+    }
+    for (const file of files) {
+      const relPath = `${dirRel}/${file}`
+      let content
+      try {
+        content = readFileSync(join(dir, file), 'utf8')
+      } catch (error) {
+        throw new Error(`no se pudo leer ${relPath} para el gate de IDs declarados: ${error.message}`)
+      }
+      const model = content.match(MODEL_LINE)?.[1]?.trim()
+      if (model) declarations.push({ id: model, source: relPath })
+    }
+  }
+  collect('agents')
+  let profiles
+  try {
+    profiles = readdirSync(join(rootDir, 'profiles'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+  } catch (error) {
+    throw new Error(`no se pudo leer profiles para el gate de IDs declarados: ${error.message}`)
+  }
+  for (const profile of profiles) collect(`profiles/${profile}/agents`)
+  return declarations
 }
 
 function runOpencode(args) {
@@ -66,8 +110,14 @@ function runOpencode(args) {
 
 export function looksBinaryMissing(result) {
   if (result.error?.code === 'ENOENT') return true
-  const output = `${result.stderr || ''}\n${result.stdout || ''}`
-  return /is not recognized|no se reconoce|command not found|: not found/i.test(output)
+  // Una corrida exitosa nunca es `binary-missing`, aunque `stderr` tenga ruido.
+  const failed = Boolean(result.error) || result.status !== 0
+  if (!failed) return false
+  if (providersFromFlatOutput(result.stdout).length > 0) return false
+  // Sólo mensajes de comando/binario ausente. Un `not found` suelto (p. ej. "provider
+  // not found") es un error de la app, no un binario faltante.
+  return /command not found|: not found|is not recognized|is not recognized as|no se reconoce|no se reconoce como|n'est pas reconnu|nicht erkannt|não é reconhecido/i
+    .test(String(result.stderr || ''))
 }
 
 function statusLine(result) {
@@ -116,6 +166,8 @@ export async function main(argv = process.argv.slice(2), options = {}) {
   const run = options.run ?? runOpencode
   const catalogPath = options.catalogPath ?? CATALOG
   const candidatePath = options.candidatePath ?? CANDIDATE
+  const rootDir = options.rootDir ?? ROOT
+  const write = argv.includes('--write')
   const today = new Date().toISOString().slice(0, 10)
   const flat = run(['models', '--refresh'])
   const binaryMissing = looksBinaryMissing(flat)
@@ -196,13 +248,36 @@ export async function main(argv = process.argv.slice(2), options = {}) {
     return 1
   }
 
+  // Gate previo a toda escritura: un ID declarado que no sobrevive en el candidato
+  // deja intactos tanto el reporte como el snapshot commiteado. La derivación de las
+  // fuentes vive acá adentro: el dry-run nunca depende de que `agents/`/`profiles/` sean
+  // legibles. Falla cerrado si no se pueden leer: sin ese conjunto el gate quedaría ciego.
+  if (write) {
+    let declaredIds
+    try {
+      declaredIds = options.declaredIds ?? declaredModelIds({ agentModels: readAgentModels(rootDir) })
+    } catch (error) {
+      console.error(`ancleto: refresh-model-catalog: ${error.message}`)
+      return 1
+    }
+    const missing = missingModelIdsInCatalog(candidate, declaredIds)
+    if (missing.length > 0) {
+      console.log('  IDs declarados ausentes del snapshot candidato:')
+      for (const item of missing) {
+        console.log(`  - ${item.id} (${item.source || 'sin origen'})`)
+      }
+      console.log('  no se escribió el snapshot commiteado ni el candidato')
+      return 1
+    }
+  }
+
   printDiff(readCurrent(catalogPath), candidate)
 
   mkdirSync(dirname(candidatePath), { recursive: true })
   writeJsonAtomic(candidatePath, candidate)
   console.log(`  candidato: ${candidatePath} (no se commitea)`)
 
-  if (argv.includes('--write')) {
+  if (write) {
     writeJsonAtomic(catalogPath, candidate)
     console.log(`  snapshot actualizado: ${catalogPath}`)
   } else {

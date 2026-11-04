@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-04T11:11:07Z",
+  "generatedAt": "2026-11-04T17:02:55Z",
   "docs": {
     "index.md": ["package.json", "src", "agents", "commands", "skills", "aspec", "scripts", "docs", "profiles", "README.md", "CHANGELOG.md", "AGENTS.md", "PRODUCT.md", ".ancletorc", ".opencode", ".discovery-map.json"],
     "overview.md": ["package.json", "src", "agents", "commands", "skills", "templates", "profiles", "aspec", "scripts", "docs", "README.md", "PRODUCT.md", "CHANGELOG.md", ".ancletorc", ".opencode"],
     "setup.md": ["package.json", "src", "scripts", "README.md", "AGENTS.md", "PRODUCT.md", "templates", "aspec", "test", ".github", "profiles", "eslint.config.js", ".opencode", ".ancletorc", ".gitattributes", ".gitignore", "agents"],
-    "decisions.md": ["src", "agents", "profiles", "aspec", "scripts", "test", "package.json", "README.md", "AGENTS.md", "PRODUCT.md", "templates", "commands", "skills", "docs", "CHANGELOG.md", "opencode.json", ".ancletorc", ".opencode"],
+    "decisions.md": ["src", "agents", "profiles", "aspec", "scripts", "test", "package.json", "README.md", "AGENTS.md", "PRODUCT.md", "templates", "commands", "skills", "docs", "CHANGELOG.md", "opencode.json", ".ancletorc", ".opencode", "eslint.config.js", ".github"],
     "integrations.md": ["package.json", "src", "scripts", "agents", "README.md", "AGENTS.md", "PRODUCT.md", ".github", "profiles", "eslint.config.js", "CHANGELOG.md", "aspec", ".gitattributes", ".gitignore", "opencode.json", "docs"],
     "inventory.md": ["package.json", ".discovery-map.json", ".github", "aspec", "profiles", "scripts", "eslint.config.js", ".ancletorc", ".opencode", "src", "test", "README.md", "agents", "commands", "skills", "templates", "docs", "CHANGELOG.md", "PRODUCT.md"],
-    "units/_map.md": ["src", "agents", "commands", "skills", "templates", "test", "docs", "aspec", "profiles", "scripts", "eslint.config.js", "README.md", "package.json", "opencode.json", "CHANGELOG.md", "AGENTS.md"],
+    "units/_map.md": ["src", "agents", "commands", "skills", "templates", "test", "docs", "aspec", "profiles", "scripts", "eslint.config.js", ".github", "README.md", "package.json", "opencode.json", "CHANGELOG.md", "AGENTS.md"],
     "units/cli-install.md": ["src", "agents", "aspec", "test", "templates", "README.md", "profiles", "scripts", "CHANGELOG.md", "package.json", ".gitattributes", ".gitignore", "skills", "opencode.json", "docs", "AGENTS.md"],
-    "units/discovery-engine.md": ["src", "scripts", "test", "README.md", ".opencode", "aspec", "package.json", "opencode.json", ".discovery-map.json", "docs"],
+    "units/discovery-engine.md": ["src", "scripts", "test", "README.md", ".opencode", "aspec", "package.json", "opencode.json", ".discovery-map.json", "docs", "CHANGELOG.md"],
     "units/memory-engine.md": ["src", "test", "README.md", "aspec", "agents", "package.json", "skills", "CHANGELOG.md", "docs", "AGENTS.md"],
     "unknowns.md": ["README.md", "PRODUCT.md", "package.json", "src", "scripts", "test", "aspec", "profiles", "CHANGELOG.md", ".ancletorc", ".discovery-map.json", ".opencode", ".gitattributes", ".gitignore", "agents", "skills", "docs", "opencode.json"]
   }

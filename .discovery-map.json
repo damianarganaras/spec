@@ -1,11 +1,11 @@
 {
-  "last_updated": "2026-11-04T14:08:52.406Z",
-  "total_files": 776,
+  "last_updated": "2026-11-04T17:01:12.574Z",
+  "total_files": 780,
   "tree_summary": {
     ".github": 1,
     ".opencode": 66,
     "agents": 10,
-    "aspec": 208,
+    "aspec": 212,
     "audit logs": 9,
     "commands": 16,
     "docs": 21,

@@ -5,6 +5,7 @@ import {
   TIERS,
   TIER_CHAINS,
   isKnownGratisModel,
+  freeTierOnPrimary,
   gratisModel,
   tierModels,
   resolveTierModels
@@ -24,6 +25,23 @@ describe('tier models (gratis)', () => {
     assert.equal(isKnownGratisModel('opencode/muse-spark-1.3-contributor-free'), false)
     assert.equal(isKnownGratisModel('opencode-go/deepseek-v4.1-flash'), false)
     assert.equal(isKnownGratisModel(undefined), false)
+  })
+
+  it('freeTierOnPrimary cruza modelo gratis con mode primario, sin tier', () => {
+    // Verdadero sólo con el modelo gratis vigente y `mode: primary` (con espacios).
+    assert.equal(freeTierOnPrimary(GRATIS_FALLBACK_MODEL, 'primary'), true)
+    assert.equal(freeTierOnPrimary(GRATIS_FALLBACK_MODEL, '  primary  '), true)
+    // Cualquier otro modo no dispara el aviso.
+    assert.equal(freeTierOnPrimary(GRATIS_FALLBACK_MODEL, 'subagent'), false)
+    assert.equal(freeTierOnPrimary(GRATIS_FALLBACK_MODEL, undefined), false)
+    assert.equal(freeTierOnPrimary(GRATIS_FALLBACK_MODEL, null), false)
+    assert.equal(freeTierOnPrimary(GRATIS_FALLBACK_MODEL, ''), false)
+    // Un modelo pago sobre un primario tampoco.
+    assert.equal(freeTierOnPrimary('commandcode/deepseek/deepseek-v4.1-flash', 'primary'), false)
+    // El ID legacy de muse-spark no es el gratis vigente.
+    assert.equal(freeTierOnPrimary('opencode/muse-spark-1.3-contributor-free', 'primary'), false)
+    // Sin modelo declarado no hay aviso.
+    assert.equal(freeTierOnPrimary(undefined, 'primary'), false)
   })
 
   it('tierModels mapea gratis a un solo modelo', () => {

@@ -547,6 +547,13 @@ actuales.
 conocido. Un valor legacy o desconocido en `.ancletorc` (`gratisModel`) se ignora y se normaliza al
 gratis resuelto; no se agrega la clave cuando no existía.
 
+**Agentes primarios.** El tier `gratis` está pensado para que lo usen los subagentes. Un modelo free
+sobre un agente primario custom (`mode: primary`) puede responder
+`403 free tier can only be used from within OpenCode`; por eso `init`, `install`, `update` e
+`import` emiten un aviso no bloqueante al aplicar el tier sobre un primario, y `check` lo reporta
+cuando detecta ese estado en el frontmatter. Un override de `opencode.json`
+(`agent.<nombre>.model`) queda fuera del alcance de esa detección.
+
 ### Mantenimiento del catálogo de modelos
 
 El snapshot `src/core/model-catalog.json` es la fuente de disponibilidad que consume la resolución de

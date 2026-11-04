@@ -114,6 +114,13 @@ export function isKnownGratisModel(model) {
   return model === GRATIS_FALLBACK_MODEL
 }
 
+// Invariante modelo + modo, independiente de cómo se instaló el modelo: un modelo
+// gratis sobre un agente primario puede responder 403 en OpenCode. Puro: sin tier,
+// sin E/S, sin red, sin procesos.
+export function freeTierOnPrimary(model, mode) {
+  return isKnownGratisModel(model) && String(mode).trim() === 'primary'
+}
+
 export function gratisModel(persisted = null) {
   return isKnownGratisModel(persisted) ? persisted : GRATIS_FALLBACK_MODEL
 }

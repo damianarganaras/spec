@@ -942,6 +942,46 @@ describe('CLI install', () => {
       assert.deepEqual(rc.installedPaths.templates, ['AGENTS.md', 'PRODUCT.md'])
     })
   })
+
+  it('install --tier gratis advierte sobre el primario y no sobre los subagentes', () => {
+    withDir((dir) => {
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      // El tier se aplica igual: el aviso es advisory, no cambia el modelo escrito.
+      assert.match(readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8'), /^model: opencode\/big-pickle$/m)
+      // Literal normativo exacto del spec (set-time, stderr).
+      const advisory = 'ancleto: tier gratis: orchestrator es un agente primario (mode: primary) y usará el modelo free opencode/big-pickle; OpenCode puede responder 403 "free tier can only be used from within OpenCode". Usá un modelo pago en el agente primario.'
+      assert.ok(r.stderr.includes(advisory), `aviso exacto en stderr: ${r.stderr}`)
+      // Núcleo estable exigido por el spec.
+      assert.match(r.stderr, /403/)
+      assert.match(r.stderr, /agente primario/)
+      // Sólo el primario canónico advierte; un subagente con el mismo modelo free no.
+      assert.equal(r.stderr.split(advisory).length - 1, 1, 'el aviso se emite una sola vez')
+      assert.doesNotMatch(r.stderr, /coder es un agente primario/)
+      assert.match(readFileSync(join(dir, '.opencode', 'agents', 'coder.md'), 'utf8'), /^model: opencode\/big-pickle$/m)
+    })
+  })
+
+  it('install --tier gratis es idempotente en contenido y re-emite el aviso en cada corrida', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir).status, 0)
+      const agentsDir = join(dir, '.opencode', 'agents')
+      const first = new Map(readdirSync(agentsDir).map((f) => [f, readFileSync(join(agentsDir, f), 'utf8')]))
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      // El tier sigue aplicado y el contenido no cambia entre corridas.
+      assert.equal(readFileSync(join(dir, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'gratis')
+      for (const [f, content] of first) {
+        const second = readFileSync(join(agentsDir, f), 'utf8')
+        assert.equal(second, content, `${f}: la segunda aplicación no cambia el contenido`)
+        assert.equal((second.match(/^model: /gm) || []).length, 1, `${f}: una sola línea model:`)
+      }
+      assert.match(readFileSync(join(agentsDir, 'orchestrator.md'), 'utf8'), /^model: opencode\/big-pickle$/m, 'tier aplicado')
+      // `install` re-materializa los assets canónicos antes de `applyTier`: la
+      // segunda corrida vuelve a advertir aunque el archivo final no cambie.
+      assert.match(r.stderr, /ancleto: tier gratis: orchestrator es un agente primario \(mode: primary\)/, 'la segunda corrida re-emite el aviso')
+    })
+  })
 })
 
 
@@ -1178,12 +1218,17 @@ describe('CLI export/import (cross-machine-export-import)', () => {
 
   // Bundle mínimo armado a mano (manifest + .ancletorc portables): fija tier y
   // `gratisModel` del escenario sin depender del export del proyecto origen.
-  function writeBundle(dir, { tier = 'minimo', agent = 'opencode', gratisModel, template = false } = {}) {
-    const bundle = join(dir, 'bundle')
+  function writeBundle(dir, { tier = 'minimo', agent = 'opencode', gratisModel, template = false, assets = false, installedPaths, withRc = true, name = 'bundle' } = {}) {
+    const bundle = join(dir, name)
     mkdirSync(bundle, { recursive: true })
-    const rc = { agent, language: 'auto', profile: 'general' }
-    if (gratisModel !== undefined) rc.gratisModel = gratisModel
-    writeFileSync(join(bundle, '.ancletorc'), JSON.stringify(rc, null, 2))
+    if (withRc) {
+      const rc = { agent, language: 'auto', profile: 'general' }
+      if (gratisModel !== undefined) rc.gratisModel = gratisModel
+      // `installedPaths` en el bundle simula el manifiesto de la máquina origen
+      // (export copia `.ancletorc` verbatim).
+      if (installedPaths !== undefined) rc.installedPaths = installedPaths
+      writeFileSync(join(bundle, '.ancletorc'), JSON.stringify(rc, null, 2))
+    }
     const manifest = {
       format: 'ancleto-export/1',
       ancletoVersion: PKG.version,
@@ -1198,20 +1243,248 @@ describe('CLI export/import (cross-machine-export-import)', () => {
     }
     writeFileSync(join(bundle, 'manifest.json'), JSON.stringify(manifest, null, 2))
     if (template) writeFileSync(join(bundle, 'AGENTS.md'), '# plantilla del bundle\n')
+    // Assets portables del bundle: el import los copia a `.opencode/*` y además
+    // los reinstala `installAgentAssets`, así que el mismo directorio lo escriben
+    // ambos caminos (la unión debe deduplicarlo).
+    if (assets) {
+      for (const d of ['agents', 'commands', 'skills']) {
+        const dest = join(bundle, '.opencode', d)
+        mkdirSync(dest, { recursive: true })
+        writeFileSync(join(dest, `bundle-${d}.md`), `---\nname: bundle-${d}\n---\n# bundle ${d}\n`)
+      }
+    }
     return bundle
   }
 
-  it('import escribe .opencode/.ancleto-tier y el check posterior no diverge', () => {
+  it('import en destino fresco registra installedPaths y el check posterior no tiene faltantes', () => {
     withDir((dir) => {
       const dst = join(dir, 'destino')
       mkdirSync(dst)
-      const r = run(['import', writeBundle(dir)], dst)
+      const r = run(['import', writeBundle(dir, { template: true })], dst)
       assert.equal(r.status, 0)
       assert.equal(readFileSync(join(dst, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'minimo')
-      assert.equal(readRc(dst).gratisModel, undefined, 'no agrega la clave ausente')
+      const rc = readRc(dst)
+      assert.equal(rc.gratisModel, undefined, 'no agrega la clave ausente')
+      assert.deepEqual(rc.installedPaths.agents, ['.opencode/agents'])
+      assert.deepEqual(rc.installedPaths.commands, ['.opencode/commands'])
+      assert.deepEqual(rc.installedPaths.skills, ['.opencode/skills'])
+      assert.deepEqual(rc.installedPaths.templates, ['AGENTS.md'])
+      // El contrato del import es que `check` no invente faltantes; las
+      // divergencias de frontmatter son advisory y dependen del host/config MCP.
       const check = run(['check'], dst)
       assert.equal(check.status, 0)
-      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+      assert.match(check.stdout, /check -> 0 faltantes, 0 huerfanos/)
+    })
+  })
+
+  it('import sobre un destino con otro host acumula rutas sin perder las previas', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      // Layout previo de cursor (sólo skills) y luego bundle opencode.
+      assert.equal(run(['install', '--project', dst, '--no-mcp', '--tier', 'minimo', '--agent', 'cursor'], dst).status, 0)
+      const before = readRc(dst).installedPaths
+      assert.deepEqual(before.skills, ['.cursor/skills'])
+      const r = run(['import', writeBundle(dir)], dst)
+      assert.equal(r.status, 0)
+      const ip = readRc(dst).installedPaths
+      assert.deepEqual(ip.skills, ['.cursor/skills', '.opencode/skills'], 'conserva cursor y agrega opencode')
+      assert.deepEqual(ip.agents, ['.opencode/agents'])
+      assert.deepEqual(ip.commands, ['.opencode/commands'])
+      assert.deepEqual(ip.templates, ['AGENTS.md', 'PRODUCT.md'], 'templates previos intactos')
+      assert.ok(before.agents.length === 0 && before.commands.length === 0)
+      const check = run(['check'], dst)
+      assert.equal(check.status, 0)
+      assert.match(check.stdout, /check -> 0 faltantes, 0 huerfanos/)
+    })
+  })
+
+  it('import ignora el installedPaths ajeno del bundle (sin faltantes falsos)', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const bundle = writeBundle(dir, {
+        template: true,
+        installedPaths: {
+          templates: ['AGENTS.md'],
+          agents: ['otra-maquina/agents'],
+          commands: ['otra-maquina/commands'],
+          skills: ['otra-maquina/skills']
+        }
+      })
+      const r = run(['import', bundle], dst)
+      assert.equal(r.status, 0)
+      const ip = readRc(dst).installedPaths
+      assert.deepEqual(ip.agents, ['.opencode/agents'])
+      assert.deepEqual(ip.commands, ['.opencode/commands'])
+      assert.deepEqual(ip.skills, ['.opencode/skills'])
+      assert.deepEqual(ip.templates, ['AGENTS.md'])
+      for (const group of ['agents', 'commands', 'skills']) {
+        assert.equal(ip[group].some((p) => p.startsWith('otra-maquina/')), false, `${group}: rutas del bundle ignoradas`)
+      }
+      const check = run(['check'], dst)
+      assert.equal(check.status, 0)
+      assert.match(check.stdout, /check -> 0 faltantes, 0 huerfanos/)
+    })
+  })
+
+  it('import registra los .opencode/* copiados del bundle sin duplicarlos (M1)', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      // El bundle trae los tres directorios de assets y, además, un manifiesto de
+      // la máquina origen: sólo las rutas del destino deben registrarse.
+      const bundle = writeBundle(dir, {
+        assets: true,
+        installedPaths: {
+          templates: ['AGENTS.md'],
+          agents: ['otra-maquina/agents'],
+          commands: ['otra-maquina/commands'],
+          skills: ['otra-maquina/skills']
+        }
+      })
+      const r = run(['import', bundle], dst)
+      assert.equal(r.status, 0)
+      // La copia del bundle materializó un archivo propio en cada directorio.
+      for (const d of ['agents', 'commands', 'skills']) {
+        assert.ok(existsSync(join(dst, '.opencode', d, `bundle-${d}.md`)), `copia del bundle en .opencode/${d}`)
+      }
+      const ip = readRc(dst).installedPaths
+      // Cada directorio lo escribieron la copia del bundle y `installAgentAssets`;
+      // la unión lo registra exactamente una vez.
+      for (const d of ['agents', 'commands', 'skills']) {
+        assert.deepEqual(ip[d], [`.opencode/${d}`], `${d}: ruta registrada una sola vez`)
+        assert.equal(new Set(ip[d]).size, ip[d].length, `${d}: sin duplicados`)
+      }
+      assert.deepEqual(ip.templates, [], 'el bundle no trae template: no se inventa una ruta')
+      for (const group of ['agents', 'commands', 'skills']) {
+        assert.equal(ip[group].some((p) => p.startsWith('otra-maquina/')), false, `${group}: rutas del bundle ignoradas`)
+      }
+    })
+  })
+
+  // Caso que aisla la copia de assets: con un bundle `cursor` el destino nativo
+  // es sólo `.cursor/skills`, así que `.opencode/*` NO puede venir de
+  // `installAgentAssets`; su registro en el manifiesto depende exclusivamente de
+  // que el import registre los directorios copiados del bundle.
+  it('import de un bundle cursor registra .opencode/* sólo por la copia de assets (M1)', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const bundle = writeBundle(dir, {
+        assets: true,
+        agent: 'cursor',
+        installedPaths: {
+          templates: ['AGENTS.md'],
+          agents: ['otra-maquina/agents'],
+          commands: ['otra-maquina/commands'],
+          skills: ['otra-maquina/skills']
+        }
+      })
+      // Un export real trae el catálogo completo en `.opencode/*`: sin eso `check`
+      // reportaría faltantes legítimos (no relacionados con `otra-maquina/*`) por
+      // registrar el directorio copiado.
+      for (const d of ['agents', 'commands', 'skills']) {
+        cpSync(join(TEST_DIR, '..', d), join(bundle, '.opencode', d), { recursive: true })
+      }
+      const r = run(['import', bundle], dst)
+      assert.equal(r.status, 0)
+      // La copia del bundle materializó un archivo propio en cada directorio y el
+      // host cursor escribió su propio layout de skills.
+      for (const d of ['agents', 'commands', 'skills']) {
+        assert.ok(existsSync(join(dst, '.opencode', d, `bundle-${d}.md`)), `copia del bundle en .opencode/${d}`)
+      }
+      assert.ok(existsSync(join(dst, '.cursor', 'skills')), 'cursor: skills del host instaladas')
+      const ip = readRc(dst).installedPaths
+      // Sólo la copia del bundle registra agents/commands: `installAgentAssets`
+      // para cursor escribe únicamente `.cursor/skills`.
+      assert.deepEqual(ip.agents, ['.opencode/agents'], 'agents: registrado por la copia, no por el host')
+      assert.deepEqual(ip.commands, ['.opencode/commands'], 'commands: registrado por la copia, no por el host')
+      // Orden real del manifiesto: primero lo escrito por el host, luego lo copiado.
+      assert.deepEqual(ip.skills, ['.cursor/skills', '.opencode/skills'], 'skills: host y copia del bundle')
+      for (const group of ['agents', 'commands', 'skills', 'templates']) {
+        assert.equal(new Set(ip[group]).size, ip[group].length, `${group}: sin duplicados`)
+        assert.equal(ip[group].some((p) => p.startsWith('otra-maquina/')), false, `${group}: rutas del bundle ignoradas`)
+      }
+      const check = run(['check'], dst)
+      assert.equal(check.status, 0, 'check sin faltantes')
+      assert.match(check.stdout, /check -> 0 faltantes/)
+      assert.equal(check.stdout.includes('(directorio faltante)'), false, 'ningún directorio faltante')
+      assert.equal(check.stdout.includes('otra-maquina'), false, 'el manifiesto del bundle no genera faltantes')
+    })
+  })
+
+  it('reimportar el mismo bundle no duplica installedPaths', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const bundle = writeBundle(dir, { template: true })
+      assert.equal(run(['import', bundle], dst).status, 0)
+      const first = readRc(dst).installedPaths
+      assert.equal(run(['import', bundle], dst).status, 0)
+      const second = readRc(dst).installedPaths
+      assert.deepEqual(second, first, 'la segunda corrida no agrega ni quita rutas')
+      assert.deepEqual(second.agents, ['.opencode/agents'])
+      assert.deepEqual(second.commands, ['.opencode/commands'])
+      assert.deepEqual(second.skills, ['.opencode/skills'])
+      assert.deepEqual(second.templates, ['AGENTS.md'])
+    })
+  })
+
+  it('un bundle sin .ancletorc preserva el installedPaths del destino', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      assert.equal(run(['install', '--project', dst, '--no-mcp', '--tier', 'minimo'], dst).status, 0)
+      const before = readRc(dst).installedPaths
+      const r = run(['import', writeBundle(dir, { withRc: false, tier: null })], dst)
+      assert.equal(r.status, 0)
+      assert.deepEqual(readRc(dst).installedPaths, before, 'sin .ancletorc no se reescribe el manifiesto')
+    })
+  })
+
+  it('import --repair preserva installedPaths, repara sólo la entrada rota y corre doctor', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir).status, 0)
+      const before = readRc(dir).installedPaths
+      mkdirSync(join(dir, '.opencode'), { recursive: true })
+      writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({
+        mcp: {
+          'ancleto-memory': { type: 'local', enabled: true, command: ['C:\\viejo\\node.exe', 'x', 'mcp'] },
+          custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
+        }
+      }))
+      const r = run(['import', '--repair'], dir)
+      assert.equal(r.status, 0)
+      const cfg = JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8'))
+      assert.deepEqual(cfg.mcp.custom, { type: 'local', enabled: true, command: ['custom-mcp'] }, 'sana intacta')
+      assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'rota regenerada con node local')
+      assert.deepEqual(readRc(dir).installedPaths, before, 'repair no reescribe installedPaths')
+      assert.match(r.stdout, /Node\.js \d/, 'doctor corre al final')
+    })
+  })
+
+  it('import aplica el tier del bundle y export no cambia su manifiesto', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      // Entrada MCP rota preexistente: el import la regenera con rutas locales.
+      mkdirSync(join(dst, '.opencode'), { recursive: true })
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({
+        mcp: { 'ancleto-memory': { type: 'local', enabled: true, command: ['C:\\viejo\\node.exe', 'x', 'mcp'] } }
+      }))
+      assert.equal(run(['import', writeBundle(dir, { tier: 'gratis', template: true })], dst).status, 0)
+      assert.equal(readFileSync(join(dst, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'gratis')
+      assert.match(readFileSync(join(dst, '.opencode', 'agents', 'orchestrator.md'), 'utf8'), /^model: opencode\/big-pickle$/m)
+      const cfg = JSON.parse(readFileSync(join(dst, '.opencode', 'opencode.json'), 'utf8'))
+      assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'MCP regenerado local')
+      const r = run(['export'], dst)
+      assert.equal(r.status, 0)
+      const out = join(dst, 'ancleto-export')
+      const manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'))
+      assert.equal(Object.prototype.hasOwnProperty.call(manifest, 'installedPaths'), false, 'export no agrega installedPaths')
+      // export copia el .ancletorc verbatim: el import debe ignorar sus rutas de origen.
+      assert.deepEqual(JSON.parse(readFileSync(join(out, '.ancletorc'), 'utf8')), readRc(dst))
     })
   })
 
@@ -1459,6 +1732,69 @@ describe('CLI copilot support (add-copilot-support)', () => {
 })
 
 describe('CLI check (G3)', () => {
+  it('advierte el modelo gratis sobre un primario sin sumar faltantes ni huérfanos', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir).status, 0)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /check -> 0 faltantes, 0 huerfanos/)
+      // Literal normativo exacto del spec (inspect-time, warning de check).
+      const advisory = '.opencode/agents/orchestrator.md (modelo free opencode/big-pickle sobre un agente primario: puede responder 403 en OpenCode)'
+      assert.ok(r.stdout.includes(advisory), `aviso exacto en stdout: ${r.stdout}`)
+      // Núcleo estable exigido por el spec.
+      assert.match(r.stdout, /403/)
+      assert.match(r.stdout, /agente primario/)
+    })
+  })
+
+  it('no advierte sobre subagentes con modelo gratis (mode: subagent)', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir).status, 0)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /coder\.md \(modelo free/)
+      // Sólo el primario canónico produce el advisory.
+      assert.equal((r.stdout.match(/modelo free/g) || []).length, 1)
+    })
+  })
+
+  it('detecta el primario por mode: y no por nombre', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir).status, 0)
+      // Un agente con nombre de subagente que declara mode: primary SÍ advierte.
+      const coderPath = join(dir, '.opencode', 'agents', 'coder.md')
+      writeFileSync(coderPath, readFileSync(coderPath, 'utf8').replace(/^mode: subagent$/m, 'mode: primary'))
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      const advisory = '.opencode/agents/coder.md (modelo free opencode/big-pickle sobre un agente primario: puede responder 403 en OpenCode)'
+      assert.ok(r.stdout.includes(advisory), `aviso exacto por mode: en stdout: ${r.stdout}`)
+      assert.match(r.stdout, /403/)
+      assert.match(r.stdout, /agente primario/)
+    })
+  })
+
+  it('no advierte un agente llamado orchestrator si declara mode: subagent', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir).status, 0)
+      const orchestratorPath = join(dir, '.opencode', 'agents', 'orchestrator.md')
+      writeFileSync(orchestratorPath, readFileSync(orchestratorPath, 'utf8').replace(/^mode: primary$/m, 'mode: subagent'))
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /orchestrator\.md \(modelo free/)
+    })
+  })
+
+  it('no advierte un agente sin mode: aunque su modelo sea gratis', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir).status, 0)
+      const coderPath = join(dir, '.opencode', 'agents', 'coder.md')
+      writeFileSync(coderPath, readFileSync(coderPath, 'utf8').replace(/^mode: subagent\r?\n/m, ''))
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /coder\.md \(modelo free/)
+    })
+  })
+
   it('exit 0 en instalacion sana', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)

@@ -1866,6 +1866,31 @@ describe('CLI check (G3)', () => {
     })
   })
 
+  it('un catálogo parseable pero con forma inválida no evalúa deriva y avisa catálogo no verificable', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const catalogos = {
+        'objeto-vacio.json': '{}',
+        'proveedores-vacios.json': '{ "providers": {} }',
+        'array.json': '[]',
+        'string.json': '"x"'
+      }
+      for (const [name, content] of Object.entries(catalogos)) {
+        const catalog = join(dir, name)
+        writeFileSync(catalog, content)
+        const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+        assert.equal(r.status, 0, `${name}: exit 0`)
+        assert.doesNotMatch(r.stdout, /ausente del catálogo de modelos/, `${name}: sin aviso de deriva`)
+        assert.match(
+          r.stdout,
+          /no se pudo verificar el catálogo de modelos/,
+          `${name}: aviso de catálogo no verificable`
+        )
+        assert.doesNotMatch(r.stderr, /\n\s+at /, `${name}: sin stack trace`)
+      }
+    })
+  })
+
   it('un catálogo con más de 90 días emite un único aviso informativo sin cambiar la resolución', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)

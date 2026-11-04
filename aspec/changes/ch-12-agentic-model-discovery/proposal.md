@@ -229,3 +229,5 @@ Delta en `aspec/changes/ch-12-agentic-model-discovery/specs/agent-model-tiers/sp
 
 - 2026-11-04 — Creación del change (fuente: instrucción del usuario, contexto técnico verificado y
   catálogo del 2026-11-03). Clasificación `spec-required`; sin Work Item (Azure deshabilitado).
+- 2026-11-04 — 2ª ronda: hardening de catálogo inválido, fechas reales, clasificación binary-missing
+  cross-platform, seam testeable de main y README (commit bacbeed; tests en verde).

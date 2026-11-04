@@ -14,17 +14,25 @@ El script SHALL:
   figuran en el snapshot vigente;
 - ejecutar `opencode models <provider> --verbose` por proveedor;
 - pasar `--refresh` en la enumeración plana y en cada consulta por proveedor;
-- clasificar el resultado como `available`, `binary-missing`, `network-unavailable` o `partial`;
+- clasificar el resultado como `available`, `binary-missing`, `network-unavailable` o `partial`; la
+  clasificación `binary-missing` SHALL aplicarse sólo cuando el binario falta (`ENOENT` o mensaje de
+  shell de comando no encontrado), y los demás errores de spawn (timeout, desborde de buffer,
+  permisos) SHALL clasificarse como `partial`, nunca como `binary-missing`;
 - tratar el marcador `Failed to fetch models.dev` como una salida offline y NO SHALL considerarla
   fresca;
 - calcular un diff contra el snapshot vigente con altas, bajas y cambios de `cost` o `limit` por
   proveedor e ID;
-- validar la forma del snapshot antes de escribirlo;
+- validar la forma del snapshot antes de escribirlo; la validación SHALL exigir que `generated_at`
+  sea una fecha de calendario real en UTC y SHALL rechazar `2026-13-01`, `2026-02-31` y
+  `2025-02-29`, no sólo un valor con formato `YYYY-MM-DD`;
 - rechazar el snapshot cuando `opencode/big-pickle` deja de tener costo 0 en entrada y salida;
 - escribir el snapshot de forma atómica cuando se solicite la acción explícita de escritura, con un
   archivo temporal en el mismo directorio y un rename sobre el destino;
 - emitir un reporte candidato con fecha, proveedores de origen y método, fuera del snapshot
   commiteado;
+- exponer la escritura y la ejecución en un entry point testeable con un runner inyectable, de modo
+  que la clasificación de frescura y la no sustitución del snapshot se verifiquen sin invocar
+  `opencode` ni usar red;
 - NO SHALL reemplazar `src/core/model-catalog.json` de forma automática: el reemplazo SHALL requerir
   una acción explícita de escritura.
 
@@ -56,6 +64,12 @@ con salidas capturadas en memoria. `src/core/tier-models.js` NO SHALL importar
 - **WHEN** el binario `opencode` no se puede ejecutar
 - **THEN** la clasificación es `binary-missing`
 - **AND** el script termina con exit code no cero sin escribir el snapshot
+
+#### Scenario: Un error de spawn distinto de ENOENT no es binary-missing
+
+- **WHEN** el spawn de `opencode` falla por timeout, desborde de buffer o permisos
+- **THEN** la clasificación es `partial`
+- **AND** el script NO SHALL reemplazar el snapshot commiteado
 
 #### Scenario: Un solo proveedor falla
 
@@ -105,9 +119,9 @@ impedir la validación de frontmatter existente.
 `generated_at` del snapshot supere un umbral fijo de 90 días. Ese aviso NO SHALL configurarse, NO
 SHALL actuar como TTL en runtime y NO SHALL alterar la resolución de tiers ni el exit code.
 
-El warning de deriva SHALL omitirse cuando el catálogo no es legible, conservando el aviso existente
-de catálogo no verificable. Para hosts que eliminan `model:` o emiten `model: inherit`, NO SHALL
-evaluarse deriva.
+El warning de deriva SHALL omitirse cuando el catálogo no es legible o no satisface la validación de
+forma (`validateCatalogSnapshot`), conservando en ambos casos el aviso existente de catálogo no
+verificable. Para hosts que eliminan `model:` o emiten `model: inherit`, NO SHALL evaluarse deriva.
 
 #### Scenario: Un modelo del mirror ausente del snapshot produce un warning
 
@@ -127,6 +141,14 @@ evaluarse deriva.
 - **WHEN** el snapshot no se puede leer o parsear
 - **THEN** `check` conserva el aviso existente de catálogo no verificable
 - **AND** no emite el warning de deriva por modelo ausente
+- **AND** el exit code no cambia
+
+#### Scenario: Un catálogo parseable pero inválido no produce deriva
+
+- **WHEN** el snapshot parsea pero no satisface `validateCatalogSnapshot` (`{}`, `{ providers: {} }`,
+  un array o un string)
+- **THEN** no se emite el warning de deriva por modelo ausente
+- **AND** se conserva el aviso de catálogo no verificable
 - **AND** el exit code no cambia
 
 #### Scenario: Un catálogo antiguo emite un aviso informativo

@@ -46,6 +46,15 @@ export function providersFromFlatOutput(raw) {
   return sortedUnique(providers)
 }
 
+// Valida un nombre de proveedor antes de pasarlo como argumento a un proceso.
+// Sólo admite letras, dígitos, punto, guion y guion bajo, empezando por
+// alfanumérico: descarta espacios, `/` y metacaracteres de shell.
+const SAFE_PROVIDER_NAME = /^[a-z0-9][a-z0-9._-]*$/i
+
+export function isSafeProviderName(name) {
+  return typeof name === 'string' && SAFE_PROVIDER_NAME.test(name)
+}
+
 // Parsea la salida de `opencode models <provider> --verbose`: cada encabezado
 // `^<provider>/\S+$` abre una entrada y el bloque JSON que le sigue aporta `cost` y
 // `limit`. Emite `{ id, cost, limit }` con `null` cuando faltan datos y deduplica por

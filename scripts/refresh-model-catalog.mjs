@@ -26,6 +26,7 @@ import {
   diffCatalogSnapshots,
   discoveryStatus,
   freeModelViolations,
+  isSafeProviderName,
   parseVerboseProviderOutput,
   providersFromFlatOutput,
   validateCatalogSnapshot
@@ -115,12 +116,17 @@ export function main(argv = process.argv.slice(2)) {
   const today = new Date().toISOString().slice(0, 10)
   const flat = runOpencode(['models', '--refresh'])
   const binaryMissing = looksBinaryMissing(flat)
-  const providers = binaryMissing ? [] : providersFromFlatOutput(flat.stdout)
+  const enumerated = binaryMissing ? [] : providersFromFlatOutput(flat.stdout)
+  const providers = enumerated.filter(isSafeProviderName)
+  const rejectedProviders = enumerated.filter((provider) => !isSafeProviderName(provider))
   const failures = []
   let networkMarker = flat.offline
 
   if (!binaryMissing && flat.status !== 0) {
     failures.push({ provider: '(enumeración)', detail: statusLine(flat), stderr: flat.stderr })
+  }
+  for (const provider of rejectedProviders) {
+    failures.push({ provider, detail: 'nombre de proveedor inseguro' })
   }
 
   const nextProviders = {}
@@ -151,6 +157,9 @@ export function main(argv = process.argv.slice(2)) {
   console.log(`  fecha: ${today}`)
   console.log(`  método: ${METHOD}`)
   console.log(`  proveedores: ${providers.length > 0 ? providers.join(', ') : '(ninguno)'}`)
+  if (rejectedProviders.length > 0) {
+    console.log(`  rechazados: ${rejectedProviders.join(', ')}`)
+  }
   console.log(`  estado: ${status}`)
 
   if (status !== 'available') {

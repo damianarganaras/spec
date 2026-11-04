@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-11-03T18:16:04Z
-pluginVersion: 0.18.9
+generatedAt: 2026-11-03T22:11:31Z
+pluginVersion: 0.18.10
 skillVersion: '2.3'
 ---
 
@@ -11,58 +11,25 @@ skillVersion: '2.3'
 
 | Unidad | Propósito | Entry point | Dossier |
 |---|---|---|---|
-| CLI / orquestación | Parsing; `init`/`install`/`update`/`upgrade`, `export`/`import`, profiles, projects, `stats` + `stats failures`, doctor, MCP, migración legacy, refresh on-write en `memory import`/`merge`/**`consolidate --apply`**, advisory en `memory doctor` (cinco checks), `memory snapshot`/`merge`/`consolidate`/**`curate`**/**`gc`** y generación de `machine-env.md`. | `src/cli/index.js` | `units/cli-install.md` |
-| UI de terminal | Banner animado y menús TTY sin dependencias. | `src/cli/ui.js` | — |
-| Merge de templates | `mergeTemplateInto` (punto único de `install`/`update`/`upgrade` e `import`): reconcilia bloques planos legados (`reconcileLegacyBlocks`) antes de `mergeLocked`. La reconciliación se gatea por la presencia del reemplazo canónico en el `source` y enmascara bloques `LOCKED` y code fences. | `src/cli/index.js` | `units/cli-install.md` |
-| Contrato de validaciones | Política declarativa (bloque `LOCKED: validation-commands`): corre sólo los comandos de `PRODUCT.md` → `## Project Commands`; format `not-configured` sin formatter; tests acotados. | `templates/AGENTS.md`, `AGENTS.md` | — |
-| Protocolo de memoria canónico | Bloque `LOCKED: memory-protocol` en `AGENTS.md`: cuándo consultar, contrato de `searchMemory` (preview/`expand`/`keys`/`required`) y uso del `<ContextOverflowWarning>`; `PRODUCT.md` sólo apunta. | `AGENTS.md`, `templates/AGENTS.md`, `templates/PRODUCT.md` | `units/memory-engine.md` |
-| Adaptación de frontmatter | Módulo puro dueño único: `adaptFrontmatter(content, host, assetKind, name)` + `parseFrontmatter`/`serializeFrontmatter`, `AGENT_ADAPTER_DROP`, `ANTIGRAVITY_TOOL_MAP`, `COMMANDCODE_TOOL_MAP`/`COMMANDCODE_MCP_TOOL_MAP`. | `src/core/adapters/frontmatter.js` | `units/cli-install.md` |
-| Instalación de assets por host | `AGENT_TARGETS` (fuente única de rutas, 8 hosts) + `installAgentAssets` materializan skills/agents/commands en el destino nativo. | `src/cli/index.js` | `units/cli-install.md` |
-| Directiva de compresión host-scoped | `hostSupportsCompression`/`hostConfigHasCompression` deciden materializar `CAVEMAN_USAGE_NOTE` sólo donde la config MCP incluye la tool. | `src/cli/index.js` | `units/cli-install.md` |
-| Validación de frontmatter y tier | `checkAgentsFrontmatter` compara el instalado contra la adaptación de la canónica o del overlay del perfil, acepta los estados esperados del tier y emite un aviso no bloqueante si el tier aplicaría otro modelo; `checkTierOrphan` avisa un tier sin agentes locales. | `src/cli/index.js` | `units/cli-install.md` |
-| Perfil test (overlay) | `installProfileOverlay` + `copyTemplates` por perfil + `testspec/`; tester ampliado y `cleto-test-*`. | `src/cli/index.js`, `profiles/test/` | `units/cli-install.md` |
-| Portabilidad entre máquinas | `export` (bundle + manifiesto sin rutas), `import` (regenera MCP + `doctor`), `import --repair`. | `src/cli/index.js` | `units/cli-install.md` |
-| Commands como skills | `installCommandSkills`/`commandToSkill` empaquetan `commands/*.md` en `.agents/skills/<n>/SKILL.md` (antigravity). | `src/cli/index.js` | `units/cli-install.md` |
-| MCP de host | `setupHostMcp` (dueño único): `.agents/mcp_config.json` (antigravity), `.mcp.json` (commandcode), `copilot-mcp.json` u `opencode.json`; merge no destructivo. | `src/cli/index.js` | `units/cli-install.md` |
-| Entorno de máquina | Dueño único de detectar plataforma/shell/EOL/tooling (disponibilidad = resoluble e invocable; sonda 2 s/10 s), renderizar/escribir `.ancleto/machine-env.md` y excluirlo vía `info/exclude`; `checkMachineEnvTracked` para `check`. | `src/core/machine-env.js` | `units/cli-install.md` |
-| Intake de sesión y techo de lecturas | Contrato del arranque: changes activos excluyendo `archive/`, un único `git status --short` delegado cuando el pedido toca el estado, silencio si no hay nada; techo de 3 archivos con exención de lecturas proactivas y hasta 5 nombrados por mensaje. | `agents/orchestrator.md` | — |
-| Trigger de Recall ante overflow | `<ContextOverflowWarning>` ⇒ delegar exactamente un Recall a `@memory-keeper`; allowlist de `bash` de `@technical-discovery` de dos literales sobre `'*': deny`. | `agents/orchestrator.md`, `agents/technical-discovery.md`, `src/core/memory/engine.js` | `units/memory-engine.md` |
-| Refs normalizadas y validación fail-closed | `parseRefsBlock`/`refsBlockEnd`/`validateRefsForWrite` en `recordNode`: gramática cerrada, items indentados o no, `change:<slug>` sin fecha, resolución/ambigüedad, rechazo de secretos, exención `source === 'runtime'`. `importNodes` queda fuera (LWW). `inspectRefs` comparte parser y resolución. | `src/core/memory/engine.js` | `units/memory-engine.md` |
-| Resolver de refs navegables (MEM-04b) | `resolveNodeRefs({ content, projectRoot })`: API read-only que expone `change:` path repo-relativo, `spec:` path + heading real, `path:` normalizado, `commit:`/`workitem:` `verifiable: false`; `needsRoot`/`error`/`blocks` en la raíz. Sin segundo parser, comando, tool MCP ni tabla. Publicado en `0.18.3`. | `src/core/memory/engine.js` | `units/memory-engine.md` |
-| Recall task-aware (MEM-05, `0.18.6`) | `searchMemory` con orden total (requerido → ref declarada → scope → `bm25` → `memory_key`), **preview** por defecto (≤240 chars, `limit` 5, `content_truncated`), `expand: true`, `keys` selectivo y `required` como entrada de llamada que falla por límite/presupuesto. | `src/core/memory/engine.js`, `src/core/memory/tools.js` | `units/memory-engine.md` |
-| Orden de inyección (`0.18.4`) | `scopeRank` + `declaresAnchor`: scope `task`→`feature`→`project`, anclaje declarado, `created_at` descendente, `memory_key` ascendente. El anclaje se decide sólo parseando `refs:`. | `src/core/memory/engine.js` | `units/memory-engine.md` |
-| Presupuesto y manifiesto de omitidas (`0.18.4`) | El bloque completo respeta `maxTokens × CHARS_PER_TOKEN`; reserva `min(1.500, 15 %)`; lista hasta 40 `memory_key` omitidas y `+N`. | `src/core/memory/engine.js` (`formatOverflowWarning`) | `units/memory-engine.md` |
-| Consolidación (`0.18.5`) | `consolidate({ dryRun = true, includeNearDuplicates = true })`: duplicados exactos por `type` + `content` normalizado sin `refs:`, canónico determinístico, `--apply` por supersesión, near-dups sólo reporte, read-only en dry-run. `includeNearDuplicates: false` omite el escaneo O(n²). | `src/core/memory/engine.js`, `src/cli/index.js` | `units/memory-engine.md` |
-| Curaduría read-only (CH-09, publicado en `0.18.8`) | `curateMemory(engine, { projectRoot })` compone `resolveNodeRefs` + `consolidate({ dryRun: true, includeNearDuplicates: false })`; reporta refs rotas, no verificables y duplicados exactos en orden total, sin escribir. Subcomando `memory curate [--json] [--strict]`, advisory con `--strict` opt-in y `no-db` explícito. | `src/core/memory/curation.js`, `src/cli/index.js` | `units/memory-engine.md` |
-| GC por edad de supersesión (MEM-05b) | Columna aditiva `superseded_at`, backfill histórico, las 4 rutas de supersesión escriben el instante, `COALESCE(superseded_at, created_at)`, cutoff único y detach de `superseded_by` antes del `DELETE`. | `src/core/memory/{database,engine}.js`, `src/cli/index.js` | `units/memory-engine.md` |
-| Promoción al archivar | Gate de `ancleto-archive`: sólo `proposal ## Decisiones` con `memory_key` propia y `Estado: aprobado`; preflight del lote, un `recordDecision` por bloque, cero candidatos ⇒ cero escrituras/delegación; corre después del merge de specs. | `skills/ancleto-archive/SKILL.md`, `agents/memory-keeper.md`, `agents/orchestrator.md` | `units/memory-engine.md` |
-| Discovery / topología | Genera `.discovery-map.json` (árbol, totales, root files). | `src/core/discovery.js` | `units/discovery-engine.md` |
-| Affected-set (grafo de imports) | `buildImportGraph`/`computeAffectedSet`: clausura de dependientes (determinista); superficie read-only `ancleto affected`. | `src/core/affected-set.js` | `units/discovery-engine.md` |
-| Empaquetado por tier | Traduce tier+flags en args de Repomix (ignores, `--compress`, budget). | `src/core/repomix-tier.js` | `units/discovery-engine.md` |
-| Modelos por tier | **Dueño único de `TIERS`**: mapa nombre→modelo por tier, `minimo` alineado a la canónica (`commandcode/deepseek/deepseek-v4.1-flash`, no-op) y resolución del tier `gratis` (Muse Spark/probe/env). | `src/core/tier-models.js` | `units/discovery-engine.md` |
-| Guard de coherencia de modelos | `test/agent-model-coherence.test.js`: igualdad de conjunto/modelo entre `TIERS.minimo` y `agents/*.md`, dueño único de `TIERS` en `src/**`, y overlay `profiles/test/agents/{tester,reviewer}.md` fuera del conjunto canónico. | `test/agent-model-coherence.test.js`, `src/core/tier-models.js` | — |
-| Base de memoria | Abre `.ancleto/memory.db` (con opción `readonly`), PRAGMAs, migraciones (incl. `superseded_at`) y FTS5. | `src/core/memory/database.js` | `units/memory-engine.md` |
-| Motor de memoria | `buildWorkingContext` (orden, presupuesto, aviso, `required`), `searchMemory` (preview/`expand`/`keys`/`required`), supersesión atómica, `formatTopologyBlock`, procedencia `source`, refs y secretos en `recordNode`, `renderRuleContent`, `inspectRefs`, `resolveNodeRefs`, `exportActive`/`importNodes`/`gcSuperseded`, `validateMerge`/`merge`, **`consolidate`** con `includeNearDuplicates`. | `src/core/memory/engine.js` | `units/memory-engine.md` |
-| Curaduría de memoria | `curateMemory`: composición pura de resolver + consolidate para un reporte read-only determinístico; `status` `ok`/`no-db`/`error`, orden por `memory_key`, paths POSIX sin `:line`. | `src/core/memory/curation.js` | `units/memory-engine.md` |
-| Snapshot de memoria | `snapshotDatabase`: copia con historial vía `VACUUM INTO` sobre fuente read-only, `quick_check`, reemplazo con backup/restore y rechazo de `target == source` por identidad de archivo. | `src/core/memory/snapshot.js` | `units/memory-engine.md` |
-| Ops de memoria (CLI) | `memory export|import|gc|snapshot|merge|consolidate|curate|context|list|doctor` (JSON sanitizado, upsert idempotente con refresh on-write, purga de superseded por edad de supersesión, snapshot binario, merge por supersesión, consolidación exacta, curaduría read-only, materialización de contexto, listado read-only, integridad + advisory). | `src/cli/index.js` | `units/memory-engine.md` |
-| Tools de memoria | Handlers y JSON Schema de las 3 tools; refresh del working-context filtrado por `shouldRefreshWorkingContext`; el MCP escribe con `source: 'mcp:ancleto-memory'`. | `src/core/memory/tools.js`, `src/core/memory/mcp-server.js` | `units/memory-engine.md` |
-| MCP de memoria | Transporte MCP stdio para el IDE. | `src/core/memory/mcp-server.js` | `units/memory-engine.md` |
-| Memory doctor | Read-only por defecto: cinco checks —integridad, alineación FTS, unicidad, refs de activos (`inspectRefs`) y estado del WAL—; `--rebuild` es el único camino que escribe; advisory de frescura. | `src/core/memory/doctor.js`, `src/cli/index.js` | `units/memory-engine.md` |
-| Working context | Render único + persistencia; día-cero sin DB; refresh on-write CLI compare-based y staleness advisory; trigger MCP; resolución de raíz. | `src/core/memory/working-context.js` | `units/memory-engine.md` |
-| Reporte de fallos | `ancleto stats failures`: lectura read-only de tool parts de opencode, clasificación `env`/`check`/`tool`/`unknown`, agregación y enmascarado de secretos/rutas. | `src/cli/index.js` | `units/cli-install.md` |
-| Config del host opencode | `opencode.json` en la raíz: entradas `agent.model` para los 10 agentes; según `AGENTS.md` sólo surte efecto en el primario. No se publica. | `opencode.json`, `package.json` | — |
-| Agents (10) | orchestrator, coder, tester, spec-writer, reviewer, documenter, technical-discovery, technical-seed-writer, memory-keeper y context-resolver. Todos leen `.ancleto/machine-env.md`; orchestrator define intake, techo, checkpoint y orden de promoción; spec-writer es dueño del shape de `## Decisiones`; memory-keeper implementa Promotion y usa `expand: true` en Recall. | `agents/*.md` | — |
-| Commands (16) | Comandos `/cleto-*` del ciclo SDD + review/security + recall/pr + transplant + update. | `commands/*.md` | — |
-| Configuración de modelos de agentes | `AGENTS.md` → `## Cambiar el modelo de los agentes`: default canónico publicado, tres superficies con el mirror del proyecto ganando sobre el global, `opencode.json` sólo sobre el primario, tier scoped a opencode, verificación con `Select-String` y `ancleto check` como oráculo. | `AGENTS.md`, `agents/*.md`, `opencode.json`, `src/cli/index.js` | — |
-| Skills (21 dirs) | Ciclo de vida, discovery, commit/pr, review/security, update, upgrade y `triage-clarifier`; los generadores emiten `## Decisiones` y no `design.md`/`context.md`; `ancleto-archive` implementa el gate de promoción; las skills de recall usan `expand: true`. | `skills/*/SKILL.md` | `units/cli-install.md` |
-| Templates (2) | `AGENTS.md` (bloques `LOCKED` canónicos) y `PRODUCT.md` base (puntero al protocolo de memoria); sin valores de máquina. | `templates/` | `units/cli-install.md` |
-| Linter | Flat config ESLint con 4 reglas sobre `src/` y `test/`. | `eslint.config.js` | — |
-| Checkpoint de contrato | Tras `@spec-writer`, el orquestador presenta el contrato del cambio en menos de una pantalla; la aprobación autoriza sólo implementar y una enmienda es obligatoria si cambian alcance, riesgo o arquitectura. | `agents/orchestrator.md` | — |
-| Decisiones del change | `## Decisiones` en `proposal.md`: shape de seis campos (o línea equivalente) definido una sola vez por `@spec-writer`; destino canónico de una decisión de diseño. | `agents/spec-writer.md`, `skills/ancleto-{propose,ff,continue,new,onboard}/SKILL.md` | — |
-| Retiro de `design.md`/`context.md` | Archivado (2026-10-30) y publicado desde `0.17.1`: el set nuevo es `proposal.md` + `tasks.md` + `specs/`; los consumidores los leen sólo como legacy opcional; el archive mueve el directorio sin modificarlo. | `aspec/specs/{artifact-update,prompt-contracts}/spec.md`, `test/content-guards.test.js` | — |
-| Specs del repo | Configuración aspec, **20 specs fuente** y changes (**1 activo**: `ancleto-vscode-extension`; + **43 archivados**, el más reciente `2026-11-03-align-agent-models-commandcode`), incl. **`agent-model-tiers`**, `machine-environment`, `session-failure-report`, `memory-ops` (con el requirement de curaduría) y `memory-engine` (con los requirements de orden, presupuesto, consolidate, `resolveNodeRefs` y recall task-aware). | `aspec/config.yaml`, `aspec/specs/**`, `aspec/changes/**` | — |
-| Tests (17) | Suite `node --test` (17 archivos; incluye `memory-fixtures`/`memory-pr1-contract`, `machine-env`, `stats-failures`, **`curation`**, **`agent-model-coherence`** y los guards de `content-guards`), con 3 fixtures y `refs-root/`. No re-ejecutada en esta regeneración. | `test/*.test.js` | — |
-| Análisis de tokens | Barrido de costo y matriz de decisión de "token-economy"; no runtime. | `optimizacion-de-tokens.md` | — |
-
-Cada dossier describe responsabilidades, flujo, reglas y paths clave; no repite inventario.
+| CLI y ciclo de vida | `init`, `install`/`update`, `upgrade`, `check`, `doctor`, `export`/`import`, wizard TTY | `src/cli/index.js`, `src/cli/ui.js` | `units/cli-install.md` |
+| Resolución de modelos | `TIERS`, `TIER_CHAINS`, resolver puro, `gratis` free-only, oráculo de `check` | `src/core/tier-models.js` | `units/cli-install.md` |
+| Catálogo de modelos | Snapshot verificado por proveedor; refresco manual | `src/core/model-catalog.json`, `scripts/refresh-model-catalog.mjs` | `units/discovery-engine.md` |
+| Adaptación por host | Frontmatter de agents y layouts nativos (`AGENT_TARGETS`) | `src/core/adapters/frontmatter.js`, `src/cli/index.js` | `units/cli-install.md` |
+| Discovery y seed | Topología, hashes, impacto, `seed-map`, estado `READY/STALE` | `src/core/discovery.js`, `src/cli/index.js` | `units/discovery-engine.md` |
+| Empaquetado Repomix | Args e ignores por tier; presupuesto de tokens | `src/core/repomix-tier.js` | `units/discovery-engine.md` |
+| Affected-set | Grafo de imports y clausura de dependientes | `src/core/affected-set.js` | `units/discovery-engine.md` |
+| Entorno de máquina | Shell, EOL, tooling e invocabilidad; exclusión local | `src/core/machine-env.js` | `units/cli-install.md` |
+| Motor de memoria | SQLite+FTS5, supersesión, refs, secretos, recall, ops | `src/core/memory/engine.js`, `database.js` | `units/memory-engine.md` |
+| Tools y MCP | `searchMemory`, `recordRule`, `recordDecision`; server stdio | `src/core/memory/tools.js`, `mcp-server.js` | `units/memory-engine.md` |
+| Working-context | Render y refresh de `.ancleto/working-context.md` | `src/core/memory/working-context.js` | `units/memory-engine.md` |
+| Doctor y curaduría | Chequeos read-only, refs rotas, duplicados exactos | `src/core/memory/doctor.js`, `curation.js` | `units/memory-engine.md` |
+| Snapshot | Copia consistente con historial (`VACUUM INTO`) | `src/core/memory/snapshot.js` | `units/memory-engine.md` |
+| Agentes | 10 subagentes instalables (canónica publicada) | `agents/*.md` | — |
+| Commands | 16 comandos `/cleto-*` | `commands/*.md` | — |
+| Skills | 21 skills del ciclo SDD/discovery/review | `skills/*/SKILL.md` | — |
+| Templates | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` | `templates/*.md` | — |
+| Perfil test | Overlay de tester/reviewer y commands de test | `profiles/test/**` | `units/cli-install.md` |
+| Specs y changes | Specs canónicos y ciclo de cambios (incl. archive) | `aspec/specs/**`, `aspec/changes/**` | — |
+| Stats | Tokens por sesión y fallos de tool parts de opencode | `src/cli/index.js` (`stats`) | `units/cli-install.md` |
+| Publicación | Lint, tests, npm publish y GitHub Release | `.github/workflows/publish.yml` | — |
+| Suite de tests | Guards de modelos, discovery, memoria, adapters, CLI | `test/*.test.js` | — |

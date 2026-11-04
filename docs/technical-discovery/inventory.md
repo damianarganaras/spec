@@ -1,92 +1,45 @@
 ---
 node: inventory
 kind: inventory
-read_when: "cobertura del repositorio por directorios y globs, y qué queda fuera"
-generatedAt: 2026-11-03T18:16:04Z
-pluginVersion: 0.18.9
+read_when: "verificar el alcance documentado de la semilla"
+generatedAt: 2026-11-03T22:11:31Z
+pluginVersion: 0.18.10
 skillVersion: '2.3'
 ---
 
-# Inventario (orientación)
+# Alcance documentado
 
-Cobertura por directorio/glob, no auditoría archivo por archivo. Conteos de
-`.discovery-map.json` (`total_files: 763`; `tree_summary` por directorio de primer nivel).
-
-| Área | Contenido | Archivos |
+| Alcance | Documento | Motivo |
 |---|---|---|
-| `src/cli/**` | `index.js` (entry point y todos los subcomandos, incl. `affected`, `stats failures`, `memory snapshot`/`merge`/**`consolidate`**/**`curate`**/**`gc`**, refresh on-write y advisory), `ui.js` (wizard/menús). | 2 |
-| `src/core/**` | `discovery.js`, `affected-set.js`, `machine-env.js`, `repomix-tier.js`, `tier-models.js` (dueño único de `TIERS`), `adapters/frontmatter.js`, `memory/{database,engine,curation,snapshot,doctor,tools,mcp-server,working-context}.js`. `engine.js` incluye `searchMemory` task-aware, `resolveNodeRefs`, `consolidate` (con `includeNearDuplicates`), `gcSuperseded`, el orden por anclaje y el aviso con manifiesto; `curation.js` compone resolver + consolidate en un reporte read-only. | 14 |
-| `agents/*.md` | 10 subagentes instalables; todos leen `.ancleto/machine-env.md`; `orchestrator.md` con `## Machine Environment`, `## Session Intake`, techo de lecturas, trigger de Recall y orden de promoción; `memory-keeper.md` usa `expand: true` en Recall; `technical-discovery.md` con allowlist de `bash` de dos literales sobre `'*': deny`. | 10 |
-| `commands/*.md` | 16 comandos (`/cleto-*` del ciclo + review/security + transplant + update). | 16 |
-| `skills/*/SKILL.md` (+ references) | 21 directorios de skills (~35 archivos; incluye `ancleto-update`, `ancleto-review`, `ancleto-technical-discovery`, `ancleto-workflow`, `triage-clarifier` y `ancleto-archive` con el gate de promoción). Los generadores emiten `proposal`/`tasks`/`specs` (sin `design.md`/`context.md`); el archive mueve sin borrar. Las skills de recall (`ancleto-recall`, `new`, `propose`, `ff`) usan `expand: true`. | 35 |
-| `templates/` | `AGENTS.md` (bloques `LOCKED` canónicos, incluido `memory-protocol`) y `PRODUCT.md` (puntero al protocolo); **sin** valores de máquina. | 2 |
-| `profiles/test/` | Overlay del perfil test: tester/reviewer ampliados, comandos `cleto-test-*`, `AGENTS.md` con bloque LOCKED. | 8 |
-| `aspec/` | `config.yaml` + `specs/` (**20 capacidades**, incl. `agent-model-tiers`, `memory-ops`, `memory-engine`, `machine-environment`, `session-failure-report`) + **1 change activo** (`ancleto-vscode-extension`) + `changes/archive/` (**43**; el último, `2026-11-03-align-agent-models-commandcode`). `memory-ops` incluye el requirement de `memory curate`; `agent-model-tiers` fija la coherencia canónica/tier. | 200 |
-| `test/**` | 17 archivos `*.test.js` (`adapters-frontmatter`, `affected-set`, **`agent-model-coherence`**, `cli`, `content-guards`, **`curation`**, `discovery-tier`, `discovery-topology`, `linter-config`, `machine-env`, `mcp`, `memory-engine`, `memory-fixtures`, `memory-pr1-contract`, `stats-failures`, `tier-models`, `working-context`) + **tres fixtures** (`seed.json`, `golden.json`, `golden-refs-seed.json`) + el root `fixtures/memory/refs-root/`. `memory-fixtures` cubre el check de refs, el resolver y el modo `refs` de M04/M05/M06; `curation` cubre el módulo y el subcomando; `agent-model-coherence` guarda canónica/`TIERS`/dueño único. | 24 |
-| `docs/**` | Documentación del framework + backlog + relevamiento (`.md`) + este seed; excluida del pack por el tier. | 21 |
-| `documentation/**` | Material legado `lnx-cli/` + guías; **gitignored**. El mapa lo cuenta porque recorre el disco, pero el pack lo excluye. | 340 |
-| `audit logs/**` | 9 `.txt` de auditorías (untracked). Entran al pack pero **no** son evidencia del producto. | 9 |
-| `.opencode/**` | Instalación local del host (incluye `.ancleto-tier` = `minimo` y los mirrors `.opencode/agents/*.md`, que se regeneran); gitignored. | 66 |
-| `.github/workflows/**` | `publish.yml` (publicación a npm + Release + gate de lint). | 1 |
-| `eslint.config.js` | Flat config del linter (4 reglas sobre `src/` y `test/`). | 1 |
-| Raíz | `package.json` (`0.18.9`), `opencode.json` (entradas `agent.model` para los 10 agentes; el override surte efecto en el primario), `README.md` (documenta preview/`expand`/`keys`/`required`, `memory curate`, el default canónico y el oráculo de `check`), `CHANGELOG.md` (hasta `0.18.9`), `DESIGN-memory-engine-v0.2.0.md`, `optimizacion-de-tokens.md` (análisis, no runtime), `LICENSE` (MIT), `AGENTS.md`, `PRODUCT.md`, `.gitattributes`, `.gitignore`, `.discovery-map.json`, `package-lock.json`, `.ancletorc` (gitignored). **No existe `BACKLOG.md`**; el backlog vive en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md`. | 15 |
+| `src/cli/**` | `units/cli-install.md`, `overview.md` | Entry point único, subcomandos, instalación y MCP |
+| `src/core/tier-models.js`, `src/core/model-catalog.json` | `decisions.md`, `units/discovery-engine.md` | Dueño de tiers/cadenas y snapshot de modelos |
+| `src/core/discovery.js`, `src/core/repomix-tier.js` | `units/discovery-engine.md` | Topología, impacto, args y presupuesto de pack |
+| `src/core/affected-set.js` | `units/discovery-engine.md` | Grafo de imports y clausura de dependientes |
+| `src/core/adapters/frontmatter.js` | `units/cli-install.md` | Adaptación pura de frontmatter por host |
+| `src/core/machine-env.js` | `units/cli-install.md`, `setup.md` | Detección de shell/EOL/tooling y exclusión local |
+| `src/core/memory/**` | `units/memory-engine.md` | Motor, DB, tools, MCP, doctor, curaduría, snapshot |
+| `scripts/**` | `decisions.md`, `units/discovery-engine.md` | Refresco manual del catálogo de modelos |
+| `agents/**` | `units/_map.md`, `units/cli-install.md` | 10 agentes instalables (superficie de producto) |
+| `commands/**` | `units/_map.md` | 16 comandos `/cleto-*` |
+| `skills/**` | `units/_map.md` | Skills nativas del ciclo SDD y discovery |
+| `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
+| `profiles/**` | `units/cli-install.md` | Overlay del perfil `test` (agents/commands/templates) |
+| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos y changes (incl. archive) |
+| `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos y discovery |
+| `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
+| `docs/technical-discovery/**` | `index.md` | Este seed (excluido del hash de fuentes) |
+| `docs/**` (resto) | `inventory.md` | Documentación del framework y guías |
+| `documentation/**` | `integrations.md` | Material legado lnx-cli, gitignored, no runtime |
+| `.ancletorc`, `.opencode/.ancleto-tier`, `opencode.json` | `setup.md`, `decisions.md` | Configuración y estado local por proyecto |
+| `.ancleto/machine-env.md` | `setup.md` | Artefacto local derivado |
+| `package.json`, `.gitattributes`, `.gitignore` | `setup.md`, `decisions.md` | Contrato de runtime, EOL y exclusiones |
 
-## Fuera del árbol versionado (gitignored, puede no existir)
+## Áreas raíz observadas (`.discovery-map.json`)
 
-`.ancletorc`, `.opencode/**` (instalación local), `.ancleto/**` (memoria y artefactos locales) y
-`/documentation` están en `.gitignore`. En este checkout `.ancletorc` y `.opencode/` existen;
-persisten `.ancleto/memory.db`, `.ancleto/working-context.md` (hoy `desactualizado`) y
-`.ancleto/machine-env.md` (generado el 2026-11-03T14:46:10Z con `ancleto: 0.18.8`). El tier vive
-en `.opencode/.ancleto-tier` (`minimo`). `audit logs/` **no** está en `.gitignore`: es untracked.
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (205), `audit logs` (9), `commands` (16),
+`docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (17),
+`templates` (2), `test` (25). Total: 771 archivos.
 
-## Cambios abiertos en el árbol de trabajo
-
-El único change activo es **`ancleto-vscode-extension`**. Los changes recientes de memoria
-(MEM-04b, ranking/omisiones, consolidación, MEM-05, MEM-05a, MEM-05b y CH-09 curaduría) están
-archivados; el más reciente es `2026-11-03-align-agent-models-commandcode`, que fija la
-coherencia canónica/tier de `0.18.9`. `git status --short` queda limpio salvo los artefactos
-derivados que regenera esta corrida: `.discovery-map.json` y
-`docs/technical-discovery/.discovery-state.json`. Evidencia: `git status --short`.
-
-## Destinos por host (no presentes en este repo)
-
-`AGENT_TARGETS` define destinos que sólo existen si el proyecto se instala con ese host:
-`.claude/**`, `.github/skills|agents|prompts/**`, `.agents/skills|agents/**` y
-`.agents/mcp_config.json` (antigravity), `.cursor/skills`, `.roo/skills`, `.commandcode/**` y
-`.mcp.json` (commandcode). Detalle: `units/cli-install.md`.
-
-## Exclusiones efectivas del pack (tier `minimo` resuelto)
-
-`node_modules`, `.git`, `dist` / `build` / `coverage` (siempre, `DEFAULT_IGNORES` del CLI y de
-la topología) + `test/**`, `docs/**`, `**/*.md` (tier) + `**/*.test.*`, `**/*.spec.*`,
-`**/__tests__/**`, imágenes (`png/jpg/svg/ico`), `public`, lockfiles. Además, Repomix respeta
-`.gitignore` (`.opencode/`, `.ancletorc`, `.ancleto/`, `/documentation`). `minimo` **no** fija
-token budget (sólo `gratis`: 50k); el pack de esta corrida fue de **751 archivos, ~20.893
-tokens**. `audit logs/` no está excluido y por eso aparece; no se usa como evidencia. El conteo
-del pack difiere del `total_files` del mapa (763) porque el mapa recorre el disco y el pack
-aplica ignores del tier y `.gitignore`.
-
-## Cobertura conceptual
-
-- Arquitectura y entry points: `overview.md`.
-- Flujos críticos: `units/memory-engine.md`, `units/discovery-engine.md`, `units/cli-install.md`.
-- Escritura de memoria y refs: `units/memory-engine.md`, `decisions.md`.
-- `searchMemory` task-aware y protocolo canónico: `units/memory-engine.md`, `decisions.md`.
-- Resolver de refs navegables: `units/memory-engine.md`, `decisions.md`.
-- Orden de inyección, presupuesto y manifiesto de omitidas: `units/memory-engine.md`,
-  `decisions.md`.
-- Consolidación de duplicados: `units/memory-engine.md`, `setup.md`, `decisions.md`.
-- Curaduría read-only (`memory curate`): `units/memory-engine.md`, `setup.md`, `decisions.md`.
-- GC por edad de supersesión: `units/memory-engine.md`, `setup.md`, `decisions.md`.
-- Promoción al archivar: `decisions.md`, `units/memory-engine.md`, `units/cli-install.md`.
-- Mantenimiento de memoria (snapshot, merge, doctor read-only): `units/memory-engine.md`,
-  `decisions.md`.
-- Scope de review y grafo de imports: `units/discovery-engine.md`.
-- Entorno de máquina y exclusión local: `setup.md`, `decisions.md`, `units/cli-install.md`.
-- Cambio de modelo de agentes: `setup.md`, `decisions.md`, `units/cli-install.md`.
-- Coherencia de modelos canónicos/`TIERS` y guard estructural: `decisions.md`, `setup.md`,
-  `units/cli-install.md`, `units/discovery-engine.md`.
-- Intake de sesión, techo de lecturas y trigger de Recall: `decisions.md`, `overview.md`.
-- Config del host opencode: `setup.md`, `decisions.md`, `integrations.md`.
-- Reglas y riesgos: `decisions.md`.
-- Externos: `integrations.md`.
+Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime; el pack del
+tier `minimo` excluye `test/**`, `docs/**` y `**/*.md`, por lo que la evidencia de esas áreas se
+verificó por lectura directa.

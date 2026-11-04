@@ -3,9 +3,9 @@ node: units/discovery-engine
 kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
-sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-04-ch-14-tier-gratis-import-integrity/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-04T19:22:37Z
-pluginVersion: 0.18.13
+sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
+generatedAt: 2026-11-04T22:24:31Z
+pluginVersion: 0.18.14
 skillVersion: '2.3'
 ---
 
@@ -15,7 +15,7 @@ skillVersion: '2.3'
 
 Separar el descubrimiento técnico del barrido manual: producir un mapa topológico estable
 (`.discovery-map.json`), empaquetar el contexto con el presupuesto del tier, medir si el seed sigue
-fresco y calcular qué archivos dependen de un cambio. En `0.18.13` el catálogo de modelos se puede
+fresco y calcular qué archivos dependen de un cambio. En `0.18.14` el catálogo de modelos se puede
 refrescar de forma completa y auditable desde una máquina de mantenimiento, sin introducir
 descubrimiento en runtime: se enumeran todos los proveedores, se fuerza `--refresh`, se clasifica
 la corrida, se calcula el diff, se valida que todo ID declarado sobreviva y se escribe de forma
@@ -52,7 +52,8 @@ atómica.
 `buildRepomixArgs` combina las exclusiones del proyecto, los extras del tier y el `--ignore`
 explícito. `readProjectTier` lee `.opencode/.ancleto-tier` (o `.ancleto-tier` en la raíz) y cae a
 `gratis` si no hay tier válido. El pack comprimido conserva firmas y comentarios, pero elide los
-cuerpos de funciones.
+cuerpos de funciones; además Repomix aplica sus ignores por defecto, que incluyen `**/*.md`, así
+que el pack no trae Markdown.
 
 ### Resolución de modelos (`minimo`)
 
@@ -151,7 +152,9 @@ inválido (`{}`, `{providers:{}}`, array, string) se descarta; un catálogo ileg
 
 Con catálogo no verificable conserva el aviso de catálogo no verificable y **no** emite deriva ni
 advisory de IDs: un snapshot corrupto o vacío no produce deriva falsa. Todos los avisos son no
-bloqueantes: no alteran el exit code, los contadores ni el conjunto de aceptación del oráculo.
+bloqueantes: no alteran el exit code, los contadores ni el conjunto de aceptación del oráculo. El
+invariante de la nota de compresión (0.18.14) no cambia este contrato: la divergencia de frontmatter
+sigue siendo advisory.
 
 ### Affected-set
 
@@ -167,9 +170,9 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 773 archivos, ~36.040 tokens, tier `minimo` (comprimido). El
-  `.discovery-map.json` observado al empacar reportó 784 archivos; el archivo trackeado en HEAD
-  conserva 780. El estado quedó en `docs/technical-discovery/.discovery-state.json`.
+- **Pack actual**: 778 archivos enumerados, ~36.310 tokens, tier `minimo` (comprimido). El
+  `.discovery-map.json` regenerado reporta 788 archivos. El estado quedó en
+  `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
   runtime/CI" y la separación `model-catalog.js` (puro) / `scripts/` (procesos).
 - **Un solo dueño de la extracción de IDs**: `modelIdsFromCatalog` vive en `model-catalog.js` y

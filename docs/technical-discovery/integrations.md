@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-04T19:22:37Z
-pluginVersion: 0.18.13
+generatedAt: 2026-11-04T22:24:31Z
+pluginVersion: 0.18.14
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
 | Repomix | Empaquetado de contexto para discovery | Salida | `src/cli/index.js` → `runRepomix` |
 | opencode | Host del IDE; base de sesiones para `stats`; `opencode models` solo en mantenimiento | Entrada | `src/cli/index.js` → `opencodeDbPath`, `scripts/refresh-model-catalog.mjs` |
 | MCP de memoria (`ancleto-memory`) | Tools `searchMemory`, `recordRule`, `recordDecision` | Salida/entrada | `src/core/memory/mcp-server.js` |
-| MCP caveman | Compresión de contexto en hosts que la exponen | Salida | `src/cli/index.js`, AGENTS.md |
+| MCP caveman | Compresión de contexto en hosts que la exponen | Salida | `src/cli/index.js` → `resolvesHostCompression` |
 | MCP engram | Memoria de sesión opcional (opt-in) | Salida | `src/cli/index.js` → `buildDefaultMcp` |
 | MCP Azure DevOps | Work Items opcional; deshabilitado en este repo | Salida | `PRODUCT.md` |
 | git | EOL, exclusión local de `machine-env`, release notes | Entrada | `src/core/machine-env.js`, workflow |
@@ -46,7 +46,8 @@ skillVersion: '2.3'
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
   esta generación se produjo con el fallback `npx` y quedó comprimido; los cuerpos de funciones se
-  eliden (ver `unknowns.md`).
+  eliden y Repomix aplica además sus ignores por defecto (incluye `**/*.md`), por eso el pack no
+  contiene Markdown (ver `unknowns.md`).
 
 ## opencode (host, telemetría local y catálogo)
 
@@ -69,9 +70,10 @@ skillVersion: '2.3'
 - **Memoria**: `ancleto mcp` levanta un servidor JSON-RPC por stdio que expone `searchMemory`,
   `recordRule` y `recordDecision` (`src/core/memory/mcp-server.js`, `tools.js`). El binario se
   registra en la config del host (`buildDefaultMcp`).
-- **Caveman**: tool de compresión disponible solo en hosts cuya config MCP la incluye
-  (`opencode`, `antigravity`). La directiva de uso se materializa host-scoped; no se agrega a
-  archivos compartidos entre hosts (`src/cli/index.js` → `CAVEMAN_USAGE_NOTE`).
+- **Caveman**: tool de compresión disponible solo en hosts con soporte (`opencode`, `antigravity`).
+  La directiva `CAVEMAN_USAGE_NOTE` se decide con `resolvesHostCompression`, que combina la config
+  MCP en disco con el MCP que el comando va a escribir; nunca se agrega a archivos compartidos entre
+  hosts (`src/cli/index.js`). `check` lee la misma config en disco (`hostConfigHasCompression`).
 - **engram**: MCP externo opcional, habilitado con `--with-engram`; no es la memoria del repo.
 - **Azure DevOps**: MCP opcional (`--with-azure`), deshabilitado en este repo
   (`PRODUCT.md` → `azure.enabled: false`). Requiere `AZURE_DEVOPS_ORG_URL` y `AZURE_DEVOPS_PAT`
@@ -98,7 +100,8 @@ skillVersion: '2.3'
   `check`) tampoco hacen red ni ejecutan procesos.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
-  que escribe en el destino (ver `decisions.md`).
+  que escribe en el destino (ver `decisions.md`). `import` valida la forma de `manifest.mcp`
+  (array; entradas con `name` string) antes del primer write.
 - Las bases SQLite (`.ancleto/memory.db` y la de opencode) son dependencias de datos locales; no se
   versionan.
 - `documentation/` es material legado de lnx-cli, gitignored y fuera del runtime (`PRODUCT.md`,

@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, merge de templates, tiers, aviso free-on-primary, portabilidad, check y entorno de máquina"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, portabilidad, check y entorno de máquina"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -10,16 +10,18 @@ covers:
   - merge de templates LOCKED
   - reconciliación legacy
   - MCP
+  - nota de compresión host-scoped
   - perfiles
   - tiers y catálogo
   - integridad de IDs
   - aviso free-on-primary
   - portabilidad e installedPaths
+  - validación de manifest.mcp
   - machine-env
   - check y doctor
-sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-04-ch-14-tier-gratis-import-integrity", "aspec/specs/agent-model-tiers/spec.md", "aspec/specs/project-portability/spec.md"]
-generatedAt: 2026-11-04T19:22:37Z
-pluginVersion: 0.18.13
+sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-04T22:24:31Z
+pluginVersion: 0.18.14
 skillVersion: '2.3'
 ---
 
@@ -49,6 +51,36 @@ stats, portabilidad, diagnóstico). `src/cli/ui.js` aporta el banner y los menú
    `PRODUCT.md`) por bloques `LOCKED`; antes se reconcilian firmas planas legadas.
 5. Se persiste `.opencode/.ancleto-tier` con el nombre del tier y se actualiza `.ancletorc`
    (`installedPaths`, `agent`, `tier`, `gratisModel` si ya existía).
+
+### Nota de compresión host-scoped (0.18.14)
+
+`CAVEMAN_USAGE_NOTE` es una directiva de uso de la tool de compresión del host; nunca se escribe en
+texto compartido (`AGENTS.md` o assets copiados verbatim). La decisión se concentra en
+`resolvesHostCompression(projectDir, host, { writesCaveman = false, intendedNames = null })`, junto
+a `hostConfigHasCompression` (`src/cli/index.js`):
+
+1. `false` si el host no soporta compresión (`hostSupportsCompression` limita a `opencode` y
+   `antigravity`).
+2. `true` si la config MCP **en disco** ya incluye `caveman` (`hostConfigHasCompression`).
+3. `false` si no hay escritura pendiente (`writesCaveman` falso).
+4. `true` si hay escritura pendiente y `intendedNames` es `null` o incluye `'caveman'`.
+
+`hostConfigHasCompression` lee `.agents/mcp_config.json` (antigravity) o `.opencode/opencode.json`
+y `.opencode/opencode.jsonc` (opencode); acepta `mcp`/`mcpServers` y busca la clave `caveman`. Un
+archivo ausente o un JSON inválido no aporta la tool. Es la misma fuente de verdad que usa `check`.
+
+- **`install`**: `writesCaveman: Boolean(mcpMap && mcpMap.caveman)`.
+- **`init`**: mismo patrón con su `mcpMap`, resuelto antes de `installAgentAssets`.
+- **`import`**: `writesCaveman: agent === 'opencode' && Boolean(freshProjectMcp.caveman)` e
+  `intendedNames` derivado de `manifest.mcp`. `repairProjectMcp` solo escribe
+  `.opencode/opencode.json`, por eso antigravity depende exclusivamente de su config de workspace ya
+  presente.
+- **Efecto**: con la config en disco ya en `caveman`, `install --no-mcp` o la ausencia del binario
+  conservan la nota; sin `caveman` en disco ni escritura pendiente, la nota se elimina al reescribir
+  el orchestrator. Re-ejecutar es idempotente.
+- **Alcance**: el invariante rige para el host activo de una instalación de proyecto que `check`
+  evalúa. H3/H9 y la rama global de `install` sin `--project` quedan fuera. La excepción M2 (config
+  MCP no parseable) se documenta en `decisions.md`.
 
 ### Aviso de modelo gratis sobre un agente primario (0.18.13)
 
@@ -89,6 +121,11 @@ fuente canónica byte a byte). Es la vía que materializa el default publicado d
   rutas de la máquina origen.
 - `import` **lee y resuelve antes del primer write**; luego aplica el tier, escribe
   `.opencode/.ancleto-tier` y repara MCP.
+- **Validación de `manifest.mcp` (0.18.14)**: antes de cualquier escritura, un `manifest.mcp`
+  presente debe ser array; cada entrada debe ser objeto con `name` string no vacío. Un valor
+  no-array aborta con `bundle invalido (manifest.mcp no es un arreglo)`; una entrada inválida, con
+  `bundle invalido (manifest.mcp con entradas invalidas)`. Ambos casos salen con exit 1. La
+  validación evita un import parcial, porque `intendedMcpNames` se consume después del primer write.
 - **`installedPaths` (0.18.13)**: cuando el bundle trae `.ancletorc`, el manifiesto se escribe
   **después** de `installAgentAssets`, del overlay de perfil y de la aplicación de tier, con
   `unionInstalledPaths(<installedPaths del destino>, <lo escrito por este import>)` para
@@ -98,7 +135,8 @@ fuente canónica byte a byte). Es la vía que materializa el default publicado d
   reimportar no duplica rutas.
 - Consecuencia buscada: el `check` posterior deja de pasar de forma vacía y puede reportar
   faltantes u huérfanos reales.
-- `--repair` repara entradas MCP rotas sin tocar las sanas y sin cambiar `installedPaths`.
+- `--repair` sin bundle repara entradas MCP rotas sin tocar las sanas y sin cambiar
+  `installedPaths`; como no reescribe assets, **no sanea** una nota de compresión legada.
 
 ### `check`
 
@@ -123,7 +161,8 @@ Sobre ese catálogo se agregan avisos **no bloqueantes**:
   candidatos estáticos y avisa por directorio. No emite deriva ni advisory de IDs en ese caso.
 
 Solo los faltantes alteran el exit code; huérfanos, divergencias, deriva, advisory, antigüedad y
-catálogo no verificable son warnings.
+catálogo no verificable son warnings. La divergencia de frontmatter por la nota de compresión sigue
+siendo advisory y la comparación sigue siendo del archivo completo.
 
 ### Refresco del catálogo y gate de `--write`
 
@@ -171,7 +210,7 @@ Code, `.mcp.json`; Copilot, `copilot-mcp.json`. Todos son merges no destructivos
   idempotente y solo elimina con coincidencia exacta.
 - **Perfil `test`**: overlay sobre `profiles/test/` (agents/commands/templates); el package base no
   se modifica. El tier sigue siendo dueño de `model:` en install/init; `upgrade` devuelve el
-  overlay a su fuente.
+  overlay a su fuente. Un guard test-only exige que `profiles/test/agents/*.md` declaren `^model:`.
 - **`machine-env`**: `materializeMachineEnv` nunca lanza; devuelve warnings. `check` avisa si el
   artefacto quedó trackeado en git.
 - **Catálogo y `check`**: deriva, advisory, antigüedad y free-on-primary son informativos y nunca
@@ -179,14 +218,17 @@ Code, `.mcp.json`; Copilot, `copilot-mcp.json`. Todos son merges no destructivos
   siendo estrictos.
 - **Aviso free-on-primary**: `applyTier` lo escribe en `stderr`; wrappers de CI que tratan `stderr`
   como error lo verán, pero el exit code sigue en 0.
-- **Riesgo**: `.ancleto/machine-env.md` registra `ancleto: 0.18.8` mientras el paquete está en
-  `0.18.13`; es un artefacto derivado, no una deriva de código.
+- **Nota de compresión**: la decisión no vuelve a detectar el binario cuando la config ya define el
+  estado; `install`/`init`/`import` comparten el helper. La consistencia cross-host no está
+  resuelta (H3/H9) y la config MCP no parseable es una excepción degenerada.
+- **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; en este
+  checkout registran `0.18.14`. No son fuentes del seed.
 
 ## Paths clave
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point, subcomandos, instalación, merge, MCP, stats |
+| `src/cli/index.js` | Entry point, subcomandos, instalación, nota de compresión, validación de bundles, MCP, stats |
 | `src/cli/ui.js` | Banner y menús TTY |
 | `src/core/adapters/frontmatter.js` | Adaptación pura de frontmatter por host y `frontmatterValue` |
 | `src/core/tier-models.js` | Tiers, cadenas, resolver, `freeTierOnPrimary`, `declaredModelIds` |
@@ -197,5 +239,7 @@ Code, `.mcp.json`; Copilot, `copilot-mcp.json`. Todos son merges no destructivos
 | `scripts/refresh-model-catalog.mjs` | Refresco manual, gate de `--write` y escritura atómica |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques `LOCKED` |
 | `profiles/test/**` | Overlay del perfil de test |
+| `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` | Change archivado de la nota de compresión y validación de `manifest.mcp` |
+| `aspec/specs/agent-install-routing/spec.md` | Requirement de compresión host-scoped y nota estado-driven |
+| `aspec/specs/project-portability/spec.md` | Requirement de `import` (nota + `installedPaths`) |
 | `aspec/specs/agent-model-tiers/spec.md` | Requirements de tiers, aviso free-on-primary e integridad |
-| `aspec/specs/project-portability/spec.md` | Requirement de `import` y `installedPaths` |

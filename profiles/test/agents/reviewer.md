@@ -1,7 +1,7 @@
 ---
 description: Reviews test automation work for correctness, conventions, and approved-scope compliance (test profile)
 mode: subagent
-model: opencode-go/qwen3.6-plus
+model: opencode-go/qwen3.8-max
 temperature: 0.1
 color: '#ef4444'
 tools:

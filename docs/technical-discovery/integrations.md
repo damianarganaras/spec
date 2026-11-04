@@ -1,160 +1,83 @@
 ---
 node: integrations
 kind: integrations
-read_when: "sistemas externos, dependencias privadas observables y contratos salientes"
-generatedAt: 2026-11-03T18:16:04Z
-pluginVersion: 0.18.9
+read_when: "sistemas externos y dependencias privadas observables"
+generatedAt: 2026-11-03T22:11:31Z
+pluginVersion: 0.18.10
 skillVersion: '2.3'
 ---
 
-# Integraciones y dependencias externas
+# Integraciones
 
-## Empaquetado de contexto
+## Resumen
 
-| Sistema | Uso | Evidencia |
-|---|---|---|
-| **Repomix 1.18.0** | Empaqueta el repo para el seed. Se resuelve en `PATH` o con `npx -y repomix@1.18.0`; admite `--include`, `--ignore`, `--compress`, `--token-budget`. Aporta `--compress` (tree-sitter). | `src/cli/index.js` (`runRepomix`), pack Repomix |
-
-## Distribución, CI y calidad
-
-| Sistema | Uso | Evidencia |
-|---|---|---|
-| **npm registry** | Publicación de `@ancleto/spec` (`npm publish --access public`), versión actual `0.18.9`. `0.18.9` alinea los modelos canónicos, muda `TIERS` a `src/core/tier-models.js` y agrega el guard de coherencia; `0.18.8` publicó **`memory curate`** y `includeNearDuplicates`; `0.18.7` el protocolo canónico de memoria, la reconciliación gateada y `memory gc` por `superseded_at`; `0.18.6` MEM-05 (recall task-aware); `0.18.5` `memory consolidate`; `0.18.4` el ranking/omisiones; `0.18.3` MEM-04b. El tag `v0.18.9` aún **no existe** (release sin tag); `v0.18.8` sí y es ancestro de `development` (`git describe --tags` = `v0.18.8-4-gaa7943f`). | `.github/workflows/publish.yml`, `package.json`, `git log`, `git tag`, `CHANGELOG.md` |
-| **GitHub** | Repo `github.com/damianarganaras/spec`; GitHub Actions (`publish.yml`) disparado por tag `v*` o `workflow_dispatch`; releases vía `gh release`. | `.github/workflows/publish.yml`, `package.json` |
-| **ESLint 10 + globals** | Dependencias **sólo de desarrollo**; habilitan `npm run lint` y el gate de lint en CI. No entran al paquete ni al runtime. | `package.json`, `eslint.config.js` |
-| **`gh` CLI + `npm view`/`curl`** | Canary no bloqueante que verifica el tarball y evita publicar versiones ya existentes. Usa `NPM_TOKEN` / `GITHUB_TOKEN` (valores omitidos). | `.github/workflows/publish.yml` |
-| **Git** | Necesario para `machine-env` (`rev-parse`, `check-ignore`, `info/exclude`), el ciclo SDD y el publish. Es la única fuente del estado del árbol para el intake del orquestador, vía `git status --short` delegado a `@technical-discovery`. Si falta, el CLI degrada con warning. | `src/core/machine-env.js`, `.gitattributes`, `AGENTS.md`, `agents/technical-discovery.md` |
-
-## IDEs / agentes consumidores (contrato de instalación)
-
-`agents/`, `commands/`, `skills/` y `templates/` son consumidos por el IDE elegido. El CLI
-resuelve el destino con `AGENT_TARGETS` (fuente única de rutas) y lo registra en
-`installedPaths` de `.ancletorc`. La adaptación de frontmatter de agents la posee
-`src/core/adapters/frontmatter.js`:
-
-| Host | Skills | Agents | Commands | Frontmatter de agents |
-|---|---|---|---|---|
-| `opencode` (default) | `.opencode/skills` | `.opencode/agents/<n>.md` | `.opencode/commands/<n>.md` | identidad |
-| `claude` | `.claude/skills` | `.claude/agents/<n>.md` | `.claude/commands/<n>.md` | dropea claves no portables |
-| `vscode` | `.github/skills` | `.github/agents/<n>.agent.md` | `.github/prompts/<n>.prompt.md` | dropea claves no portables |
-| `antigravity` | `.agents/skills` | `.agents/agents/<n>.md` | `.agents/skills/<n>/SKILL.md` (command-skill) | transformación completa |
-| `cursor` | `.cursor/skills` | — (no soportado) | — (no soportado) | identidad + aviso stderr |
-| `roo` | `.roo/skills` | — (no soportado) | — (no soportado) | identidad + aviso stderr |
-| `copilot` | — (no soportado) | `.github/prompts/<n>.prompt.md` | `.github/prompts/<n>.prompt.md` | dropea claves no portables + nota de picker |
-| `commandcode` | `.commandcode/skills` | `.commandcode/agents/<n>.md` | `.commandcode/commands/<n>.md` | transformación (tools como lista; `model` omitido) |
-
-Con perfil `test`, el overlay (`profiles/test/`) se materializa en los mismos destinos del
-host. `ancleto check` valida que el frontmatter instalado coincida con la salida del adaptador
-(warning no bloqueante). Detalle: `units/cli-install.md`.
-
-## Configuración del host opencode (raíz del repo)
-
-`opencode.json` es configuración **del checkout**, no del paquete: declara
-`agent.model = commandcode/deepseek/deepseek-v4.1-flash` para los **10 agentes**; según
-`AGENTS.md`, ese override surte efecto en el agente **primario** y no alcanza a los subagentes.
-`package.json` → `files` no lo publica. Es configuración local, no contrato del producto.
-Evidencia: `opencode.json`, `package.json`, `AGENTS.md`.
-
-## Entorno de máquina (integración local con git)
-
-`.ancleto/machine-env.md` no es un servicio externo: es un artefacto derivado y local por
-máquina. Su única integración externa es **git**, usada read-only/best-effort:
-
-- `git rev-parse --is-inside-work-tree` y `--show-toplevel` para saber si hay repo y su raíz.
-- `git rev-parse --show-prefix` para el path repo-root-relative del proyecto.
-- `git check-ignore --no-index` para decidir si ya está ignorado y verificar la exclusión.
-- `git rev-parse --git-path info/exclude` para localizar la exclusión local del clon.
-- `git ls-files` (sólo en `ancleto check`) para advertir si el artefacto quedó trackeado.
-
-Todas las invocaciones están **acotadas a 5 s** (`GIT_TIMEOUT_MS`): una llamada bloqueada no
-puede colgar `init`/`install`/`upgrade`. Nunca modifica `.gitignore` ni archivos del repo. Si
-git no está disponible o falla, el artefacto se escribe igual y la exclusión se reporta como
-warning no bloqueante.
-
-La misma dependencia de procesos externos cubre la **sonda de invocabilidad**: el módulo lanza
-los candidatos de `rg`/`node`/`npm`/`git`/`python` con `node:child_process` para comprobar que
-son invocables (2 s por intento, 10 s acumulados). Es una dependencia del **runtime local**, no
-de un servicio externo. Evidencia: `src/core/machine-env.js`,
-`aspec/specs/machine-environment/spec.md`.
-
-## Memoria local (sin servicios externos)
-
-`.ancleto/memory.db` es SQLite nativo (`node:sqlite`): no hay servidor ni dependencia de red.
-Las operaciones de memoria son **locales y sincrónicas**:
-
-- `memory snapshot` usa `VACUUM INTO` sobre una conexión read-only y reemplaza el destino con
-  `node:fs`. No invoca herramientas externas.
-- `memory merge` y `memory consolidate --apply` usan el motor transaccional. No escriben
-  archivos; el CLI refresca el working-context derivado.
-- `memory curate` usa un engine read-only (`readonly: true`, `migrate: false`): compone
-  `resolveNodeRefs` y `consolidate({ dryRun: true, includeNearDuplicates: false })` y sólo
-  reporta. No escribe la base ni artefactos derivados.
-- `memory gc` usa el motor transaccional con un cutoff calculado localmente; `VACUUM`/`REINDEX`
-  son best-effort y no salen del proceso.
-- `memory doctor` usa `PRAGMA quick_check`, la tabla sombra `memory_fts_docsize` y, en
-  `Refs de nodos activos`, sólo lectura local de `aspec/specs/**/spec.md` y listado de
-  `aspec/changes/**` con `existsSync`/`statSync`; no hay chequeo remoto ni escritura. Las refs
-  `commit:`/`workitem:` no se resuelven contra ningún servicio.
-- `resolveNodeRefs` resuelve `spec:`/`change:`/`path:` contra el **filesystem local**, sin abrir
-  la DB ni escribir. No invoca git para `commit:` ni un tracker para `workitem:`.
-- `searchMemory` es local: FTS5 con pass AND y fallback OR-prefijo; el preview/`expand`/`keys`/
-  `required` se resuelven en el engine, sin red.
-- `memory consolidate` agrupa y compara contenido localmente; los near-dups se calculan con
-  Jaccard sobre tokens, sin servicio externo.
-
-Evidencia: `src/core/memory/{snapshot,doctor,engine,curation}.js`.
-
-## MCP (Model Context Protocol)
-
-Configurados por `setupHostMcp` (dueño único) con **excepciones host-MCP**: antigravity en
-`.agents/mcp_config.json`, commandcode en `.mcp.json` y copilot en `copilot-mcp.json`; el resto
-en `.opencode/opencode.json`. `init` e `install` los configuran; `--no-mcp` lo evita. `import`
-regenera entradas rotas con rutas locales.
-
-| MCP | Tipo | Rol | Default |
+| Integración | Tipo | Dirección | Evidencia |
 |---|---|---|---|
-| `ancleto-memory` | local (stdio) | Memoria propia del repo: `searchMemory`/`recordRule`/`recordDecision` sobre `.ancleto/memory.db`. Se lanza con `.../src/cli/index.js mcp`. Escribe con `source: 'mcp:ancleto-memory'`, por lo que sus escrituras pasan por la validación fail-closed de refs. El handler refresca el working-context filtrado por `shouldRefreshWorkingContext`. `searchMemory` devuelve preview por defecto; el Recall canónico usa `expand: true`. | Habilitado |
-| `caveman` | local (binario) | Compresión de salida del agente (`caveman-mcp.exe`). Su directiva es host-scoped: se materializa sólo donde la config MCP incluye la tool (`opencode`/`antigravity`). | Habilitado si está en `PATH` |
-| `engram` | externo | Memoria de agente/sesión; **opcional** (`--with-engram`) por su costo (~4.900 tokens/request). | Deshabilitado |
-| `azure-devops` | externo (`npx -y @davstack/mcp-azure-devops`) | Sólo si `azure.enabled: true` y sin `--no-mcp`. | Deshabilitado |
+| npm registry | Publicación del paquete `@ancleto/spec` | Salida | `.github/workflows/publish.yml`, `package.json` |
+| GitHub Actions | CI de lint/tests y release | Salida | `.github/workflows/publish.yml` |
+| GitHub Releases | Notas del release por tag | Salida | `.github/workflows/publish.yml` |
+| Repomix | Empaquetado de contexto para discovery | Salida | `src/cli/index.js` → `runRepomix` |
+| opencode | Host del IDE; base de sesiones para `stats` | Entrada | `src/cli/index.js` → `opencodeDbPath` |
+| MCP de memoria (`ancleto-memory`) | Tools `searchMemory`, `recordRule`, `recordDecision` | Salida/entrada | `src/core/memory/mcp-server.js` |
+| MCP caveman | Compresión de contexto en hosts que la exponen | Salida | `src/cli/index.js`, AGENTS.md |
+| MCP engram | Memoria de sesión opcional (opt-in) | Salida | `src/cli/index.js` → `buildDefaultMcp` |
+| MCP Azure DevOps | Work Items opcional; deshabilitado en este repo | Salida | `PRODUCT.md`, `.ancletorc` |
+| git | EOL, exclusión local de `machine-env`, release notes | Entrada | `src/core/machine-env.js`, workflow |
+| SQLite/FTS5 (`node:sqlite`) | Persistencia y búsqueda de memoria | Interna | `src/core/memory/*` |
 
-La procedencia de escritura se fija en `createMemoryServer`:
-`createMemoryToolHandlers(engine, { source: 'mcp:ancleto-memory', projectRoot })`. El
-`cli:import` **no** usa esa ruta: `importNodes` queda fuera de `recordNode` y conserva LWW sin
-validar refs.
+## npm y CI
 
-`memory curate` **no** es una tool MCP ni un sexto check de `doctor`: es un subcomando CLI que
-abre la misma base en modo read-only. `memory doctor` emite además un **chequeo de staleness
-advisory** del working-context (`Working-context: <ok|ausente|desactualizado>`). Es read-only y
-no es un MCP. En el estado actual reporta `desactualizado`. Evidencia:
-`src/core/memory/working-context.js`, `src/cli/index.js`, `aspec/specs/memory-engine/spec.md`.
+- El workflow `Publish` se dispara con tags `v*` o manualmente. Corre `npm ci`, `npm run lint`,
+  `node --test test/*.test.js` y publica solo si la versión no existe en npm
+  (`npm view @ancleto/spec@<v>`).
+- `NPM_TOKEN` y `GITHUB_TOKEN` son secretos del workflow; sus valores no están en el repo.
+- El canary del tarball es **no bloqueante**: reintenta 3 veces y avisa si npm aún no propagó.
 
-## Observabilidad / telemetría
+## Repomix
 
-| Sistema | Uso | Evidencia |
-|---|---|---|
-| **Base de sesiones de opencode** | `ancleto stats` lee tokens de entrada/salida/razonamiento/cache, costo y subagentes por sesión. Sólo opencode. Es la fuente de la compuerta de medición de caveman. | `README.md`, `src/cli/index.js` (`opencodeDbPath`) |
-| **`ancleto stats failures`** | Reporte read-only de tool parts fallidos de opencode: clasifica `env`/`check`/`tool`/`unknown`, agrupa por proyecto/herramienta/clase/esqueleto y enmascara secretos/rutas. No imprime `output` ni `state.error`. | `src/cli/index.js`, `aspec/specs/session-failure-report/spec.md` |
-| **`memory doctor`** | Cinco checks read-only; último dato observado (generación anterior; no re-verificado): 232 filas FTS indexadas (232 nodos totales), **129 activos**, **360 refs verificadas, 0 no resueltas**, WAL presente. | `src/cli/index.js`, `src/core/memory/doctor.js` |
-| **`memory curate`** | Reporte read-only determinístico (publicado en `0.18.8`): refs rotas, refs no verificables y duplicados exactos; advisory con `--strict` opt-in. Último dato observado (generación anterior): `status: ok` con 0/0/0. | `src/cli/index.js`, `src/core/memory/curation.js` |
-| **Working-context advisory** | `memory doctor` expone `Working-context: <estado>` tras los checks. No rompe el exit code. | `src/cli/index.js`, `src/core/memory/working-context.js` |
+- El CLI resuelve un binario local de `repomix`; si no existe usa `npx -y repomix@1.18.0`
+  (`src/cli/index.js` → `runRepomix`).
+- Los argumentos se construyen en `src/core/repomix-tier.js`: `--output`, `--ignore` (exclusiones
+  del proyecto + extras por tier + `--ignore` explícito) y `--compress` cuando el tier lo pide.
+- `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
+  `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
+- No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand.
 
-## Azure DevOps (opcional, apagado)
+## opencode (host y telemetría local)
 
-- Gate en `.ancletorc` → `azure.enabled`; `PRODUCT.md` declara el estado apagado en este
-  repositorio.
-- El comando `/cleto-pr` usa GitHub por defecto; con Azure habilitado cambia el flujo. Setup:
-  `az extension add --name azure-devops` + `az login` (extensión, no dependencia del paquete).
-  Evidencia: `README.md`, `PRODUCT.md`.
+- `stats` y `stats failures` leen la base de sesiones de opencode, por defecto
+  `~/.local/share/opencode/opencode.db`; se puede cambiar con `ANCLETO_OPENCODE_DB`.
+- `stats failures` clasifica fallos de tool parts en `env`/`check`/`tool`/`unknown`, agrupa por
+  comando-esqueleto, enmascara paths y secretos, y nunca proyecta `output`/`error` completos.
+- La integración es **solo lectura** sobre la base de opencode.
 
-## Dependencias internas y de runtime
+## MCP propios
 
-- Módulos nativos: `node:sqlite` (motor de memoria), `node:test` (suite), `node:fs`,
-  `node:crypto`, `node:child_process` (spawn de Repomix, de `git` y de las sondas), `node:os`,
-  `node:path`, `node:url`. Evidencia: pack `src/**`.
-- Dependencias de desarrollo: `eslint` y `globals` (lint). Los lockfiles están excluidos de las
-  fuentes del discovery y del pack; `package-lock.json` existe en el checkout. No son
-  dependencias del paquete publicado. Evidencia: `package.json`,
-  `ancleto discovery --check` (`config.exclude`), `.discovery-map.json`.
-- `documentation/lnx-cli/` es material legado de otro CLI (`lnx`) usado como fuente de
-  relevamiento; no es dependencia de runtime y está gitignored.
+- **Memoria**: `ancleto mcp` levanta un servidor JSON-RPC por stdio que expone `searchMemory`,
+  `recordRule` y `recordDecision` (`src/core/memory/mcp-server.js`, `tools.js`). El binario se
+  registra en la config del host (`buildDefaultMcp`).
+- **Caveman**: tool de compresión disponible solo en hosts cuya config MCP la incluye
+  (`opencode`, `antigravity`). La directiva de uso se materializa host-scoped; no se agrega a
+  archivos compartidos entre hosts (`src/cli/index.js` → `CAVEMAN_USAGE_NOTE`).
+- **engram**: MCP externo opcional, habilitado con `--with-engram`; no es la memoria del repo.
+- **Azure DevOps**: MCP opcional (`--with-azure`), deshabilitado en este repo
+  (`.ancletorc` → `azure.enabled: false`). Requiere `AZURE_DEVOPS_ORG_URL` y `AZURE_DEVOPS_PAT`
+  (valores omitidos).
+
+## git
+
+- `machine-env` usa `git rev-parse --show-prefix` y `git check-ignore --no-index` para excluir
+  `.ancleto/machine-env.md` en `info/exclude`, sin modificar `.gitignore`.
+- La detección de EOL prioriza el atributo git del path, luego la configuración de git y, si no hay
+  repo, la convención de plataforma (`src/core/machine-env.js`).
+- El workflow usa `git for-each-ref` para recuperar el mensaje de un tag anotado.
+
+## Dependencias privadas observables
+
+- `src/core/model-catalog.json` es un snapshot **commiteado** del catálogo de proveedores; no hay
+  llamada de red en runtime. `scripts/refresh-model-catalog.mjs` es la única vía de refresco y
+  requiere `opencode` local.
+- Las bases SQLite (`.ancleto/memory.db` y la de opencode) son dependencias de datos locales; no se
+  versionan.
+- `documentation/` es material legado de lnx-cli, gitignored y fuera del runtime (`PRODUCT.md`,
+  `.gitignore`).

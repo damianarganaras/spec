@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { createHash } from 'node:crypto'
 import { createMemoryEngine } from '../src/core/memory/engine.js'
+import { TIER_CHAINS } from '../src/core/tier-models.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const CLI = join(TEST_DIR, '..', 'src', 'cli', 'index.js')
@@ -17,7 +18,7 @@ function run(args, cwd, env = {}) {
   return spawnSync(process.execPath, [CLI, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, ANCLETO_MUSE_SPARK: '0', ...env }
+    env: { ...process.env, ...env }
   })
 }
 
@@ -36,6 +37,22 @@ function withDir(fn) {
 
 function readRc(dir) {
   return JSON.parse(readFileSync(join(dir, '.ancletorc'), 'utf8'))
+}
+
+// Catálogo alternativo por `ANCLETO_MODEL_CATALOG`: seam de test/manual, mismo
+// precedente que `ANCLETO_PROJECTS_FILE`. Se arma desde el snapshot commiteado
+// quitándole los IDs indicados; nunca se muta el snapshot versionado.
+function catalogWithout(dir, ids, name = 'catalog.json') {
+  const base = JSON.parse(readFileSync(join(TEST_DIR, '..', 'src', 'core', 'model-catalog.json'), 'utf8'))
+  const providers = Object.fromEntries(
+    Object.entries(base.providers).map(([provider, entries]) => [
+      provider,
+      entries.filter((entry) => !ids.includes(entry.id))
+    ])
+  )
+  const path = join(dir, name)
+  writeFileSync(path, JSON.stringify({ ...base, providers }))
+  return path
 }
 
 describe('CLI init (G6 manifest)', () => {
@@ -456,7 +473,7 @@ describe('CLI antigravity full support (add-antigravity-full-support)', () => {
         const r = spawnSync(
           process.execPath,
           [join(root, 'src', 'cli', 'index.js'), 'install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'],
-          { cwd: dir, encoding: 'utf8', env: { ...process.env, ANCLETO_MUSE_SPARK: '0', ...regEnv(dir) } }
+          { cwd: dir, encoding: 'utf8',     env: { ...process.env, ...regEnv(dir) } }
         )
         assert.equal(r.status, 0)
         const out = readFileSync(join(dir, '.agents', 'agents', `${AGENT}.md`), 'utf8')
@@ -541,7 +558,7 @@ describe('CLI antigravity full support (add-antigravity-full-support)', () => {
         const r = spawnSync(
           process.execPath,
           [cli, 'install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'],
-          { cwd: dir, encoding: 'utf8', env: { ...process.env, ANCLETO_MUSE_SPARK: '0', ...regEnv(dir) } }
+          { cwd: dir, encoding: 'utf8',     env: { ...process.env, ...regEnv(dir) } }
         )
         assert.equal(r.status, 0)
         assert.match(r.stderr, /skip tool 'unknown_tool': no verified Antigravity id for agent 'fixture-unknown-tool'/)
@@ -725,7 +742,7 @@ describe('CLI antigravity full support (add-antigravity-full-support)', () => {
         const r = spawnSync(
           process.execPath,
           [join(root, 'src', 'cli', 'index.js'), 'install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'],
-          { cwd: dir, encoding: 'utf8', env: { ...process.env, ANCLETO_MUSE_SPARK: '0', ...regEnv(dir) } }
+          { cwd: dir, encoding: 'utf8',     env: { ...process.env, ...regEnv(dir) } }
         )
         // (a) arranca sin colgar: exit 0 pese a las tools sin id verificado.
         assert.equal(r.status, 0)
@@ -1138,6 +1155,105 @@ describe('CLI export/import (cross-machine-export-import)', () => {
       assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'MCP regenerado local')
     })
   })
+
+  // Bundle mínimo armado a mano (manifest + .ancletorc portables): fija tier y
+  // `gratisModel` del escenario sin depender del export del proyecto origen.
+  function writeBundle(dir, { tier = 'minimo', agent = 'opencode', gratisModel, template = false } = {}) {
+    const bundle = join(dir, 'bundle')
+    mkdirSync(bundle, { recursive: true })
+    const rc = { agent, language: 'auto', profile: 'general' }
+    if (gratisModel !== undefined) rc.gratisModel = gratisModel
+    writeFileSync(join(bundle, '.ancletorc'), JSON.stringify(rc, null, 2))
+    const manifest = {
+      format: 'ancleto-export/1',
+      ancletoVersion: PKG.version,
+      exportedAt: new Date().toISOString(),
+      agent,
+      tier,
+      language: 'auto',
+      profile: 'general',
+      ...(gratisModel !== undefined ? { gratisModel } : {}),
+      flags: { azure: false, engram: false },
+      mcp: []
+    }
+    writeFileSync(join(bundle, 'manifest.json'), JSON.stringify(manifest, null, 2))
+    if (template) writeFileSync(join(bundle, 'AGENTS.md'), '# plantilla del bundle\n')
+    return bundle
+  }
+
+  it('import escribe .opencode/.ancleto-tier y el check posterior no diverge', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const r = run(['import', writeBundle(dir)], dst)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dst, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'minimo')
+      assert.equal(readRc(dst).gratisModel, undefined, 'no agrega la clave ausente')
+      const check = run(['check'], dst)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('import sobre un proyecto ya inicializado actualiza el tier (evita divergencia falsa)', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      // Sin `--no-mcp`: la compresion queda consistente entre install, import y
+      // check (si el binario de caveman existe, la nota del orchestrator tambien).
+      assert.equal(run(['install', '--project', dst, '--tier', 'normal'], dst).status, 0)
+      const r = run(['import', writeBundle(dir)], dst)
+      assert.equal(r.status, 0)
+      assert.equal(readFileSync(join(dst, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'minimo')
+      const check = run(['check'], dst)
+      assert.equal(check.status, 0)
+      assert.doesNotMatch(check.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('import normaliza un gratisModel desconocido del bundle', () => {
+    withDir((dir) => {
+      const bundle = writeBundle(dir, { tier: 'gratis', gratisModel: 'opencode/muse-spark-1.3-contributor-free' })
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const r = run(['import', bundle], dst)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dst).gratisModel, 'opencode/big-pickle')
+      assert.match(
+        readFileSync(join(dst, '.opencode', 'agents', 'orchestrator.md'), 'utf8'),
+        /model: opencode\/big-pickle/
+      )
+    })
+  })
+
+  it('import que no puede resolver el tier aborta antes de escribir (sin estado parcial)', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const r = run(['import', writeBundle(dir, { template: true })], dst, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /no hay ningún candidato disponible/)
+      assert.equal(existsSync(join(dst, '.ancletorc')), false, 'sin manifiesto escrito')
+      assert.equal(existsSync(join(dst, 'AGENTS.md')), false, 'sin template escrito')
+      assert.equal(existsSync(join(dst, '.opencode', 'agents', 'orchestrator.md')), false, 'sin agents escritos')
+    })
+  })
+
+  it('import con un host que no escribe model: no resuelve el catálogo ni escribe tier', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const r = run(['import', writeBundle(dir, { agent: 'claude' })], dst, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0, 'claude: import no aborta')
+      assert.doesNotMatch(r.stderr, /no hay ningún candidato disponible/)
+      assert.ok(existsSync(join(dst, '.claude', 'agents', 'orchestrator.md')), 'layout del host instalado')
+      assert.equal(existsSync(join(dst, '.opencode', '.ancleto-tier')), false, 'sin tier aplicado')
+    })
+  })
 })
 
 describe('CLI import openspec externo (import-legacy-openspec)', () => {
@@ -1382,23 +1498,62 @@ describe('CLI check (G3)', () => {
     })
   })
 
-  it('tier gratis legacy: el check acepta el otro modelo gratis conocido sin falso positivo', () => {
+  it('tier gratis legacy: un gratisModel desconocido no produce divergencia y avisa el tier', () => {
     withDir((dir) => {
-      // install con el fallback (big-pickle) aplicado y persistido en .ancletorc
-      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '0' })
-      // estado legacy/importado: sin gratisModel persistido y con Muse Spark detectable,
-      // asi el check resuelve un modelo gratis distinto del que quedo instalado.
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      // Estado legacy: `.ancletorc` persiste un muse-spark inexistente. El check lo
+      // ignora, resuelve el unico gratis conocido y no lo trata como divergencia.
       const rcPath = join(dir, '.ancletorc')
       const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
-      delete rc.gratisModel
+      rc.gratisModel = 'opencode/muse-spark-1.3-contributor-free'
       writeFileSync(rcPath, JSON.stringify(rc, null, 2))
-      const r = run(['check'], dir, { ANCLETO_MUSE_SPARK: '1' })
+      const r = run(['check'], dir)
       assert.equal(r.status, 0)
       assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
       assert.match(
         r.stdout,
         /⚠ \.opencode\/agents \(tier 'gratis' aplica un modelo distinto al de su fuente en [1-9]\d* agentes; install\/update reescribirá model:\)/
       )
+    })
+  })
+
+  it('install normaliza un gratisModel desconocido al unico modelo gratis', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.gratisModel = 'opencode/muse-spark-1.3-contributor-free'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
+      assert.match(readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8'), /model: opencode\/big-pickle/)
+    })
+  })
+
+  it('install con tier normal normaliza un gratisModel desconocido', () => {
+    withDir((dir) => {
+      assert.equal(run(['install', '--project', dir, '--no-mcp', '--tier', 'normal'], dir).status, 0)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.gratisModel = 'opencode/muse-spark-1.3-contributor-free'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'normal'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
+    })
+  })
+
+  it('init con tier normal normaliza un gratisModel desconocido', () => {
+    withDir((dir) => {
+      assert.equal(run(['init', '--tier', 'normal'], dir).status, 0)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.gratisModel = 'opencode/muse-spark-1.3-contributor-free'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['init', '--tier', 'normal'], dir)
+      assert.equal(r.status, 0)
+      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
     })
   })
 
@@ -1438,6 +1593,145 @@ describe('CLI check (G3)', () => {
       assert.equal(r.status, 0)
       assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
       assert.doesNotMatch(r.stdout, /aplica un modelo distinto/)
+    })
+  })
+
+  // Catálogo alternativo por `ANCLETO_MODEL_CATALOG`: ver `catalogWithout` arriba.
+  it('minimo con la cabeza disponible en install y ausente en check: sin divergencia, con aviso', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const catalog = catalogWithout(dir, [chain[0]])
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      assert.match(r.stdout, /tier 'minimo' aplica un modelo distinto al de su fuente en [1-9]\d* agentes/)
+      assert.equal((r.stdout.match(/aplica un modelo distinto al de su fuente en/g) || []).length, 1)
+    })
+  })
+
+  it('minimo sin la cabeza en install y con la cabeza en check: sin divergencia, con aviso', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, [chain[0]])
+      const inst = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(inst.status, 0)
+      for (const f of readdirSync(join(TEST_DIR, '..', 'agents'))) {
+        assert.match(
+          readFileSync(join(dir, '.opencode', 'agents', f), 'utf8'),
+          new RegExp(`model: ${chain[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+          `${f}: escribe el segundo candidato`
+        )
+      }
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      assert.match(r.stdout, /tier 'minimo' aplica un modelo distinto al de su fuente en [1-9]\d* agentes/)
+      assert.equal((r.stdout.match(/aplica un modelo distinto al de su fuente en/g) || []).length, 1)
+    })
+  })
+
+  it('minimo sin candidato resoluble en check: no aborta y avisa sin cambiar el exit code', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const catalog = catalogWithout(dir, chain)
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+      assert.match(r.stdout, /no tiene ningún candidato resoluble/)
+    })
+  })
+
+  it('check no crashea cuando el catálogo falta o es ilegible: avisa y no diverge', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const inexistente = join(dir, 'no-existe.json')
+      const corrupto = join(dir, 'corrupto.json')
+      writeFileSync(corrupto, '{ esto no es JSON')
+      for (const catalog of [inexistente, corrupto]) {
+        const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+        assert.equal(r.status, 0, `exit 0 con catálogo ${catalog}`)
+        assert.doesNotMatch(r.stderr, /\n\s+at /, `sin stack trace con catálogo ${catalog}`)
+        assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+        assert.match(r.stdout, /no se pudo verificar el catálogo de modelos/)
+      }
+    })
+  })
+
+  it('install minimo sin la cabeza ni el segundo candidato escribe el tercero', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, [chain[0], chain[1]])
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      for (const f of readdirSync(join(TEST_DIR, '..', 'agents'))) {
+        assert.match(
+          readFileSync(join(dir, '.opencode', 'agents', f), 'utf8'),
+          new RegExp(`model: ${chain[2].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+          `${f}: escribe el tercer candidato`
+        )
+      }
+    })
+  })
+
+  it('install minimo sin ningún candidato aborta con error explícito y no escribe agents', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /no hay ningún candidato disponible/)
+      assert.match(r.stderr, /commandcode\/deepseek\/deepseek-v4\.1-flash/)
+      assert.equal(existsSync(join(dir, '.opencode', 'agents', 'orchestrator.md')), false)
+    })
+  })
+
+  it('install/init con un host que no escribe model: no resuelve el catálogo ni aborta', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      const inst = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(inst.status, 0)
+      assert.doesNotMatch(inst.stderr, /no hay ningún candidato disponible/)
+      assert.ok(existsSync(join(dir, '.claude', 'agents', 'orchestrator.md')), 'layout del host instalado')
+      const initDir = join(dir, 'init')
+      mkdirSync(initDir)
+      const ini = run(['init', '--tier', 'minimo', '--agent', 'claude', '--no-mcp'], initDir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(ini.status, 0)
+      assert.doesNotMatch(ini.stderr, /no hay ningún candidato disponible/)
+    })
+  })
+
+  it('install con antigravity/vscode/copilot no resuelve el catálogo ni aborta', () => {
+    const layouts = {
+      antigravity: ['.agents', 'agents', 'orchestrator.md'],
+      vscode: ['.github', 'agents', 'orchestrator.agent.md'],
+      copilot: ['.github', 'prompts', 'orchestrator.prompt.md']
+    }
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      for (const [agent, segments] of Object.entries(layouts)) {
+        const target = join(dir, agent)
+        mkdirSync(target)
+        const r = run(['install', '--project', target, '--no-mcp', '--tier', 'minimo', '--agent', agent], target, { ANCLETO_MODEL_CATALOG: catalog })
+        assert.equal(r.status, 0, `${agent}: install no aborta`)
+        assert.doesNotMatch(r.stderr, /no hay ningún candidato disponible/)
+        assert.ok(existsSync(join(target, ...segments)), `${agent}: layout del host instalado`)
+      }
+    })
+  })
+
+  it('init con opencode y sin candidatos aborta con error explícito sin escribir agents ni tier', () => {
+    withDir((dir) => {
+      const chain = TIER_CHAINS.minimo.orchestrator
+      const catalog = catalogWithout(dir, chain)
+      const r = run(['init', '--tier', 'minimo'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /no hay ningún candidato disponible/)
+      assert.equal(existsSync(join(dir, '.opencode', 'agents', 'orchestrator.md')), false)
+      assert.equal(existsSync(join(dir, '.opencode', '.ancleto-tier')), false)
     })
   })
 
@@ -3202,7 +3496,7 @@ describe('CLI init --tier (v0.6.2)', () => {
       assert.equal(r.status, 0)
       assert.equal(readFileSync(join(dir, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'gratis')
 
-      const inst = run(['install', '--project', dir, '--no-mcp'], dir, { ANCLETO_MUSE_SPARK: '0' })
+      const inst = run(['install', '--project', dir, '--no-mcp'], dir)
       assert.equal(inst.status, 0)
       const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
       assert.match(orchestrator, /model: opencode\/big-pickle/)
@@ -3231,42 +3525,47 @@ describe('CLI init --tier (v0.6.2)', () => {
     })
   })
 
-  it('init --tier gratis aplica el modelo gratis y lo persiste en .ancletorc', () => {
+  it('init --tier gratis aplica el modelo gratis sin agregar la clave si no existía', () => {
     withDir((dir) => {
       const r = run(['init', '--tier', 'gratis'], dir)
       assert.equal(r.status, 0)
       const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
       assert.match(orchestrator, /model: opencode\/big-pickle/)
-      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
+      assert.match(r.stdout, /modelo gratis: opencode\/big-pickle/)
+      // Una clave ausente no se agrega al manifiesto.
+      assert.equal(readRc(dir).gratisModel, undefined)
     })
   })
 
-  it('init --tier gratis con gratisModel persistido lo reutiliza y anuncia el origen', () => {
+  it('init --tier gratis reutiliza un gratisModel conocido y lo conserva', () => {
     withDir((dir) => {
-      assert.equal(run(['init', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '1' }).status, 0)
-      const r = run(['init', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '' })
+      assert.equal(run(['init', '--tier', 'gratis'], dir).status, 0)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.gratisModel = 'opencode/big-pickle'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['init', '--tier', 'gratis'], dir)
       assert.equal(r.status, 0)
-      assert.match(r.stdout, /modelo gratis: opencode\/muse-spark-1\.3-contributor-free \(valor guardado en \.ancletorc\)/)
-      assert.equal(readRc(dir).gratisModel, 'opencode/muse-spark-1.3-contributor-free')
+      assert.match(r.stdout, /modelo gratis: opencode\/big-pickle/)
+      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
       const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
-      assert.match(orchestrator, /model: opencode\/muse-spark-1\.3-contributor-free/)
+      assert.match(orchestrator, /model: opencode\/big-pickle/)
     })
   })
 
-  it('init --tier gratis con ANCLETO_MUSE_SPARK=0 anuncia el origen entorno', () => {
+  it('init --tier gratis normaliza un gratisModel desconocido', () => {
     withDir((dir) => {
-      const r = run(['init', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '0' })
+      assert.equal(run(['init', '--tier', 'gratis'], dir).status, 0)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.gratisModel = 'opencode/muse-spark-1.3-contributor-free'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['init', '--tier', 'gratis'], dir)
       assert.equal(r.status, 0)
-      assert.match(r.stdout, /modelo gratis: opencode\/big-pickle \(variable de entorno ANCLETO_MUSE_SPARK\)/)
+      assert.match(r.stdout, /modelo gratis: opencode\/big-pickle/)
       assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
-    })
-  })
-
-  it('init --tier gratis no interactivo anuncia la detección automática', () => {
-    withDir((dir) => {
-      const r = run(['init', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '' })
-      assert.equal(r.status, 0)
-      assert.match(r.stdout, /modelo gratis: opencode\/big-pickle \(detección automática\)/)
+      const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+      assert.match(orchestrator, /model: opencode\/big-pickle/)
     })
   })
 
@@ -3311,26 +3610,32 @@ describe('CLI install wizard (v0.6.6)', () => {
     })
   })
 
-  it('install --tier gratis con Muse Spark disponible aplica muse-spark', () => {
+  it('install --tier gratis aplica el unico modelo gratis y no detecta Muse Spark', () => {
     withDir((dir) => {
       const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '1' })
       assert.equal(r.status, 0)
       const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
-      assert.match(orchestrator, /model: opencode\/muse-spark-1\.3-contributor-free/)
-      assert.match(r.stdout, /modelo gratis: opencode\/muse-spark-1\.3-contributor-free/)
-      assert.equal(readRc(dir).gratisModel, 'opencode/muse-spark-1.3-contributor-free')
+      assert.match(orchestrator, /model: opencode\/big-pickle/)
+      assert.doesNotMatch(orchestrator, /muse-spark/)
+      assert.match(r.stdout, /modelo gratis: opencode\/big-pickle/)
+      // La variable de entorno ya no altera el modelo resuelto.
+      assert.equal(readRc(dir).gratisModel, undefined)
     })
   })
 
-  it('install --tier gratis reutiliza el modelo persistido sin preguntar', () => {
+  it('install --tier gratis reutiliza un gratisModel conocido sin preguntar', () => {
     withDir((dir) => {
-      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '1' })
-      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir, { ANCLETO_MUSE_SPARK: '' })
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.gratisModel = 'opencode/big-pickle'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
       assert.equal(r.status, 0)
-      assert.match(r.stdout, /modelo gratis: opencode\/muse-spark-1\.3-contributor-free/)
-      assert.equal(readRc(dir).gratisModel, 'opencode/muse-spark-1.3-contributor-free')
+      assert.match(r.stdout, /modelo gratis: opencode\/big-pickle/)
+      assert.equal(readRc(dir).gratisModel, 'opencode/big-pickle')
       const orchestrator = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
-      assert.match(orchestrator, /model: opencode\/muse-spark-1\.3-contributor-free/)
+      assert.match(orchestrator, /model: opencode\/big-pickle/)
     })
   })
 })

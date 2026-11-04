@@ -273,7 +273,7 @@ ancleto init --agent opencode --tier normal --lang es
 |---|---|
 | `normal` | Modelos balanceados, sin restricciones agresivas de contexto. Es el default. |
 | `minimo` | El modelo pago más económico viable, con alta compresión de contexto y exclusión de tests/docs en el discovery. |
-| `gratis` | Modelos gratuitos, empaquetado agresivo y límite estricto de tokens. Prefiere **Muse Spark 1.3 Free** si tu cuenta lo tiene habilitado; si no, usa `opencode/big-pickle`. |
+| `gratis` | Modelos gratuitos, empaquetado agresivo y límite estricto de tokens. Los diez agentes usan `opencode/big-pickle` (costo 0). |
 
 La configuración se preserva en `.ancletorc` (raíz del proyecto) y `.ancleto-tier` (junto a la configuración instalada).
 
@@ -527,17 +527,22 @@ modelo distinto al canónico.
 | coder | `opencode-go/minimax-m3` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
 | tester | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
 | spec-writer | `opencode-go/qwen3.7-plus` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| reviewer | `opencode-go/qwen3.6-plus` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| reviewer | `opencode-go/qwen3.8-max` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
 | technical-discovery | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
 | technical-seed-writer | `opencode-go/minimax-m3` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
 | memory-keeper | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
 | context-resolver | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
 | documenter | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
 
-El tier `minimo` coincide con el default publicado: aplicarlo sobre la canónica es un no-op, así que
-`install`/`update` no reescriben `model:`. Los tiers `normal` y `gratis` conservan sus proveedores
+El tier `minimo` resuelve cada agente por una cadena de preferencia contra el catálogo verificado
+(`src/core/model-catalog.json`): `commandcode/deepseek/deepseek-v4.1-flash` →
+`opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`. Se escribe el primer
+candidato disponible; con la cabeza disponible, aplicarlo sobre la canónica sigue siendo un no-op.
+Si ningún candidato está disponible, `install`/`init`/`import` abortan con un error explícito sin
+escribir un modelo inexistente. El snapshot se refresca manualmente con
+`node scripts/refresh-model-catalog.mjs`. Los tiers `normal` y `gratis` conservan sus proveedores
 actuales.
 
-**Tier `gratis`.** Los 10 agentes usan **Muse Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`) si está disponible en tu cuenta —no está abierto a todos—. En `install` interactivo el wizard te lo pregunta la primera vez y la respuesta queda guardada en `.ancletorc` (`gratisModel`) para los siguientes `init`/`install`/`update`. `init` interactivo con tier `gratis` pregunta siempre, salvo que `ANCLETO_MUSE_SPARK` fuerce el valor (pre-selecciona el valor guardado o la detección automática como default); fuera del menú reutiliza el valor guardado o detecta con `opencode models` y, si no se puede confirmar, usa `opencode/big-pickle`. Ambos comandos informan cuál aplicaron y, cuando no preguntan, de dónde salió (variable de entorno, valor guardado o detección automática).
-
-> `ANCLETO_MUSE_SPARK=1` fuerza Muse Spark, `ANCLETO_MUSE_SPARK=0` fuerza `big-pickle`. Tiene prioridad sobre la elección guardada.
+**Tier `gratis`.** Los 10 agentes usan `opencode/big-pickle` (costo 0), el único modelo gratuito
+conocido. Un valor legacy o desconocido en `.ancletorc` (`gratisModel`) se ignora y se normaliza al
+gratis resuelto; no se agrega la clave cuando no existía.

@@ -1,161 +1,106 @@
 ---
 node: units/discovery-engine
 kind: dossier
-read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y el presupuesto por tier"
-covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed]
-sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js"]
-generatedAt: 2026-11-03T18:16:04Z
-pluginVersion: 0.18.9
+read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports y la resolución de modelos por tier"
+covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos]
+sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
+sourcesSha: 62c97ff2f1f342f5
+generatedAt: 2026-11-03T22:11:31Z
+pluginVersion: 0.18.10
 skillVersion: '2.3'
 ---
 
-# Unidad: discovery, affected-set y tiers
+# Unidad: discovery, affected-set y resolución de modelos
 
 ## Propósito
 
-Relevar el repositorio, empaquetar contexto con costo controlado y computar el scope afectado por
-grafo de imports. Cuatro piezas: topología (`discovery.js`), traducción tier→Repomix
-(`repomix-tier.js`), selección de modelos (`tier-models.js`) y affected-set (`affected-set.js`).
-Evidencia: `README.md`, firmas del pack, `aspec/specs/prompt-contracts/spec.md`.
+Separar el descubrimiento técnico del barrido manual: producir un mapa topológico estable
+(`.discovery-map.json`), empaquetar el contexto con el presupuesto del tier, medir si el seed sigue
+fresco y calcular qué archivos dependen de un cambio. En 0.18.10 el mismo módulo de tiers resuelve
+la cadena de `minimo` contra un catálogo verificado, en lugar de escribir IDs fijos.
 
 ## Recorrido relevante
 
-1. `buildTopologyMap(rootDir)` recorre la raíz y produce el árbol/totales.
-2. `ancleto discovery --check` (state-only) compara hashes y clasifica `impact`.
-3. `ancleto discovery [--compress]` genera el pack Repomix con los ignores del tier.
-4. La skill `ancleto-technical-discovery` redacta el seed a partir del pack.
-5. `ancleto affected <archivo...>` computa el affected-set (read-only) para el scope de review.
+### Topología y estado del seed
 
-## Topología — `src/core/discovery.js`
+1. `writeDiscoveryMap(rootDir)` (`src/core/discovery.js`) recorre el repo, ignora
+   `node_modules`, `.git`, `.ancleto`, `dist`, `build` y `coverage`, y escribe
+   `.discovery-map.json` con `tree_summary`, `root_files` y `total_files`.
+2. `ancleto discovery --compress` (`src/cli/index.js` → `packDiscovery`) escribe el mapa, genera el
+   pack y guarda `.discovery-state.json` con la lista de fuentes, el hash por archivo y el hash
+   global.
+3. `discovery --check` compara el hash actual con el guardado:
+   - `READY` si coincide.
+   - `STALE` + `impact: material` si cambió un archivo material o apareció/desapareció un área raíz.
+   - `STALE` + `impact: minor` si solo cambiaron contenidos no materiales.
+   - `PARTIAL`/`MISSING` según documentos esperados ausentes.
+4. `seed-map.json` (lo escribe la skill) mapea documento → áreas; `affectedDocs` es la intersección
+   con `changedAreas`.
 
-- `buildTopologyMap(rootDir)`: recorre la raíz ignorando `node_modules`, `.git`, `.ancleto`,
-  `dist`, `build`, `coverage` (`TOPOLOGY_IGNORED_DIRS`); produce `last_updated`, `total_files`,
-  `tree_summary` (conteo por directorio de primer nivel) y `root_files`.
-- `writeDiscoveryMap(rootDir)`: escribe `.discovery-map.json` en la raíz.
-- `readTopologySummary(cwd)`: valida y lee el resumen para inyectarlo en el working context.
-- El mapa se regenera al correr `ancleto discovery` (no en `--check`). En esta corrida:
-  `total_files: 763`; `tree_summary` incluye `documentation` 340 y `audit logs` 9 porque el mapa
-  recorre el disco y no aplica `.gitignore`. El `total_files` **no** coincide con los 751
-  archivos del pack: el mapa cuenta el disco y el pack aplica los ignores del tier y `.gitignore`.
+### Empaquetado por tier
 
-## Empaquetado — `src/core/repomix-tier.js`
+`src/core/repomix-tier.js` define `TIER_PACK_CONFIG`:
 
-- `TIER_PACK_CONFIG`: `normal` (sin ignores extra, sin compresión, sin budget), `minimo`
-  (+`test/**`, `docs/**`, `**/*.md`; `--compress`; **sin** token budget), `gratis` (igual que
-  `minimo` + budget 50000).
-- `readProjectTier(cwd)`: lee `.ancleto-tier` en la raíz o en `.opencode/`; default `gratis`.
-  Aquí `.opencode/.ancleto-tier` contiene **`minimo`**, por lo que el pack de esta corrida quedó
-  en **751 archivos / ~20.893 tokens** (sin budget que lo limite). El conteo de tokens depende
-  de la compresión efectiva de Repomix y **no es comparable entre corridas**.
-- `buildRepomixArgs(flags, tier, exclude)`: fusiona `exclude` (`.ancletorc`) + ignores del tier
-  + `--ignore` del usuario, y agrega `--compress` si el tier o el flag lo piden. No permite
-  reemplazar los ignores por un `--ignore` vacío.
-- `tierTokenBudget(tier)`: sólo `gratis` devuelve 50000. El CLI falla si el pack supera el
-  budget del tier resuelto.
+| Tier | Extras de ignore | Compresión | Presupuesto |
+|---|---|---|---|
+| `normal` | — | No | — |
+| `minimo` | `test/**`, `docs/**`, `**/*.md` | Sí | — |
+| `gratis` | `test/**`, `docs/**`, `**/*.md` | Sí | 50.000 tokens |
 
-## Modelos por tier — `src/core/tier-models.js`
+`buildRepomixArgs` combina las exclusiones del proyecto, los extras del tier y el `--ignore`
+explícito. `readProjectTier` lee `.opencode/.ancleto-tier` (o `.ancleto-tier` en la raíz) y cae a
+`gratis` si no hay tier válido.
 
-- **`TIERS`** (exportado por este módulo, dueño único): mapa nombre→modelo por tier. `tierModels(tier, tiers, gratisOverride)`, `gratisModel(persisted)`, `envGratisModel()`,
-  `isKnownGratisModel(model)`, `detectMuseSpark()`.
-- Tier `gratis`: prefiere Muse Spark 1.3 Free (`opencode/muse-spark-1.3-contributor-free`) si la
-  cuenta lo habilita; si no, `opencode/big-pickle`. `ANCLETO_MUSE_SPARK=1|0` fuerza la elección y
-  tiene prioridad sobre lo persistido.
-- Tier `minimo`: un único modelo `commandcode/deepseek/deepseek-v4.1-flash` para los 10 agents,
-  **idéntico a la canónica**; aplicarlo con `applyTier` es un no-op. `normal` conserva
-  `opencode-go/*`. El checkout además tiene `opencode.json`, con entradas para los 10 agentes;
-  según `AGENTS.md` el override surte efecto en el primario y no en los subagentes, y el archivo
-  no se publica.
-- `test/agent-model-coherence.test.js` guarda que `TIERS.minimo` coincida con `agents/*.md` y que
-  `TIERS` se declare sólo acá (no en otro `src/**/*.js`).
+### Resolución de modelos (`minimo`)
 
-## Affected-set por grafo de imports — `src/core/affected-set.js`
+`resolveTierModels(tier, catalog, { allowUnresolved })`:
 
-Módulo **zero-dep** y **determinista** (`throughput-pipeline`). Define el scope de review y el
-objetivo de verificación del tester.
+- `TIERS` mantiene forma agente → string; `TIER_CHAINS` define la cadena de `minimo`:
+  `commandcode/deepseek/deepseek-v4.1-flash` → `opencode-go/deepseek-v4.1-flash` →
+  `opencode/deepseek-v4.1-flash-free`.
+- `modelIdsFromCatalog` acepta el snapshot completo (`{ providers }`) o un mapa proveedor → IDs.
+- Devuelve `models`, `candidates` y `unresolved`. En modo estricto lanza error si ningún candidato
+  está; `check` usa `allowUnresolved: true` y degrada con aviso.
+- `gratis` no tiene cadena: usa `opencode/big-pickle`; un `gratisModel` desconocido se normaliza.
 
-- `buildImportGraph(rootDir, ignored)`: recorre los archivos fuente (`.js/.mjs/.cjs/.ts/.tsx`,
-  `collectSourceFiles` con los mismos ignores del discovery map), extrae especificadores
-  (`extractSpecifiers`) y construye aristas `src → deps` por resolución de relativos
-  (`resolveRelative`). Devuelve `{ edges, sources, unresolved, externalCount }`.
-- `computeAffectedSet({ rootDir, seeds, ignored })`: devuelve `{ seeds, affected, unresolved,
-  externalCount }`; `affected` es la **clausura transitiva de dependientes** sobre el grafo más
-  las semillas (incluye siempre los tocados, aunque no sean nodos). Ordenado y determinístico.
-- **Cobertura**: formas estáticas `import`, `import … from`, `export … from` y las llamadas
-  `require(...)` / `import(...)` con **literal puro** (string o template sin `${}`). Los ignores
-  son los del proyecto (`TOPOLOGY_IGNORED_DIRS`).
-- **Taxonomía cerrada (4 categorías)**: (1) relativo resoluble → arista; (2) no relativo
-  (paquete npm, builtin, alias de paths) → `externalCount`, sin arista ni `unresolved`;
-  (3) llamada `import(...)`/`require(...)` con argumento no literal → `unresolved`; (4) relativo
-  irresoluble → `unresolved`.
-- **Clasificador conservador por argumento**: sólo un literal puro —tras espacios y
-  comentarios— seguido de `)` es estático; cualquier otro argumento cae en `unresolved`. Sólo se
-  escanean `import(`/`require(`; `import.meta`, el `import` estático y `require.resolve(` se
-  ignoran; el acceso por miembro `obj.require(…)` se matchea léxicamente (sobre-inclusión
-  conservadora, dirección segura).
-- **`externalCount`** es **dato informativo** —conteo de **ocurrencias** de specifiers no
-  relativos, no de specifiers distintos—, no warning ni error.
-- **Superficie read-only**: `ancleto affected [--cwd <dir>] [--json] <archivo...>`
-  (`affectedCommand`). En `--json` expone `seeds` normalizadas (relativas-posix) y
-  `externalCount`; en salida humana lista `affected` por stdout y reporta inconclusos/externos
-  por stderr (omite la línea de externos si es 0). No escribe nada.
-- **Prioridad**: si `PRODUCT.md` → `## Project Commands` declara un mecanismo/comando de
-  afectados, el pipeline usa ese en lugar del grafo propio (la resolución de alias queda
-  delegada).
+### Catálogo
 
-## Flujo del estado del seed (`--check`)
+`src/core/model-catalog.json` guarda `generated_at`, `source.method`, `source.providers` y los IDs
+con costo y límites. `scripts/refresh-model-catalog.mjs` lo regenera **manualmente** ejecutando
+`opencode models <provider> --verbose`; si falla, no escribe un snapshot vacío. `loadModelCatalog`
+permite override por `ANCLETO_MODEL_CATALOG`.
 
-1. `presentDocs` verifica los 8 documentos esperados (`EXPECTED_DOCS`) → `MISSING`/`PARTIAL`.
-2. `computeSources` + `hashSources` recorren los fuentes aplicando `DEFAULT_IGNORES`
-   (`node_modules`, `.git`, `dist`) y el propio `outputDir`; el hash encadena
-   `rel \0 longitud \0 contenido \n` por archivo ordenado.
-3. Si hay estado previo, `computeImpact` compara por archivo y por área (primer nivel) y
-   clasifica `impact`: `material` si cambió un archivo material (`package.json`, configs de
-   runtime, `index.html`, `src/main|index.*`), apareció/desapareció un área raíz o un archivo
-   material; si no, `minor`; si no hay cambios atribuibles, `none`. **La detección es por lista
-   de archivos, no por contrato.**
-4. `readSeedMap` + `affectedDocsFor` cruzan áreas cambiadas con `seed-map.json` para acotar la
-   regeneración a `affectedDocs`. Sin `seed-map.json` la regeneración es completa.
-5. El pack (`--compress`) escribe estado en `docs/technical-discovery/.discovery-state.json`
-   (sources, fileHashes, hash global, `packTokens`); el seed lo redacta la skill.
+### Affected-set
 
-**Reporte de esta corrida**: `STALE` / `impact: material`;
-`changedAreas: [".ancleto", ".ancletorc", ".opencode", "AGENTS.md", "CHANGELOG.md", "README.md",
-"agents", "aspec", "package.json", "src", "test"]`; `materialReasons: ["archivo material
-modificado: package.json"]`; los 11 documentos del seed en `affectedDocs`. La causa es el salto a
-`0.18.9` (modelos canónicos, `TIERS` en `src/core/tier-models.js`, `check` oráculo + aviso de
-tier, guard `agent-model-coherence`), la spec `agent-model-tiers`, el change archivado
-`2026-11-03-align-agent-models-commandcode` y el estado local del discovery.
+`computeAffectedSet({ rootDir, seeds })` (`src/core/affected-set.js`) construye el grafo de imports
+(estáticos, `export … from`, `import()`/`require()` con literal puro) y devuelve la clausura de
+**dependientes**. Los specifiers no relativos se cuentan como externos (`externalCount`); los
+relativos que no resuelven se reportan como inconclusos. Es read-only y determinístico.
 
 ## Reglas, contratos y riesgos
 
-- `--check` no empaqueta: es state-only sobre hashes.
-- El pack comprimido sólo expone firmas (no cuerpos), lo que limita la evidencia de `src/**`.
-- El tier decide también qué markdown/test queda fuera del pack; el seed debe anotarlo.
-- `minimo` **no** tiene token budget: un repo grande puede producir un pack grande sin fallo.
-- **`computeSources` no aplica `.gitignore`**: sólo `DEFAULT_IGNORES` + `config.exclude`. Por eso
-  `documentation/` (gitignored) y `audit logs/` (untracked) pueden aparecer como áreas nuevas y
-  `package-lock.json` puede figurar como "área eliminada" cuando en realidad está excluido. Son
-  falsos positivos del check, no cambios del producto.
-- **El affected-set es acotado por diseño**: los imports dinámicos no escaneados y los alias
-  quedan delegados al mecanismo declarado; el helper no promete universalidad.
-- `optimizacion-de-tokens.md` señala que `impact` se deriva por **archivo/área**, no por
-  **contrato**: puede dar falsos positivos/negativos.
-- **`affectedDocs` ≠ `affected-set`**: el primero son documentos del seed; el segundo es la
-  clausura de dependientes por grafo de imports.
+- **Área** = primer segmento del path; los archivos raíz son su propia área. Es la misma convención
+  en `computeImpact` y en `seed-map.json`.
+- **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
+  `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
+- **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
+- **El pack actual**: 759 archivos, ~28.428 tokens, tier `minimo` (comprimido). El estado quedó
+  guardado en `docs/technical-discovery/.discovery-state.json`.
+- **Riesgo de catálogo**: el snapshot puede envejecer; `install` falla recién en `ancleto`, no en el
+  host. Refresco manual + guard de tests es la mitigación declarada.
+- **Riesgo de alcance**: `affected-set` acota por diseño las formas dinámicas no literales; no es un
+  análisis semántico.
 
 ## Paths clave
 
 | Path | Rol |
 |---|---|
-| `src/core/discovery.js` | Mapa topológico (`buildTopologyMap`, `writeDiscoveryMap`, `readTopologySummary`). |
-| `src/core/affected-set.js` | Grafo de imports y `computeAffectedSet` (`buildImportGraph`, `extractSpecifiers`, `collectSourceFiles`). |
-| `src/core/repomix-tier.js` | Args de Repomix, ignores y budget por tier (`TIER_PACK_CONFIG`, `readProjectTier`, `buildRepomixArgs`, `tierTokenBudget`). |
-| `src/core/tier-models.js` | Dueño único de `TIERS`, modelos por tier y resolución gratis. |
-| `opencode.json` | Entradas `agent.model` para los 10 agentes; según `AGENTS.md` sólo surte efecto en el primario. Fuera del paquete publicado. |
-| `src/cli/index.js` | `checkDiscovery`, `runRepomix`, `packDiscovery`, `affectedCommand`, `computeSources`, `computeImpact`, `readSeedMap`, `affectedDocsFor`. |
-| `.discovery-map.json` | Mapa topológico regenerado por la corrida del pack (763 archivos). |
-| `docs/technical-discovery/.discovery-state.json` | Estado de hashes y `packTokens` que consume `--check`. |
-| `docs/technical-discovery/seed-map.json` | Documento del seed → áreas de evidencia (lo escribe la skill). |
-| `aspec/specs/prompt-contracts/spec.md` | Contrato del affected-set y taxonomía de 4 categorías. |
-| `test/discovery-topology.test.js`, `test/discovery-tier.test.js`, `test/tier-models.test.js`, `test/affected-set.test.js`, `test/agent-model-coherence.test.js` | Guardas de topología, tiers, modelos, affected-set y coherencia canónica/`TIERS`. |
-| `aspec/specs/agent-model-tiers/spec.md` | Contrato de modelo canónico uniforme, `upgrade`, no-op del tier `minimo` y dueño único de `TIERS`. |
+| `src/core/discovery.js` | Mapa topológico y `readTopologySummary` |
+| `src/core/repomix-tier.js` | Args de Repomix, ignores y presupuesto por tier |
+| `src/core/affected-set.js` | Grafo de imports y clausura de dependientes |
+| `src/core/tier-models.js` | `TIERS`, `TIER_CHAINS`, resolver y catálogo |
+| `src/core/model-catalog.json` | Snapshot verificado de modelos |
+| `scripts/refresh-model-catalog.mjs` | Refresco manual del snapshot |
+| `src/cli/index.js` (`packDiscovery`, `checkDiscovery`) | Empaquetado y estado del seed |
+| `docs/technical-discovery/.discovery-state.json` | Último hash/pack del seed |
+| `docs/technical-discovery/seed-map.json` | Documento → áreas de evidencia |

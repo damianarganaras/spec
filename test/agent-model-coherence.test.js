@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TIERS } from '../src/core/tier-models.js'
+import { TIERS, TIER_CHAINS } from '../src/core/tier-models.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(TEST_DIR, '..')
@@ -72,7 +72,12 @@ describe('coherencia de modelos entre canónica y tiers', () => {
     )
     for (const [name, model] of Object.entries(canonical)) {
       assert.equal(TIERS.minimo[name], model, `${name}: tier minimo == canónica`)
+      assert.equal(TIERS.minimo[name], TIER_CHAINS.minimo[name][0], `${name}: tier minimo == cabeza de la cadena`)
     }
+  })
+
+  it('TIER_CHAINS.minimo cubre exactamente el mismo conjunto de agentes que TIERS.minimo', () => {
+    assert.deepEqual(Object.keys(TIER_CHAINS.minimo).sort(), Object.keys(TIERS.minimo).sort())
   })
 
   it('TIERS.normal y TIERS.gratis cubren el mismo catálogo de agentes', () => {
@@ -81,27 +86,25 @@ describe('coherencia de modelos entre canónica y tiers', () => {
     assert.deepEqual(Object.keys(TIERS.gratis).sort(), names)
   })
 
-  it('TIERS vive y se exporta sólo en src/core/tier-models.js', () => {
+  it('TIERS y TIER_CHAINS viven y se exportan sólo en src/core/tier-models.js', () => {
     // Un unico dueno del catalogo de tiers. La deteccion tolera `const`/`let`/`var`,
     // `Object.freeze(`, export y declaraciones multilinea.
-    const declaracion = /(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s+TIERS\s*=\s*(?:Object\.freeze\s*\(\s*)?\{/
-    const exportacion = /(?:^|\n)\s*export\s*\{[^}]*\bTIERS\b[^}]*\}/
+    const declaracion = (symbol) => new RegExp(`(?:^|\\n)\\s*(?:export\\s+)?(?:const|let|var)\\s+${symbol}\\s*=\\s*(?:Object\\.freeze\\s*\\(\\s*)?\\{`)
+    const exportacion = (symbol) => new RegExp(`(?:^|\\n)\\s*export\\s*\\{[^}]*\\b${symbol}\\b[^}]*\\}`)
     const offenders = jsFiles(join(ROOT, 'src'))
       .filter((file) => relPath(file) !== 'src/core/tier-models.js')
       .filter((file) => {
         const src = readFileSync(file, 'utf8')
-        return declaracion.test(src) || exportacion.test(src)
+        return ['TIERS', 'TIER_CHAINS'].some((symbol) => declaracion(symbol).test(src) || exportacion(symbol).test(src))
       })
       .map(relPath)
-    assert.deepEqual(offenders, [], 'sólo src/core/tier-models.js declara/exporta TIERS')
-    assert.match(
-      readFileSync(join(ROOT, 'src', 'core', 'tier-models.js'), 'utf8'),
-      /^export\s+const\s+TIERS\s*=/m
-    )
-    assert.match(
-      readFileSync(join(ROOT, 'src', 'cli', 'index.js'), 'utf8'),
-      /import\s*\{[^}]*\bTIERS\b[^}]*\}\s*from\s*'\.\.\/core\/tier-models\.js'/
-    )
+    assert.deepEqual(offenders, [], 'sólo src/core/tier-models.js declara/exporta TIERS y TIER_CHAINS')
+    const tierModelsSource = readFileSync(join(ROOT, 'src', 'core', 'tier-models.js'), 'utf8')
+    assert.match(tierModelsSource, /^export\s+const\s+TIERS\s*=/m)
+    assert.match(tierModelsSource, /^export\s+const\s+TIER_CHAINS\s*=/m)
+    const cliSource = readFileSync(join(ROOT, 'src', 'cli', 'index.js'), 'utf8')
+    assert.match(cliSource, /import\s*\{[^}]*\bTIERS\b[^}]*\}\s*from\s*'\.\.\/core\/tier-models\.js'/)
+    assert.match(cliSource, /import\s*\{[^}]*\bTIER_CHAINS\b[^}]*\}\s*from\s*'\.\.\/core\/tier-models\.js'/)
   })
 
   it('el overlay del perfil test existe y queda fuera del conjunto canónico', () => {

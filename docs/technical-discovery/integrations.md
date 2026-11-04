@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-04T17:02:55Z
-pluginVersion: 0.18.12
+generatedAt: 2026-11-04T19:22:37Z
+pluginVersion: 0.18.13
 skillVersion: '2.3'
 ---
 
@@ -21,7 +21,7 @@ skillVersion: '2.3'
 | MCP de memoria (`ancleto-memory`) | Tools `searchMemory`, `recordRule`, `recordDecision` | Salida/entrada | `src/core/memory/mcp-server.js` |
 | MCP caveman | Compresión de contexto en hosts que la exponen | Salida | `src/cli/index.js`, AGENTS.md |
 | MCP engram | Memoria de sesión opcional (opt-in) | Salida | `src/cli/index.js` → `buildDefaultMcp` |
-| MCP Azure DevOps | Work Items opcional; deshabilitado en este repo | Salida | `PRODUCT.md`, `.ancletorc` |
+| MCP Azure DevOps | Work Items opcional; deshabilitado en este repo | Salida | `PRODUCT.md` |
 | git | EOL, exclusión local de `machine-env`, release notes | Entrada | `src/core/machine-env.js`, workflow |
 | SQLite/FTS5 (`node:sqlite`) | Persistencia y búsqueda de memoria | Interna | `src/core/memory/*` |
 
@@ -44,7 +44,9 @@ skillVersion: '2.3'
   del proyecto + extras por tier + `--ignore` explícito) y `--compress` cuando el tier lo pide.
 - `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
-- No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand.
+- No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
+  esta generación se produjo con el fallback `npx` y quedó comprimido; los cuerpos de funciones se
+  eliden (ver `unknowns.md`).
 
 ## opencode (host, telemetría local y catálogo)
 
@@ -72,7 +74,7 @@ skillVersion: '2.3'
   archivos compartidos entre hosts (`src/cli/index.js` → `CAVEMAN_USAGE_NOTE`).
 - **engram**: MCP externo opcional, habilitado con `--with-engram`; no es la memoria del repo.
 - **Azure DevOps**: MCP opcional (`--with-azure`), deshabilitado en este repo
-  (`.ancletorc` → `azure.enabled: false`). Requiere `AZURE_DEVOPS_ORG_URL` y `AZURE_DEVOPS_PAT`
+  (`PRODUCT.md` → `azure.enabled: false`). Requiere `AZURE_DEVOPS_ORG_URL` y `AZURE_DEVOPS_PAT`
   (valores omitidos).
 
 ## git
@@ -91,6 +93,12 @@ skillVersion: '2.3'
 - La integridad de los IDs declarados depende del snapshot commiteado: `declaredModelIds` +
   `missingModelIdsInCatalog` alimentan el guard de tests y el gate de `--write`; `check` agrega un
   aviso advisory no bloqueante cuando el snapshot válido no contiene un ID declarado.
+- `freeTierOnPrimary` no consulta ningún sistema externo: cruza el `model:` y el `mode:` ya
+  presentes en el frontmatter instalado. Los avisos (set-time en `applyTier`, inspect-time en
+  `check`) tampoco hacen red ni ejecutan procesos.
+- El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
+  verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
+  que escribe en el destino (ver `decisions.md`).
 - Las bases SQLite (`.ancleto/memory.db` y la de opencode) son dependencias de datos locales; no se
   versionan.
 - `documentation/` es material legado de lnx-cli, gitignored y fuera del runtime (`PRODUCT.md`,

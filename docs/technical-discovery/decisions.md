@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-04T17:02:55Z
-pluginVersion: 0.18.12
+generatedAt: 2026-11-04T19:22:37Z
+pluginVersion: 0.18.13
 skillVersion: '2.3'
 ---
 
@@ -18,15 +18,16 @@ skillVersion: '2.3'
   (`src/cli/index.js`).
 - **ESM puro**: `"type": "module"`; no hay TypeScript ni `tsconfig.json` pese a la mención genérica
   de `AGENTS.md` (`PRODUCT.md` lo aclara).
-- **Un dueño por invariante**: `TIERS`/`TIER_CHAINS`, el resolver y `declaredModelIds` viven en
-  `src/core/tier-models.js`; el parseo/diff/validación/integridad del catálogo y
-  `modelIdsFromCatalog`/`missingModelIdsInCatalog`, en `src/core/model-catalog.js`; la adaptación de
-  frontmatter, en `src/core/adapters/frontmatter.js`; la detección de entorno, en
-  `src/core/machine-env.js`; el render del working-context, en `src/core/memory/working-context.js`.
+- **Un dueño por invariante**: `TIERS`/`TIER_CHAINS`, el resolver, `declaredModelIds` y
+  `freeTierOnPrimary` viven en `src/core/tier-models.js`; el parseo/diff/validación/integridad del
+  catálogo y `modelIdsFromCatalog`/`missingModelIdsInCatalog`, en `src/core/model-catalog.js`; la
+  adaptación de frontmatter y `frontmatterValue`, en `src/core/adapters/frontmatter.js`; la
+  detección de entorno, en `src/core/machine-env.js`; el render del working-context, en
+  `src/core/memory/working-context.js`.
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.18.12)
+## Modelos y tiers (estado 0.18.13)
 
 ### Tabla y cadenas
 
@@ -42,6 +43,37 @@ skillVersion: '2.3'
   `check` para no abortar.
 - **Contrato preservado**: `TIERS` no pasó a arrays porque `applyTier`, el oráculo, dos guards y el
   spec vigente dependen de la forma string. La cadena vive en `TIER_CHAINS`.
+- La invariante `TIERS.minimo[agente] === TIER_CHAINS.minimo[agente][0]` se cubre con tests
+  (`test/agent-model-coherence.test.js`) y con el guard estructural de la spec, **no** con un assert
+  de runtime: `TIER_CHAINS` solo existe para `minimo`, y un assert genérico rompería los seams puros
+  `resolveTierModels`/`declaredModelIds` que aceptan `tiers`/`chains` inyectados.
+
+### Aviso de modelo gratis sobre un agente primario (0.18.13)
+
+- **Predicado único**: `freeTierOnPrimary(model, mode)` (`src/core/tier-models.js`) devuelve verdadero
+  solo si `model` satisface `isKnownGratisModel` y `String(mode).trim() === 'primary'`. Es puro: no
+  recibe ni infiere un tier, no lee archivos, no hace red y no ejecuta procesos. La invariante es
+  **modelo + modo**, con independencia de cómo se instaló el modelo.
+- **Set-time (`applyTier`)**: cuando el reemplazo de `model:` cambia el contenido (`o !== c`), lee el
+  `mode:` del frontmatter existente con `frontmatterValue(parseFrontmatter(c).entries?.find(e => e.key === 'mode'))`
+  y, si el agente es `mode: primary` y el modelo objetivo es gratis, emite por `stderr`
+  (`console.warn`) el aviso:
+  `ancleto: tier gratis: <agent> es un agente primario (mode: primary) y usará el modelo free <model>; OpenCode puede responder 403 "free tier can only be used from within OpenCode". Usá un modelo pago en el agente primario.`
+  No lanza, no cambia el modelo escrito ni el valor de retorno. La rama `o === c` no advierte
+  (idempotencia del reemplazo).
+- **Inspect-time (`checkAgentsFrontmatter`)**: si el `mode:` **instalado** es `primary` y su `model:`
+  instalado satisface `freeTierOnPrimary`, agrega la entrada advisory
+  `<dirRel>/<file> (modelo free <model> sobre un agente primario: puede responder 403 en OpenCode)`.
+  No incrementa `missing` ni `orphans` y no altera el contrato de salida `missing > 0 ? 1 : 0`.
+- La detección se deriva **solo del `mode:` del frontmatter**, nunca del nombre del agente ni de su
+  posición en `TIERS`; un `mode: subagent`, un archivo sin `mode:` o un agente ausente no producen
+  aviso.
+- **Por qué advisory y no bloqueo**: el 403 depende del runtime de OpenCode y de overrides
+  `opencode.json → agent.<nombre>.model` invisibles para ancleto. Bloquear rompería instalaciones
+  válidas y el contrato de exit de `check`. Decisión aprobada:
+  `gratis-free-tier-primary-advisory-nonblocking`.
+- **Riesgo del canal**: el aviso de `applyTier` va a `stderr`; wrappers de CI que tratan `stderr`
+  como error lo verán, pero el exit code sigue siendo 0.
 
 ### Catálogo verificado
 
@@ -61,7 +93,7 @@ skillVersion: '2.3'
 - El guard estructural `test/agent-model-coherence.test.js` + `test/model-catalog.test.js` detecta
   IDs de `TIERS`, `TIER_CHAINS`, `agents/*.md` o `profiles/*/agents/*.md` ausentes del snapshot.
 
-### Integridad de IDs declarados (0.18.12)
+### Integridad de IDs declarados (0.18.12, consolidada en 0.18.13)
 
 - `declaredModelIds({ tiers, chains, agentModels })` (`src/core/tier-models.js`) deriva los IDs
   declarados de `TIERS` (todos los tiers/agentes), `TIER_CHAINS` (todos los candidatos) y las
@@ -76,6 +108,11 @@ skillVersion: '2.3'
   `profiles/*/agents/*.md`. El mensaje nombra ID y origen. No usa red ni `.opencode/**`.
 - **Guard de contenido**: `model-catalog.js` y `tier-models.js` no importan `node:child_process`;
   el script sí puede hacerlo, y el test no falla por su carga transitiva.
+- **Consolidación documental (0.18.13)**: `aspec/specs/agent-model-tiers/spec.md` tenía dos
+  requirements que reenunciaban la integridad de IDs. Se consolidaron con `MODIFIED Requirements`
+  conservando **ambos headings** para no romper refs `spec:`/`change:` existentes; la regla
+  estricta de `--write` (pre-validar IDs y abortar antes de escribir) queda como enunciación
+  autoritativa única. Decisión: `spec-consolidation-preserve-headings`.
 
 ### Descubrimiento dev-only
 
@@ -140,6 +177,8 @@ skillVersion: '2.3'
   un aviso por ejecución si un ID declarado en `TIERS`, `TIER_CHAINS`, `agents/*.md` o
   `profiles/*/agents/*.md` no figura en el snapshot. Lista ID y origen y es distinguible del
   warning de deriva por `model:` del mirror. No altera contadores, oráculo ni exit code.
+- **Advisory de modelo gratis sobre primario (0.18.13)**: ver la subsección anterior. Es una entrada
+  adicional de la misma salida de avisos, no bloqueante.
 - **Antigüedad**: un único aviso informativo por ejecución cuando `generated_at` supera **90 días**
   (`isCatalogStale`), sin TTL en runtime ni efecto en la resolución.
 - El exit code de `check` solo cambia por faltantes; huérfanos, divergencias, deriva, advisory,
@@ -154,6 +193,25 @@ skillVersion: '2.3'
   viejo y producía divergencias falsas.
 - El tier solo se aplica/resuelve en mirrors de `opencode`; en otros hosts no se resuelve ni se
   aborta.
+
+### `import` registra `installedPaths` (0.18.13)
+
+- **La regla**: cuando el bundle incluye `.ancletorc`, el manifiesto se escribe **después** de las
+  escrituras de assets que registra y con
+  `installedPaths = unionInstalledPaths(<installedPaths del destino>, <lo escrito por este import>)`
+  para las cuatro claves `templates|agents|commands|skills`.
+- **Qué es "lo escrito"**: los templates efectivamente escritos más lo que devuelve
+  `installAgentAssets` (destinos relativos del proyecto). Además se incorporan los directorios
+  copiados desde el bundle —`.opencode/agents`, `.opencode/commands` y `.opencode/skills`— a la
+  misma unión.
+- **Nunca se hereda del bundle**: `export` copia `.ancletorc` verbatim, así que sus rutas describen
+  la máquina origen; copiarlas produciría faltantes falsos en el destino. Un bundle sin
+  `.ancletorc` no reescribe el manifiesto.
+- `unionInstalledPaths` deduplica por clave con `Set`, de modo que una ruta escrita tanto por la
+  copia del bundle como por la instalación de assets figura una sola vez, y reimportar no duplica.
+- **Cambio observable**: el `check` posterior a un `import` deja de ser vacuo; puede reportar
+  faltantes u huérfanos reales antes ocultos por un `installedPaths` vacío. Es la consecuencia
+  buscada. Decisión aprobada: `import-installed-paths-union-not-copy`.
 
 ### Superficies del `model:` (nota operativa)
 
@@ -194,14 +252,15 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 769 archivos, ~35.730 tokens (comprimido); `.discovery-map.json`
-  reporta 780 archivos totales.
+- **Pack actual**: tier `minimo`, 773 archivos, ~36.040 tokens (comprimido). El
+  `.discovery-map.json` observado al empacar reportó 784 archivos; el archivo trackeado en HEAD
+  conserva 780 de una corrida previa (ver `unknowns.md`).
 
 ## Lint y publicación
 
 - `npm run lint` ejecuta `eslint src/ test/ scripts/` con flat config y cuatro reglas
-  (`no-undef`, `no-unused-vars`, `eqeqeq`, `no-dupe-keys`); `scripts/` comparte exactamente la misma
-  configuración, sin plugin ni ignore nuevo (`eslint.config.js`, `PRODUCT.md`).
+  (`no-undef`, `no-unused-vars` con patrones `^_`, `eqeqeq`, `no-dupe-keys`); `scripts/` comparte
+  exactamente la misma configuración, sin plugin ni ignore nuevo (`eslint.config.js`, `PRODUCT.md`).
 - CI corre `npm ci` → `npm run lint` → `node --test test/*.test.js`; si lint falla no publica
   (`.github/workflows/publish.yml`).
 - **`scripts/` no se publica**: `package.json` → `files` lista `agents`, `commands`, `skills`,
@@ -226,9 +285,13 @@ sin `--tier` es `normal`.
 - **Doble fuente de tier por host**: solo `opencode` materializa `model:`; otros hosts lo dropean
   (claude/vscode/copilot/commandcode) o emiten `model: inherit` (antigravity). Resolver el catálogo
   ahí no tendría efecto.
+- **Detección parcial del 403**: el aviso free-on-primary no ve overrides
+  `opencode.json → agent.<nombre>.model`; por eso el mensaje dice "puede", nunca garantiza el 403.
+- **Check post-import no vacuo**: al poblarse `installedPaths`, un import puede exponer faltantes u
+  huérfanos reales. Es el comportamiento correcto y un cambio observable.
 - **Artefacto local desactualizado**: `.ancleto/machine-env.md` registra `ancleto: 0.18.8` mientras
-  `package.json` está en `0.18.12`; es un derivado que se regenera en `init`/`install`/`upgrade`, no
-  un manifiesto versionado.
+  `package.json` está en `0.18.13`; es un derivado gitignored que se regenera en
+  `init`/`install`/`upgrade` (correr `upgrade`), no una deriva de código.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene
   documentación del framework y el seed.
 

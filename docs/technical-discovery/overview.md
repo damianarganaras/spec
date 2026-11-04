@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-04T17:02:55Z
-pluginVersion: 0.18.12
+generatedAt: 2026-11-04T19:22:37Z
+pluginVersion: 0.18.13
 skillVersion: '2.3'
 ---
 
@@ -32,13 +32,14 @@ src/cli/index.js        entrada única; subcomandos, instalación, plantillas, M
 src/cli/ui.js           banner y menús TTY propios (selectOption/selectMultiple)
 src/core/
   tier-models.js        dueño de TIERS/TIER_CHAINS + resolver puro + declaredModelIds
+                        + freeTierOnPrimary (modelo free sobre agente primario)
   model-catalog.js      helpers puros: parseo, diff, validación, clasificación, integridad
   model-catalog.json    snapshot verificado de IDs por proveedor
   discovery.js          mapa topológico (.discovery-map.json)
   repomix-tier.js       configuración de pack por tier (ignores/compresión/presupuesto)
   affected-set.js       grafo de imports y clausura de dependientes
   machine-env.js        detección y render de .ancleto/machine-env.md
-  adapters/frontmatter.js  adaptación pura de frontmatter por host
+  adapters/frontmatter.js  adaptación pura de frontmatter por host (+ frontmatterValue)
   memory/               motor, DB, tools, MCP, doctor, curaduría, snapshot, working-context
 scripts/refresh-model-catalog.mjs  descubrimiento dev-only del catálogo (manual)
 agents/ commands/ skills/ templates/ profiles/  assets instalables
@@ -48,9 +49,10 @@ test/                   suite node --test
 
 - **Sin framework**: la UI de terminal y los parsers (frontmatter, refs, imports) son propios.
 - **Separación por módulos**: el CLI orquesta; la lógica con invariantes vive en `src/core/*`.
-  `src/core/tier-models.js` es el único dueño de la tabla de modelos, del resolver y de
-  `declaredModelIds`; `src/core/model-catalog.js` es el único dueño del parseo, diff, validación e
-  integridad del snapshot. El CLI importa ambos (ver `decisions.md`).
+  `src/core/tier-models.js` es el único dueño de la tabla de modelos, del resolver,
+  `declaredModelIds` y del predicado `freeTierOnPrimary`; `src/core/model-catalog.js` es el único
+  dueño del parseo, diff, validación e integridad del snapshot. El CLI importa ambos (ver
+  `decisions.md`).
 - **Estado local por proyecto**: `.ancletorc` (manifiesto), `.opencode/.ancleto-tier` (tier
   aplicado), `.opencode/agents|commands|skills` (mirrors), `.ancleto/memory.db` y
   `.ancleto/machine-env.md` (artefactos locales).
@@ -60,7 +62,7 @@ test/                   suite node --test
 | Componente | Rol | Entry point |
 |---|---|---|
 | CLI / instalación | `init`, `install`/`update`, `upgrade`, `import`/`export`, `check`, `doctor` | `src/cli/index.js` |
-| Resolución de modelos | Tiers, cadenas de fallback, catálogo y oráculo de `check` | `src/core/tier-models.js` |
+| Resolución de modelos | Tiers, cadenas de fallback, catálogo, oráculo de `check`, aviso free-on-primary | `src/core/tier-models.js` |
 | Catálogo de modelos | Snapshot versionado; helpers puros; integridad de IDs y refresco manual dev-only | `src/core/model-catalog.js`, `src/core/model-catalog.json`, `scripts/refresh-model-catalog.mjs` |
 | Discovery | Topología, fuentes, hashes, impacto y estado del seed | `src/core/discovery.js`, `src/cli/index.js` |
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
@@ -89,6 +91,12 @@ test/                   suite node --test
    `declaredModelIds` + `missingModelIdsInCatalog`; `refresh-model-catalog --write` bloquea la
    escritura si falta un ID; `check` emite un aviso advisory no bloqueante si el catálogo válido no
    contiene algún ID declarado.
+7. **Integridad del tier `gratis` y de `import` (0.18.13)**: `freeTierOnPrimary(model, mode)` cruza
+   modelo gratis con `mode: primary`; `applyTier` avisa por `stderr` al escribir y `check` agrega una
+   entrada advisory al inspeccionar, sin bloquear ni cambiar el exit code. `import` escribe
+   `installedPaths` como unión acumulativa de lo declarado en el destino y lo que él mismo escribió
+   (incluidos los directorios `.opencode/{agents,commands,skills}` copiados del bundle), sin heredar
+   las rutas del bundle.
 
 ## Recorrido de una instalación con tier `minimo`
 

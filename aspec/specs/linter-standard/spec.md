@@ -3,7 +3,7 @@
 ## Purpose
 
 Define el linting estándar del repositorio: una configuración mínima de ESLint (flat config) sobre
-`src/` y `test/`, el script `npm run lint`, el script `npm test`, el gate de lint en CI, ESLint
+`src/`, `test/` y `scripts/`, el script `npm run lint`, el script `npm test`, el gate de lint en CI, ESLint
 exclusivamente como devDependency para preservar el contrato de runtime sin dependencias, y la
 ausencia de violaciones en el código existente.
 
@@ -11,7 +11,7 @@ ausencia de violaciones en el código existente.
 
 ### Requirement: Configuración de ESLint mínima
 
-The system SHALL proveer una configuración de ESLint (flat config) con exactamente 4 reglas habilitadas sobre los directorios `src/` y `test/`.
+The system SHALL proveer una configuración de ESLint (flat config) con exactamente 4 reglas habilitadas sobre los directorios `src/`, `test/` y `scripts/`.
 
 #### Scenario: Config flat con reglas mínimas
 
@@ -23,19 +23,30 @@ The system SHALL proveer una configuración de ESLint (flat config) con exactame
 - **WHEN** se evalúa la configuración
 - **THEN** NO SHALL incluir Prettier, ni reglas de estilo (indentación, comas, nombres, formato), ni plugins adicionales más allá de `@eslint/js` (incluido con ESLint) y `globals`
 
+#### Scenario: La configuración cubre `scripts/`
+
+- **WHEN** se ejecuta ESLint sobre un archivo de `scripts/`
+- **THEN** se aplican las mismas 4 reglas que en `src/` y `test/`
+- **AND** no se requiere una configuración, un plugin ni un ignore nuevo
+
 ### Requirement: Script npm de lint
 
-The system SHALL proveer un script `npm run lint` que ejecute ESLint sobre `src/` y `test/`.
+The system SHALL proveer un script `npm run lint` que ejecute ESLint sobre `src/`, `test/` y
+`scripts/`.
 
 #### Scenario: Ejecución del script
 
 - **WHEN** se ejecuta `npm run lint`
-- **THEN** se corre `eslint src/ test/` y el proceso termina con exit 0 si no hay violaciones, o exit 1 si hay al menos una violación
+- **THEN** se corre `eslint src/ test/ scripts/` y el proceso termina con exit 0 si no hay
+  violaciones, o exit 1 si hay al menos una violación
 
 #### Scenario: Detección de violaciones
 
-- **WHEN** un archivo en `src/` o `test/` contiene una violación de las reglas configuradas
+- **WHEN** un archivo en `src/`, `test/` o `scripts/` contiene una violación de las reglas
+  configuradas
 - **THEN** `npm run lint` SHALL reportar la violación con file:line y regla, y terminar con exit 1
+- **AND** el comando declarado en `package.json` y en `PRODUCT.md` → `## Project Commands` coincide
+  con `eslint src/ test/ scripts/`
 
 ### Requirement: Script npm de test
 
@@ -71,7 +82,8 @@ The system SHALL incluir ESLint y sus dependencias de configuración exclusivame
 
 ### Requirement: Código existente libre de violaciones
 
-The system SHALL no contener violaciones de las reglas de lint configuradas en `src/` y `test/`.
+The system SHALL no contener violaciones de las reglas de lint configuradas en `src/`, `test/` y
+`scripts/`.
 
 #### Scenario: Sin violaciones en el código base
 

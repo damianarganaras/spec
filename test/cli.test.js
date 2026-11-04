@@ -55,6 +55,25 @@ function catalogWithout(dir, ids, name = 'catalog.json') {
   return path
 }
 
+function daysAgo(days) {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+// Snapshot inyectable por `ANCLETO_MODEL_CATALOG` con fecha y IDs controlados: la base
+// es el snapshot commiteado (nunca se muta), del que se quitan IDs opcionales.
+function catalogSnapshot(dir, { removeIds = [], generatedAt = daysAgo(0), name = 'catalog-snapshot.json' } = {}) {
+  const base = JSON.parse(readFileSync(join(TEST_DIR, '..', 'src', 'core', 'model-catalog.json'), 'utf8'))
+  const providers = Object.fromEntries(
+    Object.entries(base.providers).map(([provider, entries]) => [
+      provider,
+      entries.filter((entry) => !removeIds.includes(entry.id))
+    ])
+  )
+  const path = join(dir, name)
+  writeFileSync(path, JSON.stringify({ ...base, generated_at: generatedAt, providers }))
+  return path
+}
+
 describe('CLI init (G6 manifest)', () => {
   it('crea el .ancletorc con el manifiesto completo', () => {
     withDir((dir) => {
@@ -1798,6 +1817,124 @@ describe('CLI check (G3)', () => {
       const r = run(['check'], dir)
       assert.equal(r.status, 0)
       assert.doesNotMatch(r.stdout, /sin agentes locales/)
+    })
+  })
+
+  // ch-12: deriva y antigüedad del catálogo de modelos (Fase 7).
+  it('un model: del mirror ausente del catálogo produce un warning con archivo e ID y exit 0', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const catalog = catalogSnapshot(dir, { removeIds: ['opencode/big-pickle'] })
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      assert.match(
+        r.stdout,
+        /⚠ \.opencode\/agents\/orchestrator\.md \(model 'opencode\/big-pickle' ausente del catálogo de modelos; refrescalo con `node scripts\/refresh-model-catalog\.mjs`\)/
+      )
+      const installed = readdirSync(join(dir, '.opencode', 'agents')).filter((f) => f.endsWith('.md'))
+      assert.equal((r.stdout.match(/ausente del catálogo de modelos/g) || []).length, installed.length)
+      // El aviso de deriva no altera el conjunto de aceptación del oráculo.
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('la ausencia en el catálogo no agrega un frontmatter diverge si el tier instalado es aceptado', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const clean = run(['check'], dir)
+      const catalog = catalogSnapshot(dir, { removeIds: [TIER_CHAINS.minimo.orchestrator[0]] })
+      const drifted = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(clean.status, 0)
+      assert.equal(drifted.status, 0)
+      assert.doesNotMatch(clean.stdout, /frontmatter diverge del adaptador/)
+      assert.doesNotMatch(drifted.stdout, /frontmatter diverge del adaptador/)
+      assert.match(drifted.stdout, /ausente del catálogo de modelos/)
+    })
+  })
+
+  it('un catálogo ilegible conserva el aviso de catálogo no verificable y no evalúa deriva', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const corrupto = join(dir, 'corrupto.json')
+      writeFileSync(corrupto, '{ esto no es JSON')
+      for (const catalog of [join(dir, 'no-existe.json'), corrupto]) {
+        const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+        assert.equal(r.status, 0, `exit 0 con catálogo ${catalog}`)
+        assert.match(r.stdout, /no se pudo verificar el catálogo de modelos/)
+        assert.doesNotMatch(r.stdout, /ausente del catálogo de modelos/)
+      }
+    })
+  })
+
+  it('un catálogo parseable pero con forma inválida no evalúa deriva y avisa catálogo no verificable', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const catalogos = {
+        'objeto-vacio.json': '{}',
+        'proveedores-vacios.json': '{ "providers": {} }',
+        'array.json': '[]',
+        'string.json': '"x"'
+      }
+      for (const [name, content] of Object.entries(catalogos)) {
+        const catalog = join(dir, name)
+        writeFileSync(catalog, content)
+        const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+        assert.equal(r.status, 0, `${name}: exit 0`)
+        assert.doesNotMatch(r.stdout, /ausente del catálogo de modelos/, `${name}: sin aviso de deriva`)
+        assert.match(
+          r.stdout,
+          /no se pudo verificar el catálogo de modelos/,
+          `${name}: aviso de catálogo no verificable`
+        )
+        assert.doesNotMatch(r.stderr, /\n\s+at /, `${name}: sin stack trace`)
+      }
+    })
+  })
+
+  it('un catálogo con más de 90 días emite un único aviso informativo sin cambiar la resolución', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const catalog = catalogSnapshot(dir, { generatedAt: daysAgo(120) })
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /catálogo de modelos con 120 días de antigüedad \(/)
+      assert.equal((r.stdout.match(/días de antigüedad/g) || []).length, 1)
+      assert.doesNotMatch(r.stdout, /ausente del catálogo de modelos/)
+      assert.doesNotMatch(r.stdout, /aplica un modelo distinto/)
+      assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
+    })
+  })
+
+  it('un catálogo fresco no emite aviso de antigüedad', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const catalog = catalogSnapshot(dir, { generatedAt: daysAgo(0) })
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /días de antigüedad/)
+    })
+  })
+
+  it('un host que emite model: inherit no evalúa deriva', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'antigravity'], dir)
+      assert.match(readFileSync(join(dir, '.agents', 'agents', 'orchestrator.md'), 'utf8'), /^model: inherit$/m)
+      const catalog = catalogSnapshot(dir, { removeIds: ['opencode/big-pickle'] })
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /ausente del catálogo de modelos/)
+    })
+  })
+
+  it('un mirror opencode con model: inherit no reporta deriva para ese archivo', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      const agentPath = join(dir, '.opencode', 'agents', 'orchestrator.md')
+      writeFileSync(agentPath, readFileSync(agentPath, 'utf8').replace(/^model: .*$/m, 'model: inherit'))
+      const catalog = catalogSnapshot(dir, { removeIds: TIER_CHAINS.minimo.orchestrator })
+      const r = run(['check'], dir, { ANCLETO_MODEL_CATALOG: catalog })
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /orchestrator\.md \(model 'inherit' ausente del catálogo/)
     })
   })
 })

@@ -12,6 +12,7 @@ import {
   missingModelIds,
   resolveTierModels
 } from '../src/core/tier-models.js'
+import { validateCatalogSnapshot } from '../src/core/model-catalog.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(TEST_DIR, '..')
@@ -93,6 +94,10 @@ function withCatalogEnv(path, fn) {
 }
 
 describe('snapshot de catálogo', () => {
+  it('el snapshot real commiteado satisface validateCatalogSnapshot', () => {
+    assert.deepEqual(validateCatalogSnapshot(loadModelCatalog()), { ok: true, errors: [] })
+  })
+
   it('declara generated_at, método y proveedores con IDs completos', () => {
     const catalog = loadModelCatalog()
     assert.match(catalog.generated_at, /^\d{4}-\d{2}-\d{2}$/)

@@ -14,10 +14,9 @@ covers:
   - machine-env
   - check y doctor
   - export/import
-sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-sourcesSha: ad2dcef827b8b286
-generatedAt: 2026-11-03T22:11:31Z
-pluginVersion: 0.18.10
+sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
+generatedAt: 2026-11-04T11:11:07Z
+pluginVersion: 0.18.11
 skillVersion: '2.3'
 ---
 
@@ -68,6 +67,16 @@ faltantes (✖, afectan exit code) y huérfanos (⚠). Para agents de `opencode`
 contra la adaptación de la fuente canónica (o el overlay del perfil) y contra el conjunto de
 aceptación del tier. Un catálogo ilegible degrada con aviso, no aborta.
 
+En `0.18.11` el catálogo se carga **una sola vez por ejecución** y solo si `opencode` está
+instalado; un JSON parseable con forma inválida se descarta (`validateCatalogSnapshot`) para no
+derivar deriva falsa. Sobre ese catálogo se agregan dos avisos **no bloqueantes**:
+
+- **Deriva por archivo**: si un `model:` del mirror no figura en el snapshot, se nombra el archivo
+  y el ID y se sugiere `node scripts/refresh-model-catalog.mjs`. No altera el exit code ni el
+  conjunto de aceptación.
+- **Antigüedad**: un único aviso por ejecución cuando `generated_at` supera 90 días
+  (`isCatalogStale`), sin TTL ni efecto en la resolución.
+
 ### `doctor`
 
 Comprueba Node ≥ 24, importabilidad de `node:sqlite` y validez de `opencode.json`; es fatal solo
@@ -106,8 +115,10 @@ Code, `.mcp.json`; Copilot, `copilot-mcp.json`. Todos son merges no destructivos
   overlay a su fuente.
 - **`machine-env`**: `materializeMachineEnv` nunca lanza; devuelve warnings. `check` avisa si el
   artefacto quedó trackeado en git.
-- **Riesgo**: `.ancletorc` de este repo declara `0.18.8` y el paquete `0.18.10`; es deriva de
-  manifiesto, no de código.
+- **Catálogo y `check`**: el aviso de deriva/antigüedad es informativo y nunca hace fallar `check`;
+  solo los faltantes alteran el exit code. `install`/`init`/`import` siguen siendo estrictos.
+- **Riesgo**: `.ancleto/machine-env.md` registra `ancleto: 0.18.8` mientras el paquete está en
+  `0.18.11`; es un artefacto derivado, no una deriva de código.
 
 ## Paths clave
 
@@ -117,6 +128,7 @@ Code, `.mcp.json`; Copilot, `copilot-mcp.json`. Todos son merges no destructivos
 | `src/cli/ui.js` | Banner y menús TTY |
 | `src/core/adapters/frontmatter.js` | Adaptación pura de frontmatter por host |
 | `src/core/tier-models.js` | Tiers, cadenas, resolver y normalización de `gratis` |
+| `src/core/model-catalog.js` | Validación de forma y helpers puros del catálogo |
 | `src/core/model-catalog.json` | Snapshot verificado de modelos |
 | `src/core/repomix-tier.js` | Configuración de pack por tier |
 | `src/core/machine-env.js` | Detección de entorno y exclusión local |

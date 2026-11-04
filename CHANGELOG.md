@@ -2,6 +2,17 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.11] - 2026-11-04
+
+### Added
+- **Descubrimiento dev-only del catálogo de modelos**: `scripts/refresh-model-catalog.mjs` con `--refresh` clasifica cada proveedor como `available`, `binary-missing`, `network-unavailable` o `partial`, y reporta el diff contra el snapshot versionado.
+- **Escritura atómica y guard de `big-pickle`**: el refresh persiste el catálogo de forma atómica y rechaza `big-pickle` cuando no es gratuito.
+- **Aviso no bloqueante de deriva/antigüedad**: `ancleto check` reporta cuándo el snapshot del catálogo está desactualizado.
+
+### Changed
+- **Snapshot refrescado**: 5 proveedores y 211 IDs verificados.
+- **Sin red en runtime/CI**: el descubrimiento queda acotado a desarrollo; ni el runtime ni CI ejecutan descubrimiento ni acceden a la red.
+
 ## [0.18.10] - 2026-11-03
 
 ### Added

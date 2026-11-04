@@ -20,7 +20,8 @@ import { writeDiscoveryMap } from '../core/discovery.js'
 import { computeAffectedSet } from '../core/affected-set.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
-import { TIERS, TIER_CHAINS, resolveTierModels, loadModelCatalog, gratisModel, isKnownGratisModel } from '../core/tier-models.js'
+import { TIERS, TIER_CHAINS, resolveTierModels, loadModelCatalog, modelIdsFromCatalog, gratisModel, isKnownGratisModel } from '../core/tier-models.js'
+import { catalogAgeDays, isCatalogStale, validateCatalogSnapshot } from '../core/model-catalog.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..', '..')
@@ -2837,6 +2838,21 @@ async function checkCommand() {
   const ip = rc.installedPaths
   // D9: la union de hosts instalados se lee del manifiesto, no de un unico `rc.agent`.
   const installedHosts = installedHostsFromPaths(ip)
+  // Catálogo cargado una sola vez por ejecución: alimenta el aviso de antigüedad y la
+  // derivación de deriva de `checkAgentsFrontmatter`. Si es ilegible, `check` sigue
+  // funcionando con el fallback actual (catálogo no verificable).
+  let modelCatalog = null
+  if (installedHosts.includes('opencode')) {
+    try {
+      const loaded = loadModelCatalog()
+      // Un JSON parseable pero con forma inválida (`{}`, `{providers:{}}`, un array,
+      // un string) no es un catálogo verificable: se descarta para no derivar deriva
+      // falsa por modelo. Queda el mismo camino que cuando la carga lanza.
+      modelCatalog = validateCatalogSnapshot(loaded).ok ? loaded : null
+    } catch {
+      modelCatalog = null
+    }
+  }
   let missing = 0
   let orphans = 0
 
@@ -2888,7 +2904,7 @@ async function checkCommand() {
       // esperados (los huérfanos ya quedan avisados). Reporta como warning (⚠), no como
       // faltante (✖): el exit code NO se ve alterado por divergencias (solo por faltantes).
       if (cat === 'agents') {
-        await checkAgentsFrontmatter(cwd, dirRel, actual, expected, ext)
+        await checkAgentsFrontmatter(cwd, dirRel, actual, expected, ext, modelCatalog)
       }
       if (missingFiles.length === 0 && orphanFiles.length === 0) {
         console.log(`  ✔ ${dirRel} (${actual.length} archivos)`)
@@ -2899,6 +2915,11 @@ async function checkCommand() {
   const warnings = await checkTierOrphan(cwd)
   if (checkMachineEnvTracked(cwd)) {
     warnings.push('.ancleto/machine-env.md (trackeado en git; deberia ser un artefacto local — corre `git rm --cached .ancleto/machine-env.md`)')
+  }
+  // Aviso informativo único por ejecución: no es TTL ni altera la resolución ni el exit code.
+  if (modelCatalog && isCatalogStale(modelCatalog.generated_at, new Date())) {
+    const age = catalogAgeDays(modelCatalog.generated_at, new Date())
+    warnings.push(`catálogo de modelos con ${age} días de antigüedad (${modelCatalog.generated_at}); considerá refrescarlo con \`node scripts/refresh-model-catalog.mjs\``)
   }
 
   console.log(`ancleto: check -> ${missing} faltantes, ${orphans} huerfanos`)
@@ -2915,7 +2936,7 @@ async function checkCommand() {
 // directorio para que nunca quede silenciosa.
 // Reporta divergencia y aviso de tier como warnings (no bloqueantes). No compara
 // archivos huérfanos (ya quedan avisados arriba) ni archivos sin origen comparable.
-async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
+async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt, modelCatalog = null) {
   const host = hostForDir('agents', dirRel)
   if (!host) return
   const rc = await readAncletorc(cwd)
@@ -2945,7 +2966,12 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
         tier = rawTier
         const persisted = isKnownGratisModel(rc?.gratisModel) ? rc.gratisModel : null
         try {
-          const resolved = resolveTierMap(tier, persisted, { allowUnresolved: true })
+          if (!modelCatalog) throw new Error('catálogo no legible')
+          const resolved = resolveTierModels(tier, modelCatalog, {
+            chains: TIER_CHAINS,
+            gratisOverride: persisted,
+            allowUnresolved: true
+          })
           tierCandidates = resolved.candidates
           tierResolved = resolved.models
           tierUnresolved = resolved.unresolved
@@ -2969,6 +2995,11 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
       }
     }
   }
+  // Deriva: sólo con catálogo legible y host que escribe `model:` de verdad. Un host
+  // que elimina el campo o emite `model: inherit` no se evalúa.
+  const installedCatalogIds = host === 'opencode' && modelCatalog
+    ? modelIdsFromCatalog(modelCatalog)
+    : null
   const compression = await hostConfigHasCompression(cwd, host)
   const adapt = (source, name) => {
     let adapted = adaptFrontmatter(source, host, 'agents', name)
@@ -3003,6 +3034,15 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt) {
     const candidatos = tierCandidates[name] || []
     const conTierEstados = candidatos.map(conTier)
     const instalado = await readFile(join(cwd, dirRel, f), 'utf8')
+    // Aviso no bloqueante de deriva: un `model:` del mirror que no figura en el
+    // snapshot legible sugiere refrescar el catálogo. No toca el exit code ni el
+    // conjunto de aceptación del oráculo.
+    if (installedCatalogIds) {
+      const installedModel = instalado.match(/^model: (.+)$/m)?.[1]?.trim()
+      if (installedModel && installedModel !== 'inherit' && !installedCatalogIds.has(installedModel)) {
+        console.log(`  ⚠ ${dirRel}/${f} (model '${installedModel}' ausente del catálogo de modelos; refrescalo con \`node scripts/refresh-model-catalog.mjs\`)`)
+      }
+    }
     // El aviso de tier cuenta si el mirror difiere del resuelto-ahora (el proximo
     // install/update reescribiria `model:`) o si el resuelto-ahora difiere de la
     // fuente esperada (el tier aplica otro modelo). Ambas direcciones quedan visibles.

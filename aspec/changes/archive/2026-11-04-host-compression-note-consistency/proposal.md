@@ -183,7 +183,7 @@ La validación declarada del repositorio es:
   **Descartado:** exportar `applyTier` para testearlo directamente.
   **Justificación:** el guard cubre la precondición estructural que el no-op necesita sin ampliar la
   superficie pública del CLI ni convertir un detalle interno en contrato.
-  **Refs:** `path:src/cli/index.js`, `path:profiles/test/agents`, `change:host-compression-note-consistency`
+  **Refs:** `path:src/cli/index.js`, `path:profiles/test/agents/tester.md`, `path:profiles/test/agents/reviewer.md`, `change:host-compression-note-consistency`
   **Estado:** aprobado
 
 - **memory_key:** local-version-drift-remediation
@@ -193,7 +193,7 @@ La validación declarada del repositorio es:
   **Justificación:** `upgrade` es el dueño existente de re-aplicar templates y regenerar
   `.ancletorc`/`.ancleto/machine-env.md`; `check` es de lectura y no debe escribir. Ambos archivos
   son gitignored y la tarea no escribe memoria.
-  **Refs:** `path:src/cli/index.js`, `path:.ancletorc`, `path:.ancleto/machine-env.md`
+  **Refs:** `path:src/cli/index.js`, `path:.ancletorc`, `path:.ancleto/machine-env.md`, `change:host-compression-note-consistency`
   **Estado:** aprobado
 
 - **memory_key:** compression-note-active-host-scope

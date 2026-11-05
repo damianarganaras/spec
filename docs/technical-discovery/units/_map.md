@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-11-05T03:53:28Z
-pluginVersion: 0.18.16
+generatedAt: 2026-11-05T23:05:00Z
+pluginVersion: 0.20.0
 skillVersion: '2.3'
 ---
 
@@ -17,10 +17,11 @@ skillVersion: '2.3'
 | Integridad de IDs | `declaredModelIds` + `missingModelIdsInCatalog`; guard de tiers/cadenas/agents/perfiles | `src/core/tier-models.js`, `src/core/model-catalog.js` | `units/discovery-engine.md` |
 | Catálogo de modelos | Snapshot de 5 proveedores / 211 IDs; helpers puros; refresco manual con gate de `--write` | `src/core/model-catalog.js`, `src/core/model-catalog.json`, `scripts/refresh-model-catalog.mjs` | `units/discovery-engine.md` |
 | Adaptación por host | Frontmatter de agents, `frontmatterValue` y layouts nativos (`AGENT_TARGETS`) | `src/core/adapters/frontmatter.js`, `src/cli/index.js` | `units/cli-install.md` |
-| Diagnósticos de estado | `check` (tier dormido, deriva de versión, salud MCP) y `doctor` (precedencia de config MCP) | `src/cli/index.js` → `checkCommand`, `checkTierOrphan`, `doctorCommand` | `units/cli-install.md` |
-| Salud de comandos MCP | `mcpCommandBroken`, `findProjectMcpFile`, `PROJECT_MCP_CANDIDATES`; avisos de `check` y aviso de `import` | `src/cli/index.js` | `units/cli-install.md` |
+| Ruteo MCP por host | `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`; escritura por host activo, aviso único sin destino e intención de bundle | `src/cli/index.js` → `setupHostMcp`, `resolveHostMcpDestination`, `readHostMcpIntent` | `units/cli-install.md` |
+| Diagnósticos de estado | `check` (tier dormido, deriva de versión, salud MCP host-aware) y `doctor` (precedencia host activo→instalados→global) | `src/cli/index.js` → `checkCommand`, `checkTierOrphan`, `doctorCommand` | `units/cli-install.md` |
+| Salud de comandos MCP | `mcpCommandBroken`, `resolveExistingHostMcpDestinations`, `HOST_MCP_TARGETS`; avisos de `check` y aviso de `import` | `src/cli/index.js` | `units/cli-install.md` |
 | Nota de compresión host-scoped | `resolvesHostCompression` + `hostConfigHasCompression`; gate estado-driven en `install`/`init`/`import` | `src/cli/index.js` | `units/cli-install.md` |
-| Portabilidad | Bundle `export`; `import` con `--repair`, validación de `manifest.mcp`, tier y `installedPaths` acumulativo | `src/cli/index.js` → `exportCmd`/`importCmd` | `units/cli-install.md` |
+| Portabilidad | Bundle `export` host-neutral; `import` con `--repair`, validación de `manifest.mcp`, tier y `installedPaths` acumulativo | `src/cli/index.js` → `exportCmd`/`importCmd` | `units/cli-install.md` |
 | Discovery y seed | Topología, hashes, impacto, `seed-map`, estado `READY/STALE` | `src/core/discovery.js`, `src/cli/index.js` | `units/discovery-engine.md` |
 | Empaquetado Repomix | Args e ignores por tier; presupuesto de tokens | `src/core/repomix-tier.js` | `units/discovery-engine.md` |
 | Affected-set | Grafo de imports y clausura de dependientes | `src/core/affected-set.js` | `units/discovery-engine.md` |
@@ -35,7 +36,7 @@ skillVersion: '2.3'
 | Skills | 21 skills del ciclo SDD/discovery/review | `skills/*/SKILL.md` | — |
 | Templates | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` | `templates/*.md` | — |
 | Perfil test | Overlay de tester/reviewer y commands de test | `profiles/test/**` | `units/cli-install.md` |
-| Specs y changes | Specs canónicos (incl. `cli-diagnostics`) y ciclo de cambios (archives de `check-doctor-state-parity` y `mcp-command-health`) | `aspec/specs/**`, `aspec/changes/**` | — |
+| Specs y changes | Specs canónicos (`cli-diagnostics`, `agent-install-routing`, `project-portability`) y ciclo de cambios (archives de `mcp-host-write-routing`, `mcp-oracle-residual-closure` y `host-neutral-bundle`) | `aspec/specs/**`, `aspec/changes/**` | — |
 | Stats | Tokens por sesión y fallos de tool parts de opencode | `src/cli/index.js` (`stats`) | `units/cli-install.md` |
 | Lint y publicación | `eslint src/ test/ scripts/`, npm publish y GitHub Release | `eslint.config.js`, `.github/workflows/publish.yml` | — |
 | Suite de tests | Guards de modelos, integridad del catálogo, discovery, memoria, adapters y CLI | `test/*.test.js` | — |

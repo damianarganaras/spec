@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.16] - 2026-11-05
+
+### Fixed
+- **`mcpCommandBroken` ya no declara roto todo path con letra de unidad**: un comando absoluto sano de Windows deja de reescribirse en `import --repair` y en los refreshers de `upgrade`.
+
+### Added
+- **Advisories no bloqueantes de salud MCP en `check`**: avisa cuando la config MCP del proyecto no se puede parsear y cuando una entrada MCP tiene el comando roto, sin cambiar el exit code.
+
+### Changed
+- **`import` advierte antes de reemplazar una config MCP del proyecto no parseable**.
+- **Un único dueño del conjunto de nombres de archivo candidatos de MCP del proyecto**: `findProjectMcpFile`, `mergeMcp` y `hostConfigHasCompression` comparten la misma fuente.
+
 ## [0.18.15] - 2026-11-04
 
 ### Fixed

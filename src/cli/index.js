@@ -759,7 +759,7 @@ async function mergeMcp(configDir, mcpMap) {
     const p = join(configDir, c)
     if (await exists(p)) existing.push(p)
   }
-  const targets = existing.length ? existing : [join(configDir, 'opencode.json')]
+  const targets = existing.length ? existing : [join(configDir, PROJECT_MCP_CANDIDATES[0])]
 
   const seen = new Set()
   const added = []
@@ -786,13 +786,21 @@ async function mergeMcp(configDir, mcpMap) {
   return { file: targets.join(', '), added: [...new Set(added)] }
 }
 
+// Esquema de servidor de Antigravity: `{ command, args, env }` (se descartan
+// `type`/`enabled` de opencode).
+function toAntigravityServer(def) {
+  const command = Array.isArray(def.command) ? def.command : [def.command]
+  const server = { command: command[0], args: command.slice(1) }
+  if (def.env) server.env = def.env
+  return server
+}
+
 // D6: MCP de workspace de Antigravity (`.agents/mcp_config.json`). Merge NO
 // destructivo: se preservan `mcpServers` y demas claves top-level, no se pisa un
-// servidor homonimo, y un JSON invalido se avisa sin sobrescribir. Esquema del host
-// `{ command, args, env }` (se descartan `type`/`enabled` de opencode).
+// servidor homonimo, y un JSON invalido se avisa sin sobrescribir.
 async function mergeAntigravityMcp(projectDir, mcpMap) {
   if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
-  const file = join(projectDir, '.agents', 'mcp_config.json')
+  const file = hostMcpProjectFile(projectDir, 'antigravity')
   let cfg = {}
   if (await exists(file)) {
     try {
@@ -806,10 +814,7 @@ async function mergeAntigravityMcp(projectDir, mcpMap) {
   const added = []
   for (const [name, def] of Object.entries(mcpMap)) {
     if (cfg.mcpServers[name]) continue
-    const command = Array.isArray(def.command) ? def.command : [def.command]
-    const server = { command: command[0], args: command.slice(1) }
-    if (def.env) server.env = def.env
-    cfg.mcpServers[name] = server
+    cfg.mcpServers[name] = toAntigravityServer(def)
     added.push(name)
   }
   await mkdir(dirname(file), { recursive: true })
@@ -830,11 +835,19 @@ function mcpCommandBroken(entry) {
   return false
 }
 
+// Normaliza una entrada de esquema `mcpServers` ({ command: string, args: [] })
+// a la forma canonica `{ command: [<string>, ...<args>] }` que evalua
+// `mcpCommandBroken`.
+function normalizeHostMcpEntry(entry) {
+  if (!entry || Array.isArray(entry.command)) return entry
+  return { command: [entry.command, ...(Array.isArray(entry.args) ? entry.args : [])] }
+}
+
 // Merge no destructivo hacia copilot-mcp.json del proyecto (nunca toca
 // copilot-instructions.md: ese archivo es del usuario).
 async function mergeCopilotMcp(projectDir, mcpMap) {
   if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
-  const file = join(projectDir, 'copilot-mcp.json')
+  const file = hostMcpProjectFile(projectDir, 'copilot')
   let cfg = {}
   if (await exists(file)) {
     try {
@@ -869,7 +882,7 @@ function toCommandCodeServer(def) {
 
 async function mergeCommandCodeMcp(projectDir, mcpMap) {
   if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
-  const file = join(projectDir, '.mcp.json')
+  const file = hostMcpProjectFile(projectDir, 'commandcode')
   let cfg = {}
   if (await exists(file)) {
     try {
@@ -890,20 +903,96 @@ async function mergeCommandCodeMcp(projectDir, mcpMap) {
   return { file, added }
 }
 
-// D6: dueno unico del MCP de host. Antigravity mergea `.agents/mcp_config.json`;
-// Command Code mergea `.mcp.json`; el resto conserva `mergeMcp` sobre opencode.json
-// (targetDir = .opencode del proyecto o config global).
-async function setupHostMcp(targetDir, mcpMap, { projectDir = null, agent = null } = {}) {
+// D-MCP: descriptor unico de destino MCP por host. `null` = el host no declara
+// destino de proyecto: no se escribe archivo MCP ni se crea `.opencode`. `file` es
+// relativo al proyecto y `schema` la clave del mapa de servidores.
+const HOST_MCP_TARGETS = {
+  opencode: { file: '.opencode/opencode.json', schema: 'mcp', merge: mergeMcp },
+  antigravity: { file: '.agents/mcp_config.json', schema: 'mcpServers', merge: mergeAntigravityMcp },
+  commandcode: { file: '.mcp.json', schema: 'mcpServers', merge: mergeCommandCodeMcp },
+  copilot: { file: 'copilot-mcp.json', schema: 'mcp', merge: mergeCopilotMcp },
+  claude: null,
+  vscode: null,
+  cursor: null,
+  roo: null
+}
+
+// Orden determinista de los hosts que declaran destino (check/doctor).
+const HOST_MCP_ORDER = ['opencode', 'antigravity', 'commandcode', 'copilot']
+
+function hostMcpTarget(host) {
+  if (!host || !Object.prototype.hasOwnProperty.call(HOST_MCP_TARGETS, host)) return null
+  return HOST_MCP_TARGETS[host]
+}
+
+function hostMcpProjectFile(projectDir, host) {
+  const target = hostMcpTarget(host)
+  return target ? join(projectDir, target.file) : null
+}
+
+// Para opencode se respeta el par de candidatos: el primer archivo existente
+// (json/jsonc), o el `.json` por defecto cuando no hay ninguno.
+async function resolveHostMcpFile(projectDir, host) {
+  const target = hostMcpTarget(host)
+  if (!target) return null
+  if (host === 'opencode') return (await findProjectMcpFile(projectDir)) || hostMcpProjectFile(projectDir, host)
+  return hostMcpProjectFile(projectDir, host)
+}
+
+async function resolveHostMcpDestination(projectDir, host) {
+  const file = await resolveHostMcpFile(projectDir, host)
+  if (!file) return null
+  return { host, file, schema: hostMcpTarget(host).schema }
+}
+
+// Destinos ya existentes de un conjunto de hosts, en el orden recibido y sin
+// duplicar hosts.
+async function resolveExistingHostMcpDestinations(projectDir, hosts) {
+  const destinations = []
+  const seen = new Set()
+  for (const host of hosts) {
+    if (!hostMcpTarget(host) || seen.has(host)) continue
+    seen.add(host)
+    const destination = await resolveHostMcpDestination(projectDir, host)
+    if (destination && (await exists(destination.file))) destinations.push(destination)
+  }
+  return destinations
+}
+
+// Aviso unico por corrida para un host sin destino MCP: no bloquea ni cambia el exit.
+const noMcpDestinationWarned = new Set()
+function warnNoMcpDestination(host) {
+  if (noMcpDestinationWarned.has(host)) return
+  noMcpDestinationWarned.add(host)
+  console.error(`ancleto: el host '${host}' no declara configuracion MCP de proyecto; no se escribio MCP`)
+}
+
+// D6: dueno unico del MCP de host. Resuelve el destino desde el descriptor; la
+// instalacion global sin proyecto conserva el comportamiento previo solo-opencode.
+async function setupHostMcp(mcpMap, { projectDir = null, agent = null } = {}) {
   if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
-  if (agent === 'antigravity' && projectDir) return mergeAntigravityMcp(projectDir, mcpMap)
-  if (agent === 'commandcode' && projectDir) return mergeCommandCodeMcp(projectDir, mcpMap)
-  await mkdir(targetDir, { recursive: true })
-  return mergeMcp(targetDir, mcpMap)
+  if (!projectDir) {
+    const dir = globalConfigDir()
+    await mkdir(dir, { recursive: true })
+    return mergeMcp(dir, mcpMap)
+  }
+  const host = agent || DEFAULT_AGENT
+  const target = hostMcpTarget(host)
+  if (!target) {
+    warnNoMcpDestination(host)
+    return { file: null, added: [] }
+  }
+  if (host === 'opencode') {
+    const configDir = dirname(hostMcpProjectFile(projectDir, 'opencode'))
+    await mkdir(configDir, { recursive: true })
+    return target.merge(configDir, mcpMap)
+  }
+  return target.merge(projectDir, mcpMap)
 }
 
 // Regenera entradas rotas y agrega ausentes en copilot-mcp.json (para upgrade).
 async function refreshCopilotMcp(projectDir) {
-  const file = join(projectDir, 'copilot-mcp.json')
+  const file = hostMcpProjectFile(projectDir, 'copilot')
   let cfg = {}
   if (await exists(file)) {
     try {
@@ -934,7 +1023,7 @@ async function refreshCopilotMcp(projectDir) {
 // Regenera entradas rotas y agrega ausentes en `.mcp.json` de Command Code (para
 // upgrade). Mismo criterio que `refreshCopilotMcp`, con el esquema del host.
 async function refreshCommandCodeMcp(projectDir) {
-  const file = join(projectDir, '.mcp.json')
+  const file = hostMcpProjectFile(projectDir, 'commandcode')
   let cfg = {}
   if (await exists(file)) {
     try {
@@ -1226,6 +1315,11 @@ function installedHostsFromPaths(ip) {
   const dirs = new Set([...(ip?.skills || []), ...(ip?.agents || []), ...(ip?.commands || [])])
   return Object.entries(AGENT_TARGETS)
     .filter(([, t]) => ['skills', 'agents', 'commands'].some((cat) => t[cat]?.dir && dirs.has(t[cat].dir)))
+    // `.github/prompts` es compartido por copilot (agents+commands) y vscode
+    // (commands): una coincidencia en el dir compartido no instala vscode. Solo un
+    // destino exclusivo de vscode (`.github/agents`/`.github/skills`) lo hace, para
+    // no leer un proyecto copilot-only como vscode.
+    .filter(([host, t]) => host !== 'vscode' || ['skills', 'agents'].some((cat) => t[cat]?.dir && dirs.has(t[cat].dir)))
     .map(([host]) => host)
 }
 
@@ -1820,11 +1914,7 @@ async function install(args) {
     }
   }
 
-  const res = await setupHostMcp(target, mcpMap, { projectDir, agent })
-  if (projectDir && agent === 'copilot') {
-    const cres = await mergeCopilotMcp(projectDir, mcpMap)
-    if (cres.added.length) console.log(`ancleto: MCP configurados: ${cres.added.join(', ')} en ${cres.file}`)
-  }
+  const res = await setupHostMcp(mcpMap, { projectDir, agent })
   const loc = projectDir
     ? `${projectDir} (layout ${agent} + templates en la raiz)`
     : `${target} (disponible en todos tus proyectos)`
@@ -2012,7 +2102,7 @@ async function initProject(args) {
   await registerProject(projectDir, { agent, tier: tier || null })
   // D7: init configura el MCP del host igual que install (mismo dueno, sin rama
   // especial por host); --no-mcp conserva el escape.
-  const mcpRes = await setupHostMcp(join(projectDir, '.opencode'), mcpMap, { projectDir, agent })
+  const mcpRes = await setupHostMcp(mcpMap, { projectDir, agent })
   if (azure.enabled) console.log(AZURE_MCP_NOTICE)
   if (mcpRes.added.length) console.log(`ancleto: MCP configurados: ${mcpRes.added.join(', ')} en ${mcpRes.file}`)
   console.log(`ancleto: .ancletorc actualizado en ${projectDir} (v${manifest.version})${azure.enabled ? ' (Azure habilitado)' : ' (Azure desactivado)'} (Agente: ${agent})${tier ? ` (Tier: ${tier})` : ''} (Idioma: ${language})`)
@@ -3003,20 +3093,29 @@ async function checkCommand() {
     const list = declaredMissing.map((item) => `${item.id} (${item.source || 'sin origen'})`).join(', ')
     warnings.push(`IDs declarados ausentes del catálogo de modelos: ${list}; refrescá el catálogo desde el repositorio fuente`)
   }
-  // Salud MCP: advisory sobre la config del proyecto (no la global ni la de otros
-  // hosts). No altera `missing`/`orphans`, el exit code ni escribe archivos.
-  const projectMcp = await readProjectMcp(cwd)
-  if (projectMcp.error) {
-    warnings.push(`${relative(cwd, projectMcp.file).replace(/\\/g, '/')} no es JSON valido; no se inspeccionaron las entradas MCP`)
-  } else if (await exists(projectMcp.file)) {
-    const mcpMap = projectMcp.cfg?.mcp
-    if (mcpMap && typeof mcpMap === 'object' && !Array.isArray(mcpMap)) {
-      for (const [name, def] of Object.entries(mcpMap)) {
-        if (!mcpCommandBroken(def)) continue
-        const first = Array.isArray(def?.command) ? def.command[0] : undefined
-        const bin = typeof first === 'string' && first.length > 0 ? first : 'command ausente'
-        warnings.push(`MCP '${name}' tiene un comando roto (${bin})`)
-      }
+  // Salud MCP: advisory, host-aware. Se inspecciona el destino de cada host
+  // instalado que declare uno; nunca la config global ni hosts sin destino. No
+  // altera `missing`/`orphans`, el exit code ni escribe archivos.
+  const mcpDestinations = await resolveExistingHostMcpDestinations(
+    cwd,
+    HOST_MCP_ORDER.filter((host) => installedHosts.includes(host))
+  )
+  for (const destination of mcpDestinations) {
+    let cfg
+    try {
+      cfg = JSON.parse((await readFile(destination.file, 'utf8')).replace(/^\uFEFF/, ''))
+    } catch {
+      warnings.push(`${relative(cwd, destination.file).replace(/\\/g, '/')} no es JSON valido; no se inspeccionaron las entradas MCP`)
+      continue
+    }
+    const mcpMap = cfg?.[destination.schema]
+    if (!mcpMap || typeof mcpMap !== 'object' || Array.isArray(mcpMap)) continue
+    for (const [name, def] of Object.entries(mcpMap)) {
+      const entry = destination.schema === 'mcpServers' ? normalizeHostMcpEntry(def) : def
+      if (!mcpCommandBroken(entry)) continue
+      const first = Array.isArray(entry?.command) ? entry.command[0] : undefined
+      const bin = typeof first === 'string' && first.length > 0 ? first : 'command ausente'
+      warnings.push(`MCP '${name}' tiene un comando roto (${bin})`)
     }
   }
 
@@ -4122,25 +4221,44 @@ async function readProjectMcp(projectDir) {
   }
 }
 
-// Repara entradas rotas y agrega ausentes (solo las de intendedNames cuando se
-// indica; con null solo repara las existentes). Nunca toca las sanas.
-async function repairProjectMcp(projectDir, fresh, intendedNames = null) {
-  const { file, cfg, error } = await readProjectMcp(projectDir)
+// Repara entradas rotas y agrega ausentes en el destino MCP del host activo (solo
+// las de intendedNames cuando se indica; con null solo repara las existentes).
+// Nunca toca las sanas. Un destino no parseable se avisa nombrando el archivo y se
+// reemplaza por la configuracion nueva (decision M2), sin abortar.
+async function repairProjectMcp(projectDir, destination, fresh, intendedNames = null) {
+  const { host, file, schema } = destination
+  const toServer = (def) => {
+    if (host === 'antigravity') return toAntigravityServer(def)
+    if (host === 'commandcode') return toCommandCodeServer(def)
+    return def
+  }
+  let cfg = {}
+  let error = null
+  if (await exists(file)) {
+    try {
+      cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    } catch (err) {
+      error = err
+    }
+  }
   if (error) {
     console.error(`ancleto: no se pudo leer ${relative(projectDir, file).replace(/\\/g, '/')} como JSON; se reemplaza por la configuracion MCP nueva`)
   }
-  cfg.mcp = cfg.mcp || {}
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) cfg = {}
+  const current = cfg[schema]
+  cfg[schema] = current && typeof current === 'object' && !Array.isArray(current) ? current : {}
   const fixed = []
-  for (const [name, def] of Object.entries(cfg.mcp)) {
-    if (mcpCommandBroken(def) && fresh[name]) {
-      cfg.mcp[name] = fresh[name]
+  for (const [name, def] of Object.entries(cfg[schema])) {
+    const entry = schema === 'mcpServers' ? normalizeHostMcpEntry(def) : def
+    if (mcpCommandBroken(entry) && fresh[name]) {
+      cfg[schema][name] = toServer(fresh[name])
       fixed.push(name)
     }
   }
   if (intendedNames) {
     for (const name of intendedNames) {
-      if (!cfg.mcp[name] && fresh[name]) {
-        cfg.mcp[name] = fresh[name]
+      if (!cfg[schema][name] && fresh[name]) {
+        cfg[schema][name] = toServer(fresh[name])
         fixed.push(`${name} (agregado)`)
       }
     }
@@ -4227,6 +4345,8 @@ async function importCmd(args) {
   // Se resuelve una sola vez antes de instalar los assets y se reutiliza en el repair.
   let freshProjectMcp = null
   let intendedMcpNames = null
+  // Host activo de la corrida: el del bundle cuando existe; si no, el configurado.
+  let importAgent = null
   if (bundleArg) {
     const resolved = resolve(bundleArg)
     if (!existsSync(resolved)) {
@@ -4276,6 +4396,7 @@ async function importCmd(args) {
     const existingRc = await readAncletorc(projectDir)
     const rcAgent = bundleRc?.agent ? bundleRc.agent : existingRc?.agent
     const agent = (rcAgent && SUPPORTED_AGENTS.includes(rcAgent)) ? rcAgent : DEFAULT_AGENT
+    importAgent = agent
     const importProfile = validProfile(bundleRc?.profile ? bundleRc.profile : existingRc?.profile) || DEFAULT_PROFILE
     // Un `gratisModel` legacy/desconocido se normaliza al unico gratis conocido. La
     // clave se persiste solo si el bundle la declaraba: una clave ausente no se agrega.
@@ -4321,10 +4442,10 @@ async function importCmd(args) {
     freshProjectMcp = buildDefaultMcp({ withEngram: manifest?.flags?.engram === true })
     intendedMcpNames = (manifest.mcp ?? []).map((m) => m.name)
     const written = await installAgentAssets(projectDir, agent, {
-      // `repairProjectMcp` solo escribe `.opencode/opencode.json`: para el resto de
-      // los hosts la nota depende exclusivamente de su config ya presente en disco.
+      // La config final es la de disco (hostConfigHasCompression) mas el MCP que el
+      // repair de este import escribira en el destino del host activo.
       compression: await resolvesHostCompression(projectDir, agent, {
-        writesCaveman: agent === 'opencode' && Boolean(freshProjectMcp && freshProjectMcp.caveman),
+        writesCaveman: Boolean(freshProjectMcp && freshProjectMcp.caveman),
         intendedNames: intendedMcpNames
       })
     })
@@ -4363,18 +4484,34 @@ async function importCmd(args) {
     await scaffoldAspec(projectDir)
     console.log(`ancleto: bundle aplicado (agente: ${agent}${manifest.tier ? `, tier: ${manifest.tier}` : ''})`)
   }
-  const withEngram = manifest
-    ? manifest.flags?.engram === true
-    : Boolean((await readProjectMcp(projectDir)).cfg.mcp?.engram)
+  // Destino MCP del host activo resuelto desde el descriptor (no `.opencode` fijo).
+  const rc = await readAncletorc(projectDir)
+  const activeHost = importAgent
+    || (rc?.agent && SUPPORTED_AGENTS.includes(rc.agent) ? rc.agent : DEFAULT_AGENT)
+  const destination = await resolveHostMcpDestination(projectDir, activeHost)
+  let withEngram = manifest ? manifest.flags?.engram === true : false
+  if (!manifest && destination) {
+    try {
+      const onDisk = JSON.parse((await readFile(destination.file, 'utf8')).replace(/^\uFEFF/, ''))
+      const servers = onDisk?.[destination.schema]
+      withEngram = Boolean(servers && typeof servers === 'object' && !Array.isArray(servers) && servers.engram)
+    } catch {
+      // sin archivo o JSON invalido: el repair lo reemplaza sin engram
+    }
+  }
   const fresh = freshProjectMcp ?? buildDefaultMcp({ withEngram })
   if (manifest?.flags?.azure) {
     fresh['azure-devops'] = { type: 'local', enabled: true, command: ['npx', '-y', '@davstack/mcp-azure-devops'] }
   }
-  const intended = manifest ? intendedMcpNames : null
-  const { file, fixed } = await repairProjectMcp(projectDir, fresh, intended)
-  console.log(fixed.length
-    ? `ancleto: MCP regenerados en ${file}: ${fixed.join(', ')}`
-    : `ancleto: MCP sanos en ${file}, sin cambios`)
+  if (!destination) {
+    warnNoMcpDestination(activeHost)
+  } else {
+    const intended = manifest ? intendedMcpNames : null
+    const { file, fixed } = await repairProjectMcp(projectDir, destination, fresh, intended)
+    console.log(fixed.length
+      ? `ancleto: MCP regenerados en ${file}: ${fixed.join(', ')}`
+      : `ancleto: MCP sanos en ${file}, sin cambios`)
+  }
   await doctorCommand()
 }
 
@@ -4398,10 +4535,19 @@ async function doctorCommand() {
     fatal = true
   }
 
-  // Precedencia: la config del proyecto es la que escriben init/install; sólo si no
-  // existe se valida la global. Un archivo de proyecto inválido no cae al fallback.
+  // Precedencia: el destino del host activo que declare uno; luego los destinos de
+  // los hosts instalados (opencode, antigravity, commandcode, copilot). Sólo si no
+  // existe ninguno se valida la config global de opencode. Un archivo de proyecto
+  // inválido no cae al fallback.
   const cwd = process.cwd()
-  let cfgFile = await findProjectMcpFile(cwd)
+  const rc = await readAncletorc(cwd)
+  const activeHost = rc?.agent && SUPPORTED_AGENTS.includes(rc.agent) ? rc.agent : DEFAULT_AGENT
+  const installedHosts = installedHostsFromPaths(rc?.installedPaths)
+  const [projectDestination] = await resolveExistingHostMcpDestinations(cwd, [
+    activeHost,
+    ...HOST_MCP_ORDER.filter((host) => installedHosts.includes(host))
+  ])
+  let cfgFile = projectDestination?.file ?? null
   let cfgLabel = cfgFile ? relative(cwd, cfgFile).replace(/\\/g, '/') : null
   if (!cfgFile) {
     for (const c of GLOBAL_MCP_CANDIDATES) {

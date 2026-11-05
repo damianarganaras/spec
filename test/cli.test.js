@@ -2748,6 +2748,18 @@ describe('CLI MCP command health (mcp-command-health)', () => {
     assert.equal(r.status, 0, `install base: ${r.stderr}`)
   }
 
+  describe('ayuda de --help', () => {
+    it('describe el predicado vivo y no promete "command inexistente"', () => {
+      withDir((dir) => {
+        const r = run(['--help'], dir)
+        assert.equal(r.status, 0)
+        assert.match(r.stdout, /command ausente\/vacio o ruta absoluta inexistente/)
+        assert.match(r.stdout, /un nombre simple no es roto/)
+        assert.doesNotMatch(r.stdout, /command inexistente/)
+      })
+    })
+  })
+
   describe('predicado de salud', () => {
     it('una ruta absoluta existente y un comando simple no se reescriben', () => {
       withDir((dir) => {
@@ -2840,6 +2852,35 @@ describe('CLI MCP command health (mcp-command-health)', () => {
           const cfg = JSON.parse(readFileSync(file, 'utf8'))
           assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, `${label}: regenerada`)
         }
+      })
+    })
+
+    // El predicado no resuelve PATH: un nombre simple ausente del PATH sigue sano
+    // tanto en `check` como en `import --repair`. Una ruta absoluta ausente derivada
+    // de `tmpdir()` es rota en ambos. Ninguno de los dos mueve el exit code.
+    it('check y import --repair comparten el veredicto sin resolver PATH ni mover el exit', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        const missing = absentBin(dir)
+        const simple = 'ancleto-test-absent-mcp-bin'
+        const file = writeMcp(dir, {
+          'ancleto-memory': { type: 'local', enabled: true, command: [missing, 'x', 'mcp'] },
+          simple: { type: 'local', enabled: true, command: [simple] }
+        })
+        const check = run(['check'], dir)
+        assert.equal(check.status, 0)
+        assert.ok(check.stdout.includes(`⚠ MCP 'ancleto-memory' tiene un comando roto (${missing})`), check.stdout)
+        assert.doesNotMatch(check.stdout, /MCP 'simple'/, 'un nombre simple no se resuelve en PATH')
+
+        const repaired = run(['import', '--repair'], dir)
+        assert.equal(repaired.status, 0)
+        const cfg = JSON.parse(readFileSync(file, 'utf8'))
+        assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'la ruta absoluta ausente se regenera')
+        assert.deepEqual(
+          cfg.mcp.simple,
+          { type: 'local', enabled: true, command: [simple] },
+          'el nombre simple no se reescribe'
+        )
       })
     })
   })
@@ -3098,6 +3139,23 @@ describe('CLI MCP command health (mcp-command-health)', () => {
         const cfg = JSON.parse(readFileSync(jsonc, 'utf8'))
         assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'import repara el .jsonc')
         assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false, 'no crea el .json de proyecto')
+      })
+    })
+
+    // El fallback global deriva su par de PROJECT_MCP_CANDIDATES: mismos nombres y
+    // orden (`.json` antes que `.jsonc`). `doctor` sólo lee y reporta el nombre base.
+    it('el fallback global conserva el orden .json antes que .jsonc y no escribe', () => {
+      withDir((dir) => {
+        const xdg = join(dir, 'xdg')
+        mkdirSync(join(xdg, 'opencode'), { recursive: true })
+        writeFileSync(join(xdg, 'opencode', 'opencode.json'), JSON.stringify({ mcp: {} }))
+        writeFileSync(join(xdg, 'opencode', 'opencode.jsonc'), JSON.stringify({ mcp: {} }))
+        const before = projectSnapshot(dir)
+        const r = run(['doctor'], dir, { XDG_CONFIG_HOME: xdg })
+        assert.equal(r.status, 0)
+        assert.match(r.stdout, /✔ opencode\.json valido/)
+        assert.doesNotMatch(r.stdout, /opencode\.jsonc/, 'gana el primer candidato global')
+        assert.deepEqual(projectSnapshot(dir), before, 'doctor no escribe')
       })
     })
   })

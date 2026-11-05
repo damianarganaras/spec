@@ -2,6 +2,14 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.17] - 2026-11-05
+
+### Fixed
+- **Texto de `--help` y requirement de `project-portability` alineados al predicado MCP vivo**: una entrada está rota cuando `command` falta o está vacío o cuando su ruta absoluta no existe; un nombre simple irresoluble en PATH no cuenta como roto.
+
+### Docs
+- **Archive de `mcp-oracle-residual-closure`**: se sincroniza el spec `project-portability` con los requirements cerrados por el change.
+
 ## [0.18.16] - 2026-11-05
 
 ### Fixed

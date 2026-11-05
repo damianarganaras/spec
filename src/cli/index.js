@@ -30,6 +30,8 @@ const TEMPLATES = ['AGENTS.md', 'PRODUCT.md']
 const AZURE_MCP_NOTICE = 'ancleto: MCP azure-devops habilitado — usa las variables de entorno AZURE_DEVOPS_ORG_URL y AZURE_DEVOPS_PAT'
 // Candidatos de config MCP (mismo par, mismo orden en descubrimiento, merge y deteccion).
 const PROJECT_MCP_CANDIDATES = ['opencode.json', 'opencode.jsonc']
+// Nombres del fallback global de `doctor`, derivados del unico dueno del par.
+const GLOBAL_MCP_CANDIDATES = PROJECT_MCP_CANDIDATES.map((candidate) => basename(candidate))
 
 const HELP = `ancleto - orquestador SDD liviano con subagentes optimizados para costo/tokens
 (alias: aspec)
@@ -109,7 +111,7 @@ ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FT
   ancleto check                         Verifica integridad de archivos instalados vs manifiesto
   ancleto export [--tar <file>]         Empaqueta lo portable del proyecto (bundle + manifest.json sin rutas)
   ancleto import <bundle> [--repair]    Restaura el bundle regenerando el MCP local; --repair solo arregla entradas rotas
-  ancleto import --repair               Repara in place el opencode.json con command inexistente
+  ancleto import --repair               Repara in place la config MCP rota: command ausente/vacio o ruta absoluta inexistente; un nombre simple no es roto
   ancleto doctor                        Diagnostica el entorno (Node, node:sqlite, opencode.json)
   ancleto --help                      Esta ayuda
   ancleto --version                   Version del paquete
@@ -4402,7 +4404,7 @@ async function doctorCommand() {
   let cfgFile = await findProjectMcpFile(cwd)
   let cfgLabel = cfgFile ? relative(cwd, cfgFile).replace(/\\/g, '/') : null
   if (!cfgFile) {
-    for (const c of ['opencode.json', 'opencode.jsonc']) {
+    for (const c of GLOBAL_MCP_CANDIDATES) {
       const p = join(globalConfigDir(), c)
       if (await exists(p)) {
         cfgFile = p

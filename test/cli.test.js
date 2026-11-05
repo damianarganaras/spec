@@ -404,23 +404,26 @@ describe('CLI multi-host routing y adapters (add-multi-agent-cli-support)', () =
     })
   })
 
-  it('5.7 --agent claude no crea archivos MCP de host', () => {
+  it('5.7 --agent claude con MCP habilitado no crea archivos MCP de host y avisa una sola vez', () => {
     withDir((dir) => {
-      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir)
+      const r = run(['install', '--project', dir, '--tier', 'minimo', '--agent', 'claude'], dir, compressionEnv(dir))
       assert.equal(r.status, 0)
       assert.equal(existsSync(join(dir, '.mcp.json')), false)
       assert.equal(existsSync(join(dir, 'mcp_config.json')), false)
       assert.equal(existsSync(join(dir, '.vscode', 'mcp.json')), false)
+      assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false)
+      assert.equal((r.stderr.match(/el host 'claude' no declara configuracion MCP de proyecto/g) || []).length, 1)
     })
   })
 
-  it('5.7 un .mcp.json preexistente se conserva intacto', () => {
+  it('5.7 un .mcp.json preexistente se conserva intacto con MCP habilitado', () => {
     withDir((dir) => {
       const prev = JSON.stringify({ mcpServers: { custom: { command: 'x' } } }, null, 2) + '\n'
       writeFileSync(join(dir, '.mcp.json'), prev)
-      const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir)
+      const r = run(['install', '--project', dir, '--tier', 'minimo', '--agent', 'claude'], dir, compressionEnv(dir))
       assert.equal(r.status, 0)
       assert.equal(readFileSync(join(dir, '.mcp.json'), 'utf8'), prev)
+      assert.equal((r.stderr.match(/el host 'claude' no declara configuracion MCP de proyecto/g) || []).length, 1)
     })
   })
 
@@ -766,18 +769,21 @@ describe('CLI antigravity full support (add-antigravity-full-support)', () => {
     })
   })
 
-  it('6.8 claude y vscode no crean MCP de host ni el layout de antigravity', () => {
+  it('6.8 claude y vscode con MCP habilitado no crean MCP de host ni el layout de antigravity', () => {
     withDir((dir) => {
-      const c = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], dir, regEnv(dir))
+      const c = run(['install', '--project', dir, '--tier', 'minimo', '--agent', 'claude'], dir, regEnv(dir))
       assert.equal(c.status, 0)
+      assert.equal((c.stderr.match(/el host 'claude' no declara configuracion MCP de proyecto/g) || []).length, 1)
       const claudeCoder = readFileSync(join(dir, '.claude', 'agents', 'coder.md'), 'utf8')
       assert.doesNotMatch(claudeCoder, /^tools:/m)
       assert.doesNotMatch(claudeCoder, /^mode:/m)
-      const v = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo', '--agent', 'vscode'], dir, regEnv(dir))
+      const v = run(['install', '--project', dir, '--tier', 'minimo', '--agent', 'vscode'], dir, regEnv(dir))
       assert.equal(v.status, 0)
+      assert.equal((v.stderr.match(/el host 'vscode' no declara configuracion MCP de proyecto/g) || []).length, 1)
       assert.ok(existsSync(join(dir, '.github', 'agents', 'coder.agent.md')))
       assert.equal(existsSync(join(dir, '.mcp.json')), false)
       assert.equal(existsSync(join(dir, '.vscode', 'mcp.json')), false)
+      assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false)
       assert.equal(existsSync(join(dir, '.agents')), false)
     })
   })
@@ -2694,7 +2700,7 @@ describe('CLI doctor (G4)', () => {
     })
   })
 
-  it('ignora las configs MCP de otros hosts cuando no hay config de proyecto opencode', () => {
+  it('sin hosts instalados cae al fallback global e ignora configs de hosts no declarados', () => {
     withDir((dir) => {
       const xdg = join(dir, 'xdg')
       mkdirSync(join(xdg, 'opencode'), { recursive: true })
@@ -3034,11 +3040,11 @@ describe('CLI MCP command health (mcp-command-health)', () => {
       })
     })
 
-    // Delta (`cli-diagnostics`): `check` solo inspecciona la config MCP del proyecto.
-    // La global —resuelta por el primer branch de `globalConfigDir()`, XDG_CONFIG_HOME— y
-    // las configs de otros hosts (`copilot-mcp.json`, `.mcp.json`) no producen aviso ni
-    // mueven el exit, aunque declaren entradas rotas.
-    it('no inspecciona la config global ni la de otros hosts', () => {
+    // Delta (`cli-diagnostics`): `check` solo inspecciona la config MCP de proyecto de
+    // los hosts instalados. La global —resuelta por el primer branch de `globalConfigDir()`,
+    // XDG_CONFIG_HOME— y los destinos de hosts no instalados (`copilot-mcp.json`, `.mcp.json`)
+    // no producen aviso ni mueven el exit, aunque declaren entradas rotas.
+    it('no inspecciona la config global ni destinos de hosts no instalados', () => {
       withDir((dir) => {
         seedCheckProject(dir)
         assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false)
@@ -6186,6 +6192,386 @@ describe('CLI commandcode support (add-commandcode-support)', () => {
       assert.match(r.stdout, /✔ \.commandcode\/skills/)
       assert.doesNotMatch(r.stdout, /frontmatter diverge/)
       assert.doesNotMatch(r.stdout, /tier .* sin agentes locales/)
+    })
+  })
+})
+
+describe('CLI ruteo de escritura MCP por host (mcp-host-write-routing)', () => {
+  const advisoryPattern = (host) => new RegExp(`el host '${host}' no declara configuracion MCP de proyecto`, 'g')
+  const advisoryCount = (stderr, host) => (stderr.match(advisoryPattern(host)) || []).length
+  const MCP_FILES = [
+    '.opencode/opencode.json',
+    '.opencode/opencode.jsonc',
+    '.mcp.json',
+    '.vscode/mcp.json',
+    '.roo/mcp.json',
+    '.agents/mcp_config.json',
+    'copilot-mcp.json'
+  ]
+  const makeProject = (root, label) => {
+    const project = join(root, label)
+    mkdirSync(project, { recursive: true })
+    return project
+  }
+
+  it('8.1 hosts sin destino con MCP habilitado no escriben MCP, avisan una sola vez y conservan el exit', () => {
+    const hosts = ['claude', 'vscode', 'cursor', 'roo']
+    withDir((root) => {
+      const env = compressionEnv(root)
+      for (const host of hosts) {
+        const installed = makeProject(root, `install-${host}`)
+        const withMcp = run(['install', '--project', installed, '--agent', host, '--tier', 'minimo'], installed, env)
+        assert.equal(withMcp.status, 0, `${host}: install con MCP`)
+        assert.equal(advisoryCount(withMcp.stderr, host), 1, `${host}: un aviso advisory`)
+        for (const rel of MCP_FILES) {
+          assert.equal(existsSync(join(installed, rel)), false, `${host}: no escribe ${rel}`)
+        }
+
+        const initialized = makeProject(root, `init-${host}`)
+        const init = run(['init', '--agent', host], initialized, env)
+        assert.equal(init.status, 0, `${host}: init con MCP`)
+        assert.equal(advisoryCount(init.stderr, host), 1, `${host}: init un aviso advisory`)
+        for (const rel of MCP_FILES) {
+          assert.equal(existsSync(join(initialized, rel)), false, `${host}: init no escribe ${rel}`)
+        }
+
+        const without = makeProject(root, `nomcp-${host}`)
+        const noMcp = run(['install', '--project', without, '--agent', host, '--tier', 'minimo', '--no-mcp'], without, env)
+        assert.equal(noMcp.status, withMcp.status, `${host}: exit identico a --no-mcp`)
+        assert.equal(advisoryCount(noMcp.stderr, host), 0, `${host}: --no-mcp no emite el aviso`)
+      }
+    })
+  })
+
+  it('8.2 un proyecto mixto conserva el .opencode previo y check lo sigue validando', () => {
+    withDir((root) => {
+      const project = makeProject(root, 'mixto')
+      const env = compressionEnv(root)
+      assert.equal(run(['install', '--project', project, '--no-mcp', '--tier', 'minimo'], project, env).status, 0)
+      const missing = join(root, 'binario-inexistente', 'node.exe')
+      const cfgPath = join(project, '.opencode', 'opencode.json')
+      writeFileSync(cfgPath, JSON.stringify({
+        marker: 'keep',
+        mcp: { provocado: { type: 'local', enabled: true, command: [missing] } }
+      }, null, 2) + '\n')
+      const before = readFileSync(cfgPath, 'utf8')
+
+      const claude = run(['install', '--project', project, '--agent', 'claude', '--tier', 'minimo'], project, env)
+      assert.equal(claude.status, 0)
+      assert.equal(advisoryCount(claude.stderr, 'claude'), 1)
+      assert.equal(readFileSync(cfgPath, 'utf8'), before, 'el .opencode previo no se borra ni se reescribe')
+
+      const check = run(['check'], project, env)
+      assert.equal(check.status, 0)
+      assert.ok(check.stdout.includes(`MCP 'provocado' tiene un comando roto (${missing})`), check.stdout)
+      assert.equal(readFileSync(cfgPath, 'utf8'), before, 'check no escribe')
+    })
+  })
+
+  it('8.3 init/install --agent copilot escriben copilot-mcp.json sin .opencode/opencode.json, con merge no destructivo e idempotente', () => {
+    withDir((root) => {
+      const env = compressionEnv(root)
+      const cases = [
+        ['init', (project) => run(['init', '--agent', 'copilot', '--tier', 'minimo'], project, env)],
+        ['install', (project) => run(['install', '--project', project, '--agent', 'copilot', '--tier', 'minimo'], project, env)]
+      ]
+      for (const [label, invoke] of cases) {
+        const project = makeProject(root, label)
+        const file = join(project, 'copilot-mcp.json')
+        writeFileSync(file, JSON.stringify({ mcp: { propio: { type: 'local', command: ['x'] } }, customTop: 1 }, null, 2) + '\n')
+        const first = invoke(project)
+        assert.equal(first.status, 0, `${label}: primera corrida`)
+        const cfg = JSON.parse(readFileSync(file, 'utf8'))
+        assert.ok(cfg.mcp['ancleto-memory'], `${label}: ancleto-memory agregado`)
+        assert.deepEqual(cfg.mcp.propio, { type: 'local', command: ['x'] }, `${label}: entrada propia intacta`)
+        assert.equal(cfg.customTop, 1, `${label}: clave top-level intacta`)
+        assert.equal(existsSync(join(project, '.opencode', 'opencode.json')), false, `${label}: sin .opencode/opencode.json`)
+        const names = Object.keys(cfg.mcp).sort()
+        const bytes = readFileSync(file, 'utf8')
+        const second = invoke(project)
+        assert.equal(second.status, 0, `${label}: segunda corrida`)
+        assert.deepEqual(Object.keys(JSON.parse(readFileSync(file, 'utf8')).mcp).sort(), names, `${label}: mismo conjunto de entradas`)
+        assert.equal(readFileSync(file, 'utf8'), bytes, `${label}: idempotente byte a byte`)
+      }
+    })
+  })
+
+  it('9.1 import --repair con host claude no crea .opencode, avisa una vez y es idempotente', () => {
+    withDir((root) => {
+      const project = makeProject(root, 'claude')
+      const env = compressionEnv(root)
+      assert.equal(run(['init', '--agent', 'claude', '--no-mcp'], project, env).status, 0)
+      const foreign = join(project, '.mcp.json')
+      writeFileSync(foreign, '{ ajeno no parseable\n')
+      const before = projectSnapshot(project)
+      const first = run(['import', '--repair'], project, env)
+      assert.equal(first.status, 0)
+      assert.equal(advisoryCount(first.stderr, 'claude'), 1)
+      assert.equal(existsSync(join(project, '.opencode', 'opencode.json')), false)
+      assert.equal(readFileSync(foreign, 'utf8'), '{ ajeno no parseable\n', 'no toca el .mcp.json de otro host')
+      assert.deepEqual(projectSnapshot(project), before, 'import --repair con host sin destino no escribe')
+      const second = run(['import', '--repair'], project, env)
+      assert.equal(second.status, 0)
+      assert.equal(advisoryCount(second.stderr, 'claude'), 1)
+      assert.deepEqual(projectSnapshot(project), before, 'idempotente')
+    })
+  })
+
+  it('9.2 import --repair rutea al destino de copilot/antigravity/commandcode sin escribir .opencode', () => {
+    const cases = [
+      ['copilot', 'copilot-mcp.json', 'mcp', 'array'],
+      ['antigravity', '.agents/mcp_config.json', 'mcpServers', 'string'],
+      ['commandcode', '.mcp.json', 'mcpServers', 'string']
+    ]
+    withDir((root) => {
+      const env = compressionEnv(root)
+      const missing = join(root, 'binario-inexistente', 'node.exe')
+      for (const [host, rel, schema, shape] of cases) {
+        const project = makeProject(root, host)
+        assert.equal(run(['init', '--agent', host, '--no-mcp'], project, env).status, 0)
+        const file = join(project, rel)
+        mkdirSync(dirname(file), { recursive: true })
+        const broken = shape === 'array'
+          ? { mcp: { 'ancleto-memory': { type: 'local', enabled: true, command: [missing] } } }
+          : { mcpServers: { 'ancleto-memory': { transport: 'stdio', command: missing, args: [] } } }
+        writeFileSync(file, JSON.stringify(broken, null, 2) + '\n')
+
+        const first = run(['import', '--repair'], project, env)
+        assert.equal(first.status, 0, `${host}: import --repair`)
+        const cfg = JSON.parse(readFileSync(file, 'utf8'))
+        const entry = cfg[schema]?.['ancleto-memory']
+        assert.ok(entry, `${host}: reparado en ${schema}`)
+        if (shape === 'array') {
+          assert.equal(entry.command[0], process.execPath, `${host}: comando local del host`)
+        } else {
+          assert.equal(entry.command, process.execPath, `${host}: comando local del host`)
+        }
+        assert.equal(existsSync(join(project, '.opencode')), false, `${host}: no escribe .opencode`)
+        const bytes = readFileSync(file, 'utf8')
+        const second = run(['import', '--repair'], project, env)
+        assert.equal(second.status, 0, `${host}: segunda corrida`)
+        assert.equal(readFileSync(file, 'utf8'), bytes, `${host}: idempotente`)
+      }
+    })
+  })
+
+  it('9.3 import --repair reemplaza un destino declarado no parseable y avisa nombrando el archivo', () => {
+    const cases = [
+      ['copilot', 'copilot-mcp.json', 'mcp'],
+      ['antigravity', '.agents/mcp_config.json', 'mcpServers'],
+      ['commandcode', '.mcp.json', 'mcpServers']
+    ]
+    withDir((root) => {
+      const env = compressionEnv(root)
+      for (const [host, rel, schema] of cases) {
+        const project = makeProject(root, host)
+        assert.equal(run(['init', '--agent', host, '--no-mcp'], project, env).status, 0)
+        const file = join(project, rel)
+        mkdirSync(dirname(file), { recursive: true })
+        writeFileSync(file, '{ roto\n')
+        const r = run(['import', '--repair'], project, env)
+        assert.equal(r.status, 0, `${host}: no aborta`)
+        assert.ok(r.stderr.includes(`no se pudo leer ${rel} como JSON; se reemplaza por la configuracion MCP nueva`), r.stderr)
+        assert.equal((r.stderr.match(/no se pudo leer/g) || []).length, 1, `${host}: un aviso`)
+        const written = readFileSync(file, 'utf8')
+        assert.equal(written.includes('{ roto'), false, `${host}: no conserva el contenido invalido`)
+        const cfg = JSON.parse(written)
+        assert.equal(typeof cfg[schema], 'object', `${host}: mapa ${schema} reemplazado`)
+        assert.equal(Array.isArray(cfg[schema]), false)
+        assert.equal(existsSync(join(project, '.opencode')), false)
+      }
+    })
+  })
+
+  // R1 (project-portability): un bundle importado con host activo copilot escribe
+  // su destino propio (`copilot-mcp.json`, esquema `mcp`) y nunca crea
+  // `.opencode/opencode.json`. El merge es no destructivo e idempotente.
+  it('9.4 import de bundle con host copilot escribe copilot-mcp.json sin crear .opencode y es idempotente', () => {
+    withDir((root) => {
+      const env = compressionEnv(root)
+      const project = makeProject(root, 'bundle-copilot')
+      const file = join(project, 'copilot-mcp.json')
+      writeFileSync(file, JSON.stringify({
+        mcp: { propio: { type: 'local', enabled: true, command: ['x'] } },
+        customTop: 1
+      }, null, 2) + '\n')
+      const bundle = writeMcpBundle(root, {
+        agent: 'copilot',
+        mcp: [{ name: 'ancleto-memory', type: 'local', enabled: true }]
+      })
+
+      const first = run(['import', bundle], project, env)
+      assert.equal(first.status, 0, first.stderr)
+      const cfg = JSON.parse(readFileSync(file, 'utf8'))
+      assert.ok(cfg.mcp['ancleto-memory'], 'el MCP se escribe en copilot-mcp.json (esquema mcp)')
+      assert.deepEqual(cfg.mcp.propio, { type: 'local', enabled: true, command: ['x'] }, 'merge no destructivo')
+      assert.equal(cfg.customTop, 1, 'clave top-level intacta')
+      assert.equal(existsSync(join(project, '.opencode', 'opencode.json')), false, 'sin .opencode/opencode.json')
+
+      const bytes = readFileSync(file, 'utf8')
+      const second = run(['import', bundle], project, env)
+      assert.equal(second.status, 0, second.stderr)
+      assert.equal(readFileSync(file, 'utf8'), bytes, 'idempotente byte a byte')
+      assert.equal(existsSync(join(project, '.opencode', 'opencode.json')), false, 'la segunda corrida tampoco crea .opencode')
+    })
+  })
+
+  // R1 (project-portability): idem con host activo commandcode, cuyo destino es
+  // `.mcp.json` con esquema `mcpServers` ({ transport, command, args }).
+  it('9.5 import de bundle con host commandcode escribe .mcp.json sin crear .opencode y es idempotente', () => {
+    withDir((root) => {
+      const env = compressionEnv(root)
+      const project = makeProject(root, 'bundle-commandcode')
+      const file = join(project, '.mcp.json')
+      writeFileSync(file, JSON.stringify({
+        mcpServers: { propio: { transport: 'stdio', command: 'x', args: [] } },
+        customTop: 1
+      }, null, 2) + '\n')
+      const bundle = writeMcpBundle(root, {
+        agent: 'commandcode',
+        mcp: [{ name: 'ancleto-memory', type: 'local', enabled: true }]
+      })
+
+      const first = run(['import', bundle], project, env)
+      assert.equal(first.status, 0, first.stderr)
+      const cfg = JSON.parse(readFileSync(file, 'utf8'))
+      const entry = cfg.mcpServers['ancleto-memory']
+      assert.ok(entry, 'el MCP se escribe en .mcp.json (esquema mcpServers)')
+      assert.equal(entry.transport, 'stdio', 'esquema stdio del host')
+      assert.equal(entry.command, process.execPath, 'comando local del host')
+      assert.ok(Array.isArray(entry.args), 'args normalizado a arreglo')
+      assert.deepEqual(cfg.mcpServers.propio, { transport: 'stdio', command: 'x', args: [] }, 'merge no destructivo')
+      assert.equal(cfg.customTop, 1, 'clave top-level intacta')
+      assert.equal(existsSync(join(project, '.opencode', 'opencode.json')), false, 'sin .opencode/opencode.json')
+
+      const bytes = readFileSync(file, 'utf8')
+      const second = run(['import', bundle], project, env)
+      assert.equal(second.status, 0, second.stderr)
+      assert.equal(readFileSync(file, 'utf8'), bytes, 'idempotente byte a byte')
+      assert.equal(existsSync(join(project, '.opencode', 'opencode.json')), false, 'la segunda corrida tampoco crea .opencode')
+    })
+  })
+
+  it('10.1 check es host-aware: copilot no se lee como vscode, antigravity y commandcode normalizan su esquema', () => {
+    withDir((root) => {
+      const env = compressionEnv(root)
+      const missing = join(root, 'binario-inexistente', 'node.exe')
+
+      const copilot = makeProject(root, 'copilot')
+      assert.equal(run(['init', '--agent', 'copilot', '--no-mcp'], copilot, env).status, 0)
+      assert.ok(existsSync(join(copilot, '.github', 'prompts')), 'copilot conserva .github/prompts')
+      mkdirSync(join(copilot, '.vscode'), { recursive: true })
+      writeFileSync(join(copilot, 'copilot-mcp.json'), JSON.stringify({ mcp: { roto: { type: 'local', enabled: true, command: [missing] } } }, null, 2) + '\n')
+      writeFileSync(join(copilot, '.vscode', 'mcp.json'), JSON.stringify({ mcp: { vscodoro: { type: 'local', enabled: true, command: [missing] } } }, null, 2) + '\n')
+      writeFileSync(join(copilot, '.mcp.json'), JSON.stringify({ mcpServers: { cmdrot: { transport: 'stdio', command: missing, args: [] } } }, null, 2) + '\n')
+      const copilotCheck = run(['check'], copilot, env)
+      assert.equal(copilotCheck.status, 0)
+      assert.ok(copilotCheck.stdout.includes(`MCP 'roto' tiene un comando roto (${missing})`), copilotCheck.stdout)
+      assert.doesNotMatch(copilotCheck.stdout, /vscodoro|cmdrot/, 'no inspecciona vscode ni commandcode no instalados')
+
+      const antigravity = makeProject(root, 'antigravity')
+      assert.equal(run(['init', '--agent', 'antigravity', '--no-mcp'], antigravity, env).status, 0)
+      mkdirSync(join(antigravity, '.agents'), { recursive: true })
+      writeFileSync(join(antigravity, '.agents', 'mcp_config.json'), JSON.stringify({ mcpServers: { roto: { command: missing, args: [] } } }, null, 2) + '\n')
+      const antigravityCheck = run(['check'], antigravity, env)
+      assert.equal(antigravityCheck.status, 0)
+      assert.ok(antigravityCheck.stdout.includes(`MCP 'roto' tiene un comando roto (${missing})`), antigravityCheck.stdout)
+
+      const commandcode = makeProject(root, 'commandcode')
+      assert.equal(run(['init', '--agent', 'commandcode', '--no-mcp'], commandcode, env).status, 0)
+      writeFileSync(join(commandcode, '.mcp.json'), JSON.stringify({ mcpServers: { roto: { transport: 'stdio', command: missing, args: [] } } }, null, 2) + '\n')
+      const commandcodeCheck = run(['check'], commandcode, env)
+      assert.equal(commandcodeCheck.status, 0)
+      assert.ok(commandcodeCheck.stdout.includes(`MCP 'roto' tiene un comando roto (${missing})`), commandcodeCheck.stdout)
+
+      const claude = makeProject(root, 'claude')
+      assert.equal(run(['init', '--agent', 'claude', '--no-mcp'], claude, env).status, 0)
+      writeFileSync(join(claude, '.mcp.json'), JSON.stringify({ mcpServers: { roto: { command: missing, args: [] } } }, null, 2) + '\n')
+      const claudeCheck = run(['check'], claude, env)
+      assert.equal(claudeCheck.status, 0)
+      assert.doesNotMatch(claudeCheck.stdout, /tiene un comando roto/, 'un host sin destino no inspecciona .mcp.json')
+    })
+  })
+
+  it('10.2 doctor valida el archivo del host activo/instalado y conserva el fallback global', () => {
+    withDir((root) => {
+      const env = compressionEnv(root)
+      const xdgEmpty = join(root, 'xdg-vacio')
+
+      const copilot = makeProject(root, 'doctor-copilot')
+      assert.equal(run(['init', '--agent', 'copilot', '--tier', 'minimo'], copilot, env).status, 0)
+      const copilotDoctor = run(['doctor'], copilot, { ...env, XDG_CONFIG_HOME: xdgEmpty })
+      assert.equal(copilotDoctor.status, 0)
+      assert.match(copilotDoctor.stdout, /✔ copilot-mcp\.json valido/)
+
+      const antigravity = makeProject(root, 'doctor-antigravity')
+      assert.equal(run(['init', '--agent', 'antigravity', '--tier', 'minimo'], antigravity, env).status, 0)
+      const valid = run(['doctor'], antigravity, { ...env, XDG_CONFIG_HOME: xdgEmpty })
+      assert.equal(valid.status, 0)
+      assert.match(valid.stdout, /✔ \.agents\/mcp_config\.json valido/)
+      writeFileSync(join(antigravity, '.agents', 'mcp_config.json'), '{ roto\n')
+      const invalid = run(['doctor'], antigravity, { ...env, XDG_CONFIG_HOME: xdgEmpty })
+      assert.equal(invalid.status, 0)
+      assert.match(invalid.stdout, /✖ \.agents\/mcp_config\.json JSON invalido/)
+      assert.doesNotMatch(invalid.stdout, /✔ opencode\.json valido/)
+
+      const commandcode = makeProject(root, 'doctor-commandcode')
+      assert.equal(run(['init', '--agent', 'commandcode', '--tier', 'minimo'], commandcode, env).status, 0)
+      const commandcodeDoctor = run(['doctor'], commandcode, { ...env, XDG_CONFIG_HOME: xdgEmpty })
+      assert.equal(commandcodeDoctor.status, 0)
+      assert.match(commandcodeDoctor.stdout, /✔ \.mcp\.json valido/)
+
+      const mixed = makeProject(root, 'doctor-mixed')
+      assert.equal(run(['install', '--project', mixed, '--no-mcp', '--tier', 'minimo'], mixed, env).status, 0)
+      assert.equal(run(['install', '--project', mixed, '--no-mcp', '--tier', 'minimo', '--agent', 'claude'], mixed, env).status, 0)
+      mkdirSync(join(mixed, '.opencode'), { recursive: true })
+      writeFileSync(join(mixed, '.opencode', 'opencode.json'), JSON.stringify({ mcp: {} }))
+      const mixedDoctor = run(['doctor'], mixed, { ...env, XDG_CONFIG_HOME: xdgEmpty })
+      assert.equal(mixedDoctor.status, 0)
+      assert.match(mixedDoctor.stdout, /✔ \.opencode\/opencode\.json valido/, 'usa el host instalado cuando el activo no declara destino')
+    })
+  })
+
+  it('10.2 un proyecto sólo-claude no valida .mcp.json ni crea .opencode y conserva el fallback global', () => {
+    withDir((root) => {
+      const env = compressionEnv(root)
+      const project = makeProject(root, 'claude')
+      assert.equal(run(['init', '--agent', 'claude', '--no-mcp'], project, env).status, 0)
+      writeFileSync(join(project, '.mcp.json'), '{ roto\n')
+      const xdg = join(root, 'xdg')
+      mkdirSync(join(xdg, 'opencode'), { recursive: true })
+      writeFileSync(join(xdg, 'opencode', 'opencode.json'), JSON.stringify({ mcp: {} }))
+      const d = run(['doctor'], project, { ...env, XDG_CONFIG_HOME: xdg })
+      assert.equal(d.status, 0)
+      assert.match(d.stdout, /✔ opencode\.json valido/, 'conserva el fallback global con el nombre base')
+      assert.doesNotMatch(d.stdout, /\.mcp\.json/, 'no valida el .mcp.json de un host sin destino')
+      assert.equal(existsSync(join(project, '.opencode')), false, 'no crea .opencode')
+    })
+  })
+
+  it('10.3 ni check ni doctor convierten un hallazgo MCP en un exit no cero', () => {
+    withDir((root) => {
+      const env = compressionEnv(root)
+      const missing = join(root, 'binario-inexistente', 'node.exe')
+      const project = makeProject(root, 'copilot')
+      assert.equal(run(['init', '--agent', 'copilot', '--no-mcp'], project, env).status, 0)
+      writeFileSync(join(project, 'copilot-mcp.json'), JSON.stringify({ mcp: { roto: { type: 'local', enabled: true, command: [missing] } } }, null, 2) + '\n')
+
+      const healthy = run(['check'], project, env)
+      assert.equal(healthy.status, 0, 'un hallazgo MCP no mueve el exit sano')
+      assert.match(healthy.stdout, /0 faltantes/)
+      assert.ok(healthy.stdout.includes(`MCP 'roto' tiene un comando roto (${missing})`), healthy.stdout)
+
+      rmSync(join(project, 'AGENTS.md'))
+      const missingTemplate = run(['check'], project, env)
+      assert.equal(missingTemplate.status, 1, 'el exit 1 sigue dependiendo solo de faltantes')
+      assert.match(missingTemplate.stdout, /check -> 1 faltantes/, 'el aviso MCP no incrementa missing')
+      assert.ok(missingTemplate.stdout.includes(`MCP 'roto' tiene un comando roto (${missing})`), missingTemplate.stdout)
+
+      writeFileSync(join(project, 'copilot-mcp.json'), '{ roto\n')
+      const doctor = run(['doctor'], project, { ...env, XDG_CONFIG_HOME: join(root, 'xdg-vacio') })
+      assert.equal(doctor.status, 0, 'doctor no hace fatal un JSON MCP invalido')
+      assert.match(doctor.stdout, /✖ copilot-mcp\.json JSON invalido/)
     })
   })
 })

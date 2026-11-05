@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.19.0] - 2026-11-05
+
+### Added
+- **Descriptor único de destino MCP por host**: `opencode`, `antigravity`, `commandcode` y `copilot` declaran un destino; `claude`, `vscode`, `cursor` y `roo` no tienen destino.
+
+### Changed
+- **Escritura MCP ruteada al host activo**: `init`, `install`, `import` e `import --repair` escriben en el destino del host instalado y dejan de crear un `.opencode/opencode.json` muerto.
+- **`check` y `doctor` host-aware**: evalúan la config MCP del host activo; los hallazgos MCP siguen siendo advisory y los exit codes no cambian.
+
+### Docs
+- **Specs canónicas sincronizadas y change archivado**.
+
 ## [0.18.17] - 2026-11-05
 
 ### Fixed

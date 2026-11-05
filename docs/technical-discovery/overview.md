@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-04T22:24:31Z
-pluginVersion: 0.18.14
+generatedAt: 2026-11-05T00:07:33Z
+pluginVersion: 0.18.15
 skillVersion: '2.3'
 ---
 
@@ -28,7 +28,7 @@ Restricciones declaradas: **cero dependencias de runtime** y **Node ≥ 24** (`P
 ## Arquitectura
 
 ```text
-src/cli/index.js        entrada única; subcomandos, instalación, plantillas, MCP, stats
+src/cli/index.js        entrada única; subcomandos, instalación, plantillas, MCP, stats, check/doctor
 src/cli/ui.js           banner y menús TTY propios (selectOption/selectMultiple)
 src/core/
   tier-models.js        dueño de TIERS/TIER_CHAINS + resolver puro + declaredModelIds
@@ -68,6 +68,7 @@ test/                   suite node --test
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
 | Memoria | Nodos, supersesión, refs, recall, working-context | `src/core/memory/*` |
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
+| Diagnósticos | Oráculo de instalación (`check`) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
 | Entorno de máquina | Shell, EOL y tooling del clon | `src/core/machine-env.js` |
 | Assets | 10 agentes, 16 commands, 21 skills, templates y perfiles | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` |
 
@@ -76,8 +77,9 @@ test/                   suite node --test
 1. **Instalación / init**: `ancleto init` crea `.ancletorc` y configura MCP; `install` materializa
    assets en el destino nativo del host, adapta frontmatter, aplica el tier (solo opencode escribe
    `model:`), mergea templates `LOCKED` y registra `installedPaths`.
-2. **Ciclo SDD**: `/cleto-new` → `/cleto-propose` → `/cleto-apply` → `/cleto-verify` → `/cleto-archive`;
-   los artifacts viven en `aspec/changes/<name>/` y los specs canónicos en `aspec/specs/`.
+2. **Ciclo SDD**: `/cleto-new` → `/cleto-propose` → `/cleto-apply` → `/cleto-verify` →
+   `/cleto-archive`; los artifacts viven en `aspec/changes/<name>/` y los specs canónicos en
+   `aspec/specs/`.
 3. **Discovery del repo**: `ancleto discovery --compress` escribe `.discovery-map.json`, genera el
    pack y guarda `.discovery-state.json`; la skill `ancleto-technical-discovery` produce el seed.
 4. **Memoria**: los agentes escriben reglas/decisiones (`recordRule`/`recordDecision` o CLI), el
@@ -103,6 +105,11 @@ test/                   suite node --test
    orchestrator del host activo si y sólo si ese host soporta compresión y la config MCP final
    incluye `caveman`; `check` conserva su contrato advisory. `import` además valida `manifest.mcp`
    antes del primer write.
+9. **Paridad de diagnóstico (0.18.15)**: sólo cambia la capa de lectura. `check` deja de avisar un
+   tier huérfano cuando el host no declara superficie local de agentes (el tier queda *dormido*),
+   agrega un aviso advisory por deriva entre `.ancletorc.version` y la versión del CLI, y `doctor`
+   valida la config MCP de `opencode` del proyecto con precedencia sobre la global. Ningún escritor
+   (`init`, `install`, `update`, `upgrade`, `import`, `export`) cambia.
 
 ## Recorrido de una instalación con tier `minimo`
 

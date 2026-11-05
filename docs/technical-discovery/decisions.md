@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-04T22:24:31Z
-pluginVersion: 0.18.14
+generatedAt: 2026-11-05T00:07:33Z
+pluginVersion: 0.18.15
 skillVersion: '2.3'
 ---
 
@@ -24,11 +24,12 @@ skillVersion: '2.3'
   adaptación de frontmatter y `frontmatterValue`, en `src/core/adapters/frontmatter.js`; la
   detección de entorno, en `src/core/machine-env.js`; el render del working-context, en
   `src/core/memory/working-context.js`; la decisión de la nota de compresión, en
-  `src/cli/index.js` → `resolvesHostCompression`.
+  `src/cli/index.js` → `resolvesHostCompression`; la superficie local de agentes y el oráculo de
+  tier, en `src/cli/index.js` → `localAgentDirs`/`checkTierOrphan`.
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.18.14)
+## Modelos y tiers (estado 0.18.15)
 
 ### Tabla y cadenas
 
@@ -48,6 +49,9 @@ skillVersion: '2.3'
   (`test/agent-model-coherence.test.js`) y con el guard estructural de la spec, **no** con un assert
   de runtime: `TIER_CHAINS` solo existe para `minimo`, y un assert genérico rompería los seams puros
   `resolveTierModels`/`declaredModelIds` que aceptan `tiers`/`chains` inyectados.
+- **0.18.15**: `aspec/specs/agent-model-tiers/spec.md` incorporó el requirement
+  “El aviso de tier huérfano requiere una superficie de agentes locales” durante el archive del
+  change `check-doctor-state-parity`. No cambió `TIERS`, `TIER_CHAINS` ni el resolver.
 
 ### Aviso de modelo gratis sobre un agente primario (0.18.13)
 
@@ -62,8 +66,8 @@ skillVersion: '2.3'
   `ancleto: tier gratis: <agent> es un agente primario (mode: primary) y usará el modelo free <model>; OpenCode puede responder 403 "free tier can only be used from within OpenCode". Usá un modelo pago en el agente primario.`
   No lanza, no cambia el modelo escrito ni el valor de retorno. La rama `o === c` no advierte
   (idempotencia del reemplazo).
-- **Inspect-time (`checkAgentsFrontmatter`)**: si el `mode:` **instalado** es `primary` y su `model:`
-  instalado satisface `freeTierOnPrimary`, agrega la entrada advisory
+- **Inspect-time (`checkAgentsFrontmatter`)**: si el `mode:` **instalado** es `primary` y su
+  `model:` instalado satisface `freeTierOnPrimary`, agrega la entrada advisory
   `<dirRel>/<file> (modelo free <model> sobre un agente primario: puede responder 403 en OpenCode)`.
   No incrementa `missing` ni `orphans` y no altera el contrato de salida `missing > 0 ? 1 : 0`.
 - La detección se deriva **solo del `mode:` del frontmatter**, nunca del nombre del agente ni de su
@@ -182,6 +186,8 @@ skillVersion: '2.3'
   adicional de la misma salida de avisos, no bloqueante.
 - **Antigüedad**: un único aviso informativo por ejecución cuando `generated_at` supera **90 días**
   (`isCatalogStale`), sin TTL en runtime ni efecto en la resolución.
+- **Deriva de `.ancletorc.version` (0.18.15)**: ver “Diagnósticos de estado”. Es otro aviso de la
+  misma lista, no bloqueante.
 - El exit code de `check` solo cambia por faltantes; huérfanos, divergencias, deriva, advisory,
   antigüedad y catálogo no verificable son warnings.
 
@@ -227,6 +233,81 @@ skillVersion: '2.3'
 - **Cambio observable**: el `check` posterior a un `import` deja de ser vacuo; puede reportar
   faltantes u huérfanos reales antes ocultos por un `installedPaths` vacío. Es la consecuencia
   buscada. Decisión aprobada: `import-installed-paths-union-not-copy`.
+
+## Diagnósticos de estado (0.18.15)
+
+Change archivado:
+`aspec/changes/archive/2026-11-04-check-doctor-state-parity/` (proposal, tasks y deltas de
+`agent-model-tiers` y `cli-diagnostics`). El change es **solo de oráculo**: ningún escritor
+(`init`, `install`, `update`, `upgrade`, `import`, `export`) cambia. La capability canónica es
+`aspec/specs/cli-diagnostics/spec.md`.
+
+### Tier dormido (H7)
+
+- **Invariante**: el aviso de tier huérfano de `check` sólo se emite si el proyecto declara al menos
+  una **superficie local de agentes**. La superficie se deriva de `localAgentDirs(rc)`: la unión de
+  `installedPaths.agents` y el target de agentes del host resuelto en `rc.agent`
+  (`AGENT_TARGETS[agent].agents.dir`).
+- Si `localAgentDirs(rc)` devuelve `[]` (hosts como `cursor` o `roo`, sin target de agentes), el
+  tier queda **dormido**: no se avisa, aunque `.opencode/.ancleto-tier` exista con un tier válido.
+- Si hay al menos un directorio declarado pero la suma de archivos `.md` en los directorios
+  existentes es `0`, se conserva el aviso histórico
+  `tier "<t>" sin agentes locales donde aplicarlo…`.
+- Sin archivo de tier o con un tier fuera de `TIERS` no hay aviso. El aviso no suma a `missing` ni
+  `orphans` y no altera `missing > 0 ? 1 : 0`.
+- **Por qué la superficie y no una lista de hosts**: `localAgentDirs` ya es el dueño de “qué
+  superficies declara el proyecto”; filtrar por nombre de host duplicaría esa regla y volvería a
+  divergir al agregar un host sin agentes. Decisión aprobada:
+  `oracle-tier-orphan-requires-agent-surface`.
+- **Riesgo aceptado**: un manifiesto incompleto que omita `installedPaths.agents` y use un host sin
+  target de agentes queda silencioso. El escenario `test/cli.test.js` que borra `.opencode/agents`
+  y vacía `installedPaths.agents` con `agent: opencode` sigue avisando, porque el target de
+  `opencode` vuelve a agregar `.opencode/agents`.
+
+### Deriva de `.ancletorc.version` (H13)
+
+- `check` compara `rc.version` con `packageVersion()` (lee `version` de `package.json` en `ROOT`) y,
+  cuando `typeof rc.version === 'string'`, no está vacío y difiere, agrega **una sola vez** a la
+  lista de warnings:
+  `.ancletorc registra v<rcVersion> y el CLI es v<cliVersion>; corré 'ancleto upgrade' para regenerar los artefactos locales`.
+  El printer existente la imprime como `  ⚠ <texto>`.
+- No hay aviso si `version` falta, es `""`, no es string (`null`, número, objeto) o coincide con la
+  versión del CLI.
+- No cambia el exit code, no incrementa contadores, no altera el conjunto de aceptación, no escribe
+  archivos y no ejecuta `upgrade`. Éste sigue siendo el único remediador.
+- **Por qué advisory y no reparación**: `check` es read-only y su exit ya está definido por
+  faltantes; convertir la deriva en un fallo rompería CI que depende de ese contrato. Decisión
+  aprobada: `oracle-version-drift-advisory-readonly`.
+- **Riesgo aceptado**: la comparación es literal; una diferencia de build metadata o pre-release
+  produce el aviso. El costo es informativo.
+
+### Config MCP de `doctor` (H14)
+
+- Precedencia: `.opencode/opencode.json` del proyecto → `.opencode/opencode.jsonc` del proyecto →
+  `globalConfigDir()/opencode.json` → `globalConfigDir()/opencode.jsonc`. Se valida **sólo el primer
+  archivo existente**; no se validan proyecto y global a la vez.
+- La ruta del proyecto se reporta relativa con separadores `/` (por ejemplo
+  `.opencode/opencode.json`); la global, por `basename`.
+- Mensajes conservados: `✔ <ruta> valido`, `✖ <ruta> JSON invalido`, y
+  `⚠ opencode.json no encontrado (config MCP)` cuando no existe ninguno de los cuatro.
+- Si existe config de proyecto, **no** se cae al fallback global aunque esa config sea inválida. El
+  parseo es el existente (`JSON.parse` sobre el contenido sin BOM); un `.jsonc` con comentarios se
+  reporta inválido a propósito.
+- `doctor` **no** valida `.agents/mcp_config.json`, `.mcp.json`, `copilot-mcp.json` ni
+  `.vscode/mcp.json`. El exit code sigue siendo fatal sólo por Node < 24 o fallo al importar
+  `node:sqlite`; config inválida o ausente no lo altera.
+- **Por qué proyecto primero**: el proyecto es el ámbito donde `install`/`init` escriben la config
+  MCP de `opencode`; validar la global primero medía un archivo que puede no ser el efectivo.
+  Decisión aprobada: `doctor-prefers-project-mcp-config`.
+
+### Fuera de alcance (diferido)
+
+H3/H4/H6 (ruteo MCP por host), H5 (entrada caveman contada como compresión), H8 (tier en
+`upgrade`), H9 (`installedPaths` multi-host), H10/H11/H12 (portabilidad multi-host) y M2 (config MCP
+no parseable) siguen fuera. Cada uno cambia propiedad de estado o contratos congelados (config MCP
+por host, byte-identidad de `upgrade`, layout de `export`, carve-out de config no parseable), no un
+diagnóstico. Decisión: `deferred-write-vs-validate-backlog` (estado: descartado como parte de este
+change).
 
 ## Nota de compresión host-scoped (0.18.14)
 
@@ -304,8 +385,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 778 archivos enumerados, ~36.310 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 788 archivos (aspec 220, docs 21, test 26, etc.).
+- **Pack actual**: tier `minimo`, 783 archivos enumerados, ~36.427 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 793 archivos (aspec 225, docs 21, test 26, etc.).
 
 ## Lint y publicación
 
@@ -340,12 +421,19 @@ sin `--tier` es `normal`.
   `opencode.json → agent.<nombre>.model`; por eso el mensaje dice "puede", nunca garantiza el 403.
 - **Check post-import no vacuo**: al poblarse `installedPaths`, un import puede exponer faltantes u
   huérfanos reales. Es el comportamiento correcto y un cambio observable.
+- **Tier dormido silencioso (0.18.15)**: un manifiesto incompleto que omita `installedPaths.agents`
+  y un host sin target de agentes no produce aviso. Es el comportamiento buscado, pero oculta el
+  caso degenerado.
+- **Deriva de versión literal (0.18.15)**: cualquier diferencia de string (pre-release o build)
+  dispara el advisory; no distingue semánticamente. Es informativo y no bloquea.
+- **`.jsonc` con comentarios (0.18.15)**: `doctor` lo reporta inválido porque conserva `JSON.parse`
+  estricto; es deliberado para no ampliar alcance.
 - **Nota de compresión y proyectos mixtos**: la consistencia cross-host (H3/H9) no está resuelta;
   `check` puede seguir avisando en proyectos con varios hosts. El invariante 0.18.14 es acotado al
   host activo y no promete más.
 - **Config MCP no parseable (M2)**: `install`/`init` no pueden leer el estado en disco y materializan
   la nota por la escritura pendiente; `check` puede divergir. Es una limitación degenerada aceptada.
-- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.18.14` en este
+- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.18.15` en este
   checkout; siguen siendo derivados gitignored. Si se regeneran con otra versión, el seed no cambia
   porque no los usa como fuente.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene

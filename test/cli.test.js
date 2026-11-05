@@ -87,6 +87,25 @@ function readRc(dir) {
   return JSON.parse(readFileSync(join(dir, '.ancletorc'), 'utf8'))
 }
 
+// Foto determinista del proyecto para afirmar que `check`/`doctor` no escriben:
+// cada archivo se guarda por ruta relativa con `/` y contenido en base64.
+function projectSnapshot(dir) {
+  const files = {}
+  const walk = (rel) => {
+    for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name
+      if (entry.isDirectory()) {
+        files[`${childRel}/`] = '<dir>'
+        walk(childRel)
+      } else {
+        files[childRel] = readFileSync(join(dir, childRel)).toString('base64')
+      }
+    }
+  }
+  walk('')
+  return files
+}
+
 // Catálogo alternativo por `ANCLETO_MODEL_CATALOG`: seam de test/manual, mismo
 // precedente que `ANCLETO_PROJECTS_FILE`. Se arma desde el snapshot commiteado
 // quitándole los IDs indicados; nunca se muta el snapshot versionado.
@@ -2195,6 +2214,181 @@ describe('CLI check (G3)', () => {
     })
   })
 
+  // H7 (change check-doctor-state-parity): sin superficie de agentes locales el
+  // tier queda dormido, no huérfano.
+  it('no avisa tier huerfano en un proyecto sano de un host sin superficie de agentes', () => {
+    withDir((dir) => {
+      for (const agent of ['cursor', 'roo']) {
+        const target = join(dir, agent)
+        mkdirSync(target, { recursive: true })
+        const installed = run(['install', '--project', target, '--no-mcp', '--tier', 'gratis', '--agent', agent], target)
+        assert.equal(installed.status, 0, `${agent}: install`)
+        assert.equal(readFileSync(join(target, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'gratis')
+        const r = run(['check'], target)
+        assert.equal(r.status, 0, `${agent}: check exit 0`)
+        assert.doesNotMatch(r.stdout, /tier .* sin agentes locales/, `${agent}: sin aviso de tier`)
+      }
+    })
+  })
+
+  it('avisa tier huerfano cuando hay superficie declarada y cero archivos .md', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      // Superficie declarada por el host (`agent: opencode`), pero sin agents
+      // locales en el manifiesto y el directorio vacío: el aviso se conserva.
+      rmSync(join(dir, '.opencode', 'agents'), { recursive: true, force: true })
+      mkdirSync(join(dir, '.opencode', 'agents'), { recursive: true })
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.installedPaths.agents = []
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /⚠ tier "gratis" sin agentes locales/)
+      assert.match(r.stdout, /0 faltantes/)
+    })
+  })
+
+  // El host debe tener superficie de agentes: con cursor `localAgentDirs` es vacío
+  // y el early return de `dirs.length === 0` enmascararia el guard `TIERS[tier]`.
+  it('no avisa tier huerfano si el tier es desconocido, aunque no queden agentes locales', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      // Deja la superficie de agentes declarada por el host (`.opencode/agents`)
+      // pero vacia: sin el guard `TIERS[tier]` el conteo 0 dispararia el aviso.
+      rmSync(join(dir, '.opencode', 'agents'), { recursive: true, force: true })
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      assert.equal(rc.agent, 'opencode', 'host con superficie de agentes')
+      rc.installedPaths.agents = []
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      assert.equal(existsSync(join(dir, '.opencode', 'agents')), false, 'conteo de agentes = 0')
+      writeFileSync(join(dir, '.opencode', '.ancleto-tier'), 'bogus\n')
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /tier .* sin agentes locales/)
+    })
+  })
+
+  it('no avisa tier huerfano si falta el archivo de tier, aunque no queden agentes locales', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      rmSync(join(dir, '.opencode', 'agents'), { recursive: true, force: true })
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      assert.equal(rc.agent, 'opencode', 'host con superficie de agentes')
+      rc.installedPaths.agents = []
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      assert.equal(existsSync(join(dir, '.opencode', 'agents')), false, 'conteo de agentes = 0')
+      rmSync(join(dir, '.opencode', '.ancleto-tier'), { force: true })
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /tier .* sin agentes locales/)
+    })
+  })
+
+  // Cobertura de `AGENT_TARGETS.antigravity.agents.dir` (`.agents/agents`): espeja
+  // el caso opencode de tier huerfano sobre un host cuyo layout NO es `.opencode`.
+  it('avisa tier huerfano en antigravity cuando el layout declarado no tiene agentes', () => {
+    withDir((dir) => {
+      const r0 = run(['init', '--agent', 'antigravity', '--tier', 'gratis'], dir, {
+        ANCLETO_PROJECTS_FILE: join(dir, 'registry.json')
+      })
+      assert.equal(r0.status, 0, 'init antigravity')
+      assert.ok(existsSync(join(dir, '.agents', 'agents', 'orchestrator.md')))
+      rmSync(join(dir, '.agents', 'agents'), { recursive: true, force: true })
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      assert.equal(rc.agent, 'antigravity')
+      rc.installedPaths.agents = []
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const r = run(['check'], dir, { ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /⚠ tier "gratis" sin agentes locales/)
+    })
+  })
+
+  // H13 (change check-doctor-state-parity): deriva de `.ancletorc.version` como
+  // aviso advisory, sin cambiar exit code ni escribir archivos.
+  it('avisa la deriva de version con ambas versiones y sin alterar .ancletorc', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis', '--agent', 'cursor'], dir)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = JSON.parse(readFileSync(rcPath, 'utf8'))
+      rc.version = '0.0.0'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const before = readFileSync(rcPath, 'utf8')
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.ok(
+        r.stdout.includes(`.ancletorc registra v0.0.0 y el CLI es v${PKG.version}; corré 'ancleto upgrade' para regenerar los artefactos locales`),
+        'el aviso nombra las dos versiones y el remedio'
+      )
+      // H13: el aviso ocupa una sola línea, con la indentación de dos espacios del
+      // printer y un único glyph (el bug previo duplicaba el símbolo).
+      assert.match(r.stdout, /^ {2}⚠ \.ancletorc registra v/m, 'un aviso en una línea con un solo glyph')
+      assert.doesNotMatch(r.stdout, /⚠ ⚠/, 'sin glyph duplicado')
+      assert.equal(readFileSync(rcPath, 'utf8'), before)
+    })
+  })
+
+  it('no avisa deriva de version cuando coincide con el CLI', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis', '--agent', 'cursor'], dir)
+      const r = run(['check'], dir)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stdout, /\.ancletorc registra v/)
+    })
+  })
+
+  it('no avisa deriva de version si falta, esta vacia o no es string', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis', '--agent', 'cursor'], dir)
+      const rcPath = join(dir, '.ancletorc')
+      const base = readRc(dir)
+      const sinVersion = { ...base }
+      delete sinVersion.version
+      for (const variant of [sinVersion, { ...base, version: '' }, { ...base, version: 123 }, { ...base, version: null }, { ...base, version: { v: '0.0.0' } }]) {
+        writeFileSync(rcPath, JSON.stringify(variant, null, 2))
+        const r = run(['check'], dir)
+        assert.equal(r.status, 0)
+        assert.doesNotMatch(r.stdout, /\.ancletorc registra v/, `sin aviso para version=${JSON.stringify(variant.version)}`)
+      }
+    })
+  })
+
+  it('una segunda corrida de check no acumula el aviso de deriva', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis', '--agent', 'cursor'], dir)
+      const rcPath = join(dir, '.ancletorc')
+      const rc = readRc(dir)
+      rc.version = '0.0.0'
+      writeFileSync(rcPath, JSON.stringify(rc, null, 2))
+      const before = readFileSync(rcPath, 'utf8')
+      for (const label of ['primera', 'segunda']) {
+        const r = run(['check'], dir)
+        assert.equal(r.status, 0, label)
+        assert.equal((r.stdout.match(/\.ancletorc registra v/g) || []).length, 1, `${label}: un aviso`)
+        assert.equal(readFileSync(rcPath, 'utf8'), before, `${label}: .ancletorc intacto`)
+      }
+    })
+  })
+
+  it('check conserva el exit (1 con faltantes, 0 sano) y no modifica archivos', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const healthyBefore = projectSnapshot(dir)
+      const healthy = run(['check'], dir)
+      assert.equal(healthy.status, 0)
+      assert.deepEqual(projectSnapshot(dir), healthyBefore)
+      rmSync(join(dir, 'AGENTS.md'))
+      const missingBefore = projectSnapshot(dir)
+      const missing = run(['check'], dir)
+      assert.equal(missing.status, 1)
+      assert.deepEqual(projectSnapshot(dir), missingBefore)
+    })
+  })
+
   it('init deja agentes locales, asi que el tier NO queda huerfano', () => {
     withDir((dir) => {
       run(['init', '--tier', 'gratis'], dir)
@@ -2415,6 +2609,115 @@ describe('CLI doctor (G4)', () => {
       const r = run(['doctor'], dir, { XDG_CONFIG_HOME: join(dir, 'xdg-vacio') })
       assert.equal(r.status, 0)
       assert.match(r.stdout, /no encontrado/)
+    })
+  })
+
+  // H14 (change check-doctor-state-parity): la config MCP del proyecto tiene
+  // precedencia sobre la global y se reporta con ruta relativa.
+  it('valida la config MCP del proyecto y reporta la ruta relativa', () => {
+    withDir((dir) => {
+      const xdg = join(dir, 'xdg')
+      mkdirSync(join(xdg, 'opencode'), { recursive: true })
+      writeFileSync(join(xdg, 'opencode', 'opencode.json'), JSON.stringify({ mcp: {} }))
+      mkdirSync(join(dir, '.opencode'), { recursive: true })
+      writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({ mcp: { local: {} } }))
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: xdg })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /✔ \.opencode\/opencode\.json valido/)
+      assert.doesNotMatch(r.stdout, /✔ opencode\.json valido/, 'no valida también la global')
+    })
+  })
+
+  it('una config de proyecto invalida no cae al fallback global', () => {
+    withDir((dir) => {
+      const xdg = join(dir, 'xdg')
+      mkdirSync(join(xdg, 'opencode'), { recursive: true })
+      writeFileSync(join(xdg, 'opencode', 'opencode.json'), JSON.stringify({ mcp: {} }))
+      mkdirSync(join(dir, '.opencode'), { recursive: true })
+      writeFileSync(join(dir, '.opencode', 'opencode.json'), '{ invalido')
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: xdg })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /✖ \.opencode\/opencode\.json JSON invalido/)
+      assert.doesNotMatch(r.stdout, /opencode\.json valido/)
+    })
+  })
+
+  it('sin config de proyecto conserva el fallback global con su nombre base', () => {
+    withDir((dir) => {
+      const xdg = join(dir, 'xdg')
+      mkdirSync(join(xdg, 'opencode'), { recursive: true })
+      writeFileSync(join(xdg, 'opencode', 'opencode.json'), JSON.stringify({ mcp: {} }))
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: xdg })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /✔ opencode\.json valido/)
+      assert.doesNotMatch(r.stdout, /\.opencode\/opencode\.json valido/)
+    })
+  })
+
+  // H14 (change check-doctor-state-parity): el orden de precedencia también cubre
+  // la variante `.jsonc`, que gana sobre la global aunque esta exista como `.json`.
+  it('prefiere .opencode/opencode.jsonc del proyecto sobre la config global', () => {
+    withDir((dir) => {
+      const xdg = join(dir, 'xdg')
+      mkdirSync(join(xdg, 'opencode'), { recursive: true })
+      writeFileSync(join(xdg, 'opencode', 'opencode.json'), JSON.stringify({ mcp: {} }))
+      mkdirSync(join(dir, '.opencode'), { recursive: true })
+      writeFileSync(join(dir, '.opencode', 'opencode.jsonc'), JSON.stringify({ mcp: { local: {} } }))
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: xdg })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /✔ \.opencode\/opencode\.jsonc valido/)
+      assert.doesNotMatch(r.stdout, /✔ opencode\.json valido/, 'no valida también la global')
+    })
+  })
+
+  it('cae al opencode.jsonc global cuando no hay config de proyecto', () => {
+    withDir((dir) => {
+      const xdg = join(dir, 'xdg')
+      mkdirSync(join(xdg, 'opencode'), { recursive: true })
+      writeFileSync(join(xdg, 'opencode', 'opencode.jsonc'), JSON.stringify({ mcp: {} }))
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: xdg })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /✔ opencode\.jsonc valido/)
+      assert.doesNotMatch(r.stdout, /\.opencode\/opencode\.json/, 'reporta el nombre base, no una ruta de proyecto')
+    })
+  })
+
+  // Por diseño `doctor` valida JSON estricto: un `.jsonc` con comentarios se reporta
+  // inválido (no se interpreta como JSONC).
+  it('un opencode.jsonc con comentarios se reporta JSON invalido', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.opencode'), { recursive: true })
+      writeFileSync(join(dir, '.opencode', 'opencode.jsonc'), '{\n  // comentario\n  "mcp": {}\n}\n')
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: join(dir, 'xdg-vacio') })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /✖ \.opencode\/opencode\.jsonc JSON invalido/)
+    })
+  })
+
+  it('ignora las configs MCP de otros hosts cuando no hay config de proyecto opencode', () => {
+    withDir((dir) => {
+      const xdg = join(dir, 'xdg')
+      mkdirSync(join(xdg, 'opencode'), { recursive: true })
+      writeFileSync(join(xdg, 'opencode', 'opencode.json'), JSON.stringify({ mcp: {} }))
+      mkdirSync(join(dir, '.agents'), { recursive: true })
+      mkdirSync(join(dir, '.vscode'), { recursive: true })
+      for (const rel of ['.agents/mcp_config.json', '.mcp.json', 'copilot-mcp.json', '.vscode/mcp.json']) {
+        writeFileSync(join(dir, rel), '{ invalido')
+      }
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: xdg })
+      assert.equal(r.status, 0)
+      assert.match(r.stdout, /✔ opencode\.json valido/)
+      assert.doesNotMatch(r.stdout, /mcp_config\.json|copilot-mcp|\.vscode\/mcp\.json|\.mcp\.json/)
+    })
+  })
+
+  it('doctor no crea, borra ni modifica archivos del proyecto', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const before = projectSnapshot(dir)
+      const r = run(['doctor'], dir, { XDG_CONFIG_HOME: join(dir, 'xdg-vacio') })
+      assert.equal(r.status, 0)
+      assert.deepEqual(projectSnapshot(dir), before)
     })
   })
 })

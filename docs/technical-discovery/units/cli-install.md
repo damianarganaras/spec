@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, portabilidad, check y entorno de máquina"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, diagnósticos check/doctor, portabilidad y entorno de máquina"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -15,13 +15,16 @@ covers:
   - tiers y catálogo
   - integridad de IDs
   - aviso free-on-primary
+  - diagnósticos check y doctor
+  - tier dormido
+  - deriva de versión
+  - precedencia de config MCP
   - portabilidad e installedPaths
   - validación de manifest.mcp
   - machine-env
-  - check y doctor
-sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-04T22:24:31Z
-pluginVersion: 0.18.14
+sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-05T00:07:33Z
+pluginVersion: 0.18.15
 skillVersion: '2.3'
 ---
 
@@ -50,7 +53,7 @@ stats, portabilidad, diagnóstico). `src/cli/ui.js` aporta el banner y los menú
 4. Se copian assets con adaptación de frontmatter y se mergean templates (`AGENTS.md`,
    `PRODUCT.md`) por bloques `LOCKED`; antes se reconcilian firmas planas legadas.
 5. Se persiste `.opencode/.ancleto-tier` con el nombre del tier y se actualiza `.ancletorc`
-   (`installedPaths`, `agent`, `tier`, `gratisModel` si ya existía).
+   (`installedPaths`, `agent`, `tier`, `gratisModel` si ya existía, `version`).
 
 ### Nota de compresión host-scoped (0.18.14)
 
@@ -112,7 +115,8 @@ transformación de frontmatter.
 
 Re-aplica templates y skills sobre el proyecto actual, sin aplicar tier (el mirror vuelve a la
 fuente canónica byte a byte). Es la vía que materializa el default publicado de `agents/*.md`
-(`commandcode/deepseek/deepseek-v4.1-flash`).
+(`commandcode/deepseek/deepseek-v4.1-flash`) y, desde 0.18.15, el único remediador de la deriva de
+`.ancletorc.version` que `check` reporta.
 
 ### `import` / `export`
 
@@ -159,10 +163,21 @@ Sobre ese catálogo se agregan avisos **no bloqueantes**:
   (`isCatalogStale`).
 - **Catálogo no verificable**: si falta, es ilegible o no valida, `check` no aborta; acepta los
   candidatos estáticos y avisa por directorio. No emite deriva ni advisory de IDs en ese caso.
+- **Tier dormido (0.18.15)**: `checkTierOrphan` lee `.opencode/.ancleto-tier`; si el tier no
+  pertenece a `TIERS` no hay aviso. La superficie se deriva con `localAgentDirs(rc)` (unión de
+  `installedPaths.agents` y el target de agentes del host en `rc.agent`). Si esa lista es vacía
+  —hosts sin agentes, como `cursor` o `roo`— el tier queda dormido y no se advierte. Si hay al
+  menos un directorio y la suma de `.md` es cero, se conserva el aviso
+  `tier "<t>" sin agentes locales donde aplicarlo…`.
+- **Deriva de versión (0.18.15)**: si `rc.version` es un string no vacío distinto de
+  `packageVersion()` (leída de `package.json`), se agrega una vez el aviso
+  `.ancletorc registra v<rc> y el CLI es v<cli>; corré 'ancleto upgrade' para regenerar los
+  artefactos locales`. No cambia el exit code, no incrementa contadores y no repara.
 
-Solo los faltantes alteran el exit code; huérfanos, divergencias, deriva, advisory, antigüedad y
-catálogo no verificable son warnings. La divergencia de frontmatter por la nota de compresión sigue
-siendo advisory y la comparación sigue siendo del archivo completo.
+Solo los faltantes alteran el exit code (`missing > 0 ? 1 : 0`); huérfanos, divergencias, deriva,
+advisory, antigüedad, tier dormido y catálogo no verificable son warnings. La divergencia de
+frontmatter por la nota de compresión sigue siendo advisory y la comparación sigue siendo del
+archivo completo.
 
 ### Refresco del catálogo y gate de `--write`
 
@@ -175,8 +190,23 @@ La detección de binario ausente (`looksBinaryMissing`) es independiente del loc
 
 ### `doctor`
 
-Comprueba Node ≥ 24, importabilidad de `node:sqlite` y validez de `opencode.json`; es fatal solo
-por Node/sqlite.
+Comprueba Node ≥ 24, importabilidad de `node:sqlite` y validez de la config MCP de `opencode`. Estos
+dos primeros son los únicos fatales (`exit 1`); una config inválida o ausente no cambia el exit code.
+
+Desde 0.18.15 la config MCP se resuelve con precedencia **proyecto → global**:
+
+1. `.opencode/opencode.json` del proyecto.
+2. `.opencode/opencode.jsonc` del proyecto.
+3. `globalConfigDir()/opencode.json`.
+4. `globalConfigDir()/opencode.jsonc`.
+
+Se valida **sólo el primer archivo existente**; si hay config de proyecto, no se cae al fallback
+global aunque sea inválida. La ruta del proyecto se reporta relativa con separadores `/`
+(ej. `.opencode/opencode.json`); la global, por `basename`. Mensajes: `✔ <ruta> valido`,
+`✖ <ruta> JSON invalido`, y `⚠ opencode.json no encontrado (config MCP)` si no existe ninguno. El
+parseo es `JSON.parse` estricto sin BOM; un `.jsonc` con comentarios se reporta inválido a
+propósito. `doctor` no valida las configs MCP de otros hosts (`.agents/mcp_config.json`,
+`.mcp.json`, `copilot-mcp.json`, `.vscode/mcp.json`).
 
 ## Rutas por host (`AGENT_TARGETS`)
 
@@ -192,7 +222,8 @@ por Node/sqlite.
 | commandcode | `.commandcode/skills` | `.commandcode/agents/*.md` | `.commandcode/commands/*.md` |
 
 MCP por host: `opencode` mergea `opencode.json`; Antigravity, `.agents/mcp_config.json`; Command
-Code, `.mcp.json`; Copilot, `copilot-mcp.json`. Todos son merges no destructivos.
+Code, `.mcp.json`; Copilot, `copilot-mcp.json`. Todos son merges no destructivos. `cursor` y `roo`
+no declaran target de agentes: por eso el tier puede quedar dormido en `check`.
 
 ## Reglas, contratos y riesgos
 
@@ -213,22 +244,25 @@ Code, `.mcp.json`; Copilot, `copilot-mcp.json`. Todos son merges no destructivos
   overlay a su fuente. Un guard test-only exige que `profiles/test/agents/*.md` declaren `^model:`.
 - **`machine-env`**: `materializeMachineEnv` nunca lanza; devuelve warnings. `check` avisa si el
   artefacto quedó trackeado en git.
-- **Catálogo y `check`**: deriva, advisory, antigüedad y free-on-primary son informativos y nunca
-  hacen fallar `check`; solo los faltantes alteran el exit code. `install`/`init`/`import` siguen
-  siendo estrictos.
+- **Catálogo y `check`**: deriva, advisory, antigüedad, free-on-primary, tier dormido y deriva de
+  versión son informativos y nunca hacen fallar `check`; solo los faltantes alteran el exit code.
+  `install`/`init`/`import` siguen siendo estrictos.
 - **Aviso free-on-primary**: `applyTier` lo escribe en `stderr`; wrappers de CI que tratan `stderr`
   como error lo verán, pero el exit code sigue en 0.
 - **Nota de compresión**: la decisión no vuelve a detectar el binario cuando la config ya define el
   estado; `install`/`init`/`import` comparten el helper. La consistencia cross-host no está
   resuelta (H3/H9) y la config MCP no parseable es una excepción degenerada.
+- **Diagnósticos 0.18.15**: el change sólo tocó `checkTierOrphan`, `checkCommand` y
+  `doctorCommand`; ningún escritor cambió. El tier se considera dormido (no huérfano) sin
+  superficie local de agentes.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; en este
-  checkout registran `0.18.14`. No son fuentes del seed.
+  checkout registran `0.18.15`. No son fuentes del seed.
 
 ## Paths clave
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point, subcomandos, instalación, nota de compresión, validación de bundles, MCP, stats |
+| `src/cli/index.js` | Entry point, subcomandos, instalación, diagnósticos, nota de compresión, validación de bundles, MCP, stats |
 | `src/cli/ui.js` | Banner y menús TTY |
 | `src/core/adapters/frontmatter.js` | Adaptación pura de frontmatter por host y `frontmatterValue` |
 | `src/core/tier-models.js` | Tiers, cadenas, resolver, `freeTierOnPrimary`, `declaredModelIds` |
@@ -239,7 +273,9 @@ Code, `.mcp.json`; Copilot, `copilot-mcp.json`. Todos son merges no destructivos
 | `scripts/refresh-model-catalog.mjs` | Refresco manual, gate de `--write` y escritura atómica |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques `LOCKED` |
 | `profiles/test/**` | Overlay del perfil de test |
+| `aspec/changes/archive/2026-11-04-check-doctor-state-parity/` | Change archivado de paridad de diagnósticos (H7/H13/H14) |
 | `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` | Change archivado de la nota de compresión y validación de `manifest.mcp` |
+| `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión y config MCP de `doctor` |
 | `aspec/specs/agent-install-routing/spec.md` | Requirement de compresión host-scoped y nota estado-driven |
 | `aspec/specs/project-portability/spec.md` | Requirement de `import` (nota + `installedPaths`) |
-| `aspec/specs/agent-model-tiers/spec.md` | Requirements de tiers, aviso free-on-primary e integridad |
+| `aspec/specs/agent-model-tiers/spec.md` | Requirements de tiers, aviso free-on-primary, integridad y tier dormido |

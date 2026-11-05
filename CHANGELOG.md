@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.18.15] - 2026-11-04
+
+### Fixed
+- **`check` ya no reporta un tier huérfano en hosts sin superficie local de agentes**: cuando el host instalado no expone agentes locales (`cursor`/`roo`), el tier queda dormido en vez de contarse como huérfano.
+
+### Added
+- **Aviso advisory por deriva de `.ancletorc.version`**: `check` avisa cuando la versión declarada difiere de la CLI en ejecución, sin cambiar el exit code; `ancleto upgrade` sigue siendo el remediador.
+- **`doctor` valida la config MCP del proyecto**: revisa `.opencode/opencode.json[c]` cuando existe y cae a la config global en su ausencia.
+
+### Changed
+- **Sin cambios de comportamiento de escritura**: `init`, `install`, `update`, `upgrade`, `import` y `export` quedan intactos.
+
 ## [0.18.14] - 2026-11-04
 
 ### Fixed

@@ -16,7 +16,7 @@ vivo `mcpCommandBroken`, y el fallback global de `doctor` debe derivar su par de
   `mcpCommandBroken` (`src/cli/index.js:822-829`): roto cuando `command` está ausente/vacío o cuando
   es una ruta absoluta que no existe en disco. Un nombre simple que no resuelve en `PATH` NO es roto.
 - **R2 — Dueño único del par global.** `doctorCommand` (`src/cli/index.js:4379`) SHALL dejar de
-  repetir el literal `['opencode.json', 'opencode.jsonc']` en `:4405` y SHALL derivar los nombres del
+  repetir el literal `['opencode.json', 'opencode.jsonc']` en `:4407` y SHALL derivar los nombres del
   fallback global desde `PROJECT_MCP_CANDIDATES` (`:32`), preservando exactamente los mismos nombres
   y orden. La salida de `doctor` no cambia.
 

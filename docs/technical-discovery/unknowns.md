@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-04T22:24:31Z
-pluginVersion: 0.18.14
+generatedAt: 2026-11-05T00:07:33Z
+pluginVersion: 0.18.15
 skillVersion: '2.3'
 ---
 
@@ -14,21 +14,26 @@ skillVersion: '2.3'
 - **Pack comprimido**: el tier `minimo` produce un pack con compresión tree-sitter; los cuerpos de
   funciones se reemplazan por el delimitador `⋮----` y solo quedan firmas y comentarios de contrato.
   Las afirmaciones sobre flujos internos se apoyan en esos comentarios **y** en lectura directa de
-  los archivos citados (`src/cli/index.js` → `resolvesHostCompression`, `hostConfigHasCompression`,
-  `importCmd`, `install`/`init`; `src/core/tier-models.js`), no en el pack solo.
+  los archivos citados (`src/cli/index.js` → `packageVersion`, `checkCommand`, `checkTierOrphan`,
+  `doctorCommand`, `localAgentDirs`, `resolvesHostCompression`; `src/core/tier-models.js`), no en el
+  pack solo.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
   su ignore por defecto de Markdown. `README.md`, `CHANGELOG.md`, `AGENTS.md`, `PRODUCT.md`,
-  `aspec/specs/**` y `aspec/changes/**` no están en el pack. Las afirmaciones sobre el change
-  `2026-11-04-host-compression-note-consistency`, la validación de `manifest.mcp`, los requirements
-  mergeados en `agent-install-routing`/`project-portability` y las notas del `CHANGELOG` 0.18.14 se
-  verificaron leyendo esos paths directamente. No se auditó el resto de `aspec/specs/**`.
+  `aspec/specs/**` y `aspec/changes/**` no están en el pack. Las afirmaciones sobre la spec
+  `cli-diagnostics`, el requirement de tier dormido en `agent-model-tiers` y el change archivado
+  `2026-11-04-check-doctor-state-parity` se verificaron leyendo esos paths directamente. No se
+  auditó el resto de `aspec/specs/**`.
 - **`eslint.config.js` en el pack**: aparece vacío por efecto de la compresión. Su contenido se
   verificó leyendo el archivo directamente.
 - **Ejecución de la suite**: no se corrió `npm test` ni `npm run lint` durante la generación. Los
   guards (`test/model-catalog.test.js`, `test/model-catalog-discovery.test.js`,
   `test/agent-model-coherence.test.js`, `test/content-guards.test.js`, `test/cli.test.js`) se citan
-  por su presencia y propósito declarado, no por un resultado observado. Los “19 casos” de
-  consistencia de la nota que declara el `CHANGELOG` 0.18.14 no se ejecutaron.
+  por su presencia y propósito declarado, no por un resultado observado.
+- **Diagnósticos 0.18.15**: no se ejecutaron `ancleto check` ni `ancleto doctor` para observar los
+  avisos nuevos. El comportamiento se describió desde `checkCommand`, `checkTierOrphan`,
+  `doctorCommand` y `aspec/specs/cli-diagnostics/spec.md`. No se probaron los escenarios de tier
+  dormido (`cursor`/`roo`), deriva de versión (pre-release/build metadata) ni config de proyecto
+  inválida con global válida.
 - **Refresco del catálogo**: no se ejecutó `scripts/refresh-model-catalog.mjs`. El snapshot se tomó
   como fuente de verdad declarada (`generated_at: 2026-11-04`, 5 proveedores / 211 IDs), sin
   revalidar contra proveedores.
@@ -59,38 +64,43 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` regenerado**: el generador reporta **788 archivos** (aspec 220, docs 21,
-  test 26, etc.) y el archivo quedó regenerado en esta corrida. El pack enumera **778 archivos**
+- **`.discovery-map.json` regenerado**: el generador reporta **793 archivos** (aspec 225, docs 21,
+  test 26, etc.) y el archivo quedó regenerado en esta corrida. El pack enumera **783 archivos**
   porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además
   Repomix filtra por sus propios ignores.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
-- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` registran `ancleto: 0.18.14`
-  (verificado), alineados con `package.json` tras el `upgrade` local. El seed anterior decía
-  `0.18.8`; esa afirmación ya no aplica. Siguen siendo artefactos derivados gitignored y no se usan
-  como fuente de contenido.
+- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` registran `ancleto: 0.18.15`
+  (verificado), alineados con `package.json` tras el `upgrade` local. Siguen siendo artefactos
+  derivados gitignored y no se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de
-  `0.18.14` es una verificación puntual del estado local, no una fuente de reglas.
+  `0.18.15` es una verificación puntual del estado local, no una fuente de reglas. Desde 0.18.15 el
+  propio `check` compara ese campo con la versión del CLI y avisa si difieren.
 - **Publicación de `scripts/`**: `package.json` → `files` lista `agents`, `commands`, `skills`,
   `templates`, `profiles`, `src`; no incluye `scripts/`. El refresco del catálogo y el gate de IDs
   existen en el repo fuente pero no viajan en el tarball npm. Se documenta como deuda, no como fallo.
 - **`rg` no disponible** en este entorno (PowerShell 5.1): la evidencia se obtuvo con
   `Select-String` y lecturas directas.
+- **Estado inicial del chequeo**: la corrida de `discovery --check` previa a esta generación reportó
+  `STALE` con `impact: material` (cambiaron `package.json`, `.ancletorc`, `CHANGELOG.md`, `aspec`,
+  `src`, `test` y `.ancleto`). El seed anterior describía 0.18.14; el actual describe 0.18.15.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.18.14`,
-  `resolvesHostCompression`/`hostConfigHasCompression` y su uso en `install`/`init`/`import`,
-  validación de `manifest.mcp` en `importCmd`, `TIERS`/`TIER_CHAINS`, `freeTierOnPrimary` y sus dos
-  avisos, `declaredModelIds`, `modelIdsFromCatalog`, `missingModelIdsInCatalog`, gate de `--write`,
-  `looksBinaryMissing`, lint sobre `scripts/`, snapshot de 5 proveedores / 211 IDs, flujo de
-  `scripts/refresh-model-catalog.mjs`, registro de `installedPaths` en `importCmd`, comandos del
-  CLI, firmas de módulos de memoria, workflow.
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.18.15`, `packageVersion`,
+  `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
+  precedencia proyecto→global, `resolvesHostCompression`/`hostConfigHasCompression` y su uso en
+  `install`/`init`/`import`, validación de `manifest.mcp` en `importCmd`, `TIERS`/`TIER_CHAINS`,
+  `freeTierOnPrimary` y sus dos avisos, `declaredModelIds`, `modelIdsFromCatalog`,
+  `missingModelIdsInCatalog`, gate de `--write`, `looksBinaryMissing`, lint sobre `scripts/`,
+  snapshot de 5 proveedores / 211 IDs, flujo de `scripts/refresh-model-catalog.mjs`, registro de
+  `installedPaths` en `importCmd`, comandos del CLI, firmas de módulos de memoria, workflow.
 - **Media (inferido)**: comportamiento de hosts no probados, efecto exacto de cada adaptador en
   cada IDE, resultados de la suite y del workflow, ausencia real del 403 en configuraciones
-  concretas, materialización/saneamiento de la nota de compresión sin ejecución real.
+  concretas, materialización/saneamiento de la nota de compresión sin ejecución real, y salida
+  exacta de `check`/`doctor` en los escenarios nuevos de 0.18.15 sin ejecución.
 - **Baja / desconocida**: estado real de la memoria del repo, disponibilidad de modelos en
   proveedores al momento de leer, contenido de `audit logs/` y `documentation/` (fuera de runtime),
-  detalle exacto de los 19 casos de consistencia de la nota.
+  detalle exacto de los casos de consistencia de la nota declarados por el `CHANGELOG` 0.18.14.

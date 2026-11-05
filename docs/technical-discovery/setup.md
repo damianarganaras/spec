@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-04T22:24:31Z
-pluginVersion: 0.18.14
+generatedAt: 2026-11-05T00:07:33Z
+pluginVersion: 0.18.15
 skillVersion: '2.3'
 ---
 
@@ -35,7 +35,7 @@ skillVersion: '2.3'
 | Instalar/actualizar assets | `ancleto install [--project <dir>] [--tier ...]` | `src/cli/index.js` |
 | Re-aplicar templates/skills | `ancleto upgrade [--agent <nombre>]` | `src/cli/index.js` |
 | Verificar instalación | `ancleto check` | `src/cli/index.js` |
-| Diagnóstico de entorno | `ancleto doctor` | `src/cli/index.js` |
+| Diagnóstico de entorno y MCP | `ancleto doctor` | `src/cli/index.js` |
 | Descubrir catálogo (dry-run) | `node scripts/refresh-model-catalog.mjs` | `scripts/refresh-model-catalog.mjs` |
 | Reemplazar snapshot del catálogo | `node scripts/refresh-model-catalog.mjs --write` | `scripts/refresh-model-catalog.mjs` |
 | Bundle portable | `ancleto export [--tar <file>]` / `ancleto import <bundle>` | `src/cli/index.js` |
@@ -44,6 +44,30 @@ No hay formatter ni typechecker declarados: el repo es JavaScript ESM sin `tscon
 `PRODUCT.md` registra `Format: not-configured` / typecheck no aplica. El lint cubre `src/`, `test/`
 y `scripts/` con `eslint.config.js`: globals de Node y cuatro reglas (`no-undef`, `no-unused-vars`
 con `argsIgnorePattern`/`caughtErrorsIgnorePattern` = `^_`, `eqeqeq`, `no-dupe-keys`).
+
+## Diagnósticos (`check` y `doctor`, 0.18.15)
+
+`check` es un oráculo read-only: sólo los faltantes alteran el exit code
+(`missing > 0 ? 1 : 0`). Entre sus avisos no bloqueantes están el catálogo no verificable, la
+antigüedad del snapshot, la deriva de `model:`, los IDs declarados ausentes, el modelo free sobre un
+agente primario y, desde 0.18.15:
+
+- **Deriva de versión**: si `.ancletorc.version` es un string no vacío distinto de la versión del
+  CLI (leída de `package.json` con `packageVersion()`), imprime una vez
+  `.ancletorc registra v<rc> y el CLI es v<cli>; corré 'ancleto upgrade' para regenerar los
+  artefactos locales`. No repara: `upgrade` es el único remediador.
+- **Tier dormido**: si el proyecto no declara ninguna superficie local de agentes
+  (`localAgentDirs(rc)` devuelve `[]`, por ejemplo `cursor` o `roo`), el tier existe pero no se
+  considera huérfano. El aviso histórico sólo se emite cuando hay al menos un directorio declarado
+  y la suma de `.md` es cero.
+
+`doctor` valida Node ≥ 24, la importabilidad de `node:sqlite` y la config MCP de `opencode`. Desde
+0.18.15 resuelve la config con precedencia **proyecto → global**, probando en orden
+`.opencode/opencode.json`, `.opencode/opencode.jsonc`, `globalConfigDir()/opencode.json` y
+`globalConfigDir()/opencode.jsonc`; valida sólo el primer archivo existente. La ruta del proyecto se
+reporta relativa con `/`; la global, por nombre base. Si hay config de proyecto inválida, no cae a la
+global. El parseo es `JSON.parse` estricto (un `.jsonc` con comentarios se reporta inválido) y una
+config inválida o ausente no altera el exit code.
 
 ## Refresco del catálogo de modelos
 
@@ -108,8 +132,8 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.18.14)**: `.ancletorc` y `.ancleto/machine-env.md` registran
-`ancleto: 0.18.14`, alineados con `package.json` tras el `upgrade` local. Siguen siendo artefactos
+**Estado de este checkout (0.18.15)**: `.ancletorc` y `.ancleto/machine-env.md` registran
+`ancleto: 0.18.15`, alineados con `package.json` tras el `upgrade` local. Siguen siendo artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed.
 
 ## Entorno de máquina

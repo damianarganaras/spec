@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-generatedAt: 2026-11-04T22:24:31Z
-pluginVersion: 0.18.14
+generatedAt: 2026-11-05T00:07:33Z
+pluginVersion: 0.18.15
 skillVersion: '2.3'
 ---
 
@@ -15,11 +15,11 @@ skillVersion: '2.3'
 
 Separar el descubrimiento técnico del barrido manual: producir un mapa topológico estable
 (`.discovery-map.json`), empaquetar el contexto con el presupuesto del tier, medir si el seed sigue
-fresco y calcular qué archivos dependen de un cambio. En `0.18.14` el catálogo de modelos se puede
-refrescar de forma completa y auditable desde una máquina de mantenimiento, sin introducir
-descubrimiento en runtime: se enumeran todos los proveedores, se fuerza `--refresh`, se clasifica
-la corrida, se calcula el diff, se valida que todo ID declarado sobreviva y se escribe de forma
-atómica.
+fresco y calcular qué archivos dependen de un cambio. El catálogo de modelos se puede refrescar de
+forma completa y auditable desde una máquina de mantenimiento, sin introducir descubrimiento en
+runtime: se enumeran todos los proveedores, se fuerza `--refresh`, se clasifica la corrida, se
+calcula el diff, se valida que todo ID declarado sobreviva y se escribe de forma atómica. En 0.18.15
+esta unidad no cambió: la paridad de diagnóstico tocó sólo `check`/`doctor` en `src/cli/index.js`.
 
 ## Recorrido relevante
 
@@ -75,7 +75,7 @@ que el pack no trae Markdown.
 `src/core/model-catalog.json` guarda `generated_at: 2026-11-04`, `source.method`
 (`opencode models <provider> --verbose --refresh`), `source.providers` y los IDs con costo y
 límites: **5 proveedores / 211 IDs** — `opencode` 10, `opencode-go` 30, `anthropic` 20,
-`commandcode` 71, `openai` 80.
+`commandcode` 71, `openai` 80. Sin cambios en 0.18.15.
 
 `src/core/model-catalog.js` es el dueño único de los helpers puros:
 
@@ -111,7 +111,8 @@ excluye `inherit`.
 - **Consolidación (0.18.13)**: en `aspec/specs/agent-model-tiers/spec.md` los dos requirements
   solapados de integridad de IDs se consolidaron con `MODIFIED Requirements`, conservando ambos
   headings y dejando la regla estricta de `--write` como enunciación autoritativa. No cambió
-  comportamiento; evita reenunciar la misma obligación dos veces.
+  comportamiento; evita reenunciar la misma obligación dos veces. En 0.18.15 el mismo spec sumó el
+  requirement del tier dormido (sólo oráculo).
 
 ### Descubrimiento dev-only
 
@@ -152,9 +153,10 @@ inválido (`{}`, `{providers:{}}`, array, string) se descarta; un catálogo ileg
 
 Con catálogo no verificable conserva el aviso de catálogo no verificable y **no** emite deriva ni
 advisory de IDs: un snapshot corrupto o vacío no produce deriva falsa. Todos los avisos son no
-bloqueantes: no alteran el exit code, los contadores ni el conjunto de aceptación del oráculo. El
-invariante de la nota de compresión (0.18.14) no cambia este contrato: la divergencia de frontmatter
-sigue siendo advisory.
+bloqueantes: no alteran el exit code, los contadores ni el conjunto de aceptación del oráculo. En
+0.18.15 se sumaron dos avisos de `check` ajenos a esta unidad: tier dormido y deriva de
+`.ancletorc.version` (ver `units/cli-install.md`). El invariante de la nota de compresión (0.18.14)
+no cambia este contrato.
 
 ### Affected-set
 
@@ -170,8 +172,8 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 778 archivos enumerados, ~36.310 tokens, tier `minimo` (comprimido). El
-  `.discovery-map.json` regenerado reporta 788 archivos. El estado quedó en
+- **Pack actual**: 783 archivos enumerados, ~36.427 tokens, tier `minimo` (comprimido). El
+  `.discovery-map.json` regenerado reporta 793 archivos (aspec 225). El estado quedó en
   `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
   runtime/CI" y la separación `model-catalog.js` (puro) / `scripts/` (procesos).

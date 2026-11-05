@@ -2,6 +2,16 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.20.0] - 2026-11-05
+
+### Added
+- **`export` host-neutral**: lee la intención MCP del único destino descriptor del host activo (`opencode`, `antigravity`, `commandcode`, `copilot`), con fallback legacy a `.opencode` para `claude`, `vscode`, `cursor` y `roo`; destino ausente → intención vacía; archivo no parseable → un warning no bloqueante y exit 0.
+- **`import` con ruteo por host**: copia y registra `.opencode/{agents,commands,skills}` solo cuando el host activo es `opencode`; en los demás hosts materializa vía `installAgentAssets`; `installedPaths` sigue siendo la unión de las rutas escritas.
+
+### Docs
+- **Specs sincronizadas**: `project-portability`, `agent-install-routing` y `cli-diagnostics`.
+- **Change archivado**: `2026-11-05-host-neutral-bundle`.
+
 ## [0.19.0] - 2026-11-05
 
 ### Added

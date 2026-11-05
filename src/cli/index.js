@@ -4221,6 +4221,26 @@ async function readProjectMcp(projectDir) {
   }
 }
 
+// Intencion MCP del bundle: el destino que declara el descriptor para el host
+// activo, o la lectura legacy de `.opencode` cuando el host no declara destino.
+async function readHostMcpIntent(projectDir, host) {
+  const toEntries = (cfg) => (cfg && typeof cfg === 'object' && !Array.isArray(cfg) ? Object.entries(cfg) : [])
+    .map(([name, def]) => ({ name, type: def?.type || 'local', enabled: def?.enabled !== false }))
+  const destination = await resolveHostMcpDestination(projectDir, host)
+  if (!destination) {
+    const { file, cfg, error } = await readProjectMcp(projectDir)
+    return { entries: toEntries(cfg?.mcp), file, error: error || null }
+  }
+  const { file, schema } = destination
+  if (!(await exists(file))) return { entries: [], file, error: null }
+  try {
+    const cfg = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+    return { entries: toEntries(cfg?.[schema]), file, error: null }
+  } catch (error) {
+    return { entries: [], file, error }
+  }
+}
+
 // Repara entradas rotas y agrega ausentes en el destino MCP del host activo (solo
 // las de intendedNames cuando se indica; con null solo repara las existentes).
 // Nunca toca las sanas. Un destino no parseable se avisa nombrando el archivo y se
@@ -4275,9 +4295,11 @@ async function exportCmd(args) {
     console.error("Error: No se encontro .ancletorc. Ejecuta 'ancleto init' primero.")
     process.exit(1)
   }
-  const { cfg } = await readProjectMcp(projectDir)
-  const mcpIntent = Object.entries(cfg.mcp || {})
-    .map(([name, def]) => ({ name, type: def?.type || 'local', enabled: def?.enabled !== false }))
+  const host = SUPPORTED_AGENTS.includes(rc.agent) ? rc.agent : DEFAULT_AGENT
+  const { entries: mcpIntent, file: mcpFile, error: mcpError } = await readHostMcpIntent(projectDir, host)
+  if (mcpError) {
+    console.error(`${relative(projectDir, mcpFile).replace(/\\/g, '/')} no es JSON valido; el manifiesto exporta intencion MCP vacia`)
+  }
   const tierFile = join(projectDir, '.opencode', '.ancleto-tier')
   const tier = (await exists(tierFile)) ? (await readFile(tierFile, 'utf8')).trim() : null
   const manifest = {
@@ -4433,11 +4455,15 @@ async function importCmd(args) {
       if (merged !== current) await writeFile(target, merged)
     }
     const copiedAssets = { agents: [], commands: [], skills: [] }
-    for (const d of ASSETS) {
-      const src = join(bundleDir, '.opencode', d)
-      if (!(await exists(src))) continue
-      await cp(src, join(projectDir, '.opencode', d), { recursive: true, force: false })
-      copiedAssets[d].push(`.opencode/${d}`)
+    // Solo `opencode` materializa los assets desde `.opencode`; el resto de los
+    // hosts los recibe exclusivamente via `installAgentAssets` mas abajo.
+    if (agent === 'opencode') {
+      for (const d of ASSETS) {
+        const src = join(bundleDir, '.opencode', d)
+        if (!(await exists(src))) continue
+        await cp(src, join(projectDir, '.opencode', d), { recursive: true, force: false })
+        copiedAssets[d].push(`.opencode/${d}`)
+      }
     }
     freshProjectMcp = buildDefaultMcp({ withEngram: manifest?.flags?.engram === true })
     intendedMcpNames = (manifest.mcp ?? []).map((m) => m.name)

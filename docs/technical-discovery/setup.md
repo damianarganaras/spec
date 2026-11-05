@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-05T03:53:28Z
-pluginVersion: 0.18.16
+generatedAt: 2026-11-05T23:05:00Z
+pluginVersion: 0.20.0
 skillVersion: '2.3'
 ---
 
@@ -50,7 +50,7 @@ con `argsIgnorePattern`/`caughtErrorsIgnorePattern` = `^_`, `eqeqeq`, `no-dupe-k
 `check` es un oráculo read-only: sólo los faltantes alteran el exit code
 (`missing > 0 ? 1 : 0`). Entre sus avisos no bloqueantes están el catálogo no verificable, la
 antigüedad del snapshot, la deriva de `model:`, los IDs declarados ausentes, el modelo free sobre un
-agente primario; desde 0.18.15/0.18.16 se suman:
+agente primario; desde 0.18.15–0.19.0 se suman:
 
 - **Deriva de versión**: si `.ancletorc.version` es un string no vacío distinto de la versión del
   CLI (leída de `package.json` con `packageVersion()`), imprime una vez
@@ -60,25 +60,42 @@ agente primario; desde 0.18.15/0.18.16 se suman:
   (`localAgentDirs(rc)` devuelve `[]`, por ejemplo `cursor` o `roo`), el tier existe pero no se
   considera huérfano. El aviso histórico sólo se emite cuando hay al menos un directorio declarado
   y la suma de `.md` es cero.
-- **Salud MCP (0.18.16)**: `check` lee sólo la config MCP **del proyecto** con
-  `readProjectMcp`/`findProjectMcpFile`. Si existe y no parsea, emite
-  `<ruta> no es JSON valido; no se inspeccionaron las entradas MCP`; si parsea, emite un aviso por
-  entrada con `mcpCommandBroken` verdadero:
-  `MCP '<nombre>' tiene un comando roto (<detalle>)`. No inspecciona la config global ni la de otros
-  hosts, no escribe y no cambia el exit code.
+- **Salud MCP host-aware (0.18.16, ampliada en 0.19.0)**: `check` deriva los hosts instalados de
+  `installedHostsFromPaths(rc.installedPaths)` y, para cada uno que declare destino en
+  `HOST_MCP_TARGETS`, inspecciona el archivo existente con `resolveExistingHostMcpDestinations`.
+  No mira la config global ni hosts sin destino. Por cada destino:
+  - si existe y no parsea: `<ruta> no es JSON valido; no se inspeccionaron las entradas MCP`;
+  - si parsea y `cfg[schema]` es un objeto plano: un aviso por entrada con `mcpCommandBroken`
+    verdadero, `MCP '<nombre>' tiene un comando roto (<detalle>)`.
 
-`doctor` valida Node ≥ 24, la importabilidad de `node:sqlite` y la config MCP de `opencode`. Resuelve
-la config con precedencia **proyecto → global**, usando la misma regla de descubrimiento de proyecto
-(`findProjectMcpFile`: `.opencode/opencode.json` y luego `.opencode/opencode.jsonc`) y, si no existe,
-`globalConfigDir()/opencode.json` y `globalConfigDir()/opencode.jsonc`; valida sólo el primer archivo
-existente. La ruta del proyecto se reporta relativa con `/`; la global, por nombre base. Si hay config
-de proyecto inválida, no cae a la global. El parseo es `JSON.parse` estricto (un `.jsonc` con
-comentarios se reporta inválido) y una config inválida o ausente no altera el exit code.
+  El esquema se normaliza para `mcpServers` con `normalizeHostMcpEntry`. No escribe y no cambia el
+  exit code; `missing`/`orphans` tampoco cambian.
+
+`doctor` valida Node ≥ 24, la importabilidad de `node:sqlite` y la config MCP del host. Resuelve el
+archivo con la precedencia **host activo → hosts instalados → global**:
+
+1. El destino del host activo (`rc.agent`, o `opencode` por defecto) si existe.
+2. Los destinos de los hosts instalados derivados de `installedPaths`, en el orden
+   `opencode`, `antigravity`, `commandcode`, `copilot`.
+3. `globalConfigDir()/opencode.json` y `globalConfigDir()/opencode.jsonc` sólo si no existe ninguno
+   de proyecto; `GLOBAL_MCP_CANDIDATES` deriva esos nombres de `PROJECT_MCP_CANDIDATES`.
+
+Se valida **sólo el primer archivo existente**; si hay config de proyecto, no se cae al fallback
+global aunque sea inválida. La ruta del proyecto se reporta relativa con `/`; la global, por nombre
+base. El parseo es `JSON.parse` estricto (un `.jsonc` con comentarios se reporta inválido) y una
+config inválida o ausente no altera el exit code.
+
+`export` (0.20.0) resuelve la intención MCP del manifiesto con `readHostMcpIntent` y el descriptor
+del host activo. Si el destino existe y no parsea, emite por `stderr`
+`<ruta> no es JSON valido; el manifiesto exporta intencion MCP vacia`, exporta `manifest.mcp = []` y
+sale con 0. Un destino inexistente exporta intención vacía sin aviso.
 
 `import` (con o sin bundle, incluido `--repair`) avisa por `stderr` antes de reemplazar una config
-MCP de proyecto no parseable:
+MCP no parseable:
 `ancleto: no se pudo leer <ruta> como JSON; se reemplaza por la configuracion MCP nueva`. La decisión
-de reemplazo y el exit code no cambian.
+de reemplazo y el exit code no cambian. Desde 0.20.0, `import <bundle>` copia y registra
+`.opencode/{agents,commands,skills}` sólo si el host activo es `opencode`; en los demás hosts los
+assets se materializan por `installAgentAssets`.
 
 ## Refresco del catálogo de modelos
 
@@ -143,9 +160,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.18.16)**: `.ancletorc` y `.ancleto/machine-env.md` registran
-`ancleto: 0.18.16`, alineados con `package.json` tras el `upgrade` local. Siguen siendo artefactos
-gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed.
+**Estado de este checkout (0.20.0)**: `.ancletorc` y `.ancleto/machine-env.md` registran
+`ancleto: 0.20.0`, alineados con `package.json`. Siguen siendo artefactos gitignored que
+`init`/`install`/`upgrade` regeneran; no son fuentes del seed.
 
 ## Entorno de máquina
 

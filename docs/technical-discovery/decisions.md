@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-05T03:53:28Z
-pluginVersion: 0.18.16
+generatedAt: 2026-11-05T23:05:00Z
+pluginVersion: 0.20.0
 skillVersion: '2.3'
 ---
 
@@ -29,7 +29,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.18.16)
+## Modelos y tiers (estado 0.20.0)
 
 ### Tabla y cadenas
 
@@ -222,9 +222,10 @@ skillVersion: '2.3'
   `installedPaths = unionInstalledPaths(<installedPaths del destino>, <lo escrito por este import>)`
   para las cuatro claves `templates|agents|commands|skills`.
 - **Qué es "lo escrito"**: los templates efectivamente escritos más lo que devuelve
-  `installAgentAssets` (destinos relativos del proyecto). Además se incorporan los directorios
-  copiados desde el bundle —`.opencode/agents`, `.opencode/commands` y `.opencode/skills`— a la
-  misma unión.
+  `installAgentAssets` (destinos relativos del proyecto). Desde 0.20.0, los directorios copiados
+  desde el bundle —`.opencode/agents`, `.opencode/commands` y `.opencode/skills`— se incorporan a la
+  misma unión **sólo cuando el host activo es `opencode`**; en los demás hosts no se copian ni se
+  registran y los assets se materializan por `installAgentAssets`.
 - **Nunca se hereda del bundle**: `export` copia `.ancletorc` verbatim, así que sus rutas describen
   la máquina origen; copiarlas produciría faltantes falsos en el destino. Un bundle sin
   `.ancletorc` no reescribe el manifiesto.
@@ -283,31 +284,34 @@ Change archivado:
 
 ### Config MCP de `doctor` (H14)
 
-- Precedencia: `.opencode/opencode.json` del proyecto → `.opencode/opencode.jsonc` del proyecto →
-  `globalConfigDir()/opencode.json` → `globalConfigDir()/opencode.jsonc`. Se valida **sólo el primer
-  archivo existente**; no se validan proyecto y global a la vez.
-- La ruta del proyecto se reporta relativa con separadores `/` (por ejemplo
-  `.opencode/opencode.json`); la global, por `basename`.
-- Mensajes conservados: `✔ <ruta> valido`, `✖ <ruta> JSON invalido`, y
-  `⚠ opencode.json no encontrado (config MCP)` cuando no existe ninguno de los cuatro.
-- Si existe config de proyecto, **no** se cae al fallback global aunque esa config sea inválida. El
-  parseo es el existente (`JSON.parse` sobre el contenido sin BOM); un `.jsonc` con comentarios se
-  reporta inválido a propósito.
-- `doctor` **no** valida `.agents/mcp_config.json`, `.mcp.json`, `copilot-mcp.json` ni
-  `.vscode/mcp.json`. El exit code sigue siendo fatal sólo por Node < 24 o fallo al importar
-  `node:sqlite`; config inválida o ausente no lo altera.
+- **Estado 0.18.15**: la precedencia era `.opencode/opencode.json` del proyecto →
+  `.opencode/opencode.jsonc` del proyecto → `globalConfigDir()/opencode.json` →
+  `globalConfigDir()/opencode.jsonc`, validando **sólo el primer archivo existente**. Desde 0.19.0 la
+  precedencia es host activo → hosts instalados → global (ver “Ruteo MCP por host”); los mensajes
+  (`✔ <ruta> valido`, `✖ <ruta> JSON invalido`, `⚠ opencode.json no encontrado (config MCP)`) y el
+  parseo estricto se conservan. La ruta del proyecto se reporta relativa con separadores `/`; la
+  global, por `basename`.
+- Si existe config de proyecto, **no** se cae al fallback global aunque sea inválida. El parseo es
+  `JSON.parse` sobre el contenido sin BOM; un `.jsonc` con comentarios se reporta inválido a
+  propósito.
+- El exit code sigue siendo fatal sólo por Node < 24 o fallo al importar `node:sqlite`; config
+  inválida o ausente no lo altera. `doctor` no valida `.vscode/mcp.json` ni crea MCP para hosts sin
+  destino.
 - **Por qué proyecto primero**: el proyecto es el ámbito donde `install`/`init` escriben la config
   MCP de `opencode`; validar la global primero medía un archivo que puede no ser el efectivo.
   Decisión aprobada: `doctor-prefers-project-mcp-config`.
 
 ### Fuera de alcance (diferido)
 
-H3/H4/H6 (ruteo MCP por host), H5 (entrada caveman contada como compresión), H8 (tier en
-`upgrade`), H9 (`installedPaths` multi-host), H10/H11/H12 (portabilidad multi-host) siguen fuera.
-M2 (config MCP no parseable) quedó **parcialmente** atendido en 0.18.16: `import` ahora avisa antes
-de reemplazarla, pero la decisión de sobrescribir y el carve-out de la nota de compresión no cambian.
-Cada uno de los restantes cambia propiedad de estado o contratos congelados (config MCP por host,
-byte-identidad de `upgrade`, layout de `export`), no un diagnóstico. Decisión:
+H3/H4/H6 (ruteo MCP por host) y H10/H11/H12 (portabilidad multi-host) quedaron resueltos por
+`mcp-host-write-routing` (0.19.0) y `host-neutral-bundle` (0.20.0). Siguen fuera: H5 (entrada
+caveman contada como compresión), H8 (tier en `upgrade`) y H9/N2 (`installedPaths`/estado de tier
+multi-host). M2 (config MCP no parseable) quedó **parcialmente** atendido en 0.18.16: `import` avisa
+antes de reemplazarla, pero la decisión de sobrescribir y el carve-out de la nota de compresión no
+cambian. La colisión `.mcp.json` entre `commandcode` y `claude` y la idempotencia del refresco de
+`opencode`/`antigravity` en `upgrade` siguen diferidas por decisión explícita de 0.20.0. Cada uno de
+los restantes cambia propiedad de estado o contratos congelados (byte-identidad de `upgrade`,
+layout de `export`), no un diagnóstico. Decisión:
 `deferred-write-vs-validate-backlog` (estado: descartado como parte de este change).
 
 ## Salud de comandos MCP (0.18.16)
@@ -341,10 +345,12 @@ avisos read-only; **no** cambia el ruteo de escritura MCP por host, la portabili
 - `findProjectMcpFile(projectDir)` devuelve el primer archivo existente entre
   `.opencode/opencode.json` y `.opencode/opencode.jsonc`, o `null`.
 - `readProjectMcp(projectDir)` usa ese helper y devuelve `{ file, cfg }`; desde 0.18.16 agrega
-  `error` cuando el archivo existe y no parsea (`{ file, cfg: {}, error }`). `export` e `import`
-  conservan su contrato de lectura.
-- `check` y `doctor` comparten la regla de lectura. `doctor` conserva su fallback global y sus
-  mensajes (`✔ <ruta> valido`, `✖ <ruta> JSON invalido`,
+  `error` cuando el archivo existe y no parsea (`{ file, cfg: {}, error }`). Es la lectura legacy de
+  `export` para hosts sin destino y la base de `readHostMcpIntent`.
+- Desde 0.19.0 `check` y `doctor` resuelven el archivo por `resolveHostMcpDestination` /
+  `resolveExistingHostMcpDestinations`; `PROJECT_MCP_CANDIDATES` sigue siendo el dueño del par de
+  nombres de `opencode`. `doctor` conserva su fallback global y sus mensajes
+  (`✔ <ruta> valido`, `✖ <ruta> JSON invalido`,
   `⚠ opencode.json no encontrado (config MCP)`).
 - `mergeMcp` conserva su semántica: recolecta **todos** los candidatos existentes y mergea en cada
   uno. `hostConfigHasCompression` conserva la suya: prueba todos los candidatos y considera presente
@@ -353,16 +359,17 @@ avisos read-only; **no** cambia el ruteo de escritura MCP por host, la portabili
 
 ### Avisos advisory de `check`
 
-- `check` inspecciona **sólo** la config MCP del proyecto (no la global ni la de otros hosts). Sin
+- **0.18.16 (histórico)**: `check` inspeccionaba **sólo** la config MCP del proyecto. Desde 0.19.0
+  inspecciona los destinos declarados de todos los hosts instalados; ver “Ruteo MCP por host”. Sin
   config o con todas las entradas sanas, no emite avisos de estado MCP.
-- Si la config existe y no parsea, agrega un único aviso:
+- Si el destino existe y no parsea, agrega un único aviso:
   `<ruta> no es JSON valido; no se inspeccionaron las entradas MCP` (ruta relativa con `/`).
-- Si parsea y `cfg.mcp` es un objeto plano, agrega un aviso por entrada rota:
-  `MCP '<nombre>' tiene un comando roto (<detalle>)`. `<detalle>` es el primer elemento sólo cuando
-  `command` es un arreglo y ese elemento es un string no vacío; en cualquier otra forma es
-  `command ausente`.
-- Si `cfg.mcp` no es objeto plano (string, arreglo, número o `null`), no hay avisos MCP y no se
-  reporta error de parseo.
+- Si parsea y `cfg[schema]` (o `cfg.mcp` en la lectura legacy) es un objeto plano, agrega un aviso
+  por entrada rota: `MCP '<nombre>' tiene un comando roto (<detalle>)`. `<detalle>` es el primer
+  elemento sólo cuando `command` es un arreglo y ese elemento es un string no vacío; en cualquier
+  otra forma es `command ausente`.
+- Si el mapa de servidores no es un objeto plano (string, arreglo, número o `null`), no hay avisos
+  MCP y no se reporta error de parseo.
 - Los avisos se suman al arreglo `warnings` existente y se imprimen como `  ⚠ <texto>`; no cambian el
   exit code (`missing > 0 ? 1 : 0`), no incrementan `missing`/`orphans`, no alteran el oráculo y no
   escriben archivos.
@@ -371,7 +378,7 @@ avisos read-only; **no** cambia el ruteo de escritura MCP por host, la portabili
 
 ### Aviso de `import` antes de reemplazar
 
-- Si la config MCP de proyecto existe y no parsea, `repairProjectMcp` emite a `stderr`, antes de
+- Si el destino MCP del host activo existe y no parsea, `repairProjectMcp` emite a `stderr`, antes de
   escribir, `ancleto: no se pudo leer <ruta> como JSON; se reemplaza por la configuracion MCP nueva`.
 - El aviso se emite una vez por ejecución y aplica a `import` con bundle y a `import --repair`.
 - La decisión de reemplazo **no** cambia: la config no parseable sigue siendo sobrescrita por la
@@ -382,8 +389,10 @@ avisos read-only; **no** cambia el ruteo de escritura MCP por host, la portabili
 
 - **Ruido advisory**: un binario de un servidor de usuario que no exista en esta máquina produce un
   aviso por entrada; no bloquea.
-- **Alcance de la inspección**: `check` y `doctor` no ven la config global ni las configs MCP de
-  otros hosts (`copilot-mcp.json`, `.mcp.json`, `.agents/mcp_config.json`).
+- **Alcance de la inspección (0.18.16, superado en 0.19.0)**: entonces `check` y `doctor` no veían la
+  config global ni las configs MCP de otros hosts (`copilot-mcp.json`, `.mcp.json`,
+  `.agents/mcp_config.json`). Desde 0.19.0 ven los destinos declarados de los hosts instalados;
+  `check` sigue sin ver la config global.
 - **Existencia en el host actual**: una ruta absoluta válida en otra máquina se reporta rota en
   ésta; es la condición real que evalúa el predicado, no una lista de excepciones.
 - **M2 deja de ser silencioso, no de ser destructivo**: `import` avisa, pero sigue reemplazando el
@@ -410,16 +419,16 @@ avisos read-only; **no** cambia el ruteo de escritura MCP por host, la portabili
   tool. Es la misma fuente que usa `check`.
 - **Gates**: `install` pasa `writesCaveman: Boolean(mcpMap && mcpMap.caveman)`; `init` hace lo
   mismo con su `mcpMap`; `import` pasa `writesCaveman: agent === 'opencode' && Boolean(freshProjectMcp.caveman)`
-  e `intendedNames` derivado de `manifest.mcp`. `repairProjectMcp` solo escribe
-  `.opencode/opencode.json`, por eso `import` no cuenta escritura pendiente para antigravity.
-- **Alcance excluido**: H3 (escrituras MCP en `.opencode` originadas por otro host), H9
-  (`installedPaths` multi-host) y la rama global de `install` sin `--project` quedan fuera. La
-  rama global copia `agents/**` verbatim y `check` no la evalúa. En proyectos mixtos, un aviso
-  advisory de `check` no invalida el invariante acotado.
+  e `intendedNames` derivado de `manifest.mcp`. Desde 0.19.0 `repairProjectMcp` escribe el destino
+  del host activo, por lo que la escritura pendiente cuenta para `opencode`, `antigravity`,
+  `commandcode` o `copilot` según corresponda.
+- **Alcance excluido**: H9 (`installedPaths` multi-host) y la rama global de `install` sin
+  `--project` quedan fuera. La rama global copia `agents/**` verbatim y `check` no la evalúa. H3
+  (escrituras MCP originadas por otro host) quedó resuelto por el descriptor de 0.19.0.
 - **Excepción M2**: si la config MCP del host no es JSON parseable, `install`/`init` omiten esa
   escritura y avisan; la nota se materializa igual por la escritura pendiente y `check` puede
-  divergir. `import <bundle>` en `opencode` queda fuera: `repairProjectMcp` sobrescribe la config;
-  desde 0.18.16 emite un aviso por `stderr` antes de reemplazarla, pero no cambia la decisión.
+  divergir. `import <bundle>` reemplaza el destino del host activo (`repairProjectMcp`); desde
+  0.18.16 emite un aviso por `stderr` antes de reemplazarlo, pero no cambia la decisión.
 - **`import --repair` sin bundle**: no reescribe assets y, por lo tanto, **no sanea** una nota
   legada; solo `import <bundle>` la re-materializa.
 - **Contrato de `check` intacto**: la divergencia de frontmatter sigue siendo advisory, la
@@ -427,6 +436,116 @@ avisos read-only; **no** cambia el ruteo de escritura MCP por host, la portabili
 - **Change archivado**: `aspec/changes/archive/2026-11-04-host-compression-note-consistency/`
   (proposal con enmiendas R1/R2, tasks y deltas). Decisiones aprobadas:
   `compression-note-gate`, `compression-note-active-host-scope`, `tier-applytest-overlay-guard`.
+
+## Ruteo MCP por host (0.19.0)
+
+Changes archivados: `aspec/changes/archive/2026-11-05-mcp-host-write-routing/` (descriptor y
+ruteo de escritura) y `aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure/` (texto y par
+global derivado). Requirements canónicos en `aspec/specs/agent-install-routing/spec.md`,
+`aspec/specs/cli-diagnostics/spec.md` y `aspec/specs/project-portability/spec.md`.
+
+### Descriptor único de destino
+
+- `HOST_MCP_TARGETS` (`src/cli/index.js`) declara `{ file, schema, merge }` por host:
+
+  | Host | Archivo de proyecto | Esquema |
+  |---|---|---|
+  | `opencode` | `.opencode/opencode.json` o el `.jsonc` existente | `mcp` |
+  | `antigravity` | `.agents/mcp_config.json` | `mcpServers` |
+  | `commandcode` | `.mcp.json` | `mcpServers` |
+  | `copilot` | `copilot-mcp.json` | `mcp` |
+  | `claude`, `vscode`, `cursor`, `roo` | ninguno | — |
+
+- `HOST_MCP_ORDER = ['opencode', 'antigravity', 'commandcode', 'copilot']` fija el orden
+  determinista para diagnósticos. `hostMcpTarget`/`hostMcpProjectFile` resuelven el descriptor;
+  `resolveHostMcpFile` respeta el par `json`/`jsonc` de `opencode` y
+  `resolveHostMcpDestination` devuelve `{ host, file, schema }` o `null`.
+- **Por qué un descriptor**: `src/cli/index.js` ya era dueño de `PROJECT_MCP_CANDIDATES`,
+  `setupHostMcp` y los merges por host. Un mapa único evita literales de destino por comando y que
+  un host nuevo herede `.opencode` por omisión. Decisión: `host-mcp-destination-descriptor`.
+
+### Escritura y reparación
+
+- `setupHostMcp(mcpMap, { projectDir, agent })` es el dueño único para `init`/`install`/`update`:
+  sin proyecto conserva la rama global solo-opencode; con proyecto resuelve el host activo y llama
+  al merge del descriptor. Un host sin destino no escribe archivo MCP, crea `.opencode` ni falla:
+  emite como máximo un aviso por corrida (`warnNoMcpDestination`) y sigue.
+- `import` e `import --repair` resuelven el destino del host activo y pasan `destination` a
+  `repairProjectMcp`; un destino no parseable se avisa nombrando el archivo y se reemplaza (M2).
+- Los merges son no destructivos e idempotentes: agregan nombres ausentes, no borran entradas ni
+  archivos, y dos corridas dejan el mismo conjunto. Decisión: `host-mcp-import-routing`.
+- La garantía se acota a alcance de proyecto, host activo y hosts con destino declarado. Quedan
+  fuera la instalación global, el borrado de archivos preexistentes y la verificación independiente
+  del consumo de `copilot-mcp.json` por Copilot (`host-mcp-write-guarantee-scope`).
+
+### Diagnósticos host-aware
+
+- `check` deriva los hosts instalados de `installedHostsFromPaths(rc.installedPaths)` (unión de
+  destinos escritos, no un único `rc.agent`) y llama a `resolveExistingHostMcpDestinations` con
+  `HOST_MCP_ORDER`. Para cada destino existente valida el JSON y avisa por entrada con
+  `mcpCommandBroken`; `mcpServers` se normaliza con `normalizeHostMcpEntry`. Nunca mira la config
+  global ni hosts sin destino, no escribe y no altera el exit code.
+- `doctor` valida el primer destino existente entre el host activo y los hosts instalados; si no
+  existe ninguno, cae al par global de `opencode` (`GLOBAL_MCP_CANDIDATES`, derivado por `basename`
+  de `PROJECT_MCP_CANDIDATES`). Un archivo de proyecto inválido no cae al fallback. Los mensajes
+  (`✔ <ruta> valido`, `✖ <ruta> JSON invalido`, `⚠ opencode.json no encontrado (config MCP)`) y el
+  exit code no cambian. Decisión: `mcp-oracle-host-aware-advisory`.
+
+### Riesgos aceptados
+
+- **Colisión `.mcp.json`**: `commandcode` escribe `.mcp.json`, un nombre que Claude también lee. Es
+  preexistente y quedó explícitamente fuera (`mcp-json-collision-deferred`).
+- **`.opencode` obsoleto en proyectos mixtos**: un archivo de una instalación previa se conserva y
+  `check` lo sigue validando si `opencode` figura en `installedPaths`; no se borra ni se refresca
+  desde un host distinto.
+- **Sobrescritura M2**: `import` sigue reemplazando un destino ilegible sin backup; sólo agrega el
+  aviso.
+- **Copilot runtime no verificado**: el CLI declara `copilot-mcp.json` como destino, pero el
+  consumo por Copilot no se verifica offline.
+
+## Bundle host-neutral (0.20.0)
+
+Change archivado: `aspec/changes/archive/2026-11-05-host-neutral-bundle/` (proposal, tasks y deltas
+de `project-portability`, `agent-install-routing` y `cli-diagnostics`). El formato sigue siendo
+`ancleto-export/1`; cambian la lectura de intención en `export` y el alcance de copia/registro en
+`import`. Decisión principal: `bundle-mcp-intent-host-aware` y `bundle-asset-copy-host-scoped`.
+
+### `export` lee la intención del host activo
+
+- `readHostMcpIntent(projectDir, host)` (`src/cli/index.js`) resuelve el destino con
+  `resolveHostMcpDestination` y devuelve `{ entries, file, error }`.
+- Host con destino: si el archivo no existe, `entries = []` sin aviso; si existe y parsea, toma
+  `cfg[schema]`; si existe y no parsea, `entries = []` y `error`. `export` convierte las entradas a
+  `[{ name, type: def?.type || 'local', enabled: def?.enabled !== false }]`.
+- Host sin destino (`claude`, `vscode`, `cursor`, `roo`): conserva la lectura legacy de
+  `readProjectMcp` (`.opencode/opencode.json|jsonc`), con el mismo aviso si no parsea.
+- Si `readHostMcpIntent` devuelve `error`, `export` emite una sola vez por `stderr`
+  `<ruta> no es JSON valido; el manifiesto exporta intencion MCP vacia`, deja `manifest.mcp = []` y
+  sale con 0. `manifest.flags.engram` se deriva de esa intención.
+- No cambian el guard de rutas absolutas, la forma del manifiesto, el payload de assets ni `--tar`.
+  Decisión: `bundle-layout-remains-v1`.
+
+### `import` acota la copia de `.opencode` al host activo
+
+- El host activo se resuelve igual que antes: `.ancletorc.agent` del bundle → `.ancletorc.agent`
+  existente → default.
+- Si el host activo es `opencode`, se copian `.opencode/{agents,commands,skills}` del bundle y se
+  registran como `.opencode/<dir>`; si no, no se copian ni se registran y los assets se materializan
+  sólo por `installAgentAssets`.
+- `installedPaths` sigue siendo la unión de lo ya declarado, los templates escritos y los assets
+  escritos (`unionInstalledPaths`); nunca se heredan rutas del bundle y no se borran rutas previas.
+- Tier, estado `.opencode/.ancleto-tier`, reparación MCP, mensajes y exit codes no cambian; el tier
+  sigue aplicándose sólo a `opencode` (`bundle-tier-state-unchanged`).
+
+### Exclusiones y deuda declarada
+
+- Colisión `.mcp.json` entre `commandcode` y `claude`.
+- Idempotencia del refresco de `opencode`/`antigravity` en `upgrade`.
+- Consumo runtime de `copilot-mcp.json` por Copilot (no verificable offline).
+- Estado de tier sin cambios (`bundle-tier-state-unchanged`).
+- Portabilidad de assets custom más allá de los canónicos (se regeneran).
+- Escaneo de secretos o rutas absolutas del contenido del bundle más allá del manifiesto.
+- `repairProjectMcp` reescribiendo bytes cuando `fixed` está vacío y la instalación global.
 
 ## Superficies del `model:` (nota operativa)
 
@@ -467,8 +586,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 786 archivos enumerados, ~36.579 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 796 archivos (aspec 228, docs 21, test 26, etc.).
+- **Pack actual**: tier `minimo`, 803 archivos enumerados, ~37.189 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 813 archivos (aspec 245, docs 21, test 26, etc.).
 
 ## Lint y publicación
 
@@ -503,6 +622,12 @@ sin `--tier` es `normal`.
   `opencode.json → agent.<nombre>.model`; por eso el mensaje dice "puede", nunca garantiza el 403.
 - **Check post-import no vacuo**: al poblarse `installedPaths`, un import puede exponer faltantes u
   huérfanos reales. Es el comportamiento correcto y un cambio observable.
+- **Import deja de copiar `.opencode/*` en hosts no-opencode (0.20.0)**: un proyecto que dependía
+  por accidente de ese archivo ya no lo recibe; el archivo preexistente se conserva pero no se
+  regenera. Un bundle legacy exportado desde otro host mantiene su intención original (vacía o de
+  `opencode`) porque el formato no cambió.
+- **Aviso nuevo de `export`**: un destino no parseable produce un aviso por `stderr`; no bloquea ni
+  cambia el exit code, pero puede aparecer en CI.
 - **Tier dormido silencioso (0.18.15)**: un manifiesto incompleto que omita `installedPaths.agents`
   y un host sin target de agentes no produce aviso. Es el comportamiento buscado, pero oculta el
   caso degenerado.
@@ -510,16 +635,17 @@ sin `--tier` es `normal`.
   dispara el advisory; no distingue semánticamente. Es informativo y no bloquea.
 - **`.jsonc` con comentarios (0.18.15)**: `doctor` lo reporta inválido porque conserva `JSON.parse`
   estricto; es deliberado para no ampliar alcance.
-- **Nota de compresión y proyectos mixtos**: la consistencia cross-host (H3/H9) no está resuelta;
-  `check` puede seguir avisando en proyectos con varios hosts. El invariante 0.18.14 es acotado al
-  host activo y no promete más.
+- **Nota de compresión y proyectos mixtos**: la consistencia cross-host (H9) sigue pendiente; el
+  ruteo de escritura (H3) quedó resuelto en 0.19.0, pero `check` puede seguir avisando en proyectos
+  con varios hosts. El invariante 0.18.14 es acotado al host activo y no promete más.
 - **Config MCP no parseable (M2)**: `install`/`init` no pueden leer el estado en disco y materializan
   la nota por la escritura pendiente; `check` puede divergir. Desde 0.18.16 `import` avisa antes de
   reemplazarla, pero sigue sin conservar el contenido ilegible. Es una limitación degenerada aceptada.
-- **Ruido y alcance de la salud MCP (0.18.16)**: `check` sólo inspecciona la config MCP del proyecto
-  y reporta como roto cualquier binario absoluto ausente en esta máquina; un comando simple se
-  presume sano sin resolver `PATH`. Son avisos, no fallos.
-- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.18.16` en este
+- **Ruido y alcance de la salud MCP (0.19.0)**: `check` inspecciona los destinos existentes de los
+  hosts instalados (no la config global ni hosts sin destino) y reporta como roto cualquier binario
+  absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
+  avisos, no fallos.
+- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.20.0` en este
   checkout; siguen siendo derivados gitignored. Si se regeneran con otra versión, el seed no cambia
   porque no los usa como fuente.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene

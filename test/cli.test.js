@@ -1290,7 +1290,7 @@ describe('CLI export/import (cross-machine-export-import)', () => {
 
   // Bundle mínimo armado a mano (manifest + .ancletorc portables): fija tier y
   // `gratisModel` del escenario sin depender del export del proyecto origen.
-  function writeBundle(dir, { tier = 'minimo', agent = 'opencode', gratisModel, template = false, assets = false, installedPaths, withRc = true, name = 'bundle' } = {}) {
+  function writeBundle(dir, { tier = 'minimo', agent = 'opencode', gratisModel, template = false, assets = false, mcp = [], installedPaths, withRc = true, name = 'bundle' } = {}) {
     const bundle = join(dir, name)
     mkdirSync(bundle, { recursive: true })
     if (withRc) {
@@ -1311,7 +1311,7 @@ describe('CLI export/import (cross-machine-export-import)', () => {
       profile: 'general',
       ...(gratisModel !== undefined ? { gratisModel } : {}),
       flags: { azure: false, engram: false },
-      mcp: []
+      mcp
     }
     writeFileSync(join(bundle, 'manifest.json'), JSON.stringify(manifest, null, 2))
     if (template) writeFileSync(join(bundle, 'AGENTS.md'), '# plantilla del bundle\n')
@@ -1435,11 +1435,10 @@ describe('CLI export/import (cross-machine-export-import)', () => {
     })
   })
 
-  // Caso que aisla la copia de assets: con un bundle `cursor` el destino nativo
-  // es sólo `.cursor/skills`, así que `.opencode/*` NO puede venir de
-  // `installAgentAssets`; su registro en el manifiesto depende exclusivamente de
-  // que el import registre los directorios copiados del bundle.
-  it('import de un bundle cursor registra .opencode/* sólo por la copia de assets (M1)', () => {
+  // Host-neutral-bundle: un bundle de un host distinto de `opencode` ya NO copia
+  // ni registra `.opencode/*`; los assets los materializa `installAgentAssets` en
+  // el layout nativo del host activo. El payload `.opencode` del bundle se ignora.
+  it('import de un bundle cursor no copia ni registra .opencode/* (host-neutral-bundle)', () => {
     withDir((dir) => {
       const dst = join(dir, 'destino')
       mkdirSync(dst)
@@ -1453,36 +1452,75 @@ describe('CLI export/import (cross-machine-export-import)', () => {
           skills: ['otra-maquina/skills']
         }
       })
-      // Un export real trae el catálogo completo en `.opencode/*`: sin eso `check`
-      // reportaría faltantes legítimos (no relacionados con `otra-maquina/*`) por
-      // registrar el directorio copiado.
-      for (const d of ['agents', 'commands', 'skills']) {
-        cpSync(join(TEST_DIR, '..', d), join(bundle, '.opencode', d), { recursive: true })
-      }
       const r = run(['import', bundle], dst)
       assert.equal(r.status, 0)
-      // La copia del bundle materializó un archivo propio en cada directorio y el
-      // host cursor escribió su propio layout de skills.
+      // La copia incondicional anterior dejaba estos directorios fantasma en disco.
       for (const d of ['agents', 'commands', 'skills']) {
-        assert.ok(existsSync(join(dst, '.opencode', d, `bundle-${d}.md`)), `copia del bundle en .opencode/${d}`)
+        assert.equal(existsSync(join(dst, '.opencode', d)), false, `sin .opencode/${d} fantasma`)
       }
       assert.ok(existsSync(join(dst, '.cursor', 'skills')), 'cursor: skills del host instaladas')
       const ip = readRc(dst).installedPaths
-      // Sólo la copia del bundle registra agents/commands: `installAgentAssets`
-      // para cursor escribe únicamente `.cursor/skills`.
-      assert.deepEqual(ip.agents, ['.opencode/agents'], 'agents: registrado por la copia, no por el host')
-      assert.deepEqual(ip.commands, ['.opencode/commands'], 'commands: registrado por la copia, no por el host')
-      // Orden real del manifiesto: primero lo escrito por el host, luego lo copiado.
-      assert.deepEqual(ip.skills, ['.cursor/skills', '.opencode/skills'], 'skills: host y copia del bundle')
+      assert.deepEqual(ip.agents, [], 'agents: el host no los soporta y el bundle no los aporta')
+      assert.deepEqual(ip.commands, [], 'commands: idem')
+      assert.deepEqual(ip.skills, ['.cursor/skills'], 'skills: sólo el destino nativo del host')
+      assert.deepEqual(ip.templates, [], 'el bundle no trae template')
       for (const group of ['agents', 'commands', 'skills', 'templates']) {
-        assert.equal(new Set(ip[group]).size, ip[group].length, `${group}: sin duplicados`)
+        assert.equal(ip[group].some((p) => p.startsWith('.opencode/')), false, `${group}: sin .opencode`)
         assert.equal(ip[group].some((p) => p.startsWith('otra-maquina/')), false, `${group}: rutas del bundle ignoradas`)
+        assert.equal(new Set(ip[group]).size, ip[group].length, `${group}: sin duplicados`)
       }
       const check = run(['check'], dst)
       assert.equal(check.status, 0, 'check sin faltantes')
       assert.match(check.stdout, /check -> 0 faltantes/)
-      assert.equal(check.stdout.includes('(directorio faltante)'), false, 'ningún directorio faltante')
-      assert.equal(check.stdout.includes('otra-maquina'), false, 'el manifiesto del bundle no genera faltantes')
+    })
+  })
+
+  // Host-neutral-bundle: con host copilot el payload `.opencode/*` del bundle no
+  // se copia ni se registra; el MCP va al destino del host activo y la unión de
+  // `installedPaths` conserva las rutas previas sin heredar las del bundle.
+  it('import de un bundle copilot no copia .opencode/* y registra sólo el layout del host', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      // Destino previo de otro host: sus rutas deben sobrevivir al import.
+      assert.equal(run(['install', '--project', dst, '--no-mcp', '--tier', 'minimo', '--agent', 'cursor'], dst).status, 0)
+      assert.deepEqual(readRc(dst).installedPaths.skills, ['.cursor/skills'])
+      const bundle = writeBundle(dir, {
+        assets: true,
+        agent: 'copilot',
+        template: true,
+        mcp: [{ name: 'ancleto-memory', type: 'local', enabled: true }],
+        installedPaths: {
+          templates: ['AGENTS.md'],
+          agents: ['otra-maquina/agents'],
+          commands: ['otra-maquina/commands'],
+          skills: ['otra-maquina/skills']
+        }
+      })
+      const r = run(['import', bundle], dst)
+      assert.equal(r.status, 0)
+      // `.opencode/.ancleto-tier` puede venir del install previo: el contrato es que
+      // el import no cree ni registre los directorios de assets del bundle.
+      for (const d of ['agents', 'commands', 'skills']) {
+        assert.equal(existsSync(join(dst, '.opencode', d)), false, `sin .opencode/${d} fantasma`)
+      }
+      assert.ok(existsSync(join(dst, '.github', 'prompts', 'orchestrator.prompt.md')), 'assets del host instalados')
+      const ip = readRc(dst).installedPaths
+      assert.deepEqual(ip.templates, ['AGENTS.md', 'PRODUCT.md'], 'templates previos conservados')
+      assert.deepEqual(ip.agents, ['.github/prompts'], 'agents del host, no .opencode')
+      assert.deepEqual(ip.commands, ['.github/prompts'], 'commands del host')
+      assert.deepEqual(ip.skills, ['.cursor/skills'], 'skills previas conservadas; copilot no soporta skills')
+      for (const group of ['agents', 'commands', 'skills', 'templates']) {
+        assert.equal(ip[group].some((p) => p.startsWith('.opencode/')), false, `${group}: sin .opencode`)
+        assert.equal(ip[group].some((p) => p.startsWith('otra-maquina/')), false, `${group}: rutas del bundle ignoradas`)
+        assert.equal(new Set(ip[group]).size, ip[group].length, `${group}: sin duplicados`)
+      }
+      // El MCP del import va al destino del host activo, no a `.opencode` ni a otro host.
+      assert.ok(existsSync(join(dst, 'copilot-mcp.json')), 'MCP en copilot-mcp.json')
+      assert.equal(existsSync(join(dst, '.mcp.json')), false, 'sin destino de otro host')
+      const cfg = JSON.parse(readFileSync(join(dst, 'copilot-mcp.json'), 'utf8'))
+      assert.ok(cfg.mcp['ancleto-memory'], 'MCP regenerado en el destino de copilot')
+      assert.equal(readRc(dst).agent, 'copilot', 'host activo del bundle aplicado')
     })
   })
 
@@ -1617,6 +1655,236 @@ describe('CLI export/import (cross-machine-export-import)', () => {
       assert.doesNotMatch(r.stderr, /no hay ningún candidato disponible/)
       assert.ok(existsSync(join(dst, '.claude', 'agents', 'orchestrator.md')), 'layout del host instalado')
       assert.equal(existsSync(join(dst, '.opencode', '.ancleto-tier')), false, 'sin tier aplicado')
+    })
+  })
+})
+
+// `export` resuelve la intención MCP del host activo por el descriptor único de
+// destinos: deja de asumir `.opencode` como única fuente y conserva la lectura
+// legacy sólo para los hosts que no declaran destino.
+describe('CLI export host-neutral MCP intent (host-neutral-bundle)', () => {
+  // Proyecto exportable mínimo: `.ancletorc` con el host activo y los archivos
+  // que el escenario declare. `export` no requiere una instalación previa.
+  function makeExportProject(dir, agent, files = {}) {
+    writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ agent, language: 'auto', profile: 'general' }, null, 2))
+    for (const [rel, content] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, rel)), { recursive: true })
+      writeFileSync(join(dir, rel), typeof content === 'string' ? content : JSON.stringify(content))
+    }
+  }
+
+  function exportManifest(dir) {
+    return JSON.parse(readFileSync(join(dir, 'ancleto-export', 'manifest.json'), 'utf8'))
+  }
+
+  it('opencode conserva la intención de .opencode/opencode.json y el mapeo de entradas', () => {
+    withDir((dir) => {
+      makeExportProject(dir, 'opencode', {
+        '.opencode/opencode.json': {
+          mcp: {
+            'ancleto-memory': { type: 'local', enabled: true, command: ['node'] },
+            engram: { type: 'remote', enabled: true },
+            'sin-tipo': { command: ['x'] },
+            apagado: { type: 'local', enabled: false }
+          }
+        }
+      })
+      const r = run(['export'], dir)
+      assert.equal(r.status, 0)
+      const manifest = exportManifest(dir)
+      assert.equal(manifest.format, 'ancleto-export/1', 'formato de bundle sin cambios')
+      assert.equal(manifest.agent, 'opencode')
+      assert.deepEqual(manifest.mcp, [
+        { name: 'ancleto-memory', type: 'local', enabled: true },
+        { name: 'engram', type: 'remote', enabled: true },
+        { name: 'sin-tipo', type: 'local', enabled: true },
+        { name: 'apagado', type: 'local', enabled: false }
+      ])
+      assert.equal(manifest.flags.engram, true, 'flags.engram sigue la intención MCP')
+    })
+  })
+
+  const hostDestinations = [
+    ['copilot', 'copilot-mcp.json', 'mcp'],
+    ['antigravity', '.agents/mcp_config.json', 'mcpServers'],
+    ['commandcode', '.mcp.json', 'mcpServers']
+  ]
+  for (const [host, rel, schema] of hostDestinations) {
+    it(`${host} lee ${rel} y no la intención de .opencode`, () => {
+      withDir((dir) => {
+        makeExportProject(dir, host, {
+          [rel]: { [schema]: { 'ancleto-memory': { type: 'local', enabled: true }, 'sin-tipo': {} } },
+          // Señuelo: una intención sólo-opencode que NO debe leerse en este host.
+          '.opencode/opencode.json': { mcp: { soloOpencode: { type: 'local', enabled: true }, engram: {} } }
+        })
+        const r = run(['export'], dir)
+        assert.equal(r.status, 0)
+        const manifest = exportManifest(dir)
+        assert.equal(manifest.agent, host)
+        assert.deepEqual(manifest.mcp, [
+          { name: 'ancleto-memory', type: 'local', enabled: true },
+          { name: 'sin-tipo', type: 'local', enabled: true }
+        ], `${host}: intención del destino del host`)
+        assert.equal(manifest.flags.engram, false, `${host}: el engram de .opencode no cuenta`)
+      })
+    })
+  }
+
+  it('hosts sin destino conservan la lectura legacy de .opencode y no incorporan otros destinos', () => {
+    withDir((root) => {
+      for (const host of ['claude', 'vscode', 'cursor', 'roo']) {
+        const dir = join(root, host)
+        mkdirSync(dir)
+        makeExportProject(dir, host, {
+          '.opencode/opencode.json': { mcp: { legacy: { type: 'local', enabled: true } } },
+          '.mcp.json': { mcpServers: { deCommandcode: { transport: 'stdio' } } },
+          '.agents/mcp_config.json': { mcpServers: { deAntigravity: {} } },
+          'copilot-mcp.json': { mcp: { deCopilot: {} } }
+        })
+        const r = run(['export'], dir)
+        assert.equal(r.status, 0, `${host}: export`)
+        const manifest = exportManifest(dir)
+        assert.equal(manifest.agent, host)
+        assert.deepEqual(manifest.mcp, [{ name: 'legacy', type: 'local', enabled: true }], `${host}: sólo .opencode legacy`)
+      }
+    })
+  })
+
+  it('destino declarado inexistente exporta intención vacía sin aviso', () => {
+    withDir((dir) => {
+      makeExportProject(dir, 'copilot', {
+        // Señuelo legacy: el host declara destino, así que no cae a `.opencode`.
+        '.opencode/opencode.json': { mcp: { legacy: { type: 'local', enabled: true } } }
+      })
+      const r = run(['export'], dir)
+      assert.equal(r.status, 0)
+      assert.deepEqual(exportManifest(dir).mcp, [])
+      assert.doesNotMatch(r.stderr, /no es JSON valido/)
+    })
+  })
+
+  it('destino declarado no parseable avisa una sola vez con la ruta relativa y deja intención vacía', () => {
+    const cases = [['commandcode', '.mcp.json'], ['antigravity', '.agents/mcp_config.json']]
+    withDir((root) => {
+      for (const [host, rel] of cases) {
+        const dir = join(root, host)
+        mkdirSync(dir)
+        makeExportProject(dir, host, { [rel]: '{ roto\n' })
+        const r = run(['export'], dir)
+        assert.equal(r.status, 0, `${host}: exit code sin cambios`)
+        assert.deepEqual(exportManifest(dir).mcp, [], `${host}: intención vacía`)
+        assert.equal((r.stderr.match(/no es JSON valido/g) || []).length, 1, `${host}: un solo aviso`)
+        assert.ok(
+          r.stderr.includes(`${rel} no es JSON valido; el manifiesto exporta intencion MCP vacia`),
+          `${host}: aviso con la ruta relativa (${r.stderr})`
+        )
+      }
+    })
+  })
+
+  it('host sin destino con .opencode no parseable avisa una sola vez y exporta intención vacía', () => {
+    const cases = [
+      ['claude', '.opencode/opencode.json'],
+      ['vscode', '.opencode/opencode.json'],
+      ['cursor', '.opencode/opencode.json'],
+      ['roo', '.opencode/opencode.jsonc']
+    ]
+    withDir((root) => {
+      for (const [host, rel] of cases) {
+        const dir = join(root, host)
+        mkdirSync(dir)
+        makeExportProject(dir, host, { [rel]: '{ roto\n' })
+        const r = run(['export'], dir)
+        assert.equal(r.status, 0, `${host}: exit code sin cambios`)
+        assert.deepEqual(exportManifest(dir).mcp, [], `${host}: intención vacía`)
+        assert.equal((r.stderr.match(/no es JSON valido/g) || []).length, 1, `${host}: un solo aviso`)
+        assert.ok(
+          r.stderr.includes(`${rel} no es JSON valido; el manifiesto exporta intencion MCP vacia`),
+          `${host}: aviso con la ruta relativa (${r.stderr})`
+        )
+      }
+    })
+  })
+
+  it('mapa MCP no-objeto en el destino declarado no genera entradas fantasma', () => {
+    const cases = [
+      ['string', { mcp: 'x' }],
+      ['numero', { mcp: 5 }],
+      // Arreglo NO vacío: sin el guard `!Array.isArray`, Object.entries(['x'])
+      // fabricaría una entrada fantasma `{ name: '0' }`.
+      ['arreglo', { mcp: ['x'] }],
+      ['null', { mcp: null }],
+      ['sin-esquema', {}]
+    ]
+    withDir((root) => {
+      for (const [label, content] of cases) {
+        const dir = join(root, label)
+        mkdirSync(dir)
+        makeExportProject(dir, 'copilot', { 'copilot-mcp.json': content })
+        const r = run(['export'], dir)
+        assert.equal(r.status, 0, `${label}: export`)
+        const mcp = exportManifest(dir).mcp
+        assert.deepEqual(mcp, [], `${label}: intención vacía`)
+        assert.equal(mcp.some((m) => m.name === '0'), false, `${label}: sin entrada fantasma`)
+      }
+    })
+  })
+
+  it('mapa MCP no-objeto en la lectura legacy no genera entradas fantasma', () => {
+    const cases = [
+      ['string', { mcp: 'x' }],
+      ['numero', { mcp: 5 }],
+      // Arreglo NO vacío: sin el guard `!Array.isArray`, Object.entries(['x'])
+      // fabricaría una entrada fantasma `{ name: '0' }`.
+      ['arreglo', { mcp: ['x'] }],
+      ['null', { mcp: null }],
+      ['sin-esquema', {}]
+    ]
+    withDir((root) => {
+      for (const [label, content] of cases) {
+        const dir = join(root, label)
+        mkdirSync(dir)
+        makeExportProject(dir, 'claude', { '.opencode/opencode.json': content })
+        const r = run(['export'], dir)
+        assert.equal(r.status, 0, `${label}: export`)
+        const mcp = exportManifest(dir).mcp
+        assert.deepEqual(mcp, [], `${label}: intención vacía`)
+        assert.equal(mcp.some((m) => m.name === '0'), false, `${label}: sin entrada fantasma`)
+      }
+    })
+  })
+
+  it('lectura legacy con opencode.json null exporta intención vacía sin aviso', () => {
+    withDir((dir) => {
+      // `null` es JSON válido: no es un fallo de parseo y no debe avisar. Cubre
+      // el acceso `cfg?.mcp` (sin optional chaining, leer `.mcp` de null revienta).
+      makeExportProject(dir, 'claude', { '.opencode/opencode.json': 'null' })
+      const r = run(['export'], dir)
+      assert.equal(r.status, 0, 'exit code sin cambios')
+      assert.deepEqual(exportManifest(dir).mcp, [], 'intención vacía')
+      assert.doesNotMatch(r.stderr, /no es JSON valido/, 'null no es un fallo de parseo')
+    })
+  })
+
+  it('un mapa MCP válido conserva sus entradas', () => {
+    withDir((dir) => {
+      makeExportProject(dir, 'copilot', {
+        'copilot-mcp.json': { mcp: { ok: { type: 'remote', enabled: false } } }
+      })
+      const r = run(['export'], dir)
+      assert.equal(r.status, 0)
+      assert.deepEqual(exportManifest(dir).mcp, [{ name: 'ok', type: 'remote', enabled: false }])
+    })
+  })
+
+  it('conserva el guard de rutas absolutas del manifiesto', () => {
+    withDir((dir) => {
+      // Un campo del manifiesto con la ruta del proyecto dispara el guard previo.
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ agent: 'opencode', profile: dir }, null, 2))
+      const r = run(['export'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /rutas absolutas; export abortado/)
+      assert.equal(existsSync(join(dir, 'ancleto-export', 'manifest.json')), false, 'no escribe manifiesto')
     })
   })
 })

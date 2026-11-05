@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-05T03:53:28Z
-pluginVersion: 0.18.16
+generatedAt: 2026-11-05T23:05:00Z
+pluginVersion: 0.20.0
 skillVersion: '2.3'
 ---
 
@@ -53,8 +53,12 @@ test/                   suite node --test
   `declaredModelIds` y del predicado `freeTierOnPrimary`; `src/core/model-catalog.js` es el único
   dueño del parseo, diff, validación e integridad del snapshot. El CLI importa ambos (ver
   `decisions.md`).
+- **Descriptor MCP único**: `src/cli/index.js` → `HOST_MCP_TARGETS` declara archivo y esquema por
+  host; `setupHostMcp`, `resolveHostMcpDestination` y `readHostMcpIntent` son los únicos caminos de
+  escritura y lectura de esa intención. Ningún comando repite literales de destino por host.
 - **Estado local por proyecto**: `.ancletorc` (manifiesto), `.opencode/.ancleto-tier` (tier
-  aplicado), `.opencode/agents|commands|skills` (mirrors), `.ancleto/memory.db` y
+  aplicado), el layout nativo de assets por host (`.opencode`, `.claude`, `.agents`,
+  `.commandcode`, `.github`, `.cursor`, `.roo`), `.ancleto/memory.db` y
   `.ancleto/machine-env.md` (artefactos locales).
 
 ## Componentes principales
@@ -68,7 +72,8 @@ test/                   suite node --test
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
 | Memoria | Nodos, supersesión, refs, recall, working-context | `src/core/memory/*` |
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
-| Diagnósticos | Oráculo de instalación (`check`, incluida la salud MCP) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
+| Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
+| Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
 | Entorno de máquina | Shell, EOL y tooling del clon | `src/core/machine-env.js` |
 | Assets | 10 agentes, 16 commands, 21 skills, templates y perfiles | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` |
 
@@ -96,9 +101,9 @@ test/                   suite node --test
 7. **Integridad del tier `gratis` y de `import` (0.18.13)**: `freeTierOnPrimary(model, mode)` cruza
    modelo gratis con `mode: primary`; `applyTier` avisa por `stderr` al escribir y `check` agrega una
    entrada advisory al inspeccionar, sin bloquear ni cambiar el exit code. `import` escribe
-   `installedPaths` como unión acumulativa de lo declarado en el destino y lo que él mismo escribió
-   (incluidos los directorios `.opencode/{agents,commands,skills}` copiados del bundle), sin heredar
-   las rutas del bundle.
+   `installedPaths` como unión acumulativa de lo declarado en el destino y lo que él mismo escribió,
+   sin heredar las rutas del bundle. Desde 0.20.0, la copia y el registro de
+   `.opencode/{agents,commands,skills}` sólo ocurren cuando el host activo es `opencode`.
 8. **Consistencia de la nota de compresión (0.18.14)**: `install`, `init` e `import` deciden
    `CAVEMAN_USAGE_NOTE` con `resolvesHostCompression(projectDir, host, { writesCaveman, intendedNames })`,
    que combina la config MCP en disco con la escritura pendiente del comando. La nota existe para el
@@ -108,14 +113,26 @@ test/                   suite node --test
 9. **Paridad de diagnóstico (0.18.15)**: sólo cambia la capa de lectura. `check` deja de avisar un
    tier huérfano cuando el host no declara superficie local de agentes (el tier queda *dormido*),
    agrega un aviso advisory por deriva entre `.ancletorc.version` y la versión del CLI, y `doctor`
-   valida la config MCP de `opencode` del proyecto con precedencia sobre la global. Ningún escritor
-   (`init`, `install`, `update`, `upgrade`, `import`, `export`) cambia.
-10. **Salud de comandos MCP (0.18.16)**: `mcpCommandBroken` pasa a evaluar la existencia de una ruta
-    absoluta (incluida `C:\...` en Windows) en vez de declararla rota por su forma; una ruta sana
-    deja de reescribirse en `import --repair` y en los `refresh*`. `findProjectMcpFile` y
-    `PROJECT_MCP_CANDIDATES` concentran el descubrimiento `.opencode/opencode.json|jsonc`; `check`
-    agrega avisos no bloqueantes por config no parseable y por comandos rotos; `import` avisa antes
-    de reemplazar una config no parseable.
+   valida la config MCP del proyecto con precedencia sobre la global (desde 0.19.0, ver flujo 11).
+10. **Salud de comandos MCP (0.18.16)**: `mcpCommandBroken` evalúa la existencia de una ruta
+    absoluta (incluida `C:\...` en Windows); una ruta sana deja de reescribirse en `import --repair`
+    y en los `refresh*`. `findProjectMcpFile` y `PROJECT_MCP_CANDIDATES` concentran el
+    descubrimiento `.opencode/opencode.json|jsonc`; `check` agrega avisos no bloqueantes por config
+    no parseable y por comandos rotos; `import` avisa antes de reemplazar una config no parseable.
+11. **Ruteo MCP por host (0.19.0)**: `HOST_MCP_TARGETS` es el descriptor único
+    (`opencode` → `.opencode/opencode.json|jsonc`, `antigravity` → `.agents/mcp_config.json`,
+    `commandcode` → `.mcp.json`, `copilot` → `copilot-mcp.json`; `claude`, `vscode`, `cursor` y `roo`
+    sin destino). `init`, `install`/`update`, `import` e `import --repair` escriben en el destino del
+    host activo y no crean `.opencode` en hosts que no lo leen. `check` inspecciona los destinos
+    existentes de los hosts instalados (derivados de `installedPaths`) y `doctor` prioriza el host
+    activo/instalados antes del fallback global de `opencode`; todo hallazgo MCP sigue siendo
+    advisory y los exit codes no cambian.
+12. **Bundle host-neutral (0.20.0)**: `readHostMcpIntent(projectDir, host)` resuelve la intención MCP
+    del destino del host activo. `export` la usa: destino ausente → `manifest.mcp = []` sin aviso;
+    archivo no parseable → `manifest.mcp = []` y un único aviso no bloqueante con exit 0; hosts sin
+    destino conservan la lectura legacy de `.opencode`. `import` copia y registra `.opencode/*` sólo
+    cuando el host activo es `opencode`; en los demás hosts los assets se materializan por
+    `installAgentAssets`, y `installedPaths` sigue siendo la unión de lo realmente escrito.
 
 ## Recorrido de una instalación con tier `minimo`
 

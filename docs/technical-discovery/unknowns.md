@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-05T03:53:28Z
-pluginVersion: 0.18.16
+generatedAt: 2026-11-05T23:05:00Z
+pluginVersion: 0.20.0
 skillVersion: '2.3'
 ---
 
@@ -14,33 +14,42 @@ skillVersion: '2.3'
 - **Pack comprimido**: el tier `minimo` produce un pack con compresión tree-sitter; los cuerpos de
   funciones se reemplazan por el delimitador `⋮----` y solo quedan firmas y comentarios de contrato.
   Las afirmaciones sobre flujos internos se apoyan en esos comentarios **y** en lectura directa de
-  los archivos citados (`src/cli/index.js` → `packageVersion`, `checkCommand`, `checkTierOrphan`,
-  `doctorCommand`, `localAgentDirs`, `resolvesHostCompression`, `mcpCommandBroken`,
-  `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`; `src/core/tier-models.js`), no en el
-  pack solo.
+  los archivos citados (`src/cli/index.js` → `HOST_MCP_TARGETS`, `resolveHostMcpDestination`,
+  `readHostMcpIntent`, `importCmd`, `exportCmd`, `checkCommand`, `doctorCommand`,
+  `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`;
+  `src/core/tier-models.js`), no en el pack solo. El reporte del pack indica 803 archivos
+  (~37.189 tokens); su cuerpo contiene 28 entradas de archivo, porque `**/*.md`, `test/**`,
+  `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
+  excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
   su ignore por defecto de Markdown. `README.md`, `CHANGELOG.md`, `AGENTS.md`, `PRODUCT.md`,
-  `aspec/specs/**` y `aspec/changes/**` no están en el pack. Las afirmaciones sobre la spec
-  `cli-diagnostics`, el requirement de tier dormido en `agent-model-tiers`, el change archivado
-  `2026-11-04-check-doctor-state-parity` y el change `2026-11-05-mcp-command-health` se verificaron
-  leyendo esos paths directamente. No se auditó el resto de `aspec/specs/**`.
+  `aspec/specs/**` y `aspec/changes/**` no están en el pack. Las afirmaciones sobre las specs
+  `project-portability`, `agent-install-routing` y `cli-diagnostics`, y sobre los changes archivados
+  `2026-11-05-host-neutral-bundle`, `2026-11-05-mcp-host-write-routing` y
+  `2026-11-05-mcp-oracle-residual-closure` se verificaron leyendo esos paths directamente. No se
+  auditó el resto de `aspec/specs/**`.
 - **`eslint.config.js` en el pack**: aparece vacío por efecto de la compresión. Su contenido se
   verificó leyendo el archivo directamente.
 - **Ejecución de la suite**: no se corrió `npm test` ni `npm run lint` durante la generación. Los
   guards (`test/model-catalog.test.js`, `test/model-catalog-discovery.test.js`,
   `test/agent-model-coherence.test.js`, `test/content-guards.test.js`, `test/cli.test.js`) se citan
   por su presencia y propósito declarado, no por un resultado observado.
-- **Diagnósticos 0.18.15**: no se ejecutaron `ancleto check` ni `ancleto doctor` para observar los
-  avisos nuevos. El comportamiento se describió desde `checkCommand`, `checkTierOrphan`,
-  `doctorCommand` y `aspec/specs/cli-diagnostics/spec.md`. No se probaron los escenarios de tier
-  dormido (`cursor`/`roo`), deriva de versión (pre-release/build metadata) ni config de proyecto
-  inválida con global válida.
-- **Salud MCP 0.18.16**: no se ejecutaron `ancleto check` ni `ancleto import` para observar los
-  avisos. El predicado, `findProjectMcpFile`/`readProjectMcp` y los mensajes se leyeron directamente
-  en `src/cli/index.js` y en los requirements de `aspec/specs/cli-diagnostics/spec.md`; el change
-  archivado `aspec/changes/archive/2026-11-05-mcp-command-health/` aportó el contrato y los casos
-  borde. No se probaron rutas Windows existentes/ausentes, config no parseable, `mcp` no-objeto,
-  `caveman` roto ni la no regresión de `doctor`/`import --repair` con ejecución real.
+- **Diagnósticos 0.18.15/0.19.0**: no se ejecutaron `ancleto check` ni `ancleto doctor` para observar
+  los avisos nuevos. El comportamiento se describió desde `checkCommand`, `checkTierOrphan`,
+  `doctorCommand` y las specs canónicas. No se probaron los escenarios de tier dormido
+  (`cursor`/`roo`), deriva de versión (pre-release/build metadata), proyecto multi-host con
+  destinos MCP válidos/ausentes ni config de proyecto inválida con global válida.
+- **Salud MCP 0.18.16/0.19.0**: no se ejecutaron `ancleto check` ni `ancleto import` para observar los
+  avisos. El predicado, `findProjectMcpFile`/`readProjectMcp`, el descriptor `HOST_MCP_TARGETS`, la
+  derivación `installedHostsFromPaths`, los mensajes y la precedencia de `doctor` se leyeron
+  directamente en `src/cli/index.js` y en los requirements de las specs. No se probaron rutas
+  Windows existentes/ausentes, config no parseable, `mcp` no-objeto, `caveman` roto ni la no
+  regresión de `import --repair` con ejecución real.
+- **Bundle host-neutral 0.20.0**: no se ejecutó un `export`/`import` real. El comportamiento se leyó
+  en `readHostMcpIntent`, `exportCmd` e `importCmd` y en el change archivado
+  `2026-11-05-host-neutral-bundle`. No se probaron bundles de `copilot`, `antigravity` o
+  `commandcode`, ni el aviso de destino no parseable, ni la ausencia de `.opencode` en hosts
+  no-opencode.
 - **Refresco del catálogo**: no se ejecutó `scripts/refresh-model-catalog.mjs`. El snapshot se tomó
   como fuente de verdad declarada (`generated_at: 2026-11-04`, 5 proveedores / 211 IDs), sin
   revalidar contra proveedores.
@@ -57,63 +66,68 @@ skillVersion: '2.3'
 - **Validación de `manifest.mcp`**: se describió desde `importCmd` (comprobación de array y de
   `name` string antes del primer write). No se importó un bundle real con `manifest.mcp` malformado.
 - **`import` de bundles**: no se ejecutó un `export`+`import` real; el comportamiento de
-  `installedPaths` se leyó en `importCmd` y en el delta de `project-portability` (incluye la
-  advertencia de que el `check` posterior deja de ser vacuo).
+  `installedPaths` y la copia condicionada al host se leyeron en `importCmd` y en el change
+  archivado `2026-11-05-host-neutral-bundle` (incluye la advertencia de que el `check` posterior
+  deja de ser vacuo).
 - **`opencode` local**: no se verificó que el binario esté disponible ni su versión; afecta
   `stats`/`stats failures` y el refresco manual del catálogo.
 - **Repomix**: no se validó la versión exacta ejecutada por el fallback `npx -y repomix@1.18.0`.
 - **Hosts IDE**: no se probó la instalación en cada host (claude, vscode, antigravity, cursor, roo,
   copilot, commandcode). El layout y los adaptadores se infieren de `AGENT_TARGETS` y
-  `adaptFrontmatter`.
+  `adaptFrontmatter`. Tampoco se verificó el consumo runtime de `copilot-mcp.json` por Copilot ni
+  la colisión de `.mcp.json` entre `commandcode` y `claude`; ambos están declarados como límites.
 - **Memoria real**: no se abrió `.ancleto/memory.db` para inspeccionar nodos; el comportamiento se
   describe desde el código (`src/core/memory/*`).
 - **CI**: no se ejecutó el workflow; su comportamiento se lee de `.github/workflows/publish.yml`.
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` regenerado**: el generador reporta **796 archivos** (aspec 228, docs 21,
-  test 26, etc.) y el archivo quedó regenerado en esta corrida. El pack enumera **786 archivos**
-  (~36.579 tokens) porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y
+- **`.discovery-map.json` regenerado**: el generador reporta **813 archivos** (aspec 245, docs 21,
+  test 26, etc.) y el archivo quedó regenerado en esta corrida. El pack enumera **803 archivos**
+  (~37.189 tokens) porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y
   `public`; además Repomix filtra por sus propios ignores.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
-- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` registran `ancleto: 0.18.16`
-  (verificado), alineados con `package.json` tras el `upgrade` local. Siguen siendo artefactos
-  derivados gitignored y no se usan como fuente de contenido.
+- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` registran `ancleto: 0.20.0`
+  (verificado), alineados con `package.json`. Siguen siendo artefactos derivados gitignored y no se
+  usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de
-  `0.18.16` es una verificación puntual del estado local, no una fuente de reglas. El propio `check`
+  `0.20.0` es una verificación puntual del estado local, no una fuente de reglas. El propio `check`
   compara ese campo con la versión del CLI y avisa si difieren.
 - **Publicación de `scripts/`**: `package.json` → `files` lista `agents`, `commands`, `skills`,
   `templates`, `profiles`, `src`; no incluye `scripts/`. El refresco del catálogo y el gate de IDs
   existen en el repo fuente pero no viajan en el tarball npm. Se documenta como deuda, no como fallo.
 - **`rg` no disponible** en este entorno (PowerShell 5.1): la evidencia se obtuvo con
   `Select-String` y lecturas directas.
-- **Estado inicial del chequeo**: la corrida de `discovery --check` previa a esta generación reportó
-  `STALE` con `impact: material` y `recommendedAction: regenerate` (cambiaron `package.json`,
-  `.ancletorc`, `CHANGELOG.md`, `aspec`, `src`, `test` y `.ancleto`), aunque la solicitud lo describía
-  como `minor`. El seed anterior describía 0.18.15; el actual describe 0.18.16. La regeneración se
-  hizo completa porque `affectedDocs` listaba todos los documentos.
+- **Estado inicial del chequeo**: el CLI regeneró el pack y `.discovery-state.json` antes de esta
+  materialización, por lo que `discovery --check` reportó `READY` con `impact: none` y
+  `seedMapPresent: false` (cosmético: el archivo `seed-map.json` existe). El seed anterior describía
+  0.18.16; este describe 0.20.0. La regeneración se hizo completa porque la solicitud lo pidió
+  explícitamente y los documentos no reflejaban 0.19.0/0.20.0.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.18.16`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.20.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
-  precedencia proyecto→global y `findProjectMcpFile`, `mcpCommandBroken` por existencia,
-  `readProjectMcp` con `error`, avisos MCP de `checkCommand` y aviso de `repairProjectMcp`,
-  `resolvesHostCompression`/`hostConfigHasCompression` y su uso en `install`/`init`/`import`,
-  validación de `manifest.mcp` en `importCmd`, `TIERS`/`TIER_CHAINS`, `freeTierOnPrimary` y sus dos
-  avisos, `declaredModelIds`, `modelIdsFromCatalog`, `missingModelIdsInCatalog`, gate de `--write`,
+  precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
+  `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
+  `mcpCommandBroken` por existencia, `readProjectMcp` con `error`, avisos MCP host-aware de
+  `checkCommand` y aviso de `repairProjectMcp`, `resolvesHostCompression`/`hostConfigHasCompression`
+  y su uso en `install`/`init`/`import`, copia host-scoped de `.opencode/*` en `importCmd`,
+  validación de `manifest.mcp`, `TIERS`/`TIER_CHAINS`, `freeTierOnPrimary` y sus dos avisos,
+  `declaredModelIds`, `modelIdsFromCatalog`, `missingModelIdsInCatalog`, gate de `--write`,
   `looksBinaryMissing`, lint sobre `scripts/`, snapshot de 5 proveedores / 211 IDs, flujo de
-  `scripts/refresh-model-catalog.mjs`, registro de `installedPaths` en `importCmd`, comandos del CLI,
-  firmas de módulos de memoria, workflow.
+  `scripts/refresh-model-catalog.mjs`, `installedPaths` como unión, comandos del CLI, firmas de
+  módulos de memoria, workflow.
 - **Media (inferido)**: comportamiento de hosts no probados, efecto exacto de cada adaptador en
   cada IDE, resultados de la suite y del workflow, ausencia real del 403 en configuraciones
   concretas, materialización/saneamiento de la nota de compresión sin ejecución real, salida exacta
-  de `check`/`doctor` en los escenarios nuevos de 0.18.15 y salida exacta de los avisos MCP de
-  0.18.16 sin ejecución.
+  de `check`/`doctor` en los escenarios multi-host y salida exacta de `export`/`import` host-neutral
+  sin ejecución.
 - **Baja / desconocida**: estado real de la memoria del repo, disponibilidad de modelos en
   proveedores al momento de leer, contenido de `audit logs/` y `documentation/` (fuera de runtime),
-  y comportamiento de la salud MCP frente a comandos que dependen de un `PATH` concreto, que el
+  consumo runtime de `copilot-mcp.json`, colisión `.mcp.json` entre `commandcode` y `claude`, y
+  comportamiento de la salud MCP frente a comandos que dependen de un `PATH` concreto, que el
   predicado no resuelve.

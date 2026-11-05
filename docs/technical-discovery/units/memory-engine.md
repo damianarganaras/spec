@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate y doctor"
 covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor]
 sources: ["src/core/memory/**"]
-generatedAt: 2026-11-05T03:53:28Z
-pluginVersion: 0.18.16
+generatedAt: 2026-11-05T23:05:00Z
+pluginVersion: 0.20.0
 skillVersion: '2.3'
 ---
 
@@ -16,7 +16,7 @@ skillVersion: '2.3'
 Persistir las reglas y decisiones del proyecto en `.ancleto/memory.db` (SQLite + FTS5 vía
 `node:sqlite`) y exponerlas a los agentes como contexto inyectable y como tools MCP. La memoria es
 local al repositorio, versionable con el equipo y separada de la memoria de sesión del agente.
-Sin cambios en 0.18.16.
+Sin cambios en 0.19.0 ni 0.20.0.
 
 ## Recorrido relevante
 

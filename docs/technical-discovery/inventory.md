@@ -2,8 +2,8 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-05T03:53:28Z
-pluginVersion: 0.18.16
+generatedAt: 2026-11-05T23:05:00Z
+pluginVersion: 0.20.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 | Alcance | Documento | Motivo |
 |---|---|---|
-| `src/cli/**` | `units/cli-install.md`, `overview.md` | Entry point único, subcomandos, instalación, diagnósticos `check`/`doctor`, salud MCP, nota de compresión y MCP |
+| `src/cli/**` | `units/cli-install.md`, `overview.md` | Entry point único, subcomandos, instalación, ruteo MCP por host, diagnósticos `check`/`doctor`, nota de compresión, `export`/`import` host-neutral |
 | `src/core/tier-models.js` | `decisions.md`, `units/discovery-engine.md` | Dueño de tiers/cadenas, resolver, `declaredModelIds` y `freeTierOnPrimary` |
 | `src/core/model-catalog.js`, `src/core/model-catalog.json` | `decisions.md`, `units/discovery-engine.md` | Helpers puros, extracción de IDs, integridad y snapshot |
 | `src/core/discovery.js`, `src/core/repomix-tier.js` | `units/discovery-engine.md` | Topología, impacto, args y presupuesto de pack |
@@ -25,7 +25,7 @@ skillVersion: '2.3'
 | `skills/**` | `units/_map.md` | 21 skills del ciclo SDD/discovery/review |
 | `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
 | `profiles/**` | `units/cli-install.md`, `decisions.md` | Overlay del perfil `test` (agents/commands/templates) |
-| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `cli-diagnostics`) y changes archivados de diagnóstico (`check-doctor-state-parity`, `mcp-command-health`) |
+| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `cli-diagnostics`, `agent-install-routing`, `project-portability`) y changes archivados de diagnóstico y portabilidad (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`) |
 | `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery y contenido |
 | `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
 | `eslint.config.js`, `package.json` | `setup.md`, `decisions.md` | Lint sobre `src/`, `test/`, `scripts/` y contrato de publicación |
@@ -38,9 +38,9 @@ skillVersion: '2.3'
 
 ## Áreas raíz observadas (`.discovery-map.json` al empacar)
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (228), `audit logs` (9), `commands` (16),
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (245), `audit logs` (9), `commands` (16),
 `docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (18),
-`templates` (2), `test` (26), más 15 archivos raíz. Total observado: **796 archivos**.
+`templates` (2), `test` (26), más 15 archivos raíz. Total observado: **813 archivos**.
 
 Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime.
 `documentation/` tiene 366 archivos en disco, pero el mapa cuenta 340 tras excluir
@@ -48,7 +48,7 @@ Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son ru
 35 archivos; `test/` tiene 26 archivos, de los cuales 19 son `*.test.js` en la raíz (el patrón
 declarado es `test/*.test.js`). El pack del tier `minimo` excluye `test/**`, `docs/**` y `**/*.md`,
 por lo que la evidencia de esas áreas se verificó por lectura directa. El pack de esta generación
-enumera 786 archivos y ~36.579 tokens.
+enumera 803 archivos y ~37.189 tokens.
 
-El `.discovery-map.json` trackeado quedó regenerado en esta corrida (796 archivos). Ver
+El `.discovery-map.json` trackeado quedó regenerado en esta corrida (813 archivos). Ver
 `unknowns.md`.

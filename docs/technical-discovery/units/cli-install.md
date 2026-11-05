@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, diagnósticos check/doctor, portabilidad y entorno de máquina"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, diagnósticos check/doctor, salud MCP, portabilidad y entorno de máquina"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -10,6 +10,11 @@ covers:
   - merge de templates LOCKED
   - reconciliación legacy
   - MCP
+  - salud MCP
+  - mcpCommandBroken
+  - findProjectMcpFile
+  - PROJECT_MCP_CANDIDATES
+  - avisos MCP de check
   - nota de compresión host-scoped
   - perfiles
   - tiers y catálogo
@@ -22,9 +27,9 @@ covers:
   - portabilidad e installedPaths
   - validación de manifest.mcp
   - machine-env
-sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-05T00:07:33Z
-pluginVersion: 0.18.15
+sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-05T03:53:28Z
+pluginVersion: 0.18.16
 skillVersion: '2.3'
 ---
 
@@ -125,6 +130,10 @@ fuente canónica byte a byte). Es la vía que materializa el default publicado d
   rutas de la máquina origen.
 - `import` **lee y resuelve antes del primer write**; luego aplica el tier, escribe
   `.opencode/.ancleto-tier` y repara MCP.
+- **Aviso de config MCP no parseable (0.18.16)**: si la config del proyecto no parsea,
+  `repairProjectMcp` emite por `stderr`, antes de reemplazarla,
+  `ancleto: no se pudo leer <ruta> como JSON; se reemplaza por la configuracion MCP nueva`. La
+  decisión de reemplazo y el exit code no cambian; una config parseable no produce el aviso.
 - **Validación de `manifest.mcp` (0.18.14)**: antes de cualquier escritura, un `manifest.mcp`
   presente debe ser array; cada entrada debe ser objeto con `name` string no vacío. Un valor
   no-array aborta con `bundle invalido (manifest.mcp no es un arreglo)`; una entrada inválida, con
@@ -141,6 +150,32 @@ fuente canónica byte a byte). Es la vía que materializa el default publicado d
   faltantes u huérfanos reales.
 - `--repair` sin bundle repara entradas MCP rotas sin tocar las sanas y sin cambiar
   `installedPaths`; como no reescribe assets, **no sanea** una nota de compresión legada.
+
+### Salud de comandos MCP (0.18.16)
+
+`mcpCommandBroken(entry)` (`src/cli/index.js`) es el predicado único que comparten `import`,
+`import --repair`, `refreshCopilotMcp`, `refreshCommandCodeMcp` y la inspección de `check`:
+
+1. `command` debe ser un arreglo no vacío; si no, la entrada está rota.
+2. `command[0]` debe ser un string no vacío; si no, está rota.
+3. Si `command[0]` es una ruta absoluta de la plataforma actual (`isAbsolute`), la entrada está rota
+   sólo si `existsSync` es falso.
+4. En cualquier otro caso (comando simple) se presume sana: no se ejecuta ni se resuelve `PATH`.
+
+Una ruta Windows con letra de unidad (`C:\nvm4w\nodejs\node.exe`, `c:/...`) ya no se declara rota por
+su forma: se evalúa por existencia. Esto corrige el default `[process.execPath, ...]` de
+`buildDefaultMcp` y evita que `import --repair`/`refresh*` reescriban entradas sanas.
+
+El descubrimiento de la config MCP de proyecto tiene un único dueño del **conjunto de nombres**:
+`PROJECT_MCP_CANDIDATES = ['opencode.json', 'opencode.jsonc']`. `findProjectMcpFile(projectDir)`
+devuelve el primer existente en `.opencode/`; `readProjectMcp` lo usa y devuelve `{ file, cfg }` más
+`error` cuando el archivo existe y no parsea. Las semánticas de selección se conservan:
+`mergeMcp` recolecta todos los existentes, `hostConfigHasCompression` prueba todos y `doctor`/`check`
+leen el primero. No hay parseo tolerante de JSONC.
+
+`import` (con bundle o `--repair`) emite por `stderr`, antes de reemplazar una config no parseable:
+`ancleto: no se pudo leer <ruta> como JSON; se reemplaza por la configuracion MCP nueva`. La decisión
+de reemplazo y el exit code no cambian. `check` agrega avisos advisory (ver abajo) y nunca escribe.
 
 ### `check`
 
@@ -173,11 +208,18 @@ Sobre ese catálogo se agregan avisos **no bloqueantes**:
   `packageVersion()` (leída de `package.json`), se agrega una vez el aviso
   `.ancletorc registra v<rc> y el CLI es v<cli>; corré 'ancleto upgrade' para regenerar los
   artefactos locales`. No cambia el exit code, no incrementa contadores y no repara.
+- **Salud MCP (0.18.16)**: lee sólo la config MCP del proyecto con `readProjectMcp`. Si existe y no
+  parsea, agrega `<ruta> no es JSON valido; no se inspeccionaron las entradas MCP`. Si parsea y
+  `cfg.mcp` es un objeto plano, agrega `MCP '<nombre>' tiene un comando roto (<detalle>)` por cada
+  entrada con `mcpCommandBroken` verdadero; `<detalle>` es el primer elemento sólo si `command` es un
+  arreglo con un string no vacío, y `command ausente` en cualquier otra forma. `mcp` no-objeto no
+  produce avisos ni error de parseo. No inspecciona la config global ni la de otros hosts.
 
 Solo los faltantes alteran el exit code (`missing > 0 ? 1 : 0`); huérfanos, divergencias, deriva,
-advisory, antigüedad, tier dormido y catálogo no verificable son warnings. La divergencia de
-frontmatter por la nota de compresión sigue siendo advisory y la comparación sigue siendo del
-archivo completo.
+advisory, antigüedad, tier dormido, salud MCP y catálogo no verificable son warnings. La divergencia
+de frontmatter por la nota de compresión sigue siendo advisory y la comparación sigue siendo del
+archivo completo. Un `caveman` roto produce su aviso pero sigue contando como compresión presente
+para `hostConfigHasCompression`.
 
 ### Refresco del catálogo y gate de `--write`
 
@@ -193,15 +235,17 @@ La detección de binario ausente (`looksBinaryMissing`) es independiente del loc
 Comprueba Node ≥ 24, importabilidad de `node:sqlite` y validez de la config MCP de `opencode`. Estos
 dos primeros son los únicos fatales (`exit 1`); una config inválida o ausente no cambia el exit code.
 
-Desde 0.18.15 la config MCP se resuelve con precedencia **proyecto → global**:
+La config MCP se resuelve con precedencia **proyecto → global**:
 
 1. `.opencode/opencode.json` del proyecto.
 2. `.opencode/opencode.jsonc` del proyecto.
 3. `globalConfigDir()/opencode.json`.
 4. `globalConfigDir()/opencode.jsonc`.
 
-Se valida **sólo el primer archivo existente**; si hay config de proyecto, no se cae al fallback
-global aunque sea inválida. La ruta del proyecto se reporta relativa con separadores `/`
+El proyecto se resuelve con la regla compartida `findProjectMcpFile` (primer existente, en ese
+orden); desde 0.18.16 esa misma regla la usan `check` y la lectura de `export`/`import`. Se valida
+**sólo el primer archivo existente**; si hay config de proyecto, no se cae al fallback global aunque
+sea inválida. La ruta del proyecto se reporta relativa con separadores `/`
 (ej. `.opencode/opencode.json`); la global, por `basename`. Mensajes: `✔ <ruta> valido`,
 `✖ <ruta> JSON invalido`, y `⚠ opencode.json no encontrado (config MCP)` si no existe ninguno. El
 parseo es `JSON.parse` estricto sin BOM; un `.jsonc` con comentarios se reporta inválido a
@@ -244,9 +288,13 @@ no declaran target de agentes: por eso el tier puede quedar dormido en `check`.
   overlay a su fuente. Un guard test-only exige que `profiles/test/agents/*.md` declaren `^model:`.
 - **`machine-env`**: `materializeMachineEnv` nunca lanza; devuelve warnings. `check` avisa si el
   artefacto quedó trackeado en git.
-- **Catálogo y `check`**: deriva, advisory, antigüedad, free-on-primary, tier dormido y deriva de
-  versión son informativos y nunca hacen fallar `check`; solo los faltantes alteran el exit code.
-  `install`/`init`/`import` siguen siendo estrictos.
+- **Catálogo y `check`**: deriva, advisory, antigüedad, free-on-primary, tier dormido, deriva de
+  versión y salud MCP son informativos y nunca hacen fallar `check`; solo los faltantes alteran el
+  exit code. `install`/`init`/`import` siguen siendo estrictos.
+- **Salud MCP acotada**: `mcpCommandBroken` sólo evalúa la existencia de rutas absolutas en el host
+  actual; un comando simple se presume resuelto por `PATH`. `check` no ve la config global ni las
+  configs MCP de otros hosts. Un binario ausente en esta máquina produce un aviso advisory, no un
+  fallo.
 - **Aviso free-on-primary**: `applyTier` lo escribe en `stderr`; wrappers de CI que tratan `stderr`
   como error lo verán, pero el exit code sigue en 0.
 - **Nota de compresión**: la decisión no vuelve a detectar el binario cuando la config ya define el
@@ -255,14 +303,17 @@ no declaran target de agentes: por eso el tier puede quedar dormido en `check`.
 - **Diagnósticos 0.18.15**: el change sólo tocó `checkTierOrphan`, `checkCommand` y
   `doctorCommand`; ningún escritor cambió. El tier se considera dormido (no huérfano) sin
   superficie local de agentes.
+- **Salud MCP 0.18.16**: el change tocó `mcpCommandBroken`, el descubrimiento/lectura de la config
+  de proyecto, el arreglo `warnings` de `checkCommand` y el aviso de `repairProjectMcp`. El ruteo de
+  escritura MCP por host y la semántica de `hostConfigHasCompression` quedan fuera.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; en este
-  checkout registran `0.18.15`. No son fuentes del seed.
+  checkout registran `0.18.16`. No son fuentes del seed.
 
 ## Paths clave
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point, subcomandos, instalación, diagnósticos, nota de compresión, validación de bundles, MCP, stats |
+| `src/cli/index.js` | Entry point, subcomandos, instalación, diagnósticos, salud MCP, nota de compresión, validación de bundles, MCP, stats |
 | `src/cli/ui.js` | Banner y menús TTY |
 | `src/core/adapters/frontmatter.js` | Adaptación pura de frontmatter por host y `frontmatterValue` |
 | `src/core/tier-models.js` | Tiers, cadenas, resolver, `freeTierOnPrimary`, `declaredModelIds` |
@@ -273,9 +324,10 @@ no declaran target de agentes: por eso el tier puede quedar dormido en `check`.
 | `scripts/refresh-model-catalog.mjs` | Refresco manual, gate de `--write` y escritura atómica |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques `LOCKED` |
 | `profiles/test/**` | Overlay del perfil de test |
+| `aspec/changes/archive/2026-11-05-mcp-command-health/` | Change archivado de salud MCP, descubrimiento único y avisos de check/import |
 | `aspec/changes/archive/2026-11-04-check-doctor-state-parity/` | Change archivado de paridad de diagnósticos (H7/H13/H14) |
 | `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` | Change archivado de la nota de compresión y validación de `manifest.mcp` |
-| `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión y config MCP de `doctor` |
+| `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión, config MCP de `doctor`, salud MCP, avisos de `check` y aviso de `import` |
 | `aspec/specs/agent-install-routing/spec.md` | Requirement de compresión host-scoped y nota estado-driven |
 | `aspec/specs/project-portability/spec.md` | Requirement de `import` (nota + `installedPaths`) |
 | `aspec/specs/agent-model-tiers/spec.md` | Requirements de tiers, aviso free-on-primary, integridad y tier dormido |

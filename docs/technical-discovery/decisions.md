@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-05T00:07:33Z
-pluginVersion: 0.18.15
+generatedAt: 2026-11-05T03:53:28Z
+pluginVersion: 0.18.16
 skillVersion: '2.3'
 ---
 
@@ -29,7 +29,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.18.15)
+## Modelos y tiers (estado 0.18.16)
 
 ### Tabla y cadenas
 
@@ -303,11 +303,92 @@ Change archivado:
 ### Fuera de alcance (diferido)
 
 H3/H4/H6 (ruteo MCP por host), H5 (entrada caveman contada como compresión), H8 (tier en
-`upgrade`), H9 (`installedPaths` multi-host), H10/H11/H12 (portabilidad multi-host) y M2 (config MCP
-no parseable) siguen fuera. Cada uno cambia propiedad de estado o contratos congelados (config MCP
-por host, byte-identidad de `upgrade`, layout de `export`, carve-out de config no parseable), no un
-diagnóstico. Decisión: `deferred-write-vs-validate-backlog` (estado: descartado como parte de este
-change).
+`upgrade`), H9 (`installedPaths` multi-host), H10/H11/H12 (portabilidad multi-host) siguen fuera.
+M2 (config MCP no parseable) quedó **parcialmente** atendido en 0.18.16: `import` ahora avisa antes
+de reemplazarla, pero la decisión de sobrescribir y el carve-out de la nota de compresión no cambian.
+Cada uno de los restantes cambia propiedad de estado o contratos congelados (config MCP por host,
+byte-identidad de `upgrade`, layout de `export`), no un diagnóstico. Decisión:
+`deferred-write-vs-validate-backlog` (estado: descartado como parte de este change).
+
+## Salud de comandos MCP (0.18.16)
+
+Change archivado: `aspec/changes/archive/2026-11-05-mcp-command-health/` (proposal, tasks y delta
+`cli-diagnostics`). Los requirements canónicos viven en `aspec/specs/cli-diagnostics/spec.md`. El
+change corrige el predicado de salud, unifica el descubrimiento de la config MCP de proyecto y agrega
+avisos read-only; **no** cambia el ruteo de escritura MCP por host, la portabilidad ni los tiers.
+
+### Predicado único de salud (`mcpCommandBroken`)
+
+- Una entrada MCP está **rota** sólo cuando: `command` no es un arreglo, o está vacío; su primer
+  elemento no es un string no vacío; o su primer elemento es una ruta absoluta de la plataforma
+  actual y `existsSync` es falso (`src/cli/index.js` → `mcpCommandBroken`).
+- Está **sana** cuando el primer elemento es un comando simple (se presume resuelto por `PATH`) o una
+  ruta absoluta existente. Una ruta Windows con letra de unidad (`C:\nvm4w\nodejs\node.exe`,
+  `c:/...`) es sana si el archivo existe; la forma con letra de unidad **no** se declara rota por su
+  forma. En una plataforma que no la trata como absoluta, cae en la regla de comando simple.
+- El predicado no ejecuta el comando, no resuelve `PATH` con procesos externos y no agrega
+  dependencias; usa `isAbsolute` y `existsSync`.
+- Lo comparten `repairProjectMcp` (`import`/`import --repair`), `refreshCopilotMcp`,
+  `refreshCommandCodeMcp` y el aviso advisory de `check`.
+- **Cambio observable**: `import --repair` y los `refresh*` dejan de reescribir entradas sanas; en
+  Windows, el default `[process.execPath, ...]` deja de quedar "roto" apenas se escribe. Un proyecto
+  que dependía del rewrite ciego ya no obtiene esa normalización.
+
+### Descubrimiento único de la config MCP de proyecto
+
+- `PROJECT_MCP_CANDIDATES = ['opencode.json', 'opencode.jsonc']` (`src/cli/index.js`) es el único
+  dueño del **conjunto de nombres**; no posee la semántica de selección de cada consumidor.
+- `findProjectMcpFile(projectDir)` devuelve el primer archivo existente entre
+  `.opencode/opencode.json` y `.opencode/opencode.jsonc`, o `null`.
+- `readProjectMcp(projectDir)` usa ese helper y devuelve `{ file, cfg }`; desde 0.18.16 agrega
+  `error` cuando el archivo existe y no parsea (`{ file, cfg: {}, error }`). `export` e `import`
+  conservan su contrato de lectura.
+- `check` y `doctor` comparten la regla de lectura. `doctor` conserva su fallback global y sus
+  mensajes (`✔ <ruta> valido`, `✖ <ruta> JSON invalido`,
+  `⚠ opencode.json no encontrado (config MCP)`).
+- `mergeMcp` conserva su semántica: recolecta **todos** los candidatos existentes y mergea en cada
+  uno. `hostConfigHasCompression` conserva la suya: prueba todos los candidatos y considera presente
+  `caveman` si alguna config parseable lo declara. La diferencia de selección es intencional.
+- No se agrega parseo tolerante de JSONC: un `.jsonc` con comentarios sigue siendo no parseable.
+
+### Avisos advisory de `check`
+
+- `check` inspecciona **sólo** la config MCP del proyecto (no la global ni la de otros hosts). Sin
+  config o con todas las entradas sanas, no emite avisos de estado MCP.
+- Si la config existe y no parsea, agrega un único aviso:
+  `<ruta> no es JSON valido; no se inspeccionaron las entradas MCP` (ruta relativa con `/`).
+- Si parsea y `cfg.mcp` es un objeto plano, agrega un aviso por entrada rota:
+  `MCP '<nombre>' tiene un comando roto (<detalle>)`. `<detalle>` es el primer elemento sólo cuando
+  `command` es un arreglo y ese elemento es un string no vacío; en cualquier otra forma es
+  `command ausente`.
+- Si `cfg.mcp` no es objeto plano (string, arreglo, número o `null`), no hay avisos MCP y no se
+  reporta error de parseo.
+- Los avisos se suman al arreglo `warnings` existente y se imprimen como `  ⚠ <texto>`; no cambian el
+  exit code (`missing > 0 ? 1 : 0`), no incrementan `missing`/`orphans`, no alteran el oráculo y no
+  escriben archivos.
+- **`caveman` roto**: produce su propio aviso, pero la compuerta de la nota de compresión sigue
+  considerándolo presente (`hostConfigHasCompression` no consulta `mcpCommandBroken`).
+
+### Aviso de `import` antes de reemplazar
+
+- Si la config MCP de proyecto existe y no parsea, `repairProjectMcp` emite a `stderr`, antes de
+  escribir, `ancleto: no se pudo leer <ruta> como JSON; se reemplaza por la configuracion MCP nueva`.
+- El aviso se emite una vez por ejecución y aplica a `import` con bundle y a `import --repair`.
+- La decisión de reemplazo **no** cambia: la config no parseable sigue siendo sobrescrita por la
+  nueva y el exit code no cambia por el aviso. Una config parseable no produce el aviso; la
+  reparación se limita a las entradas rotas y a las ausentes de `intendedNames`.
+
+### Riesgos aceptados
+
+- **Ruido advisory**: un binario de un servidor de usuario que no exista en esta máquina produce un
+  aviso por entrada; no bloquea.
+- **Alcance de la inspección**: `check` y `doctor` no ven la config global ni las configs MCP de
+  otros hosts (`copilot-mcp.json`, `.mcp.json`, `.agents/mcp_config.json`).
+- **Existencia en el host actual**: una ruta absoluta válida en otra máquina se reporta rota en
+  ésta; es la condición real que evalúa el predicado, no una lista de excepciones.
+- **M2 deja de ser silencioso, no de ser destructivo**: `import` avisa, pero sigue reemplazando el
+  archivo ilegible sin backup. La nota de compresión y la decisión de escritura no cambian.
+- **JSONC comentado**: sigue reportándose inválido; el change no agrega tolerancia de comentarios.
 
 ## Nota de compresión host-scoped (0.18.14)
 
@@ -337,7 +418,8 @@ change).
   advisory de `check` no invalida el invariante acotado.
 - **Excepción M2**: si la config MCP del host no es JSON parseable, `install`/`init` omiten esa
   escritura y avisan; la nota se materializa igual por la escritura pendiente y `check` puede
-  divergir. `import <bundle>` en `opencode` queda fuera: `repairProjectMcp` sobrescribe la config.
+  divergir. `import <bundle>` en `opencode` queda fuera: `repairProjectMcp` sobrescribe la config;
+  desde 0.18.16 emite un aviso por `stderr` antes de reemplazarla, pero no cambia la decisión.
 - **`import --repair` sin bundle**: no reescribe assets y, por lo tanto, **no sanea** una nota
   legada; solo `import <bundle>` la re-materializa.
 - **Contrato de `check` intacto**: la divergencia de frontmatter sigue siendo advisory, la
@@ -385,8 +467,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 783 archivos enumerados, ~36.427 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 793 archivos (aspec 225, docs 21, test 26, etc.).
+- **Pack actual**: tier `minimo`, 786 archivos enumerados, ~36.579 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 796 archivos (aspec 228, docs 21, test 26, etc.).
 
 ## Lint y publicación
 
@@ -432,8 +514,12 @@ sin `--tier` es `normal`.
   `check` puede seguir avisando en proyectos con varios hosts. El invariante 0.18.14 es acotado al
   host activo y no promete más.
 - **Config MCP no parseable (M2)**: `install`/`init` no pueden leer el estado en disco y materializan
-  la nota por la escritura pendiente; `check` puede divergir. Es una limitación degenerada aceptada.
-- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.18.15` en este
+  la nota por la escritura pendiente; `check` puede divergir. Desde 0.18.16 `import` avisa antes de
+  reemplazarla, pero sigue sin conservar el contenido ilegible. Es una limitación degenerada aceptada.
+- **Ruido y alcance de la salud MCP (0.18.16)**: `check` sólo inspecciona la config MCP del proyecto
+  y reporta como roto cualquier binario absoluto ausente en esta máquina; un comando simple se
+  presume sano sin resolver `PATH`. Son avisos, no fallos.
+- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.18.16` en este
   checkout; siguen siendo derivados gitignored. Si se regeneran con otra versión, el seed no cambia
   porque no los usa como fuente.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene

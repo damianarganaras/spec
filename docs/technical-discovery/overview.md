@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-05T00:07:33Z
-pluginVersion: 0.18.15
+generatedAt: 2026-11-05T03:53:28Z
+pluginVersion: 0.18.16
 skillVersion: '2.3'
 ---
 
@@ -68,7 +68,7 @@ test/                   suite node --test
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
 | Memoria | Nodos, supersesión, refs, recall, working-context | `src/core/memory/*` |
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
-| Diagnósticos | Oráculo de instalación (`check`) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
+| Diagnósticos | Oráculo de instalación (`check`, incluida la salud MCP) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
 | Entorno de máquina | Shell, EOL y tooling del clon | `src/core/machine-env.js` |
 | Assets | 10 agentes, 16 commands, 21 skills, templates y perfiles | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` |
 
@@ -110,6 +110,12 @@ test/                   suite node --test
    agrega un aviso advisory por deriva entre `.ancletorc.version` y la versión del CLI, y `doctor`
    valida la config MCP de `opencode` del proyecto con precedencia sobre la global. Ningún escritor
    (`init`, `install`, `update`, `upgrade`, `import`, `export`) cambia.
+10. **Salud de comandos MCP (0.18.16)**: `mcpCommandBroken` pasa a evaluar la existencia de una ruta
+    absoluta (incluida `C:\...` en Windows) en vez de declararla rota por su forma; una ruta sana
+    deja de reescribirse en `import --repair` y en los `refresh*`. `findProjectMcpFile` y
+    `PROJECT_MCP_CANDIDATES` concentran el descubrimiento `.opencode/opencode.json|jsonc`; `check`
+    agrega avisos no bloqueantes por config no parseable y por comandos rotos; `import` avisa antes
+    de reemplazar una config no parseable.
 
 ## Recorrido de una instalación con tier `minimo`
 

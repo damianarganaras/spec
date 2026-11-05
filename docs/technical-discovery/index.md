@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-05T00:07:33Z
-pluginVersion: 0.18.15
+generatedAt: 2026-11-05T03:53:28Z
+pluginVersion: 0.18.16
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (783 archivos enumerados, ~36.427 tokens), `package.json` (`0.18.15`),
+`minimo` (786 archivos enumerados, ~36.579 tokens), `package.json` (`0.18.16`),
 `src/core/model-catalog.json` y el reporte `ancleto discovery --check`. El pack lo generó el CLI
 del propio repo (`node src/cli/index.js discovery --compress`); el tier `minimo` excluye `test/**`,
 `docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones elididos). Por eso las áreas
@@ -30,7 +30,8 @@ comportamiento se verificaron por lectura directa de los paths citados (ver `unk
 | **Modelos por tier**: `TIERS` agente→string, `TIER_CHAINS`, resolver contra catálogo, `gratis` free-only, oráculo de `check` | `decisions.md`, `setup.md`, `units/cli-install.md` |
 | **Modelo gratis sobre agente primario**: `freeTierOnPrimary(model, mode)`, aviso en `applyTier` (set-time) y en `check` (inspect-time) | `decisions.md`, `units/cli-install.md` |
 | **Diagnósticos `check`/`doctor` (0.18.15)**: deriva de `.ancletorc.version`, tier dormido sin superficie de agentes, precedencia de config MCP | `decisions.md`, `setup.md`, `units/cli-install.md` |
-| **Capability `cli-diagnostics`** y change archivado `check-doctor-state-parity` | `decisions.md`, `overview.md`, `units/cli-install.md` |
+| **Salud MCP (0.18.16)**: `mcpCommandBroken` por existencia, `findProjectMcpFile`/`PROJECT_MCP_CANDIDATES`, avisos de `check`, aviso de `import` | `decisions.md`, `setup.md`, `units/cli-install.md` |
+| **Capability `cli-diagnostics`** y changes archivados `check-doctor-state-parity` y `mcp-command-health` | `decisions.md`, `overview.md`, `units/cli-install.md` |
 | **Nota de compresión host-scoped**: `resolvesHostCompression`, gate estado-driven en `install`/`init`/`import`, alcance host activo, excepción M2 | `decisions.md`, `units/cli-install.md` |
 | **Validación de bundles**: `manifest.mcp` debe ser array de entradas con `name` string antes del primer write | `decisions.md`, `units/cli-install.md` |
 | **Catálogo de modelos**: snapshot de 5 proveedores / 211 IDs, helpers `declaredModelIds` / `modelIdsFromCatalog` / `missingModelIdsInCatalog`, guard de integridad | `decisions.md`, `units/discovery-engine.md` |
@@ -50,17 +51,18 @@ comportamiento se verificaron por lectura directa de los paths citados (ver `unk
 - **Entry point**: `src/cli/index.js` (bins `ancleto` y `aspec` en `package.json`).
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local
   (`.ancleto/memory.db`, `node:sqlite`) y control explícito de costo por tier.
-- **Versión del repo**: `package.json` = `0.18.15` (HEAD `48ccbdf`, rama `development`).
-  `.ancletorc` y `.ancleto/machine-env.md` también registran `0.18.15` tras el `upgrade` local;
+- **Versión del repo**: `package.json` = `0.18.16` (HEAD `836f03d`, rama `development`).
+  `.ancletorc` y `.ancleto/machine-env.md` también registran `0.18.16` tras el `upgrade` local;
   ambos son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-05-mcp-command-health/` (predicado de salud MCP corregido,
+  descubrimiento único de la config MCP de proyecto, avisos de `check` y aviso de `import`),
   `aspec/changes/archive/2026-11-04-check-doctor-state-parity/` (paridad de estado entre
-  escritores y diagnósticos read-only: tier dormido, deriva de versión y config MCP de `doctor`;
-  agrega la spec `cli-diagnostics` y actualiza `agent-model-tiers`) y
-  `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` (nota de compresión
+  escritores y diagnósticos read-only: tier dormido, deriva de versión y config MCP de `doctor`)
+  y `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` (nota de compresión
   host-scoped y validación de `manifest.mcp`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
-  Sin cambios en 0.18.15.
-- **Pack actual**: 783 archivos enumerados, ~36.427 tokens. El `.discovery-map.json` regenerado en
-  esta corrida reporta 793 archivos (aspec 225).
+  Sin cambios en 0.18.16.
+- **Pack actual**: 786 archivos enumerados, ~36.579 tokens. El `.discovery-map.json` regenerado en
+  esta corrida reporta 796 archivos (aspec 228).

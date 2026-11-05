@@ -2980,6 +2980,12 @@ async function checkCommand() {
   }
 
   const warnings = await checkTierOrphan(cwd)
+  // Deriva de versión del manifiesto: advisory único, no bloqueante. `upgrade` es el
+  // único remediador; `check` no repara ni altera el exit code.
+  const cliVersion = await packageVersion()
+  if (typeof rc.version === 'string' && rc.version && rc.version !== cliVersion) {
+    warnings.push(`.ancletorc registra v${rc.version} y el CLI es v${cliVersion}; corré 'ancleto upgrade' para regenerar los artefactos locales`)
+  }
   warnings.push(...agentWarnings)
   if (checkMachineEnvTracked(cwd)) {
     warnings.push('.ancleto/machine-env.md (trackeado en git; deberia ser un artefacto local — corre `git rm --cached .ancleto/machine-env.md`)')
@@ -3158,8 +3164,12 @@ async function checkTierOrphan(cwd) {
   // D9: se cuentan los agents locales del host realmente instalados, no
   // `.opencode/agents` fijo (un proyecto antigravity usa `.agents/agents`).
   const rc = await readAncletorc(cwd)
+  // Sin superficie de agentes locales el tier queda dormido, no huérfano: no hay
+  // donde aplicarlo ni nada que instalar en el proyecto.
+  const dirs = localAgentDirs(rc)
+  if (dirs.length === 0) return warnings
   let count = 0
-  for (const d of localAgentDirs(rc)) {
+  for (const d of dirs) {
     const p = join(cwd, d)
     if (await exists(p)) count += (await readdir(p)).filter((f) => f.endsWith(MD_EXT)).length
   }
@@ -4358,13 +4368,27 @@ async function doctorCommand() {
     fatal = true
   }
 
-  const configDir = globalConfigDir()
+  // Precedencia: la config del proyecto es la que escriben init/install; sólo si no
+  // existe se valida la global. Un archivo de proyecto inválido no cae al fallback.
+  const cwd = process.cwd()
   let cfgFile = null
+  let cfgLabel = null
   for (const c of ['opencode.json', 'opencode.jsonc']) {
-    const p = join(configDir, c)
+    const p = join(cwd, '.opencode', c)
     if (await exists(p)) {
       cfgFile = p
+      cfgLabel = relative(cwd, p).replace(/\\/g, '/')
       break
+    }
+  }
+  if (!cfgFile) {
+    for (const c of ['opencode.json', 'opencode.jsonc']) {
+      const p = join(globalConfigDir(), c)
+      if (await exists(p)) {
+        cfgFile = p
+        cfgLabel = basename(p)
+        break
+      }
     }
   }
   if (!cfgFile) {
@@ -4372,9 +4396,9 @@ async function doctorCommand() {
   } else {
     try {
       JSON.parse((await readFile(cfgFile, 'utf8')).replace(/^\uFEFF/, ''))
-      console.log(`  ✔ ${basename(cfgFile)} valido`)
+      console.log(`  ✔ ${cfgLabel} valido`)
     } catch {
-      console.log(`  ✖ ${basename(cfgFile)} JSON invalido`)
+      console.log(`  ✖ ${cfgLabel} JSON invalido`)
     }
   }
 

@@ -28,6 +28,8 @@ const ROOT = join(__dirname, '..', '..')
 const ASSETS = ['agents', 'commands', 'skills']
 const TEMPLATES = ['AGENTS.md', 'PRODUCT.md']
 const AZURE_MCP_NOTICE = 'ancleto: MCP azure-devops habilitado — usa las variables de entorno AZURE_DEVOPS_ORG_URL y AZURE_DEVOPS_PAT'
+// Candidatos de config MCP (mismo par, mismo orden en descubrimiento, merge y deteccion).
+const PROJECT_MCP_CANDIDATES = ['opencode.json', 'opencode.jsonc']
 
 const HELP = `ancleto - orquestador SDD liviano con subagentes optimizados para costo/tokens
 (alias: aspec)
@@ -751,7 +753,7 @@ async function mergeMcp(configDir, mcpMap) {
   if (Object.keys(mcpMap).length === 0) return { file: null, added: [] }
 
   const existing = []
-  for (const c of ['opencode.json', 'opencode.jsonc']) {
+  for (const c of PROJECT_MCP_CANDIDATES) {
     const p = join(configDir, c)
     if (await exists(p)) existing.push(p)
   }
@@ -813,15 +815,15 @@ async function mergeAntigravityMcp(projectDir, mcpMap) {
   return { file, added }
 }
 
-// Una entrada MCP esta rota cuando su binario es una ruta inexistente en este
-// host: absoluta posix ausente, estilo Windows (caso T480) o command ausente.
-// Comandos relativos (npx, PATH) se presumen sanos.
+// Una entrada MCP esta rota cuando su binario es una ruta absoluta inexistente en
+// este host (incluida `C:\...` cuando la plataforma la trata como absoluta) o
+// cuando command falta/no es un arreglo no vacio. Comandos simples (npx, PATH) se
+// presumen sanos; no se ejecuta el comando ni se resuelve PATH.
 function mcpCommandBroken(entry) {
   const cmd = entry?.command
   if (!Array.isArray(cmd) || cmd.length === 0) return true
   const bin = cmd[0]
   if (typeof bin !== 'string' || bin.length === 0) return true
-  if (/^[A-Za-z]:[\\/]/.test(bin)) return true
   if (isAbsolute(bin)) return !existsSync(bin)
   return false
 }
@@ -1057,7 +1059,7 @@ async function hostConfigHasCompression(projectDir, host) {
   if (!hostSupportsCompression(host)) return false
   const files = host === 'antigravity'
     ? [join(projectDir, '.agents', 'mcp_config.json')]
-    : [join(projectDir, '.opencode', 'opencode.json'), join(projectDir, '.opencode', 'opencode.jsonc')]
+    : PROJECT_MCP_CANDIDATES.map((c) => join(projectDir, '.opencode', c))
   for (const f of files) {
     try {
       const cfg = JSON.parse((await readFile(f, 'utf8')).replace(/^\uFEFF/, ''))
@@ -2999,6 +3001,22 @@ async function checkCommand() {
     const list = declaredMissing.map((item) => `${item.id} (${item.source || 'sin origen'})`).join(', ')
     warnings.push(`IDs declarados ausentes del catálogo de modelos: ${list}; refrescá el catálogo desde el repositorio fuente`)
   }
+  // Salud MCP: advisory sobre la config del proyecto (no la global ni la de otros
+  // hosts). No altera `missing`/`orphans`, el exit code ni escribe archivos.
+  const projectMcp = await readProjectMcp(cwd)
+  if (projectMcp.error) {
+    warnings.push(`${relative(cwd, projectMcp.file).replace(/\\/g, '/')} no es JSON valido; no se inspeccionaron las entradas MCP`)
+  } else if (await exists(projectMcp.file)) {
+    const mcpMap = projectMcp.cfg?.mcp
+    if (mcpMap && typeof mcpMap === 'object' && !Array.isArray(mcpMap)) {
+      for (const [name, def] of Object.entries(mcpMap)) {
+        if (!mcpCommandBroken(def)) continue
+        const first = Array.isArray(def?.command) ? def.command[0] : undefined
+        const bin = typeof first === 'string' && first.length > 0 ? first : 'command ausente'
+        warnings.push(`MCP '${name}' tiene un comando roto (${bin})`)
+      }
+    }
+  }
 
   console.log(`ancleto: check -> ${missing} faltantes, ${orphans} huerfanos`)
   for (const w of warnings) console.log(`  ⚠ ${w}`)
@@ -4081,24 +4099,34 @@ async function statsCommand(args) {
 
 const EXPORT_FORMAT = 'ancleto-export/1'
 
-async function readProjectMcp(projectDir) {
-  for (const c of ['opencode.json', 'opencode.jsonc']) {
+// Unica regla de descubrimiento de la config MCP del proyecto: primer archivo
+// existente entre `.opencode/opencode.json` y `.opencode/opencode.jsonc`. Devuelve
+// null cuando no existe ninguno.
+async function findProjectMcpFile(projectDir) {
+  for (const c of PROJECT_MCP_CANDIDATES) {
     const p = join(projectDir, '.opencode', c)
-    if (await exists(p)) {
-      try {
-        return { file: p, cfg: JSON.parse((await readFile(p, 'utf8')).replace(/^\uFEFF/, '')) }
-      } catch {
-        return { file: p, cfg: {} }
-      }
-    }
+    if (await exists(p)) return p
   }
-  return { file: join(projectDir, '.opencode', 'opencode.json'), cfg: {} }
+  return null
+}
+
+async function readProjectMcp(projectDir) {
+  const found = await findProjectMcpFile(projectDir)
+  if (!found) return { file: join(projectDir, '.opencode', 'opencode.json'), cfg: {} }
+  try {
+    return { file: found, cfg: JSON.parse((await readFile(found, 'utf8')).replace(/^\uFEFF/, '')) }
+  } catch (error) {
+    return { file: found, cfg: {}, error }
+  }
 }
 
 // Repara entradas rotas y agrega ausentes (solo las de intendedNames cuando se
 // indica; con null solo repara las existentes). Nunca toca las sanas.
 async function repairProjectMcp(projectDir, fresh, intendedNames = null) {
-  const { file, cfg } = await readProjectMcp(projectDir)
+  const { file, cfg, error } = await readProjectMcp(projectDir)
+  if (error) {
+    console.error(`ancleto: no se pudo leer ${relative(projectDir, file).replace(/\\/g, '/')} como JSON; se reemplaza por la configuracion MCP nueva`)
+  }
   cfg.mcp = cfg.mcp || {}
   const fixed = []
   for (const [name, def] of Object.entries(cfg.mcp)) {
@@ -4371,16 +4399,8 @@ async function doctorCommand() {
   // Precedencia: la config del proyecto es la que escriben init/install; sólo si no
   // existe se valida la global. Un archivo de proyecto inválido no cae al fallback.
   const cwd = process.cwd()
-  let cfgFile = null
-  let cfgLabel = null
-  for (const c of ['opencode.json', 'opencode.jsonc']) {
-    const p = join(cwd, '.opencode', c)
-    if (await exists(p)) {
-      cfgFile = p
-      cfgLabel = relative(cwd, p).replace(/\\/g, '/')
-      break
-    }
-  }
+  let cfgFile = await findProjectMcpFile(cwd)
+  let cfgLabel = cfgFile ? relative(cwd, cfgFile).replace(/\\/g, '/') : null
   if (!cfgFile) {
     for (const c of ['opencode.json', 'opencode.jsonc']) {
       const p = join(globalConfigDir(), c)

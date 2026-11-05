@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-05T00:07:33Z
-pluginVersion: 0.18.15
+generatedAt: 2026-11-05T03:53:28Z
+pluginVersion: 0.18.16
 skillVersion: '2.3'
 ---
 
@@ -45,12 +45,12 @@ No hay formatter ni typechecker declarados: el repo es JavaScript ESM sin `tscon
 y `scripts/` con `eslint.config.js`: globals de Node y cuatro reglas (`no-undef`, `no-unused-vars`
 con `argsIgnorePattern`/`caughtErrorsIgnorePattern` = `^_`, `eqeqeq`, `no-dupe-keys`).
 
-## Diagnósticos (`check` y `doctor`, 0.18.15)
+## Diagnósticos (`check` y `doctor`)
 
 `check` es un oráculo read-only: sólo los faltantes alteran el exit code
 (`missing > 0 ? 1 : 0`). Entre sus avisos no bloqueantes están el catálogo no verificable, la
 antigüedad del snapshot, la deriva de `model:`, los IDs declarados ausentes, el modelo free sobre un
-agente primario y, desde 0.18.15:
+agente primario; desde 0.18.15/0.18.16 se suman:
 
 - **Deriva de versión**: si `.ancletorc.version` es un string no vacío distinto de la versión del
   CLI (leída de `package.json` con `packageVersion()`), imprime una vez
@@ -60,14 +60,25 @@ agente primario y, desde 0.18.15:
   (`localAgentDirs(rc)` devuelve `[]`, por ejemplo `cursor` o `roo`), el tier existe pero no se
   considera huérfano. El aviso histórico sólo se emite cuando hay al menos un directorio declarado
   y la suma de `.md` es cero.
+- **Salud MCP (0.18.16)**: `check` lee sólo la config MCP **del proyecto** con
+  `readProjectMcp`/`findProjectMcpFile`. Si existe y no parsea, emite
+  `<ruta> no es JSON valido; no se inspeccionaron las entradas MCP`; si parsea, emite un aviso por
+  entrada con `mcpCommandBroken` verdadero:
+  `MCP '<nombre>' tiene un comando roto (<detalle>)`. No inspecciona la config global ni la de otros
+  hosts, no escribe y no cambia el exit code.
 
-`doctor` valida Node ≥ 24, la importabilidad de `node:sqlite` y la config MCP de `opencode`. Desde
-0.18.15 resuelve la config con precedencia **proyecto → global**, probando en orden
-`.opencode/opencode.json`, `.opencode/opencode.jsonc`, `globalConfigDir()/opencode.json` y
-`globalConfigDir()/opencode.jsonc`; valida sólo el primer archivo existente. La ruta del proyecto se
-reporta relativa con `/`; la global, por nombre base. Si hay config de proyecto inválida, no cae a la
-global. El parseo es `JSON.parse` estricto (un `.jsonc` con comentarios se reporta inválido) y una
-config inválida o ausente no altera el exit code.
+`doctor` valida Node ≥ 24, la importabilidad de `node:sqlite` y la config MCP de `opencode`. Resuelve
+la config con precedencia **proyecto → global**, usando la misma regla de descubrimiento de proyecto
+(`findProjectMcpFile`: `.opencode/opencode.json` y luego `.opencode/opencode.jsonc`) y, si no existe,
+`globalConfigDir()/opencode.json` y `globalConfigDir()/opencode.jsonc`; valida sólo el primer archivo
+existente. La ruta del proyecto se reporta relativa con `/`; la global, por nombre base. Si hay config
+de proyecto inválida, no cae a la global. El parseo es `JSON.parse` estricto (un `.jsonc` con
+comentarios se reporta inválido) y una config inválida o ausente no altera el exit code.
+
+`import` (con o sin bundle, incluido `--repair`) avisa por `stderr` antes de reemplazar una config
+MCP de proyecto no parseable:
+`ancleto: no se pudo leer <ruta> como JSON; se reemplaza por la configuracion MCP nueva`. La decisión
+de reemplazo y el exit code no cambian.
 
 ## Refresco del catálogo de modelos
 
@@ -132,8 +143,8 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.18.15)**: `.ancletorc` y `.ancleto/machine-env.md` registran
-`ancleto: 0.18.15`, alineados con `package.json` tras el `upgrade` local. Siguen siendo artefactos
+**Estado de este checkout (0.18.16)**: `.ancletorc` y `.ancleto/machine-env.md` registran
+`ancleto: 0.18.16`, alineados con `package.json` tras el `upgrade` local. Siguen siendo artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed.
 
 ## Entorno de máquina

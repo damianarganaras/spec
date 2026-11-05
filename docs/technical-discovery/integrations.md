@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-05T00:07:33Z
-pluginVersion: 0.18.15
+generatedAt: 2026-11-05T03:53:28Z
+pluginVersion: 0.18.16
 skillVersion: '2.3'
 ---
 
@@ -17,7 +17,8 @@ skillVersion: '2.3'
 | GitHub Actions | CI de lint/tests y release | Salida | `.github/workflows/publish.yml` |
 | GitHub Releases | Notas del release por tag | Salida | `.github/workflows/publish.yml` |
 | Repomix | Empaquetado de contexto para discovery | Salida | `src/cli/index.js` → `runRepomix` |
-| opencode | Host del IDE; base de sesiones para `stats`; config MCP que valida `doctor`; `opencode models` solo en mantenimiento | Entrada | `src/cli/index.js` → `opencodeDbPath`, `doctorCommand`, `scripts/refresh-model-catalog.mjs` |
+| opencode | Host del IDE; base de sesiones para `stats`; config MCP que validan `doctor`/`check`; `opencode models` solo en mantenimiento | Entrada | `src/cli/index.js` → `opencodeDbPath`, `doctorCommand`, `checkCommand`, `scripts/refresh-model-catalog.mjs` |
+| MCP del proyecto | Config `.opencode/opencode.json` y `.jsonc`; salud de comandos y avisos read-only | Entrada | `src/cli/index.js` → `findProjectMcpFile`, `mcpCommandBroken` |
 | MCP de memoria (`ancleto-memory`) | Tools `searchMemory`, `recordRule`, `recordDecision` | Salida/entrada | `src/core/memory/mcp-server.js` |
 | MCP caveman | Compresión de contexto en hosts que la exponen | Salida | `src/cli/index.js` → `resolvesHostCompression` |
 | MCP engram | Memoria de sesión opcional (opt-in) | Salida | `src/cli/index.js` → `buildDefaultMcp` |
@@ -56,10 +57,18 @@ skillVersion: '2.3'
 - `stats failures` clasifica fallos de tool parts en `env`/`check`/`tool`/`unknown`, agrupa por
   comando-esqueleto, enmascara paths y secretos, y nunca proyecta `output`/`error` completos.
 - La integración con la base es **solo lectura**.
-- `doctor` lee la config MCP de opencode con precedencia de proyecto
-  (`.opencode/opencode.json`, `.opencode/opencode.jsonc`) y, si no existe, la global
-  (`globalConfigDir()/opencode.json[c]`). Valida sólo el primer archivo existente con `JSON.parse`
-  estricto (sin BOM) y reporta la ruta relativa del proyecto o el nombre base de la global.
+- `doctor` y `check` comparten el descubrimiento de la config MCP de proyecto:
+  `findProjectMcpFile` resuelve el primer existente entre `.opencode/opencode.json` y
+  `.opencode/opencode.jsonc`. `doctor` cae a la global (`globalConfigDir()/opencode.json[c]`) sólo si
+  no existe config de proyecto; valida el primer archivo con `JSON.parse` estricto (sin BOM) y
+  reporta la ruta relativa del proyecto o el nombre base de la global.
+- `check` inspecciona sólo la config MCP del proyecto y agrega avisos no bloqueantes: config no
+  parseable (`<ruta> no es JSON valido; no se inspeccionaron las entradas MCP`) y una entrada por
+  comando roto (`MCP '<nombre>' tiene un comando roto (<detalle>)`). La salud se decide con
+  `mcpCommandBroken`: comando inválido o ruta absoluta inexistente; un comando simple se presume
+  resuelto por PATH y una ruta absoluta existente (incluida `C:\...` en Windows) es sana.
+- `import` avisa por `stderr` antes de reemplazar una config MCP de proyecto no parseable; la
+  escritura no cambia.
 - `scripts/refresh-model-catalog.mjs` invoca `opencode models --refresh` y
   `opencode models <provider> --verbose --refresh` en una máquina de mantenimiento. Es la única vía
   de descubrimiento; el runtime consume el snapshot commiteado y no ejecuta procesos ni red.
@@ -82,9 +91,9 @@ skillVersion: '2.3'
 - **Azure DevOps**: MCP opcional (`--with-azure`), deshabilitado en este repo
   (`PRODUCT.md` → `azure.enabled: false`). Requiere `AZURE_DEVOPS_ORG_URL` y `AZURE_DEVOPS_PAT`
   (valores omitidos).
-- **Alcance de `doctor`**: valida únicamente la config de opencode; no valida
-  `.agents/mcp_config.json`, `.mcp.json`, `copilot-mcp.json` ni `.vscode/mcp.json`
-  (`aspec/specs/cli-diagnostics/spec.md`).
+- **Alcance de `doctor`/`check`**: validan únicamente la config MCP de opencode/proyecto; no validan
+  `.agents/mcp_config.json`, `.mcp.json`, `copilot-mcp.json` ni `.vscode/mcp.json`, ni la config
+  global en el caso de `check` (`aspec/specs/cli-diagnostics/spec.md`).
 
 ## git
 
@@ -105,8 +114,9 @@ skillVersion: '2.3'
 - `freeTierOnPrimary` no consulta ningún sistema externo: cruza el `model:` y el `mode:` ya
   presentes en el frontmatter instalado. Los avisos (set-time en `applyTier`, inspect-time en
   `check`) tampoco hacen red ni ejecutan procesos.
-- Los diagnósticos de 0.18.15 son locales: `check` compara `.ancletorc.version` con `package.json`;
-  `doctor` lee archivos JSON de config MCP. Ninguno hace red ni escribe.
+- Los diagnósticos de 0.18.15/0.18.16 son locales: `check` compara `.ancletorc.version` con
+  `package.json` y evalúa la salud MCP con `existsSync`; `doctor` lee archivos JSON de config MCP.
+  Ninguno hace red ni escribe.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). `import` valida la forma de `manifest.mcp`

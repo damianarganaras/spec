@@ -1248,7 +1248,7 @@ describe('CLI export/import (cross-machine-export-import)', () => {
       mkdirSync(join(dir, '.opencode'), { recursive: true })
       writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({
         mcp: {
-          'ancleto-memory': { type: 'local', enabled: true, command: ['C:\\Program Files\\nodejs\\node.exe', 'C:\\x\\index.js', 'mcp'] },
+          'ancleto-memory': { type: 'local', enabled: true, command: [join(dir, 'binario-inexistente', 'node.exe'), join(dir, 'x', 'index.js'), 'mcp'] },
           custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
         }
       }))
@@ -1271,7 +1271,7 @@ describe('CLI export/import (cross-machine-export-import)', () => {
       mkdirSync(dst, { recursive: true })
       mkdirSync(join(dst, '.opencode'), { recursive: true })
       writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({
-        mcp: { 'ancleto-memory': { type: 'local', enabled: true, command: ['C:\\viejo\\node.exe', 'x', 'mcp'] } }
+        mcp: { 'ancleto-memory': { type: 'local', enabled: true, command: [join(dst, 'binario-inexistente', 'node.exe'), 'x', 'mcp'] } }
       }))
       const r = run(['import', join(dir, 'b.tgz')], dst)
       assert.equal(r.status, 0)
@@ -1516,7 +1516,7 @@ describe('CLI export/import (cross-machine-export-import)', () => {
       mkdirSync(join(dir, '.opencode'), { recursive: true })
       writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({
         mcp: {
-          'ancleto-memory': { type: 'local', enabled: true, command: ['C:\\viejo\\node.exe', 'x', 'mcp'] },
+          'ancleto-memory': { type: 'local', enabled: true, command: [join(dir, 'binario-inexistente', 'node.exe'), 'x', 'mcp'] },
           custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
         }
       }))
@@ -1537,7 +1537,7 @@ describe('CLI export/import (cross-machine-export-import)', () => {
       // Entrada MCP rota preexistente: el import la regenera con rutas locales.
       mkdirSync(join(dst, '.opencode'), { recursive: true })
       writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({
-        mcp: { 'ancleto-memory': { type: 'local', enabled: true, command: ['C:\\viejo\\node.exe', 'x', 'mcp'] } }
+        mcp: { 'ancleto-memory': { type: 'local', enabled: true, command: [join(dst, 'binario-inexistente', 'node.exe'), 'x', 'mcp'] } }
       }))
       assert.equal(run(['import', writeBundle(dir, { tier: 'gratis', template: true })], dst).status, 0)
       assert.equal(readFileSync(join(dst, '.opencode', '.ancleto-tier'), 'utf8').trim(), 'gratis')
@@ -2718,6 +2718,387 @@ describe('CLI doctor (G4)', () => {
       const r = run(['doctor'], dir, { XDG_CONFIG_HOME: join(dir, 'xdg-vacio') })
       assert.equal(r.status, 0)
       assert.deepEqual(projectSnapshot(dir), before)
+    })
+  })
+})
+
+describe('CLI MCP command health (mcp-command-health)', () => {
+  // Config MCP de proyecto con la serializacion exacta que escribe `repairProjectMcp`
+  // (2 espacios + salto final): una entrada sana puede compararse byte a byte.
+  function writeMcp(dir, mcp, name = 'opencode.json') {
+    mkdirSync(join(dir, '.opencode'), { recursive: true })
+    const file = join(dir, '.opencode', name)
+    writeFileSync(file, JSON.stringify({ mcp }, null, 2) + '\n')
+    return file
+  }
+
+  // Ruta absoluta derivada de `tmpdir()` (via `dir`): ausente en toda plataforma.
+  function absentBin(dir) {
+    return join(dir, 'binario-inexistente', 'node.exe')
+  }
+
+  function fileHash(file) {
+    return createHash('sha256').update(readFileSync(file)).digest('hex')
+  }
+
+  // `check` exige `.ancletorc` con installedPaths; `--no-mcp` deja el proyecto sin
+  // config MCP propia para que cada caso controle el archivo que escribe.
+  function seedCheckProject(dir) {
+    const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+    assert.equal(r.status, 0, `install base: ${r.stderr}`)
+  }
+
+  describe('predicado de salud', () => {
+    it('una ruta absoluta existente y un comando simple no se reescriben', () => {
+      withDir((dir) => {
+        const file = writeMcp(dir, {
+          'ancleto-memory': { type: 'local', enabled: true, command: [process.execPath, join(dir, 'fake-mcp.js'), 'mcp'] },
+          custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
+        })
+        const before = readFileSync(file, 'utf8')
+        const beforeHash = fileHash(file)
+        const r = run(['import', '--repair'], dir)
+        assert.equal(r.status, 0)
+        assert.equal(readFileSync(file, 'utf8'), before, 'contenido byte-identico')
+        assert.equal(fileHash(file), beforeHash, 'hash sin cambios')
+        assert.match(r.stdout, /MCP sanos en /, 'no regenera entradas sanas')
+      })
+    })
+
+    it('en Windows una ruta con letra de unidad existente es sana y no se reescribe', (t) => {
+      if (process.platform !== 'win32') return t.skip('solo aplica a Windows')
+      assert.match(process.execPath, /^[A-Za-z]:[\\/]/, 'execPath deriva de una ruta con letra de unidad')
+      withDir((dir) => {
+        const file = writeMcp(dir, {
+          'ancleto-memory': { type: 'local', enabled: true, command: [process.execPath, 'mcp'] }
+        })
+        const before = fileHash(file)
+        const r = run(['import', '--repair'], dir)
+        assert.equal(r.status, 0)
+        assert.equal(fileHash(file), before, 'la ruta existente con letra de unidad no se reescribe')
+        assert.match(r.stdout, /MCP sanos en /)
+      })
+    })
+
+    // Delta (`cli-diagnostics`): una ruta con letra de unidad NO es rota por su forma.
+    // Fuera de Windows no es absoluta para la plataforma, asi que cae en la regla de
+    // comando simple: no se repara y `check` no avisa.
+    it('fuera de Windows una ruta con letra de unidad cae en comando simple y no se repara', (t) => {
+      if (process.platform === 'win32') return t.skip('solo aplica fuera de Windows')
+      withDir((dir) => {
+        seedCheckProject(dir)
+        const winPath = 'C:\\no\\existe\\node.exe'
+        const file = writeMcp(dir, {
+          custom: { type: 'local', enabled: true, command: [winPath] }
+        })
+        const before = readFileSync(file, 'utf8')
+        const beforeHash = fileHash(file)
+        const repaired = run(['import', '--repair'], dir)
+        assert.equal(repaired.status, 0)
+        assert.equal(readFileSync(file, 'utf8'), before, 'contenido byte-identico')
+        assert.equal(fileHash(file), beforeHash, 'hash sin cambios')
+        assert.match(repaired.stdout, /MCP sanos en /)
+        const check = run(['check'], dir)
+        assert.equal(check.status, 0)
+        assert.doesNotMatch(check.stdout, /tiene un comando roto/)
+      })
+    })
+
+    it('una ruta absoluta inexistente es rota y se regenera', () => {
+      withDir((dir) => {
+        const missing = absentBin(dir)
+        assert.ok(isAbsolute(missing), 'la ruta derivada de tmpdir es absoluta')
+        assert.equal(existsSync(missing), false)
+        const file = writeMcp(dir, {
+          'ancleto-memory': { type: 'local', enabled: true, command: [missing, 'x', 'mcp'] },
+          custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
+        })
+        const r = run(['import', '--repair'], dir)
+        assert.equal(r.status, 0)
+        const cfg = JSON.parse(readFileSync(file, 'utf8'))
+        assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'regenerada con node local')
+        assert.deepEqual(cfg.mcp.custom, { type: 'local', enabled: true, command: ['custom-mcp'] }, 'sana intacta')
+        assert.match(r.stdout, /MCP regenerados en /)
+      })
+    })
+
+    it('command ausente, vacio, no arreglo o primer elemento invalido es roto', () => {
+      withDir((dir) => {
+        const variants = [
+          ['ausente', { type: 'local', enabled: true }],
+          ['vacio', { type: 'local', enabled: true, command: [] }],
+          ['no-arreglo', { type: 'local', enabled: true, command: 'node' }],
+          ['no-string', { type: 'local', enabled: true, command: [42, 'mcp'] }],
+          ['string-vacio', { type: 'local', enabled: true, command: ['', 'mcp'] }]
+        ]
+        for (const [label, entry] of variants) {
+          const sub = join(dir, label)
+          mkdirSync(sub, { recursive: true })
+          const file = writeMcp(sub, { 'ancleto-memory': entry })
+          const r = run(['import', '--repair'], sub)
+          assert.equal(r.status, 0, `${label}: exit`)
+          const cfg = JSON.parse(readFileSync(file, 'utf8'))
+          assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, `${label}: regenerada`)
+        }
+      })
+    })
+  })
+
+  describe('import --repair', () => {
+    it('una config no parseable se avisa y se reemplaza sin cambiar el exit', () => {
+      withDir((dir) => {
+        mkdirSync(join(dir, '.opencode'), { recursive: true })
+        const file = join(dir, '.opencode', 'opencode.json')
+        writeFileSync(file, '{ esto no es JSON\n')
+        const r = run(['import', '--repair'], dir)
+        assert.equal(r.status, 0, 'el aviso no cambia el exit')
+        assert.match(r.stderr, /ancleto: no se pudo leer \.opencode\/opencode\.json como JSON; se reemplaza por la configuracion MCP nueva/)
+        assert.equal((r.stderr.match(/no se pudo leer/g) || []).length, 1, 'aviso una sola vez')
+        const written = readFileSync(file, 'utf8')
+        assert.equal(written.includes('esto no es JSON'), false, 'no conserva el contenido invalido')
+        assert.equal(typeof JSON.parse(written).mcp, 'object', 'la config invalida fue reemplazada')
+      })
+    })
+
+    it('una config parseable no produce el aviso de reemplazo', () => {
+      withDir((dir) => {
+        const file = writeMcp(dir, {
+          'ancleto-memory': { type: 'local', enabled: true, command: [absentBin(dir), 'x', 'mcp'] }
+        })
+        const r = run(['import', '--repair'], dir)
+        assert.equal(r.status, 0)
+        assert.doesNotMatch(r.stderr, /no se pudo leer .* como JSON; se reemplaza/)
+        const cfg = JSON.parse(readFileSync(file, 'utf8'))
+        assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'repara solo la entrada rota')
+      })
+    })
+  })
+
+  describe('check: avisos advisory', () => {
+    it('config no parseable: un aviso con la ruta, sin escrituras y exit sin cambios', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        mkdirSync(join(dir, '.opencode'), { recursive: true })
+        writeFileSync(join(dir, '.opencode', 'opencode.json'), '{ invalido\n')
+        const before = projectSnapshot(dir)
+        const r = run(['check'], dir)
+        assert.equal(r.status, 0, 'exit 0 sin faltantes')
+        assert.ok(
+          r.stdout.includes('⚠ .opencode/opencode.json no es JSON valido; no se inspeccionaron las entradas MCP'),
+          r.stdout
+        )
+        assert.equal((r.stdout.match(/no es JSON valido/g) || []).length, 1, 'un solo aviso')
+        assert.deepEqual(projectSnapshot(dir), before, 'check no escribe ni regenera archivos')
+      })
+    })
+
+    it('una entrada rota produce un aviso por entrada y las sanas no avisan', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        const missing = absentBin(dir)
+        writeMcp(dir, {
+          'ancleto-memory': { type: 'local', enabled: true, command: [process.execPath, 'mcp'] },
+          custom: { type: 'local', enabled: true, command: [missing, 'x'] }
+        })
+        const before = projectSnapshot(dir)
+        const r = run(['check'], dir)
+        assert.equal(r.status, 0)
+        assert.ok(r.stdout.includes(`⚠ MCP 'custom' tiene un comando roto (${missing})`), r.stdout)
+        assert.equal((r.stdout.match(/tiene un comando roto/g) || []).length, 1, 'solo la rota avisa')
+        assert.deepEqual(projectSnapshot(dir), before)
+      })
+    })
+
+    it('command ausente se reporta con el detalle "command ausente"', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        writeMcp(dir, { 'ancleto-memory': { type: 'local', enabled: true } })
+        const r = run(['check'], dir)
+        assert.equal(r.status, 0)
+        assert.ok(r.stdout.includes("⚠ MCP 'ancleto-memory' tiene un comando roto (command ausente)"), r.stdout)
+      })
+    })
+
+    it('caveman roto produce su propio aviso', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        const missing = absentBin(dir)
+        writeMcp(dir, { caveman: { type: 'local', enabled: true, command: [missing] } })
+        const r = run(['check'], dir)
+        assert.equal(r.status, 0)
+        assert.ok(r.stdout.includes(`⚠ MCP 'caveman' tiene un comando roto (${missing})`), r.stdout)
+      })
+    })
+
+    it('el detalle es "command ausente" salvo el primer string no vacio', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        const variants = [
+          { command: 'node' },
+          {},
+          { command: [] },
+          { command: [42] }
+        ]
+        for (const entry of variants) {
+          writeMcp(dir, { custom: entry })
+          const r = run(['check'], dir)
+          assert.equal(r.status, 0, `exit con ${JSON.stringify(entry)}`)
+          assert.ok(
+            r.stdout.includes("⚠ MCP 'custom' tiene un comando roto (command ausente)"),
+            `${JSON.stringify(entry)}: ${r.stdout}`
+          )
+        }
+      })
+    })
+
+    it('en Windows el detalle muestra la ruta con letra de unidad rota', (t) => {
+      if (process.platform !== 'win32') return t.skip('solo aplica a Windows')
+      withDir((dir) => {
+        seedCheckProject(dir)
+        const winPath = 'C:\\no\\existe\\node.exe'
+        writeMcp(dir, { custom: { type: 'local', enabled: true, command: [winPath] } })
+        const r = run(['check'], dir)
+        assert.equal(r.status, 0)
+        assert.ok(r.stdout.includes(`⚠ MCP 'custom' tiene un comando roto (${winPath})`), r.stdout)
+      })
+    })
+
+    it('un mapa mcp no-objeto no avisa y el JSON no parseable sigue avisando una vez', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        for (const mcp of ['x', []]) {
+          mkdirSync(join(dir, '.opencode'), { recursive: true })
+          writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({ mcp }, null, 2) + '\n')
+          const r = run(['check'], dir)
+          assert.equal(r.status, 0, `exit con mcp=${JSON.stringify(mcp)}`)
+          assert.doesNotMatch(r.stdout, /tiene un comando roto/)
+          assert.doesNotMatch(r.stdout, /no es JSON valido/)
+        }
+        writeFileSync(join(dir, '.opencode', 'opencode.json'), '{ invalido\n')
+        const invalid = run(['check'], dir)
+        assert.equal(invalid.status, 0)
+        assert.equal((invalid.stdout.match(/no es JSON valido/g) || []).length, 1, 'un solo aviso')
+      })
+    })
+
+    it('sin config MCP de proyecto no hay aviso', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false)
+        assert.equal(existsSync(join(dir, '.opencode', 'opencode.jsonc')), false)
+        const r = run(['check'], dir)
+        assert.equal(r.status, 0)
+        assert.doesNotMatch(r.stdout, /no es JSON valido/)
+        assert.doesNotMatch(r.stdout, /tiene un comando roto/)
+      })
+    })
+
+    // Delta (`cli-diagnostics`): `check` solo inspecciona la config MCP del proyecto.
+    // La global —resuelta por el primer branch de `globalConfigDir()`, XDG_CONFIG_HOME— y
+    // las configs de otros hosts (`copilot-mcp.json`, `.mcp.json`) no producen aviso ni
+    // mueven el exit, aunque declaren entradas rotas.
+    it('no inspecciona la config global ni la de otros hosts', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false)
+        assert.equal(existsSync(join(dir, '.opencode', 'opencode.jsonc')), false)
+        const missing = absentBin(dir)
+        const xdg = join(dir, 'xdg')
+        mkdirSync(join(xdg, 'opencode'), { recursive: true })
+        writeFileSync(join(xdg, 'opencode', 'opencode.json'), JSON.stringify({
+          mcp: { globalbroken: { type: 'local', enabled: true, command: [missing] } }
+        }, null, 2) + '\n')
+        for (const name of ['copilot-mcp.json', '.mcp.json']) {
+          writeFileSync(join(dir, name), JSON.stringify({
+            mcpServers: { otherbroken: { command: missing } }
+          }, null, 2) + '\n')
+        }
+        const r = run(['check'], dir, { XDG_CONFIG_HOME: xdg })
+        assert.equal(r.status, 0, 'el exit no cambia por configs ajenas')
+        assert.doesNotMatch(r.stdout, /tiene un comando roto/)
+        assert.doesNotMatch(r.stdout, /no es JSON valido/)
+      })
+    })
+
+    it('una config con todas las entradas sanas no produce aviso', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        writeMcp(dir, {
+          'ancleto-memory': { type: 'local', enabled: true, command: [process.execPath, 'mcp'] },
+          custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
+        })
+        const r = run(['check'], dir)
+        assert.equal(r.status, 0)
+        assert.doesNotMatch(r.stdout, /tiene un comando roto/)
+      })
+    })
+
+    it('el aviso no cambia el exit 1 por faltantes', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        writeMcp(dir, { 'ancleto-memory': { type: 'local', enabled: true } })
+        rmSync(join(dir, 'AGENTS.md'))
+        const r = run(['check'], dir)
+        assert.equal(r.status, 1)
+        assert.match(r.stdout, /check -> 1 faltantes/)
+        assert.ok(r.stdout.includes("⚠ MCP 'ancleto-memory' tiene un comando roto (command ausente)"), r.stdout)
+      })
+    })
+  })
+
+  // La compuerta de la nota de compresion mira PRESENCIA de `caveman`, no la salud
+  // de su comando: una entrada presente pero rota sigue materializando la nota.
+  describe('compuerta de compresion', () => {
+    it('caveman presente pero roto mantiene la nota y produce aviso propio', () => {
+      withDir((dir) => {
+        mkdirSync(join(dir, '.opencode'), { recursive: true })
+        writeFileSync(join(dir, '.opencode', 'opencode.json'), JSON.stringify({
+          mcp: { caveman: { type: 'local', enabled: true, command: [] } }
+        }, null, 2) + '\n')
+        // Binario caveman ausente en PATH: la decision no depende de detectarlo.
+        const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, compressionEnv(dir))
+        assert.equal(r.status, 0, r.stderr)
+        const orch = readFileSync(join(dir, '.opencode', 'agents', 'orchestrator.md'), 'utf8')
+        assert.match(orch, /Compresión de contexto \(tool del host\)/, 'la entrada presente cuenta para la compuerta')
+        const cfg = JSON.parse(readFileSync(join(dir, '.opencode', 'opencode.json'), 'utf8'))
+        assert.deepEqual(cfg.mcp.caveman.command, [], 'install --no-mcp no repara la entrada')
+        const check = run(['check'], dir)
+        assert.equal(check.status, 0)
+        assert.ok(check.stdout.includes("⚠ MCP 'caveman' tiene un comando roto (command ausente)"), check.stdout)
+      })
+    })
+  })
+
+  describe('doctor y descubrimiento compartido', () => {
+    it('check, doctor y export/import resuelven .opencode/opencode.jsonc cuando es el unico archivo', () => {
+      withDir((dir) => {
+        seedCheckProject(dir)
+        const missing = absentBin(dir)
+        const jsonc = writeMcp(dir, {
+          'ancleto-memory': { type: 'local', enabled: true, command: [missing, 'x', 'mcp'] },
+          custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
+        }, 'opencode.jsonc')
+        assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false)
+
+        const check = run(['check'], dir)
+        assert.equal(check.status, 0)
+        assert.ok(check.stdout.includes(`⚠ MCP 'ancleto-memory' tiene un comando roto (${missing})`), check.stdout)
+
+        const doctor = run(['doctor'], dir, { XDG_CONFIG_HOME: join(dir, 'xdg-vacio') })
+        assert.equal(doctor.status, 0)
+        assert.match(doctor.stdout, /✔ \.opencode\/opencode\.jsonc valido/)
+
+        const exported = run(['export'], dir)
+        assert.equal(exported.status, 0)
+        const manifest = JSON.parse(readFileSync(join(dir, 'ancleto-export', 'manifest.json'), 'utf8'))
+        assert.deepEqual(manifest.mcp.map((m) => m.name).sort(), ['ancleto-memory', 'custom'], 'export lee el mismo .jsonc')
+
+        const repaired = run(['import', '--repair'], dir)
+        assert.equal(repaired.status, 0)
+        const cfg = JSON.parse(readFileSync(jsonc, 'utf8'))
+        assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'import repara el .jsonc')
+        assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false, 'no crea el .json de proyecto')
+      })
     })
   })
 })

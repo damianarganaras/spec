@@ -65,6 +65,17 @@ El estado MCP SHALL seguir siendo advisory: una config inválida o ausente NO SH
 - **THEN** el exit code sigue siendo 0
 - **AND** el comando no escribe ni modifica archivos
 
+#### Scenario: Las configuraciones MCP de otros hosts quedan excluidas
+
+- **WHEN** el proyecto tiene `.agents/mcp_config.json`, `.mcp.json`, `copilot-mcp.json` o
+  `.vscode/mcp.json` y no existe `.opencode/opencode.json`
+- **THEN** `doctor` SHALL validar sólo el destino MCP del host activo o instalado que declare un
+  archivo de proyecto
+- **AND** NO SHALL validar los destinos de hosts que no están instalados ni son el host activo, ni
+  `.vscode/mcp.json`
+- **AND** si ningún host con destino declara un archivo de proyecto existente, resuelve la config
+  MCP por el fallback global de `opencode`
+
 ### Requirement: `check` emite avisos advisory de estado MCP
 
 `ancleto check` SHALL inspeccionar la configuración MCP de proyecto de cada host instalado que declare un destino en el descriptor único. Los hosts instalados SHALL derivarse de la unión de `installedPaths` y NO SHALL derivarse de un único `rc.agent` ni de una resolución directorio→host que pueda leer `.github/prompts` como `vscode` cuando el host real es `copilot`.

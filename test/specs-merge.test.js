@@ -1,6 +1,7 @@
-﻿import { describe, it } from 'node:test'
+import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   mkdtempSync,
   rmSync,
@@ -83,6 +84,20 @@ function snapshot(dir) {
   }
   walk(dir)
   return out
+}
+
+// Hash determinista del arbol completo (rutas + contenidos) para afirmar cero
+// escrituras acumuladas sin depender de mtime, que es solo una senal secundaria.
+function treeHash(dir) {
+  const snap = snapshot(dir)
+  const hash = createHash('sha256')
+  for (const rel of Object.keys(snap).sort()) {
+    hash.update(rel)
+    hash.update('\0')
+    hash.update(snap[rel])
+    hash.update('\0')
+  }
+  return hash.digest('hex')
 }
 
 // Ejecuta un merge que debe fallar fail-closed y verifica exit 2 + cero escrituras
@@ -1206,6 +1221,61 @@ describe('specs merge - RENAMED vacio es no-op (specs-merge-hardening)', () => {
       assert.deepEqual(json.errors, [])
       assert.deepEqual(json.capabilities, [{ capability: 'alpha', operations: [], changed: false }])
       assert.equal(readFileSync(join(dir, specRel('alpha')), 'utf8'), before)
+      assert.equal(mtimeOf(dir, specRel('alpha')), stamp)
+    })
+  })
+})
+
+describe('specs merge - dry-run idempotente y cero escrituras (test-oracles-hardening)', () => {
+  it('dos dry-runs consecutivos: stdout byte-identico, mismo exit code y arbol sin cambios', () => {
+    withDir((dir) => {
+      writeSpec(dir, specRel('alpha'), canon('alpha', requirement('Existing', 'Existing body.')))
+      writeSpec(dir, deltaRel('ch', 'alpha'), '## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n')
+
+      const stamp = setOldMtime(dir, specRel('alpha'))
+      const beforeHash = treeHash(dir)
+      const beforeSnapshot = snapshot(dir)
+
+      const first = run(['specs', 'merge', '--change', 'ch', '--dry-run', '--json'], dir)
+      assert.equal(first.status, 0, `stderr: ${first.stderr}`)
+
+      const second = run(['specs', 'merge', '--change', 'ch', '--dry-run', '--json'], dir)
+      assert.equal(second.status, 0, `stderr: ${second.stderr}`)
+
+      assert.equal(second.status, first.status, 'mismo exit code en ambas corridas')
+      assert.equal(second.stdout, first.stdout, 'stdout byte a byte identico entre corridas')
+
+      // Cero escrituras acumuladas: hash del arbol completo (rutas + contenidos)
+      // igual antes de la primera corrida y despues de la segunda.
+      assert.equal(treeHash(dir), beforeHash)
+      assert.deepEqual(snapshot(dir), beforeSnapshot)
+      // mtime solo como senal secundaria.
+      assert.equal(mtimeOf(dir, specRel('alpha')), stamp)
+    })
+  })
+
+  it('--change archive --dry-run dos veces: exit 2 en ambas y cero escrituras', () => {
+    withDir((dir) => {
+      writeSpec(dir, specRel('alpha'), canon('alpha', requirement('A', 'A body.')))
+      mkdirSync(join(dir, 'aspec', 'changes', 'archive'), { recursive: true })
+
+      const stamp = setOldMtime(dir, specRel('alpha'))
+      const beforeHash = treeHash(dir)
+      const beforeSnapshot = snapshot(dir)
+
+      const first = run(['specs', 'merge', '--change', 'archive', '--dry-run', '--json'], dir)
+      assert.equal(first.status, 2, `stderr: ${first.stderr}`)
+      const firstJson = JSON.parse(first.stdout)
+      assert.equal(firstJson.ok, false)
+      assert.equal(firstJson.dryRun, true)
+
+      const second = run(['specs', 'merge', '--change', 'archive', '--dry-run', '--json'], dir)
+      assert.equal(second.status, 2, `stderr: ${second.stderr}`)
+      assert.equal(second.status, first.status, 'mismo exit code fail-closed en ambas corridas')
+      assert.equal(second.stdout, first.stdout, 'stdout byte a byte identico entre corridas')
+
+      assert.equal(treeHash(dir), beforeHash)
+      assert.deepEqual(snapshot(dir), beforeSnapshot)
       assert.equal(mtimeOf(dir, specRel('alpha')), stamp)
     })
   })

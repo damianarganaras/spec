@@ -404,3 +404,131 @@ describe('affected-set — superficie CLI read-only (throughput-pipeline)', () =
     })
   })
 })
+
+describe('affected-set — clasificación de imports dinámicos (test-oracles-hardening)', () => {
+  it("import('node:sqlite') es externo: suma a externalCount y no figura en unresolved", () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'src'), { recursive: true })
+      writeFileSync(join(dir, 'src', 'a.js'), 'export const a = 1\n')
+      writeFileSync(join(dir, 'src', 'db.js'), "export const load = () => import('node:sqlite')\n")
+
+      const { affected, unresolved, externalCount } = computeAffectedSet({
+        rootDir: dir,
+        seeds: ['src/db.js']
+      })
+      // Un specifier no relativo de una llamada con literal puro es externo por
+      // construccion: se cuenta como dato, no crea arista ni se reporta inconcluso.
+      assert.equal(externalCount, 1)
+      assert.deepEqual(unresolved, [])
+      assert.equal(
+        unresolved.some((u) => u.specifier === 'node:sqlite'),
+        false
+      )
+      assert.deepEqual(affected, ['src/db.js'])
+    })
+  })
+
+  it("import('node:sqlite', { with: ... }) es conservador: unresolved como import(<dynamic>)", () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'src'), { recursive: true })
+      writeFileSync(join(dir, 'src', 'a.js'), 'export const a = 1\n')
+      writeFileSync(
+        join(dir, 'src', 'json.js'),
+        "export const load = () => import('node:sqlite', { with: { type: 'json' } })\n"
+      )
+
+      const { affected, unresolved, externalCount } = computeAffectedSet({
+        rootDir: dir,
+        seeds: ['src/json.js']
+      })
+      // Contrato conservador vigente: el segundo argumento es "cualquier otro
+      // argumento", no un literal puro seguido de `)`, asi que es inconcluso.
+      assert.deepEqual(unresolved, [{ file: 'src/json.js', specifier: 'import(<dynamic>)' }])
+      assert.equal(externalCount, 0)
+      assert.deepEqual(affected, ['src/json.js'])
+    })
+  })
+
+  it('import(someVar) es inconcluso como import(<dynamic>)', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'src'), { recursive: true })
+      writeFileSync(join(dir, 'src', 'a.js'), 'export const a = 1\n')
+      writeFileSync(join(dir, 'src', 'dyn.js'), 'export const load = (someVar) => import(someVar)\n')
+
+      const { affected, unresolved, externalCount } = computeAffectedSet({
+        rootDir: dir,
+        seeds: ['src/dyn.js']
+      })
+      assert.deepEqual(unresolved, [{ file: 'src/dyn.js', specifier: 'import(<dynamic>)' }])
+      assert.equal(externalCount, 0)
+      assert.deepEqual(affected, ['src/dyn.js'])
+    })
+  })
+
+  it("import('./missing.js') es inconcluso con el specifier relativo concreto", () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'src'), { recursive: true })
+      writeFileSync(join(dir, 'src', 'a.js'), 'export const a = 1\n')
+      writeFileSync(join(dir, 'src', 'caller.js'), "export const load = () => import('./missing.js')\n")
+
+      const { affected, unresolved, externalCount } = computeAffectedSet({
+        rootDir: dir,
+        seeds: ['src/caller.js']
+      })
+      // Relativo irresoluble: se reporta con el specifier concreto, no se asume
+      // cubierto y el destino fantasma no entra al set.
+      assert.deepEqual(unresolved, [{ file: 'src/caller.js', specifier: './missing.js' }])
+      assert.equal(externalCount, 0)
+      assert.deepEqual(affected, ['src/caller.js'])
+    })
+  })
+
+  it("import('./exists.js') resuelve la arista y el destino entra al affected-set", () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'src'), { recursive: true })
+      writeFileSync(join(dir, 'src', 'exists.js'), 'export const e = 1\n')
+      writeFileSync(join(dir, 'src', 'importer.js'), "export const load = () => import('./exists.js')\n")
+
+      const { affected, unresolved, externalCount } = computeAffectedSet({
+        rootDir: dir,
+        seeds: ['src/exists.js']
+      })
+      // La llamada con literal puro relativo resuelve a una arista: el importador
+      // es dependiente del destino y entra al set.
+      assert.deepEqual(unresolved, [])
+      assert.equal(externalCount, 0)
+      assert.deepEqual(affected, ['src/exists.js', 'src/importer.js'])
+    })
+  })
+})
+
+describe('affected-set — límite estructural de suites spawn-only (test-oracles-hardening)', () => {
+  // Invariante negativa: documenta un límite ESTRUCTURAL del grafo de imports.
+  // Una suite que spawnea el CLI sin importarlo no tiene arista de import, así
+  // que el affected-set NO es un contrato completo de selección de tests.
+  it('un test que spawnea el CLI sin importarlo NO entra al affected-set del source del CLI', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, 'src', 'cli'), { recursive: true })
+      mkdirSync(join(dir, 'test'), { recursive: true })
+      writeFileSync(join(dir, 'src', 'cli', 'index.js'), 'export function main() { return 0 }\n')
+      // La suite referencia el CLI solo como string de spawn: no hay arista de import.
+      writeFileSync(
+        join(dir, 'test', 'cli.test.js'),
+        "import { spawnSync } from 'node:child_process'\n" +
+          "const CLI = new URL('../src/cli/index.js', import.meta.url).pathname\n" +
+          "spawnSync(process.execPath, [CLI, 'affected'])\n"
+      )
+
+      const { affected, externalCount } = computeAffectedSet({
+        rootDir: dir,
+        seeds: ['src/cli/index.js']
+      })
+      // Control positivo: la suite SI fue escaneada (su unico externo,
+      // node:child_process, se conto), asi que su ausencia del set no se debe a
+      // que el archivo de test quedo fuera del grafo.
+      assert.equal(externalCount, 1)
+      assert.equal(affected.includes('test/cli.test.js'), false)
+      assert.deepEqual(affected, ['src/cli/index.js'])
+    })
+  })
+})

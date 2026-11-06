@@ -71,3 +71,10 @@
 
 - [x] 7.1 Correr `node --test test/content-guards.test.js` (ruta explícita) y `npm run lint` si el scope
   incluye archivos JS; registrar el format check como `not-configured`.
+
+## Fase 5 — Archive
+
+**Change:** p0-pr5-archive-conformity
+**Archived to:** aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/
+**Specs:** ✓ Synced — delta ya materializado en aspec/specs/prompt-contracts/spec.md; merge idempotente sin cambios
+**Memories promoted:** archive-conformity-discriminator, archive-noop-does-not-write-canonical-specs, conformity-verification-reuses-closed-ledger, triage-routing-single-contract

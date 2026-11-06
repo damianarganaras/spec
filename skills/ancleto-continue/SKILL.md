@@ -25,12 +25,12 @@ Continue a change by creating exactly ONE next artifact. No external binaries: s
 Read `aspec/changes/<name>/` and check files in this fixed dependency order:
 
 1. `proposal.md` — what & why
-2. `specs/` — delta requirements (at least one `spec.md` inside; skip only if the change specifies no behavior)
+2. `specs/` — delta requirements (at least one `spec.md` inside). A conformity change — `proposal.md` cites a `spec:<capability>#<requirement>` that resolves against `aspec/specs/<capability>/spec.md` — does NOT need a delta; a functional change without a delta does.
 3. `tasks.md` — implementation checklist
 
-The first absent item (or, for `specs/`, one with no `spec.md`) is next.
+`specs/` counts as next only when the change is functional and has no delta. A conformity change skips straight to `tasks.md`; never create a delta for it.
 
-- **All three present**: congratulate the user, show status, suggest "All artifacts created! You can now implement this change with `ancleto-apply` or archive it with `ancleto-archive`." STOP.
+- **All required artifacts present** (for a conformity change, `proposal.md` + `tasks.md`; otherwise all three): congratulate the user, show status, suggest "All artifacts created! You can now implement this change with `ancleto-apply` or archive it with `ancleto-archive`." STOP.
 - **Change directory missing**: report it and stop.
 
 ### 2. Load context files
@@ -53,7 +53,7 @@ Report which artifact was created, progress (N/3), and what is unlocked next, th
 
 ## Guardrails
 
-- Create ONE artifact per invocation, in order (proposal → specs → tasks); never skip.
+- Create ONE artifact per invocation, in order (proposal → specs → tasks); never skip a required artifact. A conformity change with a resolvable `spec:<capability>#<requirement>` citation skips `specs/` and continues with `tasks.md`.
 - Read existing artifacts before creating the next.
 - If context is unclear, ask before creating.
 - Verify the artifact exists before reporting progress.

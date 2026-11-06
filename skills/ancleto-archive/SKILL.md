@@ -29,11 +29,17 @@ Read `aspec/changes/<name>/tasks.md` (when present); count `- [ ]` (incomplete) 
 
 ### 2. Assess delta spec sync state
 
-Check for delta specs at `aspec/changes/<name>/specs/`; if none, proceed without a sync prompt.
+Check `aspec/changes/<name>/specs/` for a delta requirement block: any `## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED Requirements`, or `## RENAMED Requirements` section. A `specs/` directory that exists but contains no such block (for example, a header-only `specs/`) counts as no delta.
 
-**Canonical keywords first:** when delta specs exist and the CLI is available, run `ancleto specs check --change <name> --json`. If a delta spec or its target source-of-truth spec is non-canonical (translated keywords), warn that requirement blocks cannot be matched reliably and ask whether to normalize the affected spec first or archive without syncing that capability. Never merge into a non-canonical spec silently.
+**No delta requirement block (change de conformidad):** before archiving, validate the citation in `proposal.md` fail-closed — a `spec:<capability>#<requirement>` must resolve: the capability directory `aspec/specs/<capability>/` exists and the exact `Requirement:` title exists in `aspec/specs/<capability>/spec.md`. If it does not resolve, REJECT the archive (`se rechaza`): report explicitly that the citation no resuelve or is missing, name it, and instruct: add the delta or fix the citation. Do not move the change and do not promote anything. If it resolves, report explicitly `sin delta` naming the cited `spec:<capability>#<requirement>`, skip the merge entirely, and continue with the move and the promotion.
 
-**If delta specs exist:**
+**Citation relevance:** resolvability alone does not prove conformity. The cited `Requirement:` and its scenarios must describe the behavior the change restores. When the cited Requirement does not describe the implemented behavior, reject the archive or stop and ask the user: do not archive on an unrelated citation. Relevance is a semantic judgment the agent makes against the diff and the cited Requirement; it is not mechanically provable. The mechanical gate only proves resolvability and the absence of delta requirement blocks.
+
+**Bounded guarantee:** Change Archive de un change de conformidad: no modifica `aspec/specs/**/*.md`. This guarantee is limited to this operation and explicitly excludes: `ancleto-sync-specs`; `@documenter` in `Standalone Source-of-Truth Update`; `ancleto-bulk-archive`; the "Sync now" branch when a delta does exist; the user-chosen "Archive without syncing" branch; the move to `aspec/changes/archive/`; the `@coder` archive commit; promotion to `.ancleto/memory.db` / `working-context`; the seed freshness check; and all reads (including `ancleto specs check` and the fail-closed `spec:` resolution).
+
+**Canonical keywords first:** when a delta requirement block exists and the CLI is available, run `ancleto specs check --change <name> --json`. If a delta spec or its target source-of-truth spec is non-canonical (translated keywords), warn that requirement blocks cannot be matched reliably and ask whether to normalize the affected spec first or archive without syncing that capability. Never merge into a non-canonical spec silently.
+
+**If a delta requirement block exists:**
 
 - Diff each delta against its main spec at `aspec/specs/<capability>/spec.md`; show a combined summary of adds/modifications/removals/renames.
 - Prompt: "Sync now (recommended)" vs "Archive without syncing" (or "Archive now" / "Sync anyway" / "Cancel" when already synced).
@@ -76,7 +82,7 @@ Create `aspec/changes/archive/` if absent. Target: `YYYY-MM-DD-<change-name>` (c
 
 **Change:** <change-name>
 **Archived to:** aspec/changes/archive/YYYY-MM-DD-<name>/
-**Specs:** ✓ Synced (or: No delta specs / Sync skipped)
+**Specs:** ✓ Synced (or: `sin delta` — <cited `spec:<capability>#<requirement>`> / Sync skipped)
 **Memories promoted:** <list, or "None">
 ```
 

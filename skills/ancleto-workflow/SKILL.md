@@ -20,7 +20,7 @@ explore → new/propose/ff → continue* → update? → apply → verify → ar
              onboard      bulk-archive (batches)
 ```
 
-`*` continue runs once per missing artifact until the set is complete.
+`*` continue runs once per missing artifact until the set is complete. For a conformity change — a resolvable `spec:<capability>#<requirement>` citation in `proposal.md` and no delta — `specs/` is not a missing artifact and no delta is created.
 `?` update runs only when a definition changes (a main spec, the scope, or a design decision).
 
 ## Routing Rules
@@ -47,7 +47,8 @@ explore → new/propose/ff → continue* → update? → apply → verify → ar
 |---|---|
 | Directory missing → nothing to continue | `ancleto-new` (or propose/ff) |
 | `proposal.md` missing | `ancleto-continue` |
-| `specs/` missing | `ancleto-continue` |
+| `specs/` missing with a resolvable `spec:<capability>#<requirement>` citation (conformity change) | do NOT create a delta — continue with `tasks.md` or `ancleto-apply` |
+| `specs/` missing without a resolvable citation (functional change) | `ancleto-continue` (create the delta) |
 | `tasks.md` missing | `ancleto-continue` |
 | All artifacts present, tasks unchecked | `ancleto-apply` |
 | A definition changed (main spec, scope, design decision) | `ancleto-update` |
@@ -72,6 +73,6 @@ When routing, pass along:
 ## Guardrails
 
 - Never creates, modifies, or archives anything itself — it only routes.
-- Never skip `verify` when the change touched specified behavior (`specs/` present); route there before `archive`.
+- Never skip `verify` when the change touched specified behavior — a delta is present OR the change cites a canonical Requirement; route there before `archive`.
 - Never route to `apply` when `tasks.md` is missing — route to `continue` first.
 - `recordRule`/`recordDecision` accept only `memory_key`, `content`, `justification`, `scope`. Never send `source`, `confidence`, `status` or `id` — the runtime manages those.

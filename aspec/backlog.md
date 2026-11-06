@@ -1,13 +1,13 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-05 (release 0.20.0).
+> Última actualización: 2026-11-06 (release 0.20.0).
 
 ## Prioridad de ejecución
 
 1. **0.20.1 — `fix(cli)`**: guard de escritura en `repairProjectMcp` (`fixed` vacío + sin error → no tocar bytes). Bug contra contrato vigente; test de bytes/mtime; sin delta de spec. Change propuesto: `fix-repair-mcp-noop`.
 2. **0.21.0 — `feat(cli)`**: advisories read-only de deriva legacy (`.opencode/*` histórico; bundle legacy sin intención MCP). Deltas MODIFIED en `project-portability` y `cli-diagnostics`; exit codes sin cambios. Change propuesto: `portability-followup-diagnostics`.
-3. **Reingeniería P0**: PR-5 (discriminador conformidad vs delta, archive no-op sin delta, guard/T02, ruteo orchestrator/triage) + cierre formal de MEM-01. PR-4 ya está cumplido.
+3. **Reingeniería P0**: PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`. PR-4 ya está cumplido.
 4. **Reingeniería P1**: CH-00 baseline (prerrequisito) → CH-06 merge de specs idempotente + selección de tests → CH-07 A/B de prefijos/caché/modelos.
 5. **Reingeniería P2 colaboración**: CH-08/MEM-06 → T25/T27 (`formatVersion`, reindex) → T20 (idempotencia) → T30 (V1/V2) → CH-10 (matriz de hosts).
 6. **Reingeniería P2 motor/host restante**: #4 (exclusión mutua de escritores), #6 (tope de verificación / orden archive→merge), #18 (seed stale por diseño).
@@ -50,7 +50,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 ### Qué falta (por prioridad)
 
-- **P0:** PR-5 completo; cierre formal de MEM-01 (runbook).
+- **P0:** PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`.
 - **P1:** CH-00 baseline; CH-06 merge de specs idempotente + selección de tests; CH-07 A/B de prefijos/caché/modelos.
 - **P2 colaboración:** `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10).
 - **P2 motor/host:** T20 idempotencia, T30 V1/V2, CH-10 matriz de hosts, #4, #6, #18.

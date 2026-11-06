@@ -451,6 +451,8 @@ las de semántica pura y con consumidor comprobado: merge de specs con `--dry-ru
 (`mergeLocked` **no** es merge de deltas — V2 línea 532), selección de tests focalizados cuando la
 cobertura sea confiable, e intake read-only fresco.
 
+> **0.22.1 (2026-11-06):** deuda residual de CH-06a cerrada (ítems 1–4) e ítem 5 documentado como exclusión; CH-06b sigue diferido por proyección incompleta y falta de consumidor probado. Este documento no se reconcilia en esta sesión.
+
 ### 5.2 Deuda declarada de MEM-04 (no aplicada en el primer corte)
 
 - **`inspectRefs` no captura errores de I/O.** `readFileSync`/`readdirSync`/`statSync` pueden lanzar

@@ -3,7 +3,7 @@ node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.1
+pluginVersion: 0.22.2
 skillVersion: '2.3'
 ---
 

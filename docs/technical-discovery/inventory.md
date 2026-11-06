@@ -3,7 +3,7 @@ node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.1
+pluginVersion: 0.22.2
 skillVersion: '2.3'
 ---
 
@@ -39,9 +39,9 @@ skillVersion: '2.3'
 
 ## Áreas raíz observadas (`.discovery-map.json` al empacar)
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (262), `audit logs` (9), `commands` (16),
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (264), `audit logs` (9), `commands` (16),
 `docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (19),
-`templates` (2), `test` (27), más 15 archivos raíz. Total observado: **832 archivos**.
+`templates` (2), `test` (27), más 15 archivos raíz. Total observado: **834 archivos**.
 
 Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime.
 `documentation/` tiene 366 archivos en disco, pero el mapa cuenta 340 tras excluir
@@ -49,8 +49,8 @@ Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son ru
 35 archivos; `test/` tiene 27 archivos, todos `*.test.js` en la raíz (20, incluido
 `specs-merge.test.js`; el patrón declarado es `test/*.test.js`). El pack del tier `minimo` excluye
 `test/**`, `docs/**` y `**/*.md`, por lo que la evidencia de esas áreas se verificó por lectura
-directa. El pack de esta generación registra 822 fuentes y ~38.087 tokens, con 29 entradas de
+directa. El pack de esta generación registra 824 fuentes y ~38.087 tokens, con 29 entradas de
 archivo en el cuerpo.
 
-El `.discovery-map.json` observado en esta corrida reporta 832 archivos (aspec 262, src 19,
+El `.discovery-map.json` observado en esta corrida reporta 834 archivos (aspec 264, src 19,
 test 27). Ver `unknowns.md`.

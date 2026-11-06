@@ -3,7 +3,7 @@ node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.1
+pluginVersion: 0.22.2
 skillVersion: '2.3'
 ---
 
@@ -18,7 +18,7 @@ skillVersion: '2.3'
   `readHostMcpIntent`, `importCmd`, `exportCmd`, `checkCommand`, `doctorCommand`,
   `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`,
   `specsMergeCommand`, `resolveChangeDir`, `specsCommand`; `src/core/specs-merge.js`;
-  `src/core/tier-models.js`), no en el pack solo. El estado del pack registra 822 fuentes
+  `src/core/tier-models.js`), no en el pack solo. El estado del pack registra 824 fuentes
   (~38.087 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
@@ -115,15 +115,15 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **832 archivos** (aspec 262, docs 21,
-  test 27, src 19, etc.). El pack registra **822 fuentes** (~38.087 tokens) y 29 entradas de archivo
+- **`.discovery-map.json` observado**: el generador reporta **834 archivos** (aspec 264, docs 21,
+  test 27, src 19, etc.). El pack registra **824 fuentes** (~38.087 tokens) y 29 entradas de archivo
   porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además
   Repomix filtra por sus propios ignores.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.22.1`). No se usan como fuente de contenido.
+  gitignored; deben alinearse con `package.json` (`0.22.2`). No se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
   versión local es una verificación puntual, no una fuente de reglas. El propio `check` compara ese
@@ -135,7 +135,7 @@ skillVersion: '2.3'
   `Select-String` y lecturas directas.
 - **Estado inicial del chequeo**: el pack y `.discovery-state.json` fueron regenerados antes de esta
   materialización con estado `STALE`/`impact: minor` y `affectedDocs` para todos los documentos del
-  seed. Para reflejar 0.22.1 se actualizaron `decisions.md`, `index.md`, `integrations.md`,
+  seed. Para reflejar 0.22.2 se actualizaron `decisions.md`, `index.md`, `integrations.md`,
   `inventory.md`, `overview.md`, `setup.md`, `units/_map.md`, `units/cli-install.md`,
   `units/discovery-engine.md`, `units/memory-engine.md` y `unknowns.md` desde el pack y las fuentes
   citadas. El estado final lo reporta el `discovery --check` posterior. El seed anterior describía
@@ -143,7 +143,7 @@ skillVersion: '2.3'
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.22.1`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.22.2`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,

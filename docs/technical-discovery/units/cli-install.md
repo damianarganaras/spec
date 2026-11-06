@@ -43,7 +43,7 @@ covers:
   - machine-env
 sources: ["src/cli/index.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.1
+pluginVersion: 0.22.2
 skillVersion: '2.3'
 ---
 
@@ -461,7 +461,7 @@ tier puede quedar dormido en `check`.
   `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
   resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; deben
-  alinearse con `package.json` (`0.22.1`). No son fuentes del seed.
+  alinearse con `package.json` (`0.22.2`). No son fuentes del seed.
 - **Merge de specs 0.22.0–0.22.1**: el fail-closed es por plan, no transaccional ante una caída de
   I/O a mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs
   traducidos ni crea capabilities. No está cableado en skills/agentes. El contenedor `archive` ya

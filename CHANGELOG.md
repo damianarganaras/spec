@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.22.2] - 2026-11-06
+
+### Tests
+- **`specs merge`**: idempotencia del `--dry-run --json` (stdout byte-idéntico entre corridas y cero escrituras acumuladas) y caso fail-closed de `--change archive --dry-run` repetido (exit 2, cero escrituras).
+- **`affected-set`**: oráculos de clasificación de imports dinámicos (`import('node:sqlite')` externo; `import('node:sqlite', { with })` e `import(x)` → `unresolved`; relativo irresoluble → `unresolved`; relativo resoluble → arista) e invariante negativa de suites spawn-only.
+
+### Notas
+- Change de conformidad `test-oracles-hardening`, archivado en `aspec/changes/archive/2026-11-06-test-oracles-hardening/`; sin delta de specs. CH-06b, CH-00, CH-07 y el resto del P2 siguen diferidos.
+
 ## [0.22.1] - 2026-11-06
 
 ### Fixed

@@ -410,6 +410,27 @@ archiva OK, más el guard que exige citar `Requirement:` cuando no hay delta.
 | **CH-11** ✅ | Regla de severidad de `cleto-review` a su hogar normativo | Delta `MODIFIED Requirements` en `aspec/specs/code-review/spec.md` que incorpore la regla de asignación de severidad hoy sólo implícita en la skill: CRITICAL sólo para duplicación literal o dead code probado dentro del scope; redundancia inferida o ubicación discutible ⇒ WARNING/SUGGESTION; ante duda, degradar. Después de eso, nodo `cleto-review-severity-degrade`. | — | Evidencia: `aspec/changes/archive/2026-10-02-cleto-review/design.md:11`; hoy la regla vive sólo en `skills/ancleto-review/SKILL.md:36-42,61-63,70` y `aspec/specs/code-review/spec.md:59-66` sólo enumera severidades y cap. El backfill no la capturó porque su hogar correcto es la spec, no la memoria.<br>Cerrado en 0.18.2: la regla vive en el Requirement `Reporte estructurado sin modificación de código` de `aspec/specs/code-review/spec.md`; capturada en el nodo `cleto-review-severity-degrade`. |
 | **MEM-07** ✅ | Gramática de refs: `change:` usa el slug sin fecha | Una frase en el bloque de gramática de `aspec/specs/memory-engine/spec.md` (~L475-481) que diga que `change:<slug>` lleva el slug **sin** el prefijo `YYYY-MM-DD-`, que lo aporta el directorio `archive/`; y que `agents/spec-writer.md` (`## Decisions Section`) lo **referencie** en vez de re-enunciarlo. | — | No cambia contrato: el resolver ya antepone la fecha (`src/core/memory/engine.js:259`) y un slug con fecha falla con `referencia un change inexistente` (`:267`). Motivo: la trampa costó un ciclo completo de review en el backfill (5/5 escrituras rechazadas).<br>Cerrado en 0.18.2: el Requirement `Refs normalizadas materializadas en el contenido del nodo` de `aspec/specs/memory-engine/spec.md` fija que `change:<slug>` va sin prefijo de fecha, y `agents/spec-writer.md` referencia esa fuente única en vez de re-enunciarla. |
 
+**Evidencia 2026-11-06 — el corte del bloque inyectado no distingue importancia.**
+Medición sobre este repo (release 0.21.0): 39 reglas de `scope: project`, de las cuales el bloque
+`<ProjectMemoryRules>` renderiza sólo 8 y omite 31 (`<ContextOverflowWarning>`; `memory doctor`
+reporta 591 refs / 189 nodos activos / 0 refs sin resolver). Agregar **una** regla larga
+(`content-guard-change-artifact-location`) hizo caer las renderizadas de 9 a 8 y empujó dos reglas
+que antes se inyectaban a la cola omitida: el total pasó de 38 a 39 y la omisión de 29 a 31. Entre
+las omitidas está `node-test-scope-explicit-paths`, que fija que los tests se corren con rutas
+explícitas y nunca con `node --test` sin acotar.
+
+Consecuencias medidas: (a) un agente nuevo arranca sin reglas críticas; (b) el
+`<ContextOverflowWarning>` obliga a un Recall extra (una delegación a `@memory-keeper`) antes de
+trabajar; (c) el prefijo inyectado cambia con cada alta de regla, lo que rompe reutilización de
+caché.
+
+Criterio de aceptación que MEM-05 debe cubrir con esta evidencia: (i) un set chico, revisado y
+estable de invariantes universales que **siempre** entren; (ii) el resto recuperado por tarea
+(FTS/refs), no inyectado; (iii) error explícito con `memory_key` cuando una regla crítica no entra,
+nunca corte silencioso; y (iv) los dos presupuestos se miden y testean por separado — el bloque
+inyectado (~8.000 chars) y el campo destilado de delegación (≤5 reglas / ≤1.500 B). Subir el tope no
+es un fix: sólo mueve el síntoma y encarece cada request.
+
 ### 5.1 `CH-06` — §5.13 del V2 partida en "existe hoy" vs "cambio nuevo"
 
 **Existe hoy (superficie que NO se rediseña en P1):**

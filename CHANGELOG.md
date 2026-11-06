@@ -2,6 +2,14 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.21.0] - 2026-11-06
+
+### Added
+- **Cambio de conformidad archivado sin delta**: discriminador explícito entre conformidad y cambio funcional; el archive es no-op y deja una cita `spec:<capability>#<requirement>` resoluble y relevante, con dos Requirements nuevos en `prompt-contracts`.
+
+### Changed
+- **Ruteo alineado del flujo de conformidad**: `agents/orchestrator.md`, `skills/triage-clarifier`, `skills/ancleto-workflow` y `skills/ancleto-continue` comparten el mismo criterio; `@spec-writer` no genera `specs/` para conformidad y `@coder`, `@tester`, `@documenter` y `@reviewer` contemplan el change sin delta.
+
 ## [0.20.1] - 2026-11-06
 
 ### Fixed

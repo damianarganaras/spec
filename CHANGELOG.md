@@ -2,6 +2,11 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.22.0] - 2026-11-06
+
+### Added
+- **Merge estructural de specs por delta**: `ancleto specs merge --change <slug> [--dry-run] [--json]` combina de forma determinista e idempotente el delta de un change contra las specs canónicas por título exacto de Requirement; `--dry-run` no escribe nada y cualquier error falla cerrado con exit 2 sin escrituras parciales; nueva capability canónica `spec-sync`.
+
 ## [0.21.0] - 2026-11-06
 
 ### Added

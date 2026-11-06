@@ -92,6 +92,9 @@ comparte.
 - **Cambios con scope incierto / arquitectura**: Crear artifacts en `aspec/changes/<name>/`.
 - **Cambios menores / fixes**: Implementación directa.
 - **Cierre**: Archivar con `/cleto-archive` al finalizar.
+- **Cierre de sesión**: antes de terminar, actualizar siempre `aspec/backlog.md` con lo hecho, lo
+  descartado y lo que queda (y el detalle en `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` cuando el
+  ítem viva ahí). No cerrar una sesión con el backlog desactualizado.
 
 <!-- LOCKED: artifacts-language -->
 - **Idioma de los artifacts**: el contenido de `proposal.md`, `design.md`, `tasks.md` y `specs/` se escribe

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs'
-import { cp, mkdir, access, writeFile, readFile, readdir, mkdtemp, rm } from 'node:fs/promises'
+import { cp, mkdir, access, writeFile, readFile, readdir, mkdtemp, rm, stat } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createInterface } from 'node:readline'
@@ -18,6 +18,7 @@ import { curateMemory } from '../core/memory/curation.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
 import { computeAffectedSet } from '../core/affected-set.js'
+import { mergeSpecText } from '../core/specs-merge.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
 import { TIERS, TIER_CHAINS, declaredModelIds, resolveTierModels, loadModelCatalog, modelIdsFromCatalog, gratisModel, isKnownGratisModel, freeTierOnPrimary } from '../core/tier-models.js'
@@ -68,6 +69,9 @@ Uso:
   ancleto specs check [--change <name>] [--json]
                                    Valida keywords canonicos (### Requirement:, WHEN, THEN)
                                    en aspec/specs y, con --change, en los deltas del change
+  ancleto specs merge --change <slug> [--dry-run] [--json]
+                                    Aplica el delta del change sobre los specs canonicos existentes
+                                    (ADDED/MODIFIED/REMOVED/RENAMED por titulo exacto; fail-closed)
   ancleto affected [--cwd <dir>] [--json] <archivo...>
                                    Computa el affected-set (clausura de dependientes por el grafo
                                    de imports) sembrado por los archivos dados (read-only; reporta
@@ -3369,6 +3373,155 @@ async function specsCheckCommand(args) {
   process.exit(ok ? 0 : 1)
 }
 
+// Resuelve el change por slug: activo en aspec/changes/<slug>/ o archivado en
+// aspec/changes/<YYYY-MM-DD>-<slug>/. Fail-closed (exit 2) ante 0 o ≥2 coincidencias.
+const CHANGE_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+
+// Slug seguro para resolver rutas: sin traversal (`..`, `/`, `\`, NUL) y con forma canónica.
+function isValidChangeSlug(slug) {
+  return typeof slug === 'string'
+    && !slug.includes('..')
+    && !slug.includes('/')
+    && !slug.includes('\\')
+    && !slug.includes('\0')
+    && CHANGE_SLUG_RE.test(slug)
+}
+
+async function resolveChangeDir(cwd, slug) {
+  const changesDir = join(cwd, CHANGES_ROOT, 'changes')
+  const matches = []
+  const active = join(changesDir, slug)
+  try {
+    if ((await stat(active)).isDirectory()) matches.push(active)
+  } catch {}
+  const archiveDir = join(changesDir, 'archive')
+  if (await exists(archiveDir)) {
+    const archivedName = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-${escapeRegExp(slug)}$`)
+    for (const entry of await readdir(archiveDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && archivedName.test(entry.name)) matches.push(join(archiveDir, entry.name))
+    }
+  }
+  return matches
+}
+
+// Capabilities presentes en el delta del change (<changeDir>/specs/<capability>/spec.md).
+async function collectDeltaCapabilities(changeDir) {
+  const specsDir = join(changeDir, 'specs')
+  const capabilities = []
+  if (!(await exists(specsDir))) return capabilities
+  for (const entry of await readdir(specsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const deltaPath = join(specsDir, entry.name, 'spec.md')
+    if (await exists(deltaPath)) capabilities.push({ capability: entry.name, deltaPath })
+  }
+  capabilities.sort((a, b) => a.capability.localeCompare(b.capability))
+  return capabilities
+}
+
+async function specsMergeCommand(args) {
+  const cwd = process.cwd()
+  const asJson = args.includes('--json')
+  const dryRun = args.includes('--dry-run')
+  const ci = args.indexOf('--change')
+  const slug = ci >= 0 ? args[ci + 1] : null
+  if (!slug || slug.startsWith('-')) {
+    console.error('ancleto: uso: ancleto specs merge --change <slug> [--dry-run] [--json]')
+    process.exit(1)
+  }
+  if (!isValidChangeSlug(slug)) {
+    console.error(`ancleto: specs merge: slug invalido "${slug}"`)
+    process.exit(2)
+  }
+
+  const matches = await resolveChangeDir(cwd, slug)
+  if (matches.length !== 1) {
+    const reason = matches.length === 0
+      ? `no existe el change "${slug}"`
+      : `change ambiguo "${slug}": ${matches.length} coincidencias`
+    console.error(`ancleto: specs merge: ${reason}`)
+    process.exit(2)
+  }
+  const changeDir = matches[0]
+
+  // Fase 1: computar todos los planes antes de escribir nada.
+  const plans = []
+  const errors = []
+  try {
+    for (const { capability, deltaPath } of await collectDeltaCapabilities(changeDir)) {
+      const target = join(cwd, CHANGES_ROOT, 'specs', capability, 'spec.md')
+      if (!(await exists(target))) {
+        errors.push({ capability, requirement: null, reason: 'canonical spec not found' })
+        continue
+      }
+      const merged = mergeSpecText(await readFile(deltaPath, 'utf8'), await readFile(target, 'utf8'))
+      for (const error of merged.errors) errors.push({ capability, ...error })
+      plans.push({ capability, target, output: merged.output, operations: merged.operations, changed: merged.changed })
+    }
+  } catch (error) {
+    console.error(`ancleto: specs merge: ${error.message}`)
+    process.exit(1)
+  }
+
+  const report = {
+    change: slug,
+    dryRun,
+    capabilities: plans.map((plan) => ({ capability: plan.capability, operations: plan.operations, changed: plan.changed })),
+    operations: plans.flatMap((plan) => plan.operations),
+    changed: plans.some((plan) => plan.changed),
+    errors
+  }
+
+  if (errors.length > 0) {
+    if (asJson) console.log(JSON.stringify({ ok: false, ...report }, null, 2))
+    else {
+      for (const error of errors) {
+        const where = error.capability || '?'
+        const req = error.requirement ? ` «${error.requirement}»` : ''
+        console.error(`ancleto: specs merge: ${where}${req}: ${error.reason}`)
+      }
+      console.error('ancleto: specs merge: conflicto fail-closed; no se escribio ningun spec')
+    }
+    process.exit(2)
+  }
+
+  // Fase 2: escribir solo si no hubo errores y no es --dry-run.
+  if (!dryRun) {
+    try {
+      for (const plan of plans) {
+        if (plan.changed) await writeFile(plan.target, plan.output)
+      }
+    } catch (error) {
+      console.error(`ancleto: specs merge: ${error.message}`)
+      process.exit(1)
+    }
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify({ ok: true, ...report }, null, 2))
+    return
+  }
+  if (plans.length === 0) {
+    console.log('ancleto: specs merge: el change no tiene deltas de specs')
+    return
+  }
+  for (const plan of plans) {
+    const ops = plan.operations.map((op) => op.type).join(', ') || 'sin operaciones'
+    console.log(`  ${dryRun ? '(dry-run) ' : ''}${plan.capability}: ${ops}${plan.changed ? '' : ' (sin cambios)'}`)
+  }
+  const written = dryRun ? 0 : plans.filter((plan) => plan.changed).length
+  console.log(dryRun
+    ? `ancleto: specs merge: ${plans.length} capability(es); ningun archivo escrito (--dry-run)`
+    : `ancleto: specs merge: ${written} de ${plans.length} spec(s) canonicos actualizados`)
+}
+
+async function specsCommand(args) {
+  if (args[0] === 'merge') {
+    await specsMergeCommand(args.slice(1))
+    return
+  }
+  await specsCheckCommand(args)
+}
+
 // Read-only: computa el affected-set (dependientes incluidos) sin escribir nada.
 async function affectedCommand(args) {
   const asJson = args.includes('--json')
@@ -4632,7 +4785,7 @@ switch (cmd) {
     await checkCommand()
     break
   case 'specs':
-    await specsCheckCommand(rest)
+    await specsCommand(rest)
     break
   case 'affected':
     await affectedCommand(rest)

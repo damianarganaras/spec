@@ -52,6 +52,12 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 - **P0:** PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`.
 - **P1:** CH-00 baseline; CH-06 merge de specs idempotente + selección de tests; CH-07 A/B de prefijos/caché/modelos.
+- **P1 · MEM-05 (pendiente) — presupuesto del working-context:** el bloque inyectado
+  `<ProjectMemoryRules>` no distingue importancia. Con 39 reglas `scope: project` renderiza 8 y omite
+  31; agregar una regla larga (2026-11-06) hizo caer las renderizadas de 9 a 8 y desplazó dos reglas
+  que antes entraban, incluida `node-test-scope-explicit-paths`. MEM-05 debe fijar un set universal
+  estable, recuperar el resto por tarea y fallar explícito (con `memory_key`) cuando una regla crítica
+  no entra. Detalle y criterio de aceptación: `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` §5.
 - **P2 colaboración:** `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10).
 - **P2 motor/host:** T20 idempotencia, T30 V1/V2, CH-10 matriz de hosts, #4, #6, #18.
 - **Deuda:** MEM-05c–g, CH-09a–h.

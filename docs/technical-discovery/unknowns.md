@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-06T12:16:49Z
-pluginVersion: 0.20.1
+generatedAt: 2026-11-06T14:20:00Z
+pluginVersion: 0.21.0
 skillVersion: '2.3'
 ---
 
@@ -17,17 +17,24 @@ skillVersion: '2.3'
   los archivos citados (`src/cli/index.js` → `HOST_MCP_TARGETS`, `resolveHostMcpDestination`,
   `readHostMcpIntent`, `importCmd`, `exportCmd`, `checkCommand`, `doctorCommand`,
   `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`;
-  `src/core/tier-models.js`), no en el pack solo. El reporte del pack indica 807 archivos
+  `src/core/tier-models.js`), no en el pack solo. El reporte del pack indica 810 archivos
   (~37.266 tokens); su cuerpo contiene 28 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
   su ignore por defecto de Markdown. `README.md`, `CHANGELOG.md`, `AGENTS.md`, `PRODUCT.md`,
-  `aspec/specs/**` y `aspec/changes/**` no están en el pack. Las afirmaciones sobre las specs
-  `project-portability`, `agent-install-routing` y `cli-diagnostics`, y sobre los changes archivados
-  `2026-11-05-host-neutral-bundle`, `2026-11-05-mcp-host-write-routing` y
-  `2026-11-05-mcp-oracle-residual-closure` se verificaron leyendo esos paths directamente. No se
-  auditó el resto de `aspec/specs/**`.
+  `agents/**`, `skills/**`, `aspec/specs/**` y `aspec/changes/**` no están en el pack. Las
+  afirmaciones sobre las specs `project-portability`, `agent-install-routing`, `cli-diagnostics` y
+  `prompt-contracts`, sobre los changes archivados `2026-11-05-host-neutral-bundle`,
+  `2026-11-05-mcp-host-write-routing`, `2026-11-05-mcp-oracle-residual-closure` y
+  `2026-11-06-p0-pr5-archive-conformity`, y sobre los conteos de `agents/`/`commands/`/`skills/` se
+  verificaron leyendo esos paths directamente. No se auditó el resto de `aspec/specs/**`.
+- **Contrato de conformidad 0.21.0**: se describió desde `aspec/specs/prompt-contracts/spec.md`
+  (los dos Requirements nuevos), `CHANGELOG.md`, el `proposal.md`/`tasks.md` del archive y las cuatro
+  decisiones promovidas leídas de `.ancleto/memory.db` vía `searchMemory`. No se leyó línea por línea
+  cada skill/agent tocado, ni se ejecutaron los content guards (`test/content-guards.test.js`); la
+  aceptación del archive es textual porque no existe un subcomando CLI `archive`. La relevancia
+  semántica de la cita no es verificable mecánicamente (es juicio de review).
 - **`eslint.config.js` en el pack**: aparece vacío por efecto de la compresión. Su contenido se
   verificó leyendo el archivo directamente.
 - **Ejecución de la suite**: no se corrió `npm test` ni `npm run lint` durante la generación. Los
@@ -87,19 +94,19 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` regenerado**: el generador reporta **817 archivos** (aspec 249, docs 21,
-  test 26, etc.) y el archivo quedó regenerado en esta corrida. El pack enumera **807 archivos**
+- **`.discovery-map.json` regenerado**: el generador reporta **820 archivos** (aspec 252, docs 21,
+  test 26, etc.) y el archivo quedó regenerado en esta corrida. El pack enumera **810 archivos**
   (~37.266 tokens) porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y
   `public`; además Repomix filtra por sus propios ignores.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
-- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` registran `ancleto: 0.20.1`
+- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` registran `ancleto: 0.21.0`
   (verificado), alineados con `package.json`. Siguen siendo artefactos derivados gitignored y no se
   usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de
-  `0.20.1` es una verificación puntual del estado local, no una fuente de reglas. El propio `check`
+  `0.21.0` es una verificación puntual del estado local, no una fuente de reglas. El propio `check`
   compara ese campo con la versión del CLI y avisa si difieren.
 - **Publicación de `scripts/`**: `package.json` → `files` lista `agents`, `commands`, `skills`,
   `templates`, `profiles`, `src`; no incluye `scripts/`. El refresco del catálogo y el gate de IDs
@@ -107,15 +114,15 @@ skillVersion: '2.3'
 - **`rg` no disponible** en este entorno (PowerShell 5.1): la evidencia se obtuvo con
   `Select-String` y lecturas directas.
 - **Estado inicial del chequeo**: el CLI regeneró el pack y `.discovery-state.json` antes de esta
-  materialización, por lo que `discovery --check` reportó `READY` con `impact: none` y
-  `seedMapPresent: false` (cosmético: el archivo `seed-map.json` existe y el CLI sólo calcula ese
-  campo en la rama `STALE`). El seed anterior describía 0.20.0; este describe 0.20.1. La
-  regeneración se hizo completa porque la solicitud lo pidió explícitamente y el documento debía
-  reflejar el fix de `import --repair`.
+  materialización. El chequeo previo reportó `STALE` con `impact: minor` y esta lista de documentos
+  afectados: `decisions.md`, `index.md`, `integrations.md`, `inventory.md`, `overview.md`, `setup.md`,
+  `units/_map.md`, `units/cli-install.md`, `units/discovery-engine.md`, `units/memory-engine.md` y
+  `unknowns.md`. Todos se reescribieron a 0.21.0 desde el pack y las fuentes citadas; el estado final
+  lo reporta el `discovery --check` posterior. El seed anterior describía 0.20.1.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.20.1`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.21.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -127,13 +134,15 @@ skillVersion: '2.3'
   `declaredModelIds`, `modelIdsFromCatalog`, `missingModelIdsInCatalog`, gate de `--write`,
   `looksBinaryMissing`, lint sobre `scripts/`, snapshot de 5 proveedores / 211 IDs, flujo de
   `scripts/refresh-model-catalog.mjs`, `installedPaths` como unión, comandos del CLI, firmas de
-  módulos de memoria, workflow.
+  módulos de memoria, workflow, y los dos Requirements de conformidad de `prompt-contracts`
+  (predicado, archive no-op acotado, ruteo y cuatro decisiones promovidas).
 - **Media (inferido)**: comportamiento de hosts no probados, efecto exacto de cada adaptador en
   cada IDE, resultados de la suite y del workflow, ausencia real del 403 en configuraciones
   concretas, materialización/saneamiento de la nota de compresión sin ejecución real, no-escritura
   de `repairProjectMcp` sobre bytes/mtime sin ejecución real, salida exacta
   de `check`/`doctor` en los escenarios multi-host y salida exacta de `export`/`import` host-neutral
-  sin ejecución.
+  sin ejecución; alineación literal de cada skill/agent con la norma de conformidad (se leyó el
+  contrato y el proposal, no el diff completo de cada archivo).
 - **Baja / desconocida**: estado real de la memoria del repo, disponibilidad de modelos en
   proveedores al momento de leer, contenido de `audit logs/` y `documentation/` (fuera de runtime),
   consumo runtime de `copilot-mcp.json`, colisión `.mcp.json` entre `commandcode` y `claude`, y

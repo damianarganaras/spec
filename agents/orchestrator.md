@@ -247,6 +247,10 @@ If that happens, treat the ambiguity as still unresolved and classify the reques
 
 Classify by risk, not just by change size. When a change looks small or local but alters observable behavior, business rules, or touches high-stakes logic (auth, payments, data integrity, security, or shared contracts/types), the risk axis wins: prefer `spec-required` even if the diff is minimal. Size only justifies a direct path when the change is also low-risk.
 
+### Conformity change vs functional change
+
+A change is a **change de conformidad** if and only if (i) its `proposal.md` cites a `spec:<capability>#<requirement>` that resolves against `aspec/specs/<capability>/spec.md`, and (ii) its `specs/` has no `ADDED Requirements`, `MODIFIED Requirements`, `REMOVED Requirements`, or `RENAMED Requirements` block. The mere absence of `specs/` does NOT prove conformity: no delta plus no resolvable citation is an explicit error (`se rechaza`; add the delta or fix the citation), never a silent archive, and the archive reports `sin delta` only when the citation resolves. If the spec is missing or contradicts the expected behavior, classify the change as `spec-required` with a mandatory delta. A functional change without a delta requires a delta (`spec-required`).
+
 ### 1. `spec-required`
 
 Use `@spec-writer` first when the request includes any of the following:
@@ -317,7 +321,7 @@ If scope, risk, or the architecture decision changes after approval, present the
 ### Path A: Spec-Required Changes
 
 1. **Conditional Memory Recall**: Apply the Team Memory Recall rules. Delegate to **`@memory-keeper`** only when one of the documented signals exists; otherwise continue without a memory call.
-2. **Spec Generation**: Delegate to **`@spec-writer`** to generate the change artifacts. If the change originates from a Work Item, ensure its id is recorded in the change — a `Related Work Item: #{id}` line in `proposal.md` — so a later session can match it in the Active Change Check without re-fetching the card.
+2. **Spec Generation**: Delegate to **`@spec-writer`** to generate the change artifacts. If the change originates from a Work Item, ensure its id is recorded in the change — a `Related Work Item: #{id}` line in `proposal.md` — so a later session can match it in the Active Change Check without re-fetching the card. For a **change de conformidad** (its `proposal.md` cites a `spec:<capability>#<requirement>` that resolves), `@spec-writer` produces `proposal.md` carrying that citation and `tasks.md` only when continuity is needed; it does NOT produce `specs/`, and the archive reports `sin delta`.
 3. **🛑 CONTRACT CHECKPOINT**: After `@spec-writer`, STOP and present the contract of the change as defined in `### Contract Checkpoint`, then wait for explicit approval before implementation.
 4. **Implementation**: Delegate to **`@coder`** only - no direct implementation. Include the complete Resolved Context Envelope. The checkpoint names the file set `@coder` may commit: `@coder` commits only those named files, and a checkpoint that names no file set means commit nothing and ask for it.
 5. **Testing**: Delegate to **`@tester`** to create or update unit tests and perform final validation against the approved scope, including a non-writing format check and one lint pass after all edits. Include the complete Resolved Context Envelope, the coder's task-owned files, and its reported risks. `@tester` returns the final union of task-owned files, the deterministic `affected-set` (dependents included), and a **complete and closed Validation Ledger** for the review scope. A format failure in a task-owned file is failed verification and must not be fixed silently by `@tester`.

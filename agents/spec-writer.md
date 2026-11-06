@@ -43,7 +43,7 @@ using the `ancleto-workflow` skill and the conventions of:
 5. Generate the minimum correct set of artifacts for the requested change:
    - `proposal.md`
    - `tasks.md`
-   - `specs/{capability}/spec.md` as needed
+   - `specs/{capability}/spec.md` as needed (functional changes only; a conformity change has no delta)
 6. Before returning, verify every generated spec uses the canonical keywords (`### Requirement:`, `#### Scenario:`, `**WHEN**`/`**THEN**`, `SHALL`); fix any translated heading or keyword in place — never leave a spec with translated keywords.
 7. When the delegation says the context was produced without a technical seed, declare that in the generated artifacts.
 8. Return a brief summary with generated paths, scope, and open questions or risks
@@ -84,7 +84,7 @@ Follow the project conventions from `AGENTS.md`, especially tech stack, naming c
 
 This is an existing codebase. Use the repository context received in the delegation instead of reconstructing the implementation through exploratory reading. Open a specific cited path only when required to confirm a detail.
 
-If a relevant aspec source-of-truth spec already exists, write a delta against it instead of restating the full behavior.
+If a relevant aspec source-of-truth spec already exists, write a delta against it instead of restating the full behavior. This applies only to functional changes. For a change classified as conformity — its `proposal.md` cites a `spec:<capability>#<requirement>` that resolves against `aspec/specs/<capability>/spec.md`, and its `specs/` has no delta — generate `proposal.md` carrying that citation and do NOT generate `specs/`.
 
 ## Decisions Section
 

@@ -1,6 +1,15 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import {
+  readFileSync,
+  readdirSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderMachineEnv } from '../src/core/machine-env.js'
@@ -2187,6 +2196,354 @@ describe('contrato del change: ## Decisiones y checkpoint de contrato (CH-02a)',
         [
           '| Design decision | `proposal.md ## Decisiones` |',
           '| Design decision | `design.md` |'
+        ]
+      ]
+    )
+  })
+})
+
+describe('content guards - conformidad sin delta y archive no-op (T02/T03)', () => {
+  const readFile = (...parts) => readFileSync(join(ROOT, ...parts), 'utf8')
+  const readSkill = (name) => readFile('skills', name, 'SKILL.md')
+  const orchestratorTriage = () => agentSection('orchestrator', '## Triage Rules')
+
+  const CHANGE_NAME = 'p0-pr5-archive-conformity'
+
+  // Resuelve el change desde la ruta activa o desde un unico match en archive/ (solo fs de
+  // lectura: nunca DB ni CLI). Cero o mas de un candidato con proposal.md es error, para que
+  // el guard falle en vez de pasar por un path vacio, y para que siga valido tras el archive.
+  function resolveChangeDir(name, changeRoot = join(ROOT, 'aspec', 'changes')) {
+    const archive = join(changeRoot, 'archive')
+    const candidates = [join(changeRoot, name)]
+    if (existsSync(archive)) {
+      for (const entry of readdirSync(archive, { withFileTypes: true })) {
+        if (entry.isDirectory() && entry.name.endsWith(`-${name}`)) {
+          candidates.push(join(archive, entry.name))
+        }
+      }
+    }
+    const matches = candidates.filter((dir) => existsSync(join(dir, 'proposal.md')))
+    assert.equal(
+      matches.length,
+      1,
+      `el change ${name} debe tener proposal.md en exactamente una ruta (activa o archive); encontradas: ${matches.length}`
+    )
+    return matches[0]
+  }
+
+  // Gap 1: arbol temporal fuera del repo (OS temp dir) para ejercitar el resolver sobre
+  // rutas reales sin tocar `aspec/changes`. Se limpia siempre, incluso si el assert falla.
+  function withTempChangeRoot(fn) {
+    const root = mkdtempSync(join(tmpdir(), 'ancleto-content-guards-'))
+    try {
+      return fn(root)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+
+  const writeProposal = (dir) => {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'proposal.md'), '# proposal\n')
+  }
+
+  const archivedDir = (root) => join(root, 'archive', `2026-11-06-${CHANGE_NAME}`)
+
+  const archiveNoDelta = (text) =>
+    normalize(section(text, '### 2. Assess delta spec sync state', '\n### '))
+
+  const BOUNDED_GUARANTEE =
+    'Change Archive de un change de conformidad: no modifica `aspec/specs/**/*.md`.'
+
+  const PROMPT_CONTRACT_TITLES = [
+    'Clasificación de conformidad frente a cambio funcional',
+    'Archive de un change de conformidad sin delta'
+  ]
+
+  function guardCitationRequirement(text) {
+    assert.match(text, /change de conformidad/i)
+    assert.match(text, /spec:<capability>#<requirement>/)
+    assert.match(text, /no resolvable citation/)
+    assert.match(text, /explicit error/)
+    assert.match(text, /sin delta/)
+  }
+
+  function guardArchiveCitation(text) {
+    assert.match(text, /change de conformidad/i)
+    assert.match(text, /spec:<capability>#<requirement>/)
+    assert.match(text, /must resolve/)
+    assert.match(text, /sin delta/)
+  }
+
+  function guardBoundedGuarantee(text) {
+    assert.ok(text.includes(BOUNDED_GUARANTEE), 'falta la garantía acotada literal')
+    assert.doesNotMatch(text, /no toca `aspec\/specs/, 'la garantía no debe usar "no toca"')
+  }
+
+  function guardExplicitReject(text) {
+    assert.match(text, /se rechaza/i)
+  }
+
+  // La paridad corre sobre los slices de ruteo, nunca sobre el archivo entero: una mencion
+  // en otra seccion no puede hacer pasar el predicado por la razon equivocada.
+  const TRIAGE_ROUTING_SLICES = [
+    '## Classification rules',
+    '## Conformity change',
+    '## Single-question policy',
+    '## Fallback policy',
+    '## Direct path confirmation'
+  ]
+
+  function guardRoutingParity(raw) {
+    const isTriage = raw.includes('\n## Direct path confirmation')
+    const routing = isTriage
+      ? TRIAGE_ROUTING_SLICES.map((heading) => section(raw, heading)).join('\n')
+      : section(raw, '## Triage Rules')
+    const text = normalize(routing)
+
+    for (const category of ['direct-test-only', 'direct-implementation', 'spec-required']) {
+      assert.ok(text.includes(category), `falta la categoría ${category}`)
+    }
+    assert.ok(text.includes('clarification-needed'), 'falta clarification-needed como pre-estado')
+    assert.match(text, /not sufficient|insufficient/i)
+    assert.match(text, /in home/)
+    // Un cambio funcional sin delta no se degrada a archive silencioso: exige un delta.
+    assert.match(text, /A functional change without a delta requires a delta \(`spec-required`\)/)
+
+    // El stop de confirmación pertenece sólo a `direct-implementation`: el requisito de triage
+    // no nombra `direct-test-only`, y Path B conserva su REQUIRED USER CONFIRMATION.
+    if (isTriage) {
+      const confirmation = normalize(section(raw, '## Direct path confirmation', '\n## '))
+      assert.match(confirmation, /silence/)
+      assert.match(confirmation, /delay/)
+      assert.match(confirmation, /Before delegating `direct-implementation`, require an explicit user reply/)
+      assert.doesNotMatch(
+        confirmation.split('`direct-test-only` does not add this confirmation stop')[0],
+        /direct-test-only/,
+        'la confirmación de triage no debe exigirse para direct-test-only'
+      )
+      assert.match(confirmation, /`direct-test-only` does not add this confirmation stop/)
+    } else {
+      const pathB = normalize(section(raw, '### Path B: Direct-Implementation Changes', '\n### '))
+      assert.match(pathB, /silence/)
+      assert.match(pathB, /delay/)
+      assert.match(
+        pathB,
+        /\*\*🛑 REQUIRED USER CONFIRMATION\*\*: Stop, explain why the change was classified as direct/
+      )
+    }
+  }
+
+  function guardWorkflowRouting(text) {
+    assert.doesNotMatch(text, /\|\s*`specs\/` missing\s*\|\s*`ancleto-continue`\s*\|/)
+    assert.match(text, /conformity/i)
+    assert.match(text, /resolv/i)
+    assert.match(text, /no delta|does NOT need a delta/i)
+  }
+
+  // ROUND 2: el contrato sin delta del reviewer exige las dos condiciones. (a) la cita
+  // resuelve contra la spec canonica y (b) el Requirement citado y sus escenarios
+  // describen el comportamiento restaurado. La relevancia (b) no es mecanizable, asi que
+  // su fallo se reporta como CRITICAL: la resolubilidad sola no prueba conformidad.
+  function guardReviewerNoDeltaConformity(text) {
+    const t = normalize(text)
+    assert.match(t, /\(a\) the citation resolves against the canonical spec/)
+    assert.match(
+      t,
+      /\(b\) the cited Requirement and its scenarios describe the behavior the change restores/
+    )
+    assert.match(t, /If \(b\) fails, report the citation as not relevant as a `CRITICAL` finding/)
+  }
+
+  // ROUND 2: el guardrail de verify se ancla al impacto sobre comportamiento — hay delta
+  // O el change cita un Requirement canonico — y no a la presencia desnuda de `specs/`.
+  function guardWorkflowVerifyKeying(text) {
+    const t = normalize(text)
+    assert.match(t, /Never skip `verify` when the change touched specified behavior/)
+    assert.match(t, /a delta is present OR the change cites a canonical Requirement/)
+    assert.doesNotMatch(t, /`specs\/`/)
+  }
+
+  function guardContinueRouting(text) {
+    assert.doesNotMatch(text, /skip only if the change specifies no behavior/)
+    assert.match(text, /conformity/i)
+    assert.match(text, /resolv/i)
+    assert.match(text, /no delta|does NOT need a delta/i)
+  }
+
+  function guardRefsResolve(canonical, proposal) {
+    for (const title of PROMPT_CONTRACT_TITLES) {
+      assert.ok(
+        canonical.split('\n').some((line) => line.trim() === `### Requirement: ${title}`),
+        `la spec canónica no contiene el Requirement: ${title}`
+      )
+      const refsLines = proposal.split('\n').filter((line) => line.includes('**Refs:**'))
+      assert.ok(
+        refsLines.some((line) => line.includes(`spec:prompt-contracts#${title}`)),
+        `el proposal no cita spec:prompt-contracts#${title} en una línea **Refs:**`
+      )
+    }
+  }
+
+  it('T02 · la conformidad exige una cita resoluble cuando no hay delta', () => {
+    assertMutationBreaks(guardCitationRequirement, orchestratorTriage(), [
+      ['no resolvable citation', 'any citation']
+    ])
+    assertMutationBreaks(guardArchiveCitation, archiveNoDelta(readSkill('ancleto-archive')), [
+      ['must resolve', 'is optional']
+    ])
+  })
+
+  it('T02 · la garantía acotada usa "no modifica" y nunca "no toca"', () => {
+    assertMutationBreaks(guardBoundedGuarantee, readSkill('ancleto-archive'), [
+      ['no modifica', 'no toca']
+    ])
+  })
+
+  it('T03 · sin cita resoluble el archive no se permite en silencio', () => {
+    assertMutationBreaks(guardExplicitReject, orchestratorTriage(), [['se rechaza', '']])
+    assertMutationBreaks(guardExplicitReject, archiveNoDelta(readSkill('ancleto-archive')), [
+      ['se rechaza', '']
+    ])
+  })
+
+  it('routing parity · triage y orchestrator comparten categorías y clarificación', () => {
+    const silenceMutation = ['silence', 'waiting', { all: true }]
+    const categoryMutation = ['direct-test-only', 'test-only', { all: true }]
+    const functionalDeltaMutation = [
+      'A functional change without a delta requires a delta (`spec-required`)',
+      'A functional change without a delta needs no delta'
+    ]
+    assertMutationBreaks(guardRoutingParity, readSkill('triage-clarifier'), [
+      ['in home', 'somewhere', { all: true }],
+      silenceMutation,
+      categoryMutation,
+      functionalDeltaMutation,
+      [
+        'Before delegating `direct-implementation`, require',
+        'Before delegating `direct-implementation` or `direct-test-only`, require'
+      ],
+      ['`direct-test-only` does not add this confirmation stop', '']
+    ])
+    assertMutationBreaks(guardRoutingParity, readFile('agents', 'orchestrator.md'), [
+      ['in home', 'somewhere', { all: true }],
+      silenceMutation,
+      categoryMutation,
+      functionalDeltaMutation,
+      ['🛑 REQUIRED USER CONFIRMATION', 'Optional confirmation']
+    ])
+  })
+
+  it('routing parity · workflow y continue distinguen conformidad de cambio funcional', () => {
+    assertMutationBreaks(guardWorkflowRouting, normalize(readSkill('ancleto-workflow')), [
+      [
+        '| `proposal.md` missing | `ancleto-continue` |',
+        '| `proposal.md` missing | `ancleto-continue` |\n| `specs/` missing | `ancleto-continue` |'
+      ]
+    ])
+    assertMutationBreaks(guardContinueRouting, normalize(readSkill('ancleto-continue')), [
+      ['## Steps', '## Steps\nskip only if the change specifies no behavior']
+    ])
+  })
+
+  it('T02 · el change se resuelve en activo o archive y un path incorrecto rompe el guard', () => {
+    const dir = resolveChangeDir(CHANGE_NAME)
+    assert.ok(existsSync(join(dir, 'proposal.md')), 'el proposal debe existir en el directorio resuelto')
+    // Mutacion 1: un nombre inexistente no resuelve (cero matches).
+    assert.throws(() => resolveChangeDir(`${CHANGE_NAME}-inexistente`), /exactamente una ruta/)
+    // Mutacion 2: una raiz incorrecta apunta a un path que no contiene el change.
+    assert.throws(
+      () => resolveChangeDir(CHANGE_NAME, join(ROOT, 'aspec', 'changes', 'archive')),
+      /exactamente una ruta/
+    )
+  })
+
+  it('Gap 1 · el resolver reconoce el sufijo del archive (endsWith, no startsWith)', () => {
+    withTempChangeRoot((root) => {
+      const archived = archivedDir(root)
+      writeProposal(archived)
+
+      const resolved = resolveChangeDir(CHANGE_NAME, root)
+      assert.equal(resolved, archived, 'debe resolver al directorio archivado por su sufijo')
+      // La ruta archivada no empieza con el nombre: probar startsWith habria fallado.
+      assert.ok(resolved.endsWith(`-${CHANGE_NAME}`), 'el match es por sufijo `-<name>`')
+    })
+  })
+
+  it('Gap 1 · un archivo con el sufijo extendido no compite (sigue habiendo un solo match)', () => {
+    withTempChangeRoot((root) => {
+      const archived = archivedDir(root)
+      const extended = `${archived}-extra`
+      writeProposal(archived)
+      writeProposal(extended)
+
+      const resolved = resolveChangeDir(CHANGE_NAME, root)
+      assert.equal(resolved, archived, 'el sufijo extendido `...-extra` no debe matchear')
+    })
+  })
+
+  it('Gap 1 · activo y archive a la vez fallan cerrado (dos matches)', () => {
+    withTempChangeRoot((root) => {
+      writeProposal(join(root, CHANGE_NAME))
+      writeProposal(archivedDir(root))
+
+      assert.throws(() => resolveChangeDir(CHANGE_NAME, root), /exactamente una ruta/)
+    })
+  })
+
+  it('Gap 1 · sin candidatos falla cerrado (cero matches)', () => {
+    withTempChangeRoot((root) => {
+      mkdirSync(join(root, 'archive'), { recursive: true })
+      assert.throws(() => resolveChangeDir(CHANGE_NAME, root), /exactamente una ruta/)
+    })
+  })
+
+  it('ROUND 2 · el reviewer exige resolubilidad Y relevancia del Requirement citado', () => {
+    assertMutationBreaks(
+      guardReviewerNoDeltaConformity,
+      agentSection('reviewer', '### 1. aspec Change', '\n### '),
+      [
+        [
+          'the cited Requirement and its scenarios describe the behavior the change restores',
+          'the citation exists'
+        ],
+        [
+          'If (b) fails, report the citation as not relevant as a `CRITICAL` finding',
+          'If (b) fails, report the citation as not relevant as a `SUGGESTION` finding'
+        ]
+      ]
+    )
+  })
+
+  it('ROUND 2 · el guardrail de verify se ancla al impacto de comportamiento, no a specs/', () => {
+    assertMutationBreaks(
+      guardWorkflowVerifyKeying,
+      normalize(section(readSkill('ancleto-workflow'), '## Guardrails')),
+      [
+        [
+          'a delta is present OR the change cites a canonical Requirement',
+          '`specs/` is present'
+        ]
+      ]
+    )
+  })
+
+  it('T02 · los refs de promoción resuelven contra la spec canónica (read-only)', () => {
+    const canonical = readFile('aspec', 'specs', 'prompt-contracts', 'spec.md')
+    const proposal = readFileSync(join(resolveChangeDir(CHANGE_NAME), 'proposal.md'), 'utf8')
+    assertMutationBreaks(
+      (text) => guardRefsResolve(text, proposal),
+      canonical,
+      [[`### Requirement: ${PROMPT_CONTRACT_TITLES[0]}`, '### Requirement: Otro título']]
+    )
+    assertMutationBreaks(
+      (text) => guardRefsResolve(canonical, text),
+      proposal,
+      [
+        [
+          `spec:prompt-contracts#${PROMPT_CONTRACT_TITLES[0]}`,
+          'spec:prompt-contracts#Otro título',
+          { all: true }
         ]
       ]
     )

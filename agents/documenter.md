@@ -109,9 +109,9 @@ Do not treat archive as a blind file move.
    - `proposal.md`
    - `tasks.md`
    - `specs/` when the change includes delta specs
-3. Determine whether the change includes spec deltas that must be reflected in `aspec/specs/`
-4. When deltas exist, run `ancleto specs check --change {change-name} --json` before merging. If a delta spec or its target source-of-truth spec is non-canonical (translated keywords), stop and report it instead of merging into it
-5. If needed, update the relevant source-of-truth specs so they reflect the completed change
+3. Determine whether the change includes spec deltas that must be reflected in `aspec/specs/`. The absence of `specs/` is not a defect: a change with no delta is a conformity change only when the `spec:<capability>#<requirement>` cited in `proposal.md` resolves (the capability directory `aspec/specs/<capability>/` exists and the exact `Requirement:` title exists in `aspec/specs/<capability>/spec.md`)
+4. Run `ancleto specs check --change {change-name} --json` only when deltas exist, before merging. If a delta spec or its target source-of-truth spec is non-canonical (translated keywords), stop and report it instead of merging into it
+5. If needed, update the relevant source-of-truth specs so they reflect the completed change. For a conformity change, report `sin delta` naming the cited `spec:<capability>#<requirement>` and write nothing under `aspec/specs/**`
 6. If the change is not ready for archive, stop and report the inconsistency clearly
 7. If the change is ready, archive it by **moving** the folder to `aspec/changes/archive/{YYYY-MM-DD}-{change-name}/`. The archive is a move, not a deletion: the change folder survives inside the archive and no copy of it remains at `aspec/changes/{change-name}/`
 8. After the move, confirm the change folder no longer sits at `aspec/changes/{change-name}/` and that the archived copy is complete; if any file or folder of the change is left outside the archive path, report it as residue instead of leaving silent residue
@@ -150,6 +150,7 @@ After completing the finalization step, return a short structured summary includ
 - archived change name (`Change Archive` mode)
 - archive path (`Change Archive` mode)
 - source-of-truth specs updated or confirmed, each with the `file:line` of the touched requirement
+- for a conformity change, `sin delta` naming the cited `spec:<capability>#<requirement>`, with no write under `aspec/specs/**`
 - the specific spec file updated and the behavior it now reflects (`Standalone Source-of-Truth Update` mode)
 - artifacts preserved (`Change Archive` mode)
 - whether the change folder was moved into the archive and no copy remains at `aspec/changes/{change-name}/` (`Change Archive` mode)

@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-06T12:16:49Z
-pluginVersion: 0.20.1
+generatedAt: 2026-11-06T14:20:00Z
+pluginVersion: 0.21.0
 skillVersion: '2.3'
 ---
 
@@ -25,11 +25,12 @@ skillVersion: '2.3'
   detección de entorno, en `src/core/machine-env.js`; el render del working-context, en
   `src/core/memory/working-context.js`; la decisión de la nota de compresión, en
   `src/cli/index.js` → `resolvesHostCompression`; la superficie local de agentes y el oráculo de
-  tier, en `src/cli/index.js` → `localAgentDirs`/`checkTierOrphan`.
+  tier, en `src/cli/index.js` → `localAgentDirs`/`checkTierOrphan`; la norma de ruteo del triage, en
+  `agents/orchestrator.md` (0.21.0).
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.20.1)
+## Modelos y tiers (estado 0.21.0)
 
 ### Tabla y cadenas
 
@@ -97,6 +98,8 @@ skillVersion: '2.3'
   red ni ejecuta procesos.
 - El guard estructural `test/agent-model-coherence.test.js` + `test/model-catalog.test.js` detecta
   IDs de `TIERS`, `TIER_CHAINS`, `agents/*.md` o `profiles/*/agents/*.md` ausentes del snapshot.
+- **0.21.0 no modifica** el catálogo ni sus consumidores: los cambios de la versión viven en
+  contratos de prompt, `agents/` y `skills/`.
 
 ### Integridad de IDs declarados (0.18.12, consolidada en 0.18.13)
 
@@ -567,6 +570,111 @@ Change archivado: `aspec/changes/archive/2026-11-06-fix-repair-mcp-noop/` (propo
   adición de nombres intencionados y normalización de raíz no-objeto. Un `.jsonc` con comentarios
   sigue sin parsear (`jsonc-comments-not-supported`).
 
+## Conformidad sin delta (0.21.0)
+
+Change archivado: `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` (proposal, tasks y
+delta de `prompt-contracts`). La versión **no modifica `src/`**: el contrato vive en
+`aspec/specs/prompt-contracts/spec.md`, `agents/*.md` y `skills/*`; la aceptación es textual
+(skills/agents + content guards), porque no existe un subcomando CLI `archive`.
+
+### Discriminador conformidad vs cambio funcional
+
+- Un change es **de conformidad** si y sólo si: (i) su `proposal.md` cita un
+  `spec:<capability>#<requirement>` que resuelve contra `aspec/specs/<capability>/spec.md`
+  (capability y título exacto del Requirement existen), **y** (ii) su `specs/` no contiene bloques
+  `ADDED/MODIFIED/REMOVED/RENAMED Requirements`.
+- La **ausencia de `specs/` por sí sola no prueba conformidad**: sin delta y sin cita resoluble el
+  change no es de conformidad; se agrega el delta o se agrega/corrige la cita y la situación se
+  reporta como error explícito, nunca como archive silencioso.
+- Si la spec vigente falta o contradice el comportamiento esperado, el delta es obligatorio
+  (`spec-required`); el change no se presenta como conformidad.
+- El camino de conformidad también es alcanzable abriendo un change formal con `proposal.md` breve y
+  sin `specs/`.
+
+### Archive de conformidad (no-op sobre specs)
+
+- Al archivar un change de conformidad, el archive informa explícitamente **"sin delta"** nombrando
+  el `spec:<capability>#<requirement>` citado, y completa normalmente el move del directorio y la
+  promoción de decisiones aprobadas.
+- Antes de archivar, la cita se valida **fail-closed**: una cita que no resuelve se rechaza con
+  reporte explícito y no se escribe en `aspec/specs/**/*.md`.
+- La resolubilidad **no es suficiente**: la cita debe ser además **relevante** —el Requirement y sus
+  escenarios deben describir el comportamiento que el change restaura—. La relevancia es un juicio
+  semántico; la compuerta mecánica sólo prueba resolubilidad y ausencia de bloques delta.
+  `@reviewer` reporta la falta de relevancia como hallazgo `CRITICAL`.
+- La garantía se enuncia acotada exactamente así: **"Change Archive de un change de conformidad: no
+  modifica `aspec/specs/**/*.md`."** Se usa "no modifica", nunca "no toca", y quedan fuera de la
+  garantía `ancleto-sync-specs`, `@documenter` en Standalone Source-of-Truth Update,
+  `ancleto-bulk-archive`, la rama "Sync now" con delta, "Archive without syncing", el move a
+  `aspec/changes/archive/`, el commit de archive de `@coder`, la promoción a `.ancleto/memory.db`/
+  `working-context`, el chequeo de frescura del seed y todas las lecturas (`ancleto specs check`,
+  resolución fail-closed de `spec:`).
+- El archive **no agrega un segundo gate de verificación**: reusa el ledger cerrado del orquestador
+  y no contradice "Don't block archiving on warnings".
+
+### Ruteo alineado
+
+- `agents/orchestrator.md` es el **dueño único de la norma de ruteo**; `skills/triage-clarifier`
+  la implementa y coincide literalmente en categorías (`direct-test-only`,
+  `direct-implementation`, `spec-required`; `clarification-needed` sólo como pre-estado), regla de
+  una sola pregunta, "ambigüedad persistente ⇒ `spec-required`" con aviso explícito, clarificación
+  insuficiente (sólo ubicación/ownership/superficie), confirmación explícita del camino directo y la
+  cláusula de conformidad.
+- `skills/ancleto-workflow` y `skills/ancleto-continue` dejan de tratar la ausencia de `specs/` como
+  artifact faltante por sí sola: distinguen conformidad con cita resoluble (no crear delta) de
+  cambio funcional sin delta (crear delta).
+- `@spec-writer` no genera `specs/` para conformidad (sí `proposal.md` con la cita); `@documenter`
+  condiciona `specs check` y el merge a la existencia de deltas; `@coder`, `@tester` y `@reviewer`
+  contemplan el change sin delta (el reviewer verifica cita resoluble y que el diff no toque
+  `aspec/specs/`).
+- Los mirrors `.opencode/**` no se editan a mano: se regeneran con `ancleto upgrade`.
+
+### Decisiones promovidas (memoria del repo)
+
+- **`archive-conformity-discriminator`** — “un change es de conformidad si y sólo si (i) su
+  `proposal.md` cita un `spec:<capability>#<requirement>` que resuelve ... y (ii) su `specs/` no
+  contiene bloques `ADDED/MODIFIED/REMOVED/RENAMED Requirements`. La ausencia de `specs/` por sí
+  sola no prueba conformidad: sin delta y sin cita resoluble es un error explícito, nunca un archive
+  silencioso; si la spec falta o contradice, el delta es obligatorio.” **Justificación:** el
+  predicado mecánico prueba resolubilidad y ausencia de delta; la relevancia semántica es juicio de
+  review. Descartado: exigir siempre un delta aun con spec inequívoca (evita reescribir requisitos
+  sin cambio de contrato). Refs: `spec:prompt-contracts#Clasificación de conformidad frente a cambio
+  funcional`, `change:p0-pr5-archive-conformity`.
+- **`archive-noop-does-not-write-canonical-specs`** — “Change Archive de un change de conformidad:
+  no modifica `aspec/specs/**/*.md`”, usando "no modifica" y nunca "no toca", con la lista explícita
+  de exclusiones (otros escritores, move, commit, promoción, frescura y lecturas). **Justificación:**
+  "no toca" incluiría lecturas y, sin exclusiones, la garantía sería falsa en cuanto el mismo estado
+  pasara por `ancleto-sync-specs`, `@documenter` o `ancleto-bulk-archive`. Refs:
+  `spec:prompt-contracts#Archive de un change de conformidad sin delta`,
+  `change:p0-pr5-archive-conformity`.
+- **`conformity-verification-reuses-closed-ledger`** — la mitad "sin verificación" del guard reusa
+  el contrato vigente: el ledger cerrado sigue siendo responsabilidad del orquestador y
+  `skills/ancleto-archive/SKILL.md` no agrega un gate propio. **Justificación:** un gate duplicado
+  contradice "Don't block archiving on warnings" y crea dos fuentes de verdad para el mismo
+  predicado. Refs: `spec:prompt-contracts#Archive de un change de conformidad sin delta`,
+  `change:p0-pr5-archive-conformity`.
+- **`triage-routing-single-contract`** — `agents/orchestrator.md` es dueño de la norma y
+  `skills/triage-clarifier/SKILL.md` la implementa con vocabulario literal; `ancleto-workflow` y
+  `ancleto-continue` distinguen conformidad con cita resoluble de cambio funcional sin delta.
+  **Justificación:** una sola norma evita que las superficies deriven; antes ambas skills convertían
+  un change de conformidad en la creación de un delta. Refs:
+  `spec:prompt-contracts#Clasificación de conformidad frente a cambio funcional`,
+  `change:p0-pr5-archive-conformity`.
+
+### Riesgos aceptados
+
+- **Aceptación no ejecutable**: no hay subcomando `archive`; los guards fijan los predicados de texto
+  y cada invariante se prueba con mutación (`assertMutationBreaks`). No se declara un test ejecutable
+  de archive.
+- **Relevancia semántica**: la resolubilidad mecánica de la cita no prueba que el Requirement
+  describa el comportamiento; queda como juicio de review (`CRITICAL` si falta).
+- **Garantía acotada**: no cubre a los demás escritores del mismo estado ni las lecturas; enunciarla
+  globalmente sería falso.
+- **Divergencia de mirrors**: editar sólo `agents/`/`skills/` y regenerar con `ancleto upgrade`; no
+  tocar `.opencode/**` a mano.
+- **MEM-01 fuera de alcance**: el runbook de curaduría sobre `.ancleto/memory.db` no se ejecuta en
+  este change (requiere OK explícito).
+
 ## Superficies del `model:` (nota operativa)
 
 `AGENTS.md` describe tres superficies: `agents/*.md` (canónica publicada), `.opencode/agents/*.md`
@@ -593,6 +701,10 @@ sin `--tier` es `normal`.
 - **Ops read-only por defecto**: `memory doctor`, `memory curate`, `memory list` y
   `memory consolidate` (sin `--apply`) no migran ni escriben. `snapshot` usa conexión read-only y
   `VACUUM INTO`, con reemplazo seguro en Windows.
+- **0.21.0**: el archive de conformidad promovió cuatro decisiones a `.ancleto/memory.db`
+  (`archive-conformity-discriminator`, `archive-noop-does-not-write-canonical-specs`,
+  `conformity-verification-reuses-closed-ledger`, `triage-routing-single-contract`); el motor no
+  cambió.
 
 ## Discovery y seed
 
@@ -606,8 +718,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 807 archivos enumerados, ~37.266 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 817 archivos (aspec 249, docs 21, test 26, etc.).
+- **Pack actual**: tier `minimo`, 810 archivos enumerados, ~37.266 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 820 archivos (aspec 252, docs 21, test 26, etc.).
 
 ## Lint y publicación
 
@@ -665,12 +777,14 @@ sin `--tier` es `normal`.
   hosts instalados (no la config global ni hosts sin destino) y reporta como roto cualquier binario
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
-- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.20.1` en este
+- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.21.0` en este
   checkout; siguen siendo derivados gitignored. Si se regeneran con otra versión, el seed no cambia
   porque no los usa como fuente.
 - **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
   `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue
   reemplazándose porque no se agregó parseo tolerante.
+- **Conformidad 0.21.0**: la compuerta mecánica no prueba relevancia semántica ni cubre un archive
+  ejecutable; la aceptación depende de contratos de texto y content guards. `MEM-01` queda fuera.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene
   documentación del framework y el seed.
 

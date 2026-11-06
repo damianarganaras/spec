@@ -9,6 +9,8 @@ description: Clarification-needed triage helper. Use when the request sits betwe
 
 Reduce triage ambiguity; don't replace the orchestrator or start a spec workflow.
 
+`agents/orchestrator.md` owns the routing norm; this skill implements it and must stay literally consistent with it.
+
 ## Use only when
 
 - the request isn't clearly `direct-implementation`, `direct-test-only`, or `spec-required`
@@ -48,11 +50,17 @@ Evaluate silently before asking:
 
 ## Classification rules
 
+Vocabulary: `direct-test-only`, `direct-implementation`, `spec-required` are the only final categories; `clarification-needed` is only a pre-state before one of them is chosen.
+
 Classify without asking whenever possible:
 
 - choose `direct-test-only` when the request is limited to tests for existing behavior
 - choose `direct-implementation` when the change is small, local, and its expected result is clear
 - choose `spec-required` when the request affects visible behavior, business rules, shared contracts, architecture, or is already broad
+
+## Conformity change
+
+A change is a **change de conformidad** if and only if (i) its `proposal.md` cites a `spec:<capability>#<requirement>` that resolves against `aspec/specs/<capability>/spec.md`, and (ii) its `specs/` has no `ADDED Requirements`, `MODIFIED Requirements`, `REMOVED Requirements`, or `RENAMED Requirements` block. The mere absence of `specs/` does NOT prove conformity: no delta plus no resolvable citation is an explicit error (`se rechaza`; add the delta or fix the citation), never a silent archive. If the spec is missing or contradicts the expected behavior, classify the change as `spec-required` with a mandatory delta. A functional change without a delta requires a delta (`spec-required`).
 
 ## Single-question policy
 
@@ -69,11 +77,21 @@ Do not ask multi-part questions.
 Do not ask for implementation details unless required to classify safely.
 Do not start an interview.
 
+Before asking, explicitly warn the user that if ambiguity persists after the answer, the request will be treated as `spec-required` to avoid assuming behavior or scope.
+
 ## Fallback policy
 
 If one clarification still leaves meaningful ambiguity or risk, favor `spec-required`.
 
+An answer **is not sufficient** when it only narrows location, ownership, or surface area without clarifying expected behavior, intended outcome, or scope. Examples: `in home`, `in this layout`, `in the header`. Insufficient clarification means the ambiguity is unresolved and the request becomes `spec-required`.
+
 When in doubt, prefer the safer classification over an under-scoped direct path.
+
+## Direct path confirmation
+
+The direct path is never implied by silence, delay, or lack of objection. Before delegating `direct-implementation`, require an explicit user reply that confirms the direct path; otherwise classify as `spec-required`.
+
+`direct-test-only` does not add this confirmation stop; it remains subject to the escalation rule.
 
 ## Expected outcome
 
@@ -85,6 +103,8 @@ After applying this skill, the orchestrator should do exactly one of:
 4. ask one concise clarification question
 
 If option 4 happened and the answer still leaves the main ambiguity, classify as `spec-required`.
+
+`clarification-needed` is a pre-state, never a final outcome: it always resolves into `direct-test-only`, `direct-implementation`, or `spec-required`.
 
 ## What not to do
 

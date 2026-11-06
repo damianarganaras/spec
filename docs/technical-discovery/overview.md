@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-06T12:16:49Z
-pluginVersion: 0.20.1
+generatedAt: 2026-11-06T14:20:00Z
+pluginVersion: 0.21.0
 skillVersion: '2.3'
 ---
 
@@ -16,7 +16,9 @@ usuario (`opencode`, Claude, VS Code, Antigravity, Cursor, Roo, Copilot, Command
 funciones (`PRODUCT.md`, `README.md`):
 
 1. **Especificar**: ciclo de changes con artifacts `proposal`/`design`/`tasks`/`specs` y comandos
-   `/cleto-*`.
+   `/cleto-*`. Desde 0.21.0 distingue un **change de conformidad** —cita un
+   `spec:<capability>#<requirement>` existente y no lleva delta— de un cambio funcional, que exige
+   delta (`spec-required`).
 2. **Descubrir**: mapa topológico del repo y empaquetado de contexto con Repomix, con presupuesto
    por tier.
 3. **Recordar**: memoria persistente local de reglas y decisiones en `.ancleto/memory.db`
@@ -42,9 +44,9 @@ src/core/
   adapters/frontmatter.js  adaptación pura de frontmatter por host (+ frontmatterValue)
   memory/               motor, DB, tools, MCP, doctor, curaduría, snapshot, working-context
 scripts/refresh-model-catalog.mjs  descubrimiento dev-only del catálogo (manual)
-agents/ commands/ skills/ templates/ profiles/  assets instalables
-aspec/                  config + specs + changes (incluye archive)
-test/                   suite node --test
+agents/ commands/ skills/ templates/ profiles/  assets instalables (incl. contrato de conformidad)
+aspec/                  config + specs + changes (incluye archive y backlog)
+test/                   suite node --test (content guards incluidos)
 ```
 
 - **Sin framework**: la UI de terminal y los parsers (frontmatter, refs, imports) son propios.
@@ -56,6 +58,10 @@ test/                   suite node --test
 - **Descriptor MCP único**: `src/cli/index.js` → `HOST_MCP_TARGETS` declara archivo y esquema por
   host; `setupHostMcp`, `resolveHostMcpDestination` y `readHostMcpIntent` son los únicos caminos de
   escritura y lectura de esa intención. Ningún comando repite literales de destino por host.
+- **Contrato de conformidad sin código**: desde 0.21.0 la norma de triage vive en
+  `agents/orchestrator.md` y la implementan `skills/triage-clarifier`, `skills/ancleto-workflow` y
+  `skills/ancleto-continue`; `src/cli/index.js` no agrega un subcomando `archive` ni cambia su
+  comportamiento (sólo rutea `specs` a `specsCheckCommand`).
 - **Estado local por proyecto**: `.ancletorc` (manifiesto), `.opencode/.ancleto-tier` (tier
   aplicado), el layout nativo de assets por host (`.opencode`, `.claude`, `.agents`,
   `.commandcode`, `.github`, `.cursor`, `.roo`), `.ancleto/memory.db` y
@@ -74,6 +80,7 @@ test/                   suite node --test
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
+| Conformidad SDD | Discriminador conformidad-vs-delta y archive sin delta | `agents/orchestrator.md`, `skills/triage-clarifier`, `skills/ancleto-workflow`, `skills/ancleto-continue`, `aspec/specs/prompt-contracts/spec.md` |
 | Entorno de máquina | Shell, EOL y tooling del clon | `src/core/machine-env.js` |
 | Assets | 10 agentes, 16 commands, 21 skills, templates y perfiles | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` |
 
@@ -139,6 +146,14 @@ test/                   suite node --test
     destino sano conserva bytes y mtime; un destino inexistente sin entradas que reparar no se crea.
     La garantía se acota a `import`/`import --repair`; `install`/`init` y `upgrade` siguen
     reescribiendo el mismo destino.
+14. **Conformidad sin delta (0.21.0)**: un change sin `specs/` se clasifica como conformidad sólo si
+    su `proposal.md` cita un `spec:<capability>#<requirement>` que resuelve contra
+    `aspec/specs/<capability>/spec.md` y no hay bloques `ADDED/MODIFIED/REMOVED/RENAMED`. En ese
+    caso no se crea delta; el archive informa "sin delta" nombrando el Requirement, valida la cita
+    fail-closed, completa move y promoción, y no modifica `aspec/specs/**/*.md`. Sin cita resoluble
+    el archive se rechaza; si la spec falta o contradice, el change es funcional (`spec-required`).
+    `agents/orchestrator.md` es dueño de la norma y las skills de triage/workflow/continue la
+    implementan; no hay subcomando CLI `archive`.
 
 ## Recorrido de una instalación con tier `minimo`
 

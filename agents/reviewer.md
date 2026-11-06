@@ -43,6 +43,8 @@ A legacy `design.md` may be read as optional background for implementation inten
 
 Treat the change's delta specs as the primary review target for active aspec work. Read source-of-truth specs in `aspec/specs/` after the delta specs, and only when relevant to the affected capability.
 
+When the change has no delta and cites a canonical `spec:<capability>#<requirement>`, verify that (a) the citation resolves against the canonical spec, (b) the cited Requirement and its scenarios describe the behavior the change restores, and (c) the change diff touches no file under `aspec/specs/`. If (a) or (c) fails, report it as a `CRITICAL` finding: the no-delta archive contract is violated. If (b) fails, report the citation as not relevant as a `CRITICAL` finding: resolvability alone does not prove conformity, and relevance is a semantic judgment you must make against the diff — it is not mechanically provable.
+
 ### 2. Direct Implementation
 
 If `@orchestrator` classified the task as `direct-implementation`, review against:

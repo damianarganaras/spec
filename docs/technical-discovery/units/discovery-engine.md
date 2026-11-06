@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-generatedAt: 2026-11-06T17:27:00Z
-pluginVersion: 0.22.0
+generatedAt: 2026-11-06T20:07:32Z
+pluginVersion: 0.22.1
 skillVersion: '2.3'
 ---
 
@@ -19,9 +19,10 @@ fresco y calcular qué archivos dependen de un cambio. El catálogo de modelos s
 forma completa y auditable desde una máquina de mantenimiento, sin introducir descubrimiento en
 runtime: se enumeran todos los proveedores, se fuerza `--refresh`, se clasifica la corrida, se
 calcula el diff, se valida que todo ID declarado sobreviva y se escribe de forma atómica. En 0.19.0,
-0.20.0, 0.20.1, 0.21.0 y 0.22.0 esta unidad no cambió: esos cambios tocaron el ruteo MCP, la
+0.20.0, 0.20.1, 0.21.0, 0.22.0 y 0.22.1 esta unidad no cambió: esos cambios tocaron el ruteo MCP, la
 portabilidad, el predicado de escritura de `repairProjectMcp`, los contratos de conformidad en
-`agents/`/`skills/` y el merge de specs, sin tocar topología, empaquetado, affected-set ni catálogo.
+`agents/`/`skills/`, el merge de specs y el orden del archive, sin tocar topología, empaquetado,
+affected-set ni catálogo.
 
 ## Recorrido relevante
 
@@ -77,7 +78,7 @@ que el pack no trae Markdown.
 `src/core/model-catalog.json` guarda `generated_at: 2026-11-04`, `source.method`
 (`opencode models <provider> --verbose --refresh`), `source.providers` y los IDs con costo y
 límites: **5 proveedores / 211 IDs** — `opencode` 10, `opencode-go` 30, `anthropic` 20,
-`commandcode` 71, `openai` 80. Sin cambios en 0.19.0, 0.20.0, 0.20.1 ni 0.21.0.
+`commandcode` 71, `openai` 80. Sin cambios en 0.19.0–0.22.1.
 
 `src/core/model-catalog.js` es el dueño único de los helpers puros:
 
@@ -174,8 +175,8 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 816 fuentes y ~37.901 tokens, tier `minimo` (comprimido), con 29 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 826 archivos (aspec 256, src 19,
+- **Pack actual**: 822 fuentes y ~38.087 tokens, tier `minimo` (comprimido), con 29 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 832 archivos (aspec 262, src 19,
   test 27, docs 21). El estado quedó en `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
   runtime/CI" y la separación `model-catalog.js` (puro) / `scripts/` (procesos).

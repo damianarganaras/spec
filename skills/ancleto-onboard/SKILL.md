@@ -87,8 +87,10 @@ Demo explore mode: read involved files, sketch diagrams. **PAUSE** for acknowled
 
 ## Phase 9: Archive
 
-**EXPLAIN:** archiving moves the change to `aspec/changes/archive/YYYY-MM-DD-<name>/`, preserving the decision record.
-**DO:** create `aspec/changes/archive/` if missing, move it, show the location.
+**EXPLAIN:** archiving runs through the `ancleto-archive` gate: it merges/syncs the delta specs, preflights the approved `## Decisiones` batch read-only, promotes the approved decisions to persistent memory, and only then moves the change to `aspec/changes/archive/YYYY-MM-DD-<name>/`, preserving the decision record.
+**DO:** follow the `ancleto-archive` gate in order: merge/sync specs → read-only preflight of the approved `## Decisiones` batch → promote approved decisions → move (phase B) → summary. Never move the change directly.
+
+A preflight or promotion failure means the change is not moved: report `no archivado; memoria pendiente` (English `not archived; memory pending`) with the `memory_key` and a retry instruction. A move failure after promotion reports `memoria promovida; NO archivado` (English `memory promoted; NOT archived`) with a retry instruction.
 
 ## Phase 10: Recap
 

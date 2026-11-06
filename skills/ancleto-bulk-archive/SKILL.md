@@ -76,23 +76,17 @@ Ask once (runtime question tool when available): "Archive N changes?" — "Archi
 
 ### 8. Execute archive
 
-Process in the determined order:
+Process in the determined order, applying the same per-change ordering (sync → preflight → promotion → move):
 
-a. **Preflight promotions** before touching the change: apply the promotion gate to the blocks under `## Decisiones` of its `proposal.md` (shape defined in `agents/spec-writer.md`; reference it, do not restate it here). A block without its own `memory_key` and `Estado: aprobado` is not a candidate, and only `decision` is promoted (never a `rule`). Any key/refs/`Estado` violation, a session candidate (transcript, task state, session summary), or two blocks sharing a `memory_key` with different content or refs, rejects that change's batch: record it as failed with a per-block report of its location, do not sync its specs, do not move it, and continue with the rest of the batch.
-b. **Sync specs** if delta specs exist and the resolution says so: apply the delta to `aspec/specs/<capability>/spec.md` (ADDED adds; MODIFIED updates preserving unmentioned scenarios; REMOVED deletes; RENAMED renames via `FROM:`/`TO:`). Track sync.
-c. **Archive**: create `aspec/changes/archive/` if missing, move to `aspec/changes/archive/YYYY-MM-DD-<name>/` without modifying the directory. If the target exists, fail that change (record the error) but continue.
-d. **Track outcomes**: success, failed (with error), skipped.
-
-### 9. Promote approved decisions per change
-
-Apply the archive promotion gate to each change archived in phase 8:
-
-1. With valid candidates, delegate `@memory-keeper` once in Promotion mode for that change. It writes one `recordDecision` per approved block with `content` of 1–3 sentences plus the `refs:` block.
-2. If a write fails after the move, report that change as **archived, memory pending** with the `memory_key` and the reason; this is the only post-move failure mode. Never report it as memorized.
+a. **Sync specs** if delta specs exist and the resolution says so: apply the delta to `aspec/specs/<capability>/spec.md` (ADDED adds; MODIFIED updates preserving unmentioned scenarios; REMOVED deletes; RENAMED renames via `FROM:`/`TO:`). Track sync.
+b. **Preflight promotions** before touching the change: apply the promotion gate to the blocks under `## Decisiones` of its `proposal.md` (shape defined in `agents/spec-writer.md`; reference it, do not restate it here). A block without its own `memory_key` and `Estado: aprobado` is not a candidate, and only `decision` is promoted (never a `rule`). Any key/refs/`Estado` violation, a session candidate (transcript, task state, session summary), or two blocks sharing a `memory_key` with different content or refs, rejects that change's batch: record it as failed with a per-block report of its location and report it as **no archivado; memoria pendiente**, naming the `memory_key` and the reason with a retry instruction; do not move it and continue with the rest of the batch.
+c. **Promote approved decisions** before moving the change, so every `path:` ref is still resolvable. With valid candidates, delegate `@memory-keeper` once in Promotion mode for that change; it writes one `recordDecision` per approved block with `content` of 1–3 sentences plus the `refs:` block. If the promotion fails, record that change as failed, do not move it, and report **no archivado; memoria pendiente** with the `memory_key`, the reason and a retry instruction; continue with the rest of the batch.
+d. **Archive**: create `aspec/changes/archive/` if missing, move to `aspec/changes/archive/YYYY-MM-DD-<name>/` without modifying the directory. If the target exists, fail that change (record the error) but continue. If the move fails after a successful promotion, report that change as **memoria promovida; NO archivado** with a retry instruction.
+e. **Track outcomes**: success, failed (with error), skipped.
 
 **Aggregation:** if no selected change has candidates, the batch makes **zero `@memory-keeper` delegations**. Per-change pending memory does not block the rest of the batch.
 
-### 10. Display summary
+### 9. Display summary
 
 ```
 ## Bulk Archive Complete
@@ -101,7 +95,8 @@ Archived N changes: <change-1> -> archive/YYYY-MM-DD-<change-1>/
 Skipped M: <change-2> (incomplete; user declined)
 Spec sync: N delta specs synced, M conflicts resolved
 **Memories promoted:** <list, or "None">
-**Memory pending:** <change -> memory_key — reason, or "None">
+**Not archived; memory pending:** <change -> memory_key — reason, or "None">
+**Memory promoted; not archived:** <change -> memory_key — reason, or "None">
 ```
 
 ## Guardrails

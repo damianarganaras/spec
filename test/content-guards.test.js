@@ -2549,3 +2549,266 @@ describe('content guards - conformidad sin delta y archive no-op (T02/T03)', () 
     )
   })
 })
+
+describe('content guards - orden del archive (promocion antes del move)', () => {
+  const readSkill = (name) => readFileSync(join(ROOT, 'skills', name, 'SKILL.md'), 'utf8')
+
+  // Marcadores textuales estables de cada paso. Se comparan índices, nunca números de línea.
+  const CASES = [
+    {
+      skill: 'ancleto-archive',
+      promotion: '### 5. Promote approved decisions',
+      move: '### 6. Perform the archive'
+    },
+    {
+      skill: 'ancleto-bulk-archive',
+      promotion: 'c. **Promote approved decisions**',
+      move: 'd. **Archive**'
+    }
+  ]
+
+  function guardPromotionBeforeMove(text, promotion, move) {
+    const promotionIndex = text.indexOf(promotion)
+    const moveIndex = text.indexOf(move)
+    assert.ok(promotionIndex >= 0, `falta el paso de promoción: ${promotion}`)
+    assert.ok(moveIndex >= 0, `falta el paso de move: ${move}`)
+    assert.ok(promotionIndex < moveIndex, 'la promoción de decisiones debe preceder al move')
+  }
+
+  for (const { skill, promotion, move } of CASES) {
+    it(`${skill} promueve las decisiones aprobadas antes de mover el change`, () => {
+      const text = readSkill(skill)
+      guardPromotionBeforeMove(text, promotion, move)
+
+      // Mutación: intercambia ambos pasos; el orden invertido debe romper el guard.
+      const swapped = text
+        .replace(promotion, '\u0000PROMOTION\u0000')
+        .replace(move, promotion)
+        .replace('\u0000PROMOTION\u0000', move)
+      assert.throws(
+        () => guardPromotionBeforeMove(swapped, promotion, move),
+        'el guard debe fallar cuando el move precede a la promoción'
+      )
+    })
+  }
+
+  // Phase 9 debe rutear por el gate de archive (merge/sync -> preflight -> promocion ->
+  // move -> summary) y nunca mover el change directamente. La mutacion que sustituye la
+  // secuencia por un move directo debe romper el guard.
+  const onboardPhase9 = (text) => normalize(section(text, '## Phase 9: Archive', '\n## '))
+
+  function guardOnboardArchiveGate(text) {
+    const t = onboardPhase9(text)
+    assert.match(t, /`ancleto-archive`/, 'Phase 9 debe rutear por el gate de archive')
+    const sequence = ['merge/sync specs', 'read-only preflight', 'promote approved decisions', 'move (phase B)', 'summary']
+    const indexes = sequence.map((step) => {
+      const index = t.indexOf(step)
+      assert.ok(index >= 0, `Phase 9 debe declarar el paso del gate: ${step}`)
+      return index
+    })
+    for (let i = 1; i < indexes.length; i++) {
+      assert.ok(indexes[i - 1] < indexes[i], 'Phase 9 debe respetar el orden merge → preflight → promoción → move → summary')
+    }
+    const promote = t.indexOf('promote')
+    const move = t.indexOf('move')
+    assert.ok(promote >= 0 && move >= 0, 'Phase 9 debe declarar promoción y move')
+    assert.ok(promote < move, 'la promoción de decisiones debe preceder al move en Phase 9')
+    assert.match(t, /Never move the change directly/, 'Phase 9 no debe instruir un move directo')
+    for (const literal of [
+      'no archivado; memoria pendiente',
+      'not archived; memory pending',
+      'memoria promovida; NO archivado',
+      'memory promoted; NOT archived'
+    ]) {
+      assert.ok(t.includes(literal), `Phase 9 debe reportar el literal de fallo: ${literal}`)
+    }
+  }
+
+  it('ancleto-onboard Phase 9 rutea por el gate y promueve antes de mover', () => {
+    assertMutationBreaks(guardOnboardArchiveGate, readSkill('ancleto-onboard'), [
+      [
+        'merge/sync specs → read-only preflight of the approved `## Decisiones` batch → promote approved decisions → move (phase B) → summary',
+        'move the change directly'
+      ],
+      ['promote approved decisions → move (phase B)', 'move (phase B) → promote approved decisions'],
+      ['Never move the change directly', 'Move the change directly']
+    ])
+  })
+
+  // El fallo se reporta con el literal canonico en español o con su equivalente exacto en
+  // ingles (superficies de agente). Una superficie sin ninguna de las dos variantes rompe
+  // la garantia.
+  const FAILURE_LITERALS = {
+    pending: ['no archivado; memoria pendiente', 'not archived; memory pending'],
+    promoted: ['memoria promovida; NO archivado', 'memory promoted; NOT archived']
+  }
+
+  const FAILURE_SURFACES = [
+    {
+      label: 'skills/ancleto-archive/SKILL.md',
+      text: () => readSkill('ancleto-archive'),
+      move: '### 6. Perform the archive'
+    },
+    {
+      label: 'skills/ancleto-bulk-archive/SKILL.md',
+      text: () => readSkill('ancleto-bulk-archive'),
+      move: 'd. **Archive**'
+    },
+    {
+      label: 'agents/documenter.md',
+      text: () => readFileSync(join(ROOT, 'agents', 'documenter.md'), 'utf8')
+    },
+    {
+      label: 'agents/orchestrator.md',
+      text: () => readFileSync(join(ROOT, 'agents', 'orchestrator.md'), 'utf8')
+    }
+  ]
+
+  function guardFailureMessages(text, label, move) {
+    const matches = (literals) => literals.filter((literal) => text.includes(literal))
+    const pending = matches(FAILURE_LITERALS.pending)
+    const promoted = matches(FAILURE_LITERALS.promoted)
+    assert.ok(
+      pending.length > 0,
+      `${label} no reporta el fallo previo al move (${FAILURE_LITERALS.pending.join(' | ')})`
+    )
+    assert.ok(
+      promoted.length > 0,
+      `${label} no reporta el fallo del move tras promoción (${FAILURE_LITERALS.promoted.join(' | ')})`
+    )
+    if (move) {
+      const moveIndex = text.indexOf(move)
+      assert.ok(moveIndex >= 0, `${label}: falta el paso de move ${move}`)
+      assert.ok(
+        text.indexOf(pending[0]) < moveIndex,
+        `${label} debe reportar el fallo previo al move antes del paso de move`
+      )
+    }
+    assert.doesNotMatch(text, /archivado, memoria pendiente/i, `${label} conserva el texto viejo`)
+    assert.doesNotMatch(text, /archived, memory pending/i, `${label} conserva el texto viejo`)
+  }
+
+  it('reporta los dos textos de fallo en las cuatro superficies y descarta el viejo', () => {
+    for (const surface of FAILURE_SURFACES) {
+      guardFailureMessages(surface.text(), surface.label, surface.move)
+    }
+    // Mutación: quitar ambas variantes (todas sus apariciones) rompe el guard.
+    const withoutPending = readSkill('ancleto-archive')
+      .split('no archivado; memoria pendiente')
+      .join('')
+      .split('not archived; memory pending')
+      .join('')
+    assert.throws(
+      () => guardFailureMessages(withoutPending, 'ancleto-archive', '### 6. Perform the archive'),
+      'una superficie sin literal de fallo debe romper el guard'
+    )
+  })
+})
+
+describe('content guards - archive en dos fases (merge, promocion, move)', () => {
+  const readAgent = (name) => readFileSync(join(ROOT, 'agents', `${name}.md`), 'utf8')
+
+  // Marcadores textuales estables. Se comparan indices, nunca numeros de linea.
+  const DOCUMENTER_PHASE_A = '### Phase A — Merge'
+  const DOCUMENTER_PHASE_B = '### Phase B — Move'
+  const ORCH_PHASE_A = '`@documenter` phase A** (merge only)'
+  const ORCH_PROMOTION = 'run the Promotion pass for approved'
+  const ORCH_PHASE_B = '`@documenter` phase B** (move only)'
+
+  function guardDocumenterPhases(text) {
+    const phaseAIndex = text.indexOf(DOCUMENTER_PHASE_A)
+    const phaseBIndex = text.indexOf(DOCUMENTER_PHASE_B)
+    assert.ok(phaseAIndex >= 0, `falta ${DOCUMENTER_PHASE_A}`)
+    assert.ok(phaseBIndex >= 0, `falta ${DOCUMENTER_PHASE_B}`)
+    assert.ok(phaseAIndex < phaseBIndex, 'Phase A debe preceder a Phase B')
+
+    const phaseA = normalize(section(text, DOCUMENTER_PHASE_A, '\n### '))
+    const phaseB = normalize(section(text, DOCUMENTER_PHASE_B, '\n## '))
+    assert.match(phaseA, /Do NOT move the change folder/i, 'Phase A no debe mover el change folder')
+    assert.match(phaseB, /moving\*\*.*aspec\/changes\/archive\//, 'Phase B debe mover el change folder')
+    assert.match(phaseB, /A promotion failure means Phase B is NOT invoked/, 'un fallo de promocion no invoca Phase B')
+    assert.match(phaseB, /memory promoted; NOT archived/, 'un fallo del move despues de promocion se reporta explicito')
+  }
+
+  function guardOrchestratorArchiveOrder(text) {
+    const phaseA = text.indexOf(ORCH_PHASE_A)
+    const promotion = text.indexOf(ORCH_PROMOTION)
+    const phaseB = text.indexOf(ORCH_PHASE_B)
+    assert.ok(phaseA >= 0, 'falta el marcador de phase A (merge)')
+    assert.ok(promotion >= 0, 'falta el marcador de la Promotion pass')
+    assert.ok(phaseB >= 0, 'falta el marcador de phase B (move)')
+    assert.ok(phaseA < promotion, 'phase A (merge) debe preceder a la Promotion pass')
+    assert.ok(promotion < phaseB, 'la Promotion pass debe preceder a phase B (move)')
+  }
+
+  it('el documenter declara Phase A (merge, sin mover) antes de Phase B (move)', () => {
+    const text = readAgent('documenter')
+    guardDocumenterPhases(text)
+
+    // Mutacion: intercambia las cabeceras; el orden invertido debe romper el guard.
+    const swapped = text
+      .replace(DOCUMENTER_PHASE_A, '\u0000PHASE_A\u0000')
+      .replace(DOCUMENTER_PHASE_B, DOCUMENTER_PHASE_A)
+      .replace('\u0000PHASE_A\u0000', DOCUMENTER_PHASE_B)
+    assert.throws(
+      () => guardDocumenterPhases(swapped),
+      'el guard debe fallar cuando Phase B precede a Phase A'
+    )
+  })
+
+  it('el orchestrator corre la promocion despues del merge y antes del move', () => {
+    const text = readAgent('orchestrator')
+    guardOrchestratorArchiveOrder(text)
+
+    // Mutacion: intercambia los marcadores de fase; la promocion ya no queda entre ambos.
+    const swapped = text
+      .replace(ORCH_PHASE_A, '\u0000PHASE_A\u0000')
+      .replace(ORCH_PHASE_B, ORCH_PHASE_A)
+      .replace('\u0000PHASE_A\u0000', ORCH_PHASE_B)
+    assert.throws(
+      () => guardOrchestratorArchiveOrder(swapped),
+      'el guard debe fallar cuando el move precede a la promocion o al merge'
+    )
+  })
+})
+
+describe('content guards - atomicidad acotada de specs merge', () => {
+  const CHANGE_NAME = 'specs-merge-hardening'
+
+  // Activo o un unico match en archive/ con proposal.md; 0 o >=2 fallan cerrado.
+  function resolveChangeDir() {
+    const changeRoot = join(ROOT, 'aspec', 'changes')
+    const archive = join(changeRoot, 'archive')
+    const candidates = [join(changeRoot, CHANGE_NAME)]
+    if (existsSync(archive)) {
+      for (const entry of readdirSync(archive, { withFileTypes: true })) {
+        if (entry.isDirectory() && entry.name.endsWith(`-${CHANGE_NAME}`)) {
+          candidates.push(join(archive, entry.name))
+        }
+      }
+    }
+    const matches = candidates.filter((dir) => existsSync(join(dir, 'proposal.md')))
+    assert.equal(matches.length, 1, `${CHANGE_NAME} debe resolver a exactamente una ruta activa o archivada`)
+    return matches[0]
+  }
+
+  function guardBoundedAtomicity(text) {
+    assert.match(text, /NO transaccional/, 'la fase de escritura debe declararse no transaccional')
+    assert.match(text, /NO SHALL prometer ninguna garant[ií]a de atomicidad/, 'falta la exclusion explicita')
+    assert.doesNotMatch(text, /escritura (es|ser[aá]) at[oó]mica/i, 'no debe prometer atomicidad de la fase de escritura')
+  }
+
+  it('el delta documenta la exclusion de atomicidad y una mutacion rompe el guard', () => {
+    const dir = resolveChangeDir()
+    const text = readFileSync(join(dir, 'specs', 'spec-sync', 'spec.md'), 'utf8')
+    guardBoundedAtomicity(text)
+    assert.throws(
+      () => guardBoundedAtomicity(text.replace('NO transaccional', 'transaccional')),
+      'quitar la exclusion debe romper el guard'
+    )
+    assert.throws(
+      () => guardBoundedAtomicity(`${text}\nLa fase de escritura es atómica.\n`),
+      'una promesa de atomicidad de escritura debe romper el guard'
+    )
+  })
+})

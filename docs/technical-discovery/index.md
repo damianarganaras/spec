@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-06T17:27:00Z
-pluginVersion: 0.22.0
+generatedAt: 2026-11-06T20:07:32Z
+pluginVersion: 0.22.1
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (816 fuentes, ~37.901 tokens), `package.json` (`0.22.0`), `src/core/model-catalog.json` y
+`minimo` (822 fuentes, ~38.087 tokens), `package.json` (`0.22.1`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones elididos). Por eso las áreas
@@ -28,7 +28,8 @@ paths citados (ver `unknowns.md`).
 | Reglas, contratos, riesgos, deuda, acoplamiento e impacto de cambios | `decisions.md` |
 | Sistemas externos y dependencias observables (npm, GitHub, Repomix, git, MCP, opencode) | `integrations.md` |
 | Catálogo de unidades (módulos, agents, skills, commands) con propósito y entry point | `units/_map.md` |
-| **Merge de specs (0.22.0)**: `ancleto specs merge --change <slug> [--dry-run] [--json]`, `src/core/specs-merge.js`, capability `spec-sync` | `decisions.md`, `units/cli-install.md`, `units/_map.md` |
+| **Merge de specs (0.22.0–0.22.1)**: `ancleto specs merge --change <slug> [--dry-run] [--json]`, `src/core/specs-merge.js`, capability `spec-sync`; preámbulo H1 estructural, contenedor `archive` fail-closed, `ADDED` con una línea en blanco y atomicidad acotada al plan | `decisions.md`, `units/cli-install.md`, `units/_map.md` |
+| **Orden del archive (0.22.1)**: merge/sync → preflight read-only → promoción de `## Decisiones` → move → commit; literales de fallo y superficies canónicas | `decisions.md`, `units/memory-engine.md`, `units/_map.md` |
 | **Conformidad vs cambio funcional (0.21.0)**: predicado de cita resoluble + ausencia de bloques delta, `spec-required`, ruteo único | `decisions.md`, `overview.md`, `units/_map.md` |
 | **Archive de conformidad sin delta (0.21.0)**: reporte "sin delta", cita fail-closed, garantía acotada, reuso del ledger cerrado | `decisions.md`, `units/cli-install.md` |
 | **Modelos por tier**: `TIERS` agente→string, `TIER_CHAINS`, resolver contra catálogo, `gratis` free-only, oráculo de `check` | `decisions.md`, `setup.md`, `units/cli-install.md` |
@@ -59,11 +60,17 @@ paths citados (ver `unknowns.md`).
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local
   (`.ancleto/memory.db`, `node:sqlite`) y control explícito de costo por tier. Desde 0.21.0 el
   ciclo distingue **changes de conformidad** (citan un Requirement existente y no llevan delta) de
-  cambios funcionales; desde 0.22.0 el merge de delta specs es un comando CLI determinístico.
-- **Versión del repo**: `package.json` = `0.22.0` (rama `development`). `.ancletorc` y
+  cambios funcionales; desde 0.22.0 el merge de delta specs es un comando CLI determinístico,
+  endurecido en 0.22.1, y desde 0.22.1 el archive promueve las decisiones aprobadas antes del move.
+- **Versión del repo**: `package.json` = `0.22.1` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-06-specs-merge-hardening/` (0.22.1: contenedor `archive`
+  fail-closed, preámbulo H1 estructural, `ADDED` con una línea en blanco y exclusión de atomicidad
+  de la fase de escritura),
+  `aspec/changes/archive/2026-11-06-archive-order-correctness/` (0.22.1: promoción antes del move,
+  fases A/B del documenter y semántica de fallo),
   `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` (0.22.0: módulo puro
   `src/core/specs-merge.js`, subcomando `specs merge` y capability `spec-sync`),
   `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` (0.21.0: discriminador
@@ -75,11 +82,12 @@ paths citados (ver `unknowns.md`).
   `aspec/changes/archive/2026-11-05-mcp-host-write-routing/` (descriptor de destino MCP por host).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
-  Sin cambios en 0.19.0–0.22.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-  archivos) mantienen el conteo; en 0.22.0 no cambió su cantidad.
-- **Pack actual**: 816 fuentes y ~37.901 tokens (comprimido, tier `minimo`), con 29 entradas de
-  archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos. El
-  `.discovery-map.json` de la corrida reporta 826 archivos (aspec 256, src 19, test 27).
-- **Estado del chequeo**: esta materialización reescribió todos los documentos desde el pack y las
-  fuentes citadas para reflejar 0.22.0. El estado final (`READY`/`STALE`/`PARTIAL`) lo reporta el
-  `ancleto discovery --check` posterior; no se ejecutó un segundo pack.
+   Sin cambios en 0.19.0–0.22.1. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
+   archivos) mantienen el conteo; en 0.22.1 no cambió su cantidad.
+- **Pack actual**: 822 fuentes y ~38.087 tokens (comprimido, tier `minimo`), con 29 entradas de
+   archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos. El
+   `.discovery-map.json` de la corrida reporta 832 archivos (aspec 262, docs 21, test 27, src 19).
+- **Estado del chequeo**: esta materialización actualizó los documentos afectados desde el pack y
+   las fuentes citadas para reflejar 0.22.1, preservando la estructura del seed. El estado final
+   (`READY`/`STALE`/`PARTIAL`) lo reporta el `ancleto discovery --check` posterior; no se ejecutó un
+   segundo pack.

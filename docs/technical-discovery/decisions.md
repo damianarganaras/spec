@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-06T17:27:00Z
-pluginVersion: 0.22.0
+generatedAt: 2026-11-06T20:07:32Z
+pluginVersion: 0.22.1
 skillVersion: '2.3'
 ---
 
@@ -27,11 +27,12 @@ skillVersion: '2.3'
   `src/cli/index.js` → `resolvesHostCompression`; la superficie local de agentes y el oráculo de
   tier, en   `src/cli/index.js` → `localAgentDirs`/`checkTierOrphan`; la norma de ruteo del triage, en
   `agents/orchestrator.md` (0.21.0); el parseo, plan y serialización del merge de specs, en
-  `src/core/specs-merge.js` (0.22.0).
+  `src/core/specs-merge.js` (0.22.0–0.22.1); la secuencia de archive y la compuerta de promoción, en
+  `agents/orchestrator.md`, `agents/documenter.md` y las skills de archive (0.22.1).
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.22.0)
+## Modelos y tiers (estado 0.22.1)
 
 ### Tabla y cadenas
 
@@ -99,8 +100,9 @@ skillVersion: '2.3'
   red ni ejecuta procesos.
 - El guard estructural `test/agent-model-coherence.test.js` + `test/model-catalog.test.js` detecta
   IDs de `TIERS`, `TIER_CHAINS`, `agents/*.md` o `profiles/*/agents/*.md` ausentes del snapshot.
-- **0.21.0 y 0.22.0 no modifican** el catálogo ni sus consumidores: los cambios de 0.21.0 viven en
-  contratos de prompt, `agents/` y `skills/`; los de 0.22.0, en el merge de specs.
+- **0.21.0–0.22.1 no modifican** el catálogo ni sus consumidores: los cambios de 0.21.0 viven en
+  contratos de prompt, `agents/` y `skills/`; los de 0.22.0 y 0.22.1, en el merge de specs y en el
+  orden del archive.
 
 ### Integridad de IDs declarados (0.18.12, consolidada en 0.18.13)
 
@@ -676,12 +678,14 @@ delta de `prompt-contracts`). La versión **no modifica `src/`**: el contrato vi
 - **MEM-01 fuera de alcance**: el runbook de curaduría sobre `.ancleto/memory.db` no se ejecuta en
   este change (requiere OK explícito).
 
-## Merge determinístico de specs (0.22.0)
+## Merge determinístico de specs (0.22.0–0.22.1)
 
-Change archivado: `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` (proposal,
-tasks y delta de `spec-sync`). La capability canónica resultante es
-`aspec/specs/spec-sync/spec.md`, con cinco Requirements: merge determinístico, idempotencia,
-fail-closed, dry-run y alcance acotado.
+Changes archivados: `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` (0.22.0,
+proposal, tasks y delta de `spec-sync`) y
+`aspec/changes/archive/2026-11-06-specs-merge-hardening/` (0.22.1, dos `MODIFIED` sobre la misma
+capability). La capability canónica resultante es `aspec/specs/spec-sync/spec.md`, con cinco
+Requirements: merge determinístico, idempotencia, fail-closed, dry-run y alcance acotado. 0.22.1 no
+agrega comandos ni flags; endurece el parser y el fail-closed.
 
 ### Módulo puro y separación de capas
 
@@ -701,13 +705,18 @@ fail-closed, dry-run y alcance acotado.
   difuso ni por posición. Un título que coincide con 0 o ≥2 requirements es fail-closed.
 - El parser reconoce las secciones `## ADDED Requirements`, `## MODIFIED Requirements`,
   `## REMOVED Requirements` y `## RENAMED Requirements`; un bloque de requirement termina en el
-  próximo `##` o `###` (un `#### Scenario:` no corta el bloque). El delta admite un único
-  preámbulo H1 (`# Delta: <name>` o `# Spec delta: <name>`) al inicio y lo ignora.
-- `ADDED` inserta el bloque dentro de `## Requirements`; si el título ya existe con contenido
-  idéntico es no-op y con contenido distinto es fail-closed. `MODIFIED` reemplaza el bloque
-  completo (cuerpo y escenarios). `REMOVED` elimina el bloque y es no-op si ya no existe. `RENAMED`
-  cambia sólo el heading de `FROM` a `TO`; es no-op si el título nuevo ya existe y fail-closed si
-  están ambos o ninguno.
+  próximo `##` o `###` (un `#### Scenario:` no corta el bloque). El delta admite **a lo sumo un**
+  H1 a columna 0 al inicio, cualquiera sea su título, seguido de blancos opcionales y de la primera
+  sección `##` reconocida; no hay allowlist literal de títulos. Un segundo H1, o cualquier línea no
+  vacía que no sea H1 antes de esa sección, es fail-closed (preserva las cuatro formas H1 legacy de
+  los archives).
+- `ADDED` inserta el bloque dentro de `## Requirements` con **exactamente una línea en blanco**
+  entre el bloque y la siguiente sección `##` (o el EOF, sin blanco extra); si el título ya existe
+  con contenido idéntico es no-op y con contenido distinto es fail-closed. `MODIFIED` reemplaza el
+  bloque completo (cuerpo y escenarios). `REMOVED` elimina el bloque y es no-op si ya no existe.
+  `RENAMED` cambia sólo el heading de `FROM` a `TO`; es no-op si el título nuevo ya existe y
+  fail-closed si están ambos o ninguno. Una sección `## RENAMED Requirements` vacía es no-op válido
+  (exit 0, `changed:false`, `mtime` intacto).
 - La serialización conserva el separador de línea dominante del archivo canónico (CRLF solo si
   supera estrictamente a los LF sueltos) y recorta líneas en blanco finales: dos corridas del mismo
   delta producen un archivo byte a byte idéntico.
@@ -716,11 +725,15 @@ fail-closed, dry-run y alcance acotado.
 
 - La garantía de cero escrituras es **por plan**: se computan todos los planes de todas las
   capabilities antes de escribir. Ante cualquier error —título ambiguo, `MODIFIED`/`RENAMED`
-  incompleto, `ADDED` conflictivo, `RENAMED` con ambos/ninguno, `FROM`/`TO` faltante, capability sin
-  spec canónico, 0 o ≥2 changes para el slug o bloque malformado— el comando sale con **exit 2** y
-  no escribe ningún spec del change; el mensaje nombra capability, requirement y motivo.
-- Un error de I/O durante la escritura no es transaccional entre archivos: la garantía de
-  atomicidad cubre el plan, no la caída del disco a mitad de la fase de escritura.
+  incompleto, `ADDED` conflictivo, `RENAMED` con ambos/ninguno, `FROM`/`TO` faltante,   capability sin
+  spec canónico, 0 o ≥2 changes para el slug, bloque malformado o el contenedor
+  `aspec/changes/archive`— el comando sale con **exit 2** y no escribe ningún spec del change; el
+  mensaje nombra capability, requirement y motivo. El contenedor `archive` se detecta por identidad
+  de path, no por la presencia de `proposal.md` ni por el slug, y también falla con `--dry-run`.
+- **Atomicidad acotada**: el plan es fail-closed con cero escrituras; la fase de escritura es
+  secuencial y no transaccional. Un error de I/O o una interrupción durante esa fase puede dejar
+  escritos un prefijo de los specs del plan, sin rollback ni atomicidad entre archivos. La spec
+  declara esta exclusión y no promete una garantía mayor.
 - `--dry-run` computa y reporta el mismo plan con cero escrituras (contenido y `mtime` intactos) y
   usa los mismos códigos que la ejecución real. Un plan sin cambios no escribe. `--json` emite
   `{ ok, change, dryRun, capabilities, operations, changed, errors }`.
@@ -741,6 +754,20 @@ fail-closed, dry-run y alcance acotado.
   una capability nueva. Ref: `spec:spec-sync#Alcance acotado del comando specs merge`.
 - **`specs-merge-dry-run-zero-writes`** — `--dry-run` sin archivos temporales ni journal. Ref:
   `spec:spec-sync#Dry-run sin escrituras en specs merge`.
+- **`specs-merge-h1-structural-preamble`** (0.22.1) — a lo sumo un H1 a columna 0 al inicio,
+  cualquier título; un segundo H1 o contenido suelto antes de la primera sección falla cerrado.
+  Descartado: allowlist literal de `# Delta:` / `# Spec delta:` (rompería 78 deltas legacy). Ref:
+  `spec:spec-sync#Merge determinístico de delta specs sobre specs canónicos existentes`.
+- **`specs-merge-archive-container-fail-closed`** (0.22.1) — `--change archive`, o cualquier slug
+  que resuelva al contenedor, sale 2 con cero escrituras; detección por identidad de path.
+  Descartado: detectar por `proposal.md` o por nombre. Ref:
+  `spec:spec-sync#Fail-closed ante ambigüedad o delta inválido`.
+- **`specs-merge-added-single-blank-line`** (0.22.1) — `ADDED` deja exactamente una línea en blanco
+  entre el bloque y la sección siguiente o el EOF. Ref:
+  `spec:spec-sync#Merge determinístico de delta specs sobre specs canónicos existentes`.
+- **`specs-merge-write-phase-atomicity-exclusion`** (0.22.1) — la atomicidad se limita al plan; la
+  fase de escritura es secuencial y no transaccional, declarada como exclusión explícita. Ref:
+  `spec:spec-sync#Fail-closed ante ambigüedad o delta inválido`.
 
 ### Riesgos aceptados
 
@@ -754,6 +781,51 @@ fail-closed, dry-run y alcance acotado.
   una falla de I/O intermedia.
 - **Sin test observado en esta generación**: `test/specs-merge.test.js` existe en el repo, pero el
   pack del tier `minimo` excluye `test/**` y no se ejecutó la suite (ver `unknowns.md`).
+
+## Orden del archive y promoción de memoria (0.22.1)
+
+Change archivado: `aspec/changes/archive/2026-11-06-archive-order-correctness/`. La capability
+canónica es `aspec/specs/memory-ops/spec.md`, requirement “Promoción al archivar sólo de decisiones
+duraderas aprobadas”. No cambia el motor de memoria ni `src/`: el contrato vive en las superficies
+de agentes y skills.
+
+### Secuencia canónica
+
+1. **Merge/sync de specs** si hay delta (fase A de `@documenter`).
+2. **Preflight read-only** del lote de `## Decisiones` aprobadas, fail-closed.
+3. **Promoción** de las decisiones aprobadas a `.ancleto/memory.db`.
+4. **Move** del directorio a `aspec/changes/archive/YYYY-MM-DD-<slug>/`, sin modificarlo (fase B).
+5. **Summary/commit**.
+
+La promoción corre **después del merge y antes del move**, para que las refs `path:` que apuntan
+dentro del change sigan resolviendo. `@documenter` separa fase A (sólo merge, retorna `phase A
+complete`) y fase B (sólo move, invocada tras confirmar la promoción). `@orchestrator` corre
+Automatic Record en paralelo con la fase A; la promoción nunca se ejecuta en paralelo con la fase A
+ni después del move. La secuencia se replica en `skills/ancleto-archive/SKILL.md`,
+`skills/ancleto-bulk-archive/SKILL.md` y la Phase 9 de `skills/ancleto-onboard/SKILL.md`.
+
+### Semántica de fallo
+
+- **Preflight o promoción fallidos antes del move**: el change **no se mueve**, no queda ninguna
+  escritura por violación del gate y se reporta **`no archivado; memoria pendiente`** (inglés:
+  `not archived; memory pending`), nombrando la `memory_key` y el motivo con reintento.
+- **Move fallido tras una promoción exitosa**: se reporta **`memoria promovida; NO archivado`**
+  (inglés: `memory promoted; NOT archived`) con reintento.
+- El literal **`archivado, memoria pendiente`** queda eliminado: presume move-before-promote y ya
+  no describe la secuencia. Tampoco se reporta "archivado y memorizado" si sólo se archivó.
+- Un lote con clave repetida y contenido/refs distintos se rechaza completo; dos claves
+  contradictorias se reportan con sus fuentes y se remiten a decisión humana o a `memory merge`.
+
+### Decisiones declaradas
+
+- **`archive-order-promote-before-move`** — secuencia merge/sync → preflight → promoción → move →
+  commit; promoción antes del move y fallos con los dos literales canónicos. Ref:
+  `spec:memory-ops#Promoción al archivar sólo de decisiones duraderas aprobadas`.
+- **`archive-order-content-guard`** — `test/content-guards.test.js` compara el índice textual de
+  promoción y move en ambas skills; una mutación que invierte el orden debe fallar.
+- **`archive-order-canonical-agent-surface`** — el orden se codifica en `agents/orchestrator.md`,
+  `agents/documenter.md`, `skills/ancleto-archive`, `skills/ancleto-bulk-archive` y
+  `skills/ancleto-onboard`; la release regenera mirrors con `ancleto upgrade`.
 
 ## Superficies del `model:` (nota operativa)
 
@@ -785,8 +857,11 @@ sin `--tier` es `normal`.
   (`archive-conformity-discriminator`, `archive-noop-does-not-write-canonical-specs`,
   `conformity-verification-reuses-closed-ledger`, `triage-routing-single-contract`); el motor no
   cambió.
-- **0.22.0**: tampoco cambia el motor. `specs merge` no abre ni escribe `.ancleto/memory.db`; la
-  promoción de decisiones sigue siendo responsabilidad del archive.
+- **0.22.0–0.22.1**: tampoco cambian el motor. `specs merge` no abre ni escribe
+  `.ancleto/memory.db`; la promoción de decisiones sigue siendo responsabilidad del archive pero,
+  desde 0.22.1, ocurre **antes del move** y su secuencia vive en `agents/` y `skills/`, no en el
+  engine. La promoción sólo admite `decision` con `memory_key` propia y `Estado: aprobado`; nunca
+  promueve `rule` ni inventa claves.
 
 ## Discovery y seed
 
@@ -800,8 +875,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 816 fuentes, ~37.901 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 826 archivos (aspec 256, docs 21, test 27, src 19, etc.).
+- **Pack actual**: tier `minimo`, 822 fuentes, ~38.087 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 832 archivos (aspec 262, docs 21, test 27, src 19, etc.).
 
 ## Lint y publicación
 
@@ -860,16 +935,21 @@ sin `--tier` es `normal`.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.22.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.22.1`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
   `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue
   reemplazándose porque no se agregó parseo tolerante.
 - **Conformidad 0.21.0**: la compuerta mecánica no prueba relevancia semántica ni cubre un archive
   ejecutable; la aceptación depende de contratos de texto y content guards. `MEM-01` queda fuera.
-- **Merge de specs 0.22.0**: el comando exige specs canónicos en inglés y un título exacto; no
-  repara specs traducidos ni crea capabilities. La no-escritura de `--dry-run` y la idempotencia se
-  describen desde el código y la spec, no desde una corrida observada en esta generación.
+- **Merge de specs 0.22.0–0.22.1**: el comando exige specs canónicos en inglés y un título exacto;
+  no repara specs traducidos ni crea capabilities. La no-escritura de `--dry-run`, la idempotencia y
+  la atomicidad acotada al plan se describen desde el código y la spec, no desde una corrida
+  observada en esta generación. El contenedor `archive` falla cerrado por identidad de path.
+- **Orden del archive 0.22.1**: la corrección vive en contratos de prompt (agentes y skills), no en
+  `src/`; la aceptación se apoya en `test/content-guards.test.js`, que no se ejecutó en esta
+  generación. Editar sólo `agents/`/`skills/` y regenerar con `ancleto upgrade`; no tocar
+  `.opencode/**` a mano.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene
   documentación del framework y el seed.
 

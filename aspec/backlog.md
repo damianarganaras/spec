@@ -1,14 +1,14 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-06 (release 0.20.0).
+> Última actualización: 2026-11-06 (release 0.22.0).
 
 ## Prioridad de ejecución
 
 1. **0.20.1 — `fix(cli)`**: guard de escritura en `repairProjectMcp` (`fixed` vacío + sin error → no tocar bytes). Bug contra contrato vigente; test de bytes/mtime; sin delta de spec. Change propuesto: `fix-repair-mcp-noop`.
 2. **0.21.0 — `feat(cli)`**: advisories read-only de deriva legacy (`.opencode/*` histórico; bundle legacy sin intención MCP). Deltas MODIFIED en `project-portability` y `cli-diagnostics`; exit codes sin cambios. Change propuesto: `portability-followup-diagnostics`.
 3. **Reingeniería P0**: PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`. PR-4 ya está cumplido.
-4. **Reingeniería P1**: CH-00 baseline (prerrequisito) → CH-06 merge de specs idempotente + selección de tests → CH-07 A/B de prefijos/caché/modelos.
+4. **Reingeniería P1**: CH-00 baseline (runbook, prerrequisito) → CH-06a merge determinístico de delta specs **cerrado en 0.22.0** (`ch-06a-specs-merge-deterministic`) → CH-06b selección de tests por affected-set (diferido) → CH-07 A/B de prefijos/caché/modelos (bloqueado por CH-00).
 5. **Reingeniería P2 colaboración**: CH-08/MEM-06 → T25/T27 (`formatVersion`, reindex) → T20 (idempotencia) → T30 (V1/V2) → CH-10 (matriz de hosts).
 6. **Reingeniería P2 motor/host restante**: #4 (exclusión mutua de escritores), #6 (tope de verificación / orden archive→merge), #18 (seed stale por diseño).
 7. **Deuda declarada**: MEM-05c–g, CH-09a–h.
@@ -51,17 +51,30 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 ### Qué falta (por prioridad)
 
 - **P0:** PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`.
-- **P1:** CH-00 baseline; CH-06 merge de specs idempotente + selección de tests; CH-07 A/B de prefijos/caché/modelos.
+- **P1:** CH-00 baseline como runbook; CH-06a cerrado en 0.22.0 (`ch-06a-specs-merge-deterministic`, capability `spec-sync`); CH-06b (selección de tests por affected-set) diferido — `computeAffectedSet`/`ancleto affected` ya existen y son determinísticos, la selección focalizada es heurística y no tiene consumidor probado; CH-07 A/B bloqueado por CH-00.
 - **P1 · MEM-05 (pendiente) — presupuesto del working-context:** el bloque inyectado
   `<ProjectMemoryRules>` no distingue importancia. Con 39 reglas `scope: project` renderiza 8 y omite
   31; agregar una regla larga (2026-11-06) hizo caer las renderizadas de 9 a 8 y desplazó dos reglas
   que antes entraban, incluida `node-test-scope-explicit-paths`. MEM-05 debe fijar un set universal
   estable, recuperar el resto por tarea y fallar explícito (con `memory_key`) cuando una regla crítica
   no entra. Detalle y criterio de aceptación: `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` §5.
+  Núcleo archivado el 2026-11-02; el "set universal estable" sigue pendiente y queda fuera de 0.22.0: requiere curaduría de memoria (MEM-01) y definición de criticality (CH-09a, diferido), y no es código offline-testeable.
 - **P2 colaboración:** `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10).
 - **P2 motor/host:** T20 idempotencia, T30 V1/V2, CH-10 matriz de hosts, #4, #6, #18.
 - **Deuda:** MEM-05c–g, CH-09a–h.
 
+### Deuda declarada de CH-06a (0.22.0)
+
+- `ancleto specs merge --change archive` coincide con el directorio contenedor `aspec/changes/archive` y sale 0 ("sin deltas") en vez de fail-closed. Endurecer el resolver para excluir el contenedor.
+- El preámbulo H1 se acepta con cualquier `# `; el delta enumera sólo `# Delta:` / `# Spec delta:`. Acotar o documentar.
+- La inserción ADDED antes de otra sección `## ` deja dos líneas en blanco; es determinística pero conviene fijar/verificar el espaciado.
+- Falta un test de `## RENAMED Requirements` vacío (el código ya lo trata como no-op).
+- Las escrituras son secuenciales: un error de I/O en la escritura N deja escritas las anteriores. La atomicidad de plan (fail-closed) sí está garantizada.
+
 ## Relación con 0.20.0
 
 `2026-11-05-host-neutral-bundle` es una línea independiente de portabilidad (export/import/MCP), no un tramo memoria-first. Su equivalente en el eje memoria (colaboración/continuidad) es CH-08/MEM-06, aún pendiente.
+
+## Relación con 0.22.0
+
+0.22.0 cierra CH-06a: `ancleto specs merge --change <slug> [--dry-run] [--json]`, merge estructural idempotente por título exacto, fail-closed con cero escrituras y atomicidad de plan; nueva capability canónica `spec-sync`. No cambia `specs check`, `mergeLocked`, el affected-set ni los contratos de memoria/seed.

@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.22.1] - 2026-11-06
+
+### Fixed
+- **`ancleto specs merge` falla cerrado ante `--change archive`**: cuando `--change archive` resuelve al contenedor `aspec/changes/archive`, el comando falla cerrado con exit 2, cero escrituras y sin excepción para `--dry-run`; el preámbulo H1 del delta es estructural (a lo sumo un H1, cualquier título; un segundo H1 o contenido suelto antes de la primera sección falla cerrado, preservando las formas de delta archivadas legacy); `ADDED` inserta exactamente un separador de línea en blanco; un `## RENAMED Requirements` vacío es un no-op testeado; la fase de escritura no transaccional queda documentada como exclusión explícita.
+- **Orden del archive endurecido**: el archive pasa a merge/sync → preflight de solo lectura → promoción de `## Decisiones` aprobadas → move → commit en `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md` y `skills/ancleto-onboard/SKILL.md`; una falla de promoción no mueve el change, y una falla de move posterior a la promoción reporta `memoria promovida; NO archivado` (`memory promoted; NOT archived`).
+
+### Docs
+- **Sin comandos ni flags nuevos**: se sincronizan las specs canónicas `spec-sync` y `memory-ops`.
+
 ## [0.22.0] - 2026-11-06
 
 ### Added

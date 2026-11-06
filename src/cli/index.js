@@ -3387,18 +3387,31 @@ function isValidChangeSlug(slug) {
     && CHANGE_SLUG_RE.test(slug)
 }
 
+// Identidad de path (absoluta y normalizada; case-insensitive en Windows).
+function samePath(a, b) {
+  const ra = resolve(a)
+  const rb = resolve(b)
+  return process.platform === 'win32' ? ra.toLowerCase() === rb.toLowerCase() : ra === rb
+}
+
 async function resolveChangeDir(cwd, slug) {
   const changesDir = join(cwd, CHANGES_ROOT, 'changes')
+  const archiveDir = join(changesDir, 'archive')
   const matches = []
   const active = join(changesDir, slug)
-  try {
-    if ((await stat(active)).isDirectory()) matches.push(active)
-  } catch {}
-  const archiveDir = join(changesDir, 'archive')
+  // El contenedor de archives nunca es un change: ni como directorio activo ni
+  // por el glob de archives.
+  if (!samePath(active, archiveDir)) {
+    try {
+      if ((await stat(active)).isDirectory()) matches.push(active)
+    } catch {}
+  }
   if (await exists(archiveDir)) {
     const archivedName = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-${escapeRegExp(slug)}$`)
     for (const entry of await readdir(archiveDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && archivedName.test(entry.name)) matches.push(join(archiveDir, entry.name))
+      const candidate = join(archiveDir, entry.name)
+      if (samePath(candidate, archiveDir)) continue
+      if (entry.isDirectory() && archivedName.test(entry.name)) matches.push(candidate)
     }
   }
   return matches
@@ -3430,6 +3443,29 @@ async function specsMergeCommand(args) {
   }
   if (!isValidChangeSlug(slug)) {
     console.error(`ancleto: specs merge: slug invalido "${slug}"`)
+    process.exit(2)
+  }
+
+  // El contenedor `aspec/changes/archive` no es un change. La detección es por
+  // identidad de path contra el contenedor, no por el slug ni por `proposal.md`.
+  const changesDir = join(cwd, CHANGES_ROOT, 'changes')
+  const archiveContainer = join(changesDir, 'archive')
+  if (samePath(join(changesDir, slug), archiveContainer)) {
+    const containerRel = relative(cwd, archiveContainer).replace(/\\/g, '/')
+    const reason = `el contenedor "${containerRel}" no es un change (slug: "${slug}")`
+    if (asJson) {
+      console.log(JSON.stringify({
+        ok: false,
+        change: slug,
+        dryRun,
+        capabilities: [],
+        operations: [],
+        changed: false,
+        errors: [{ capability: null, requirement: null, reason }]
+      }, null, 2))
+    } else {
+      console.error(`ancleto: specs merge: ${reason}`)
+    }
     process.exit(2)
   }
 

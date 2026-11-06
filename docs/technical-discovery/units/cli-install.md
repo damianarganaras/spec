@@ -37,11 +37,13 @@ covers:
   - merge de specs
   - specs merge
   - specs-merge
+  - endurecimiento specs merge 0.22.1
+  - orden del archive
   - materialización de agents y skills
   - machine-env
-sources: ["src/cli/index.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-06T17:27:00Z
-pluginVersion: 0.22.0
+sources: ["src/cli/index.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-06T20:07:32Z
+pluginVersion: 0.22.1
 skillVersion: '2.3'
 ---
 
@@ -164,8 +166,9 @@ los cambios de ruteo de conformidad de `agents/orchestrator.md`, `skills/triage-
 `agents/documenter.md`, `agents/coder.md`, `agents/tester.md` y `agents/reviewer.md`; los mirrors
 `.opencode/**` no se editan a mano.
 
-**0.22.0**: el CLI suma el subcomando `specs merge` (ver abajo). `upgrade` sigue siendo la vía de
-materialización de assets; el merge de specs no se aplica durante `install`/`upgrade`.
+**0.22.0–0.22.1**: el CLI suma el subcomando `specs merge` (0.22.0) y lo endurece sin flags nuevos
+en 0.22.1 (ver abajo). `upgrade` sigue siendo la vía de materialización de assets; el merge de specs
+no se aplica durante `install`/`upgrade`, y el orden del archive vive en `agents/`/`skills/`.
 
 ### `import` / `export`
 
@@ -332,11 +335,12 @@ global aunque sea inválida. La ruta del proyecto se reporta relativa con separa
 existe ninguno. El parseo es `JSON.parse` estricto sin BOM; un `.jsonc` con comentarios se reporta
 inválido a propósito. `doctor` no valida `.vscode/mcp.json` ni crea MCP para hosts sin destino.
 
-### Merge de specs (0.22.0)
+### Merge de specs (0.22.0–0.22.1)
 
 `ancleto specs merge --change <slug> [--dry-run] [--json]` aplica el delta de un change sobre las
 specs canónicas existentes. El módulo `src/core/specs-merge.js` es puro; el CLI resuelve rutas,
-lee/escribe y reporta.
+lee/escribe y reporta. 0.22.1 no agrega comandos ni flags: endurece el parser, el contenedor
+`archive` y el espaciado de `ADDED`.
 
 1. `specsCommand(args)` desvía sólo `args[0] === 'merge'` a `specsMergeCommand`; cualquier otra
    invocación sigue a `specsCheckCommand`, por lo que `specs check` y `specs` sin argumentos
@@ -344,7 +348,10 @@ lee/escribe y reporta.
 2. `--change <slug>` se valida con `isValidChangeSlug`: rechaza `..`, `/`, `\`, NUL y formas fuera
    de `^[A-Za-z0-9][A-Za-z0-9._-]*$` con exit 2.
 3. `resolveChangeDir` busca el change activo en `aspec/changes/<slug>/` y el archivado en
-   `aspec/changes/archive/YYYY-MM-DD-<slug>/`. 0 o ≥2 coincidencias son fail-closed (exit 2).
+   `aspec/changes/archive/YYYY-MM-DD-<slug>/`. 0 o ≥2 coincidencias son fail-closed (exit 2). El
+   contenedor `aspec/changes/archive` nunca es un change: `--change archive`, o cualquier slug que
+   resuelva a ese directorio, sale 2 con cero escrituras (también con `--dry-run`); la detección es
+   por identidad de path, no por `proposal.md`.
 4. `collectDeltaCapabilities` enumera `<changeDir>/specs/<capability>/spec.md`; si la capability no
    tiene `aspec/specs/<capability>/spec.md`, el error es fail-closed y **no se crea** la spec.
 5. Fase 1: `mergeSpecText(delta, canonico)` computa el plan de todas las capabilities y acumula
@@ -360,14 +367,22 @@ Reglas del merge (`src/core/specs-merge.js`):
 
 - Matching **exacto** por título de `### Requirement:`; 0 o ≥2 coincidencias son error. Un heading
   `###` indentado o un bloque no reconocido también falla cerrado.
-- El bloque de requirement termina en el próximo `##` o `###`, no en `#### Scenario:`; el delta
-  admite un preámbulo H1 opcional (`# Delta: <name>` / `# Spec delta: <name>`) y lo ignora.
-- `ADDED` inserta dentro de `## Requirements`; idéntico es no-op, distinto es conflicto.
-  `MODIFIED` reemplaza cuerpo y escenarios completos. `REMOVED` elimina y es no-op si ya no existe.
-  `RENAMED` cambia el heading de `FROM` a `TO`; no-op si `TO` ya existe, conflicto si están ambos o
-  ninguno, y exige `- FROM:`/`- TO:`.
+- El bloque de requirement termina en el próximo `##` o `###`, no en `#### Scenario:`. El delta
+  admite **a lo sumo un** H1 a columna 0 al inicio, cualquiera sea su título, seguido de blancos
+  opcionales y de la primera sección `##` reconocida; no hay allowlist literal. Un segundo H1 o una
+  línea no vacía y no H1 antes de esa sección es fail-closed (exit 2, cero escrituras).
+- `ADDED` inserta dentro de `## Requirements` con **exactamente una línea en blanco** entre el
+  bloque y la siguiente sección `##` (o el EOF, sin blanco extra); idéntico es no-op, distinto es
+  conflicto. `MODIFIED` reemplaza cuerpo y escenarios completos. `REMOVED` elimina y es no-op si ya
+  no existe. `RENAMED` cambia el heading de `FROM` a `TO`; no-op si `TO` ya existe, conflicto si
+  están ambos o ninguno, y exige `- FROM:`/`- TO:`. Un `## RENAMED Requirements` vacío es no-op
+  válido (exit 0, `changed:false`, `mtime` intacto).
 - La serialización conserva el EOL dominante del canónico (CRLF sólo si supera estrictamente a los
   LF sueltos) y recorta líneas en blanco finales; el mismo delta produce el mismo archivo.
+- **Atomicidad acotada**: la validación del plan es fail-closed con cero escrituras, pero la fase
+  de escritura es secuencial y no transaccional. Un error de I/O o una interrupción durante esa
+  fase puede dejar escritos un prefijo de los specs del plan, sin rollback entre archivos. La spec
+  declara la exclusión y no promete atomicidad fuera del plan.
 - No toca archivos delta, la carpeta del change, memoria, seed, `package.json`, `specs check`,
   `mergeLocked` ni el affected-set, y no crea capabilities nuevas. El comando no está cableado en
   `skills/ancleto-sync-specs`, `skills/ancleto-archive` ni `/cleto-*`.
@@ -446,10 +461,13 @@ tier puede quedar dormido en `check`.
   `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
   resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; deben
-  alinearse con `package.json` (`0.22.0`). No son fuentes del seed.
-- **Merge de specs 0.22.0**: el fail-closed es por plan, no transaccional ante una caída de I/O a
-  mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs traducidos ni
-  crea capabilities. No está cableado en skills/agentes.
+  alinearse con `package.json` (`0.22.1`). No son fuentes del seed.
+- **Merge de specs 0.22.0–0.22.1**: el fail-closed es por plan, no transaccional ante una caída de
+  I/O a mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs
+  traducidos ni crea capabilities. No está cableado en skills/agentes. El contenedor `archive` ya
+  no se trata como change.
+- **Orden del archive 0.22.1**: la promoción corre antes del move y se documenta en `agents/` y
+  `skills/`; no cambia `src/`. La aceptación depende de content guards, no de un subcomando CLI.
 
 ## Paths clave
 
@@ -467,6 +485,7 @@ tier puede quedar dormido en `check`.
 | `scripts/refresh-model-catalog.mjs` | Refresco manual, gate de `--write` y escritura atómica |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques `LOCKED` |
 | `profiles/test/**` | Overlay del perfil de test |
+| `aspec/changes/archive/2026-11-06-specs-merge-hardening/` | Change archivado del endurecimiento de `specs merge` (0.22.1): contenedor `archive`, H1 estructural, `ADDED` y atomicidad acotada |
 | `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` | Change archivado del merge determinístico de specs y la capability `spec-sync` (0.22.0) |
 | `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` | Change archivado del discriminador conformidad-vs-delta y archive sin delta (0.21.0; materializado por `upgrade`) |
 | `aspec/changes/archive/2026-11-06-fix-repair-mcp-noop/` | Change archivado del predicado de escritura de `repairProjectMcp` (0.20.1) |
@@ -477,7 +496,9 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-04-check-doctor-state-parity/` | Change archivado de paridad de diagnósticos (H7/H13/H14) |
 | `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` | Change archivado de la nota de compresión y validación de `manifest.mcp` |
 | `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión, config MCP de `doctor`, salud MCP, avisos de `check` y aviso de `import` |
-| `aspec/specs/spec-sync/spec.md` | Requirements del merge determinístico, idempotencia, fail-closed, dry-run y alcance acotado (0.22.0) |
+| `aspec/specs/spec-sync/spec.md` | Requirements del merge determinístico, idempotencia, fail-closed, dry-run y alcance acotado; 0.22.1 agrega H1 estructural, contenedor `archive` y atomicidad acotada |
+| `aspec/specs/memory-ops/spec.md` | Requirements de memoria y de la promoción de decisiones al archivar antes del move (0.22.1) |
+| `aspec/changes/archive/2026-11-06-archive-order-correctness/` | Change archivado del orden del archive y la semántica de fallo (0.22.1) |
 | `aspec/specs/prompt-contracts/spec.md` | Requirements de conformidad-vs-delta y archive sin delta (0.21.0) |
 | `aspec/specs/agent-install-routing/spec.md` | Requirements de destinos nativos, ruteo MCP por host y compresión host-scoped |
 | `aspec/specs/project-portability/spec.md` | Requirements de `export` host-neutral, `import` (MCP + `installedPaths`), reparación y nota de compresión |

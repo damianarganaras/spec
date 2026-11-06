@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-06 (release 0.22.1).
+> Última actualización: 2026-11-06 (release 0.22.2).
 
 ## Prioridad de ejecución
 
@@ -53,7 +53,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 ### Qué falta (por prioridad)
 
 - **P0:** PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`.
-- **P1:** CH-00 baseline como runbook; CH-06a cerrado en 0.22.0 (`ch-06a-specs-merge-deterministic`, capability `spec-sync`); CH-06b (selección de tests por affected-set) diferido — `computeAffectedSet`/`ancleto affected` ya existen y son determinísticos, la selección focalizada es heurística y no tiene consumidor probado; CH-07 A/B bloqueado por CH-00.
+- **P1:** CH-00 baseline como runbook; CH-06a cerrado en 0.22.0 (`ch-06a-specs-merge-deterministic`, capability `spec-sync`); CH-06b (selección de tests por affected-set) diferido por **segunda vez** (0.22.2), ahora por razón estructural: `test/cli.test.js` spawnea el CLI (sin arista de import) y los content guards leen markdown no indexado, así que declararla "no contrato completo" no la vuelve segura; se reabre sólo con consumidor probado + contrato que nombre las suites excluidas. `computeAffectedSet`/`ancleto affected` ya existen y son determinísticos; CH-07 A/B bloqueado por CH-00.
 - **P1 · MEM-05 (pendiente) — presupuesto del working-context:** el bloque inyectado
   `<ProjectMemoryRules>` no distingue importancia. Con 39 reglas `scope: project` renderiza 8 y omite
   31; agregar una regla larga (2026-11-06) hizo caer las renderizadas de 9 a 8 y desplazó dos reglas
@@ -92,3 +92,24 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **CH-07** (A/B de prefijos/caché/modelos): bloqueado por CH-00.
 - **CH-08/MEM-06, MEM-05 y el P2 motor/host restante** (#4, #6, #18, T20, T30, CH-10, T25/T27): siguen pendientes/diferidos.
 - **Extensión VS Code**: sin cambios en esta release; sigue diferida.
+
+## Relación con 0.22.2
+
+0.22.2 contiene un único change, `test-oracles-hardening`: un **change de conformidad, sin delta**. No agrega comandos, flags ni comportamiento; fija con tests lo que ya estaba implementado.
+
+- **T1 — `specs merge --dry-run --json`:** idempotencia y cero escrituras (dos corridas byte-idénticas; caso `--change archive` con exit 2 repetido).
+- **T2 — clasificación de imports dinámicos del affected-set:** `import('node:sqlite')` externo; `import('node:sqlite', { with })` e `import(x)` → `unresolved`; relativo irresoluble → `unresolved`; relativo resoluble → arista.
+- **T3 — invariante negativa de suites spawn-only:** un test que spawnea el CLI no entra al affected-set, con control positivo `externalCount === 1`.
+- **Archivos:** `test/specs-merge.test.js` (+71/−1 BOM), `test/affected-set.test.js` (+128). Suite: 1142 total / 1137 pass / 0 fail / 5 skips preexistentes (win32). `npm run lint` passed; format `not-configured`; typecheck n/a.
+- **Versiones y verificaciones:** tag anotado `v0.22.2` @ `aef671bf8e55310789a39c955e99604d75007af6`; main == origin/main == tag; run de publish `42299926378` success con `+ @ancleto/spec@0.22.2`; npm version/dist-tag/gitHead OK y tarball HTTP 200.
+- **Archivo:** `aspec/changes/archive/2026-11-06-test-oracles-hardening/`.
+- **Decisiones promovidas a memoria:** `affected-set-dynamic-classification-already-conformant`, `affected-set-projection-deferred-structural`.
+- **Seed:** regenerado `READY / impact none`; 13 archivos actualizados, incluidas 22 ocurrencias de versión de estado actual (`0.22.1`→`0.22.2`) y conteos 832→834 / 822→824.
+- **Memoria:** 648 refs / 202 nodos activos / 0 sin resolver; 39 reglas project, 8 renderizadas, 31 omitidas.
+
+**Descartado / diferido en 0.22.2 (sigue pendiente, no hecho):**
+
+- **A — CH-06b proyección `--tests`:** diferido por **segunda vez**, ahora por razón estructural: `test/cli.test.js` spawnea el CLI (sin arista de import) y los content guards leen markdown no indexado; declararla "no contrato completo" no la vuelve segura. Se reabre sólo con consumidor probado + contrato que nombre las suites excluidas.
+- **B — clasificación `import('node:sqlite')`:** **NO-OP** — ya estaba implementado (`staticCallSpecifier` acepta literal puro; los no relativos suman `externalCount`). Reproducido: `import('node:sqlite')` → externo; el reporte real no lo lista en `unresolved` (22 unresolved: 8 `import(<dynamic>)`, 4 `require(<dynamic>)`, 10 relativos). Cierra como "ya conforme", no como trabajo pendiente.
+- **C — atomicidad multi-archivo de `specs merge`:** rechazado otra vez — temp+backup+rollback no da atomicidad real entre renames, agrega sidecars fuera del alcance declarado y convertiría una exclusión explícita en garantía no sostenible. La propiedad valiosa es el fail-closed del plan con cero escrituras.
+- **D–H:** sin evidencia + no offline-testeable (CH-08/MEM-06 requiere multi-worktree; MEM-05/MEM-01/CH-09a requieren curaduría de DB y aprobación; CH-00/CH-07 no publicables; P2 motor/host y deuda CH-09/MEM-05c–g sin trigger).

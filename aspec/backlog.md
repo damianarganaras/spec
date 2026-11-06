@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-06 (release 0.22.0).
+> Última actualización: 2026-11-06 (release 0.22.1).
 
 ## Prioridad de ejecución
 
@@ -14,6 +14,8 @@
 7. **Deuda declarada**: MEM-05c–g, CH-09a–h.
 
 > Nota: el paso 2 (0.21.0) es chico y cierra la línea de portabilidad, pero su valor estratégico es menor que P0. Si se quiere llegar antes a PR-5, se puede diferir 0.21.0.
+
+> **Actualización 0.22.1 (2026-11-06):** se cerró la deuda residual de CH-06a (ítems 1–4) y se documentó el ítem 5 como exclusión explícita; también quedó fijado el orden archive → merge. CH-06b sigue **diferido** (proyección de tests incompleta, sin consumidor probado) y CH-07 sigue **bloqueado por CH-00**.
 
 ## Portabilidad / bundle (post-0.20.0)
 
@@ -63,13 +65,13 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **P2 motor/host:** T20 idempotencia, T30 V1/V2, CH-10 matriz de hosts, #4, #6, #18.
 - **Deuda:** MEM-05c–g, CH-09a–h.
 
-### Deuda declarada de CH-06a (0.22.0)
+### Deuda residual de CH-06a — cerrada en 0.22.1
 
-- `ancleto specs merge --change archive` coincide con el directorio contenedor `aspec/changes/archive` y sale 0 ("sin deltas") en vez de fail-closed. Endurecer el resolver para excluir el contenedor.
-- El preámbulo H1 se acepta con cualquier `# `; el delta enumera sólo `# Delta:` / `# Spec delta:`. Acotar o documentar.
-- La inserción ADDED antes de otra sección `## ` deja dos líneas en blanco; es determinística pero conviene fijar/verificar el espaciado.
-- Falta un test de `## RENAMED Requirements` vacío (el código ya lo trata como no-op).
-- Las escrituras son secuenciales: un error de I/O en la escritura N deja escritas las anteriores. La atomicidad de plan (fail-closed) sí está garantizada.
+- **(1) Contenedor `--change archive`** — corregido: el resolver de path falla cerrado por identidad de path, exit 2, cero escrituras; aplica también a `--dry-run`.
+- **(2) Preámbulo H1** — corregido: regla estructural (como máximo un H1, con cualquier título; un segundo H1 o contenido suelto antes de la primera sección falla cerrado). Se preservan las formas legacy de delta archivadas y se actualizó `spec-sync`.
+- **(3) Espaciado ADDED** — corregido: exactamente una línea en blanco antes del siguiente `## `; sin blanco extra al final del archivo.
+- **(4) `## RENAMED Requirements` vacío** — test agregado; no-op confirmado.
+- **(5) Fase de escritura no transaccional** — documentada como exclusión explícita en `spec-sync`; la atomicidad de plan se mantiene y no se implementó atomicidad multi-archivo.
 
 ## Relación con 0.20.0
 
@@ -78,3 +80,15 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 ## Relación con 0.22.0
 
 0.22.0 cierra CH-06a: `ancleto specs merge --change <slug> [--dry-run] [--json]`, merge estructural idempotente por título exacto, fail-closed con cero escrituras y atomicidad de plan; nueva capability canónica `spec-sync`. No cambia `specs check`, `mergeLocked`, el affected-set ni los contratos de memoria/seed.
+
+## Relación con 0.22.1
+
+0.22.1 contiene dos changes, `specs-merge-hardening` y `archive-order-correctness`, sin comandos ni flags nuevos. Se sincronizaron las specs canónicas `spec-sync` y `memory-ops`. El orden de archivo queda fijado en: merge → preflight read-only → promover `## Decisiones` aprobadas → mover → commit, a través de `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive`, `skills/ancleto-bulk-archive` y `skills/ancleto-onboard`; los content guards fijan ese orden.
+
+**Descartado / diferido en 0.22.1 (sigue pendiente, no hecho):**
+
+- **CH-06b `--tests`** (proyección de tests por affected-set): descartado — no puede ser un contrato completo de selección de tests y no tiene consumidor probado. Sigue diferido.
+- **CH-00 baseline**: runbook, no publicable; sigue pendiente.
+- **CH-07** (A/B de prefijos/caché/modelos): bloqueado por CH-00.
+- **CH-08/MEM-06, MEM-05 y el P2 motor/host restante** (#4, #6, #18, T20, T30, CH-10, T25/T27): siguen pendientes/diferidos.
+- **Extensión VS Code**: sin cambios en esta release; sigue diferida.

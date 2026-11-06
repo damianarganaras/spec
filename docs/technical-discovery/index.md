@@ -3,7 +3,7 @@ node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.1
+pluginVersion: 0.22.2
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (822 fuentes, ~38.087 tokens), `package.json` (`0.22.1`), `src/core/model-catalog.json` y
+`minimo` (824 fuentes, ~38.087 tokens), `package.json` (`0.22.2`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones elididos). Por eso las áreas
@@ -62,7 +62,7 @@ paths citados (ver `unknowns.md`).
   ciclo distingue **changes de conformidad** (citan un Requirement existente y no llevan delta) de
   cambios funcionales; desde 0.22.0 el merge de delta specs es un comando CLI determinístico,
   endurecido en 0.22.1, y desde 0.22.1 el archive promueve las decisiones aprobadas antes del move.
-- **Versión del repo**: `package.json` = `0.22.1` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.22.2` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
@@ -84,10 +84,10 @@ paths citados (ver `unknowns.md`).
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.22.1. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
    archivos) mantienen el conteo; en 0.22.1 no cambió su cantidad.
-- **Pack actual**: 822 fuentes y ~38.087 tokens (comprimido, tier `minimo`), con 29 entradas de
+- **Pack actual**: 824 fuentes y ~38.087 tokens (comprimido, tier `minimo`), con 29 entradas de
    archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos. El
-   `.discovery-map.json` de la corrida reporta 832 archivos (aspec 262, docs 21, test 27, src 19).
+   `.discovery-map.json` de la corrida reporta 834 archivos (aspec 264, docs 21, test 27, src 19).
 - **Estado del chequeo**: esta materialización actualizó los documentos afectados desde el pack y
-   las fuentes citadas para reflejar 0.22.1, preservando la estructura del seed. El estado final
+   las fuentes citadas para reflejar 0.22.2, preservando la estructura del seed. El estado final
    (`READY`/`STALE`/`PARTIAL`) lo reporta el `ancleto discovery --check` posterior; no se ejecutó un
    segundo pack.

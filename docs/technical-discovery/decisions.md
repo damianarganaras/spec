@@ -3,7 +3,7 @@ node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.1
+pluginVersion: 0.22.2
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.22.1)
+## Modelos y tiers (estado 0.22.2)
 
 ### Tabla y cadenas
 
@@ -875,8 +875,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 822 fuentes, ~38.087 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 832 archivos (aspec 262, docs 21, test 27, src 19, etc.).
+- **Pack actual**: tier `minimo`, 824 fuentes, ~38.087 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 834 archivos (aspec 264, docs 21, test 27, src 19, etc.).
 
 ## Lint y publicación
 
@@ -935,7 +935,7 @@ sin `--tier` es `normal`.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.22.1`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.22.2`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
   `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue

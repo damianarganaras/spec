@@ -5,7 +5,7 @@ read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.1
+pluginVersion: 0.22.2
 skillVersion: '2.3'
 ---
 
@@ -175,8 +175,8 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 822 fuentes y ~38.087 tokens, tier `minimo` (comprimido), con 29 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 832 archivos (aspec 262, src 19,
+- **Pack actual**: 824 fuentes y ~38.087 tokens, tier `minimo` (comprimido), con 29 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 834 archivos (aspec 264, src 19,
   test 27, docs 21). El estado quedó en `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
   runtime/CI" y la separación `model-catalog.js` (puro) / `scripts/` (procesos).

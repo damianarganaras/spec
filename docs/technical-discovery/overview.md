@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-05T23:05:00Z
-pluginVersion: 0.20.0
+generatedAt: 2026-11-06T12:16:49Z
+pluginVersion: 0.20.1
 skillVersion: '2.3'
 ---
 
@@ -133,6 +133,12 @@ test/                   suite node --test
     destino conservan la lectura legacy de `.opencode`. `import` copia y registra `.opencode/*` sólo
     cuando el host activo es `opencode`; en los demás hosts los assets se materializan por
     `installAgentAssets`, y `installedPaths` sigue siendo la unión de lo realmente escrito.
+13. **Reparación MCP sin escritura (0.20.1)**: `repairProjectMcp` (`src/cli/index.js`) escribe el
+    destino del host activo sólo si el archivo no parsea, si la estructura requiere normalización
+    (raíz no-objeto o clave de esquema presente no-objeto) o si reparó/agregó alguna entrada. Un
+    destino sano conserva bytes y mtime; un destino inexistente sin entradas que reparar no se crea.
+    La garantía se acota a `import`/`import --repair`; `install`/`init` y `upgrade` siguen
+    reescribiendo el mismo destino.
 
 ## Recorrido de una instalación con tier `minimo`
 

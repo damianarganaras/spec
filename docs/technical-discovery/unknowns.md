@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-05T23:05:00Z
-pluginVersion: 0.20.0
+generatedAt: 2026-11-06T12:16:49Z
+pluginVersion: 0.20.1
 skillVersion: '2.3'
 ---
 
@@ -17,8 +17,8 @@ skillVersion: '2.3'
   los archivos citados (`src/cli/index.js` → `HOST_MCP_TARGETS`, `resolveHostMcpDestination`,
   `readHostMcpIntent`, `importCmd`, `exportCmd`, `checkCommand`, `doctorCommand`,
   `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`;
-  `src/core/tier-models.js`), no en el pack solo. El reporte del pack indica 803 archivos
-  (~37.189 tokens); su cuerpo contiene 28 entradas de archivo, porque `**/*.md`, `test/**`,
+  `src/core/tier-models.js`), no en el pack solo. El reporte del pack indica 807 archivos
+  (~37.266 tokens); su cuerpo contiene 28 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
@@ -50,6 +50,11 @@ skillVersion: '2.3'
   `2026-11-05-host-neutral-bundle`. No se probaron bundles de `copilot`, `antigravity` o
   `commandcode`, ni el aviso de destino no parseable, ni la ausencia de `.opencode` en hosts
   no-opencode.
+- **Reparación MCP sin escritura 0.20.1**: no se ejecutó `import --repair` para observar bytes y
+  mtime intactos. El predicado `error || normalized || fixed.length > 0`, la normalización
+  estructural y la no-creación de un destino vacío se leyeron en `repairProjectMcp` y en el change
+  archivado `2026-11-06-fix-repair-mcp-noop`. No se probaron archivos con raíz no-objeto, valor de
+  esquema no-objeto ni `.jsonc` con comentarios.
 - **Refresco del catálogo**: no se ejecutó `scripts/refresh-model-catalog.mjs`. El snapshot se tomó
   como fuente de verdad declarada (`generated_at: 2026-11-04`, 5 proveedores / 211 IDs), sin
   revalidar contra proveedores.
@@ -82,19 +87,19 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` regenerado**: el generador reporta **813 archivos** (aspec 245, docs 21,
-  test 26, etc.) y el archivo quedó regenerado en esta corrida. El pack enumera **803 archivos**
-  (~37.189 tokens) porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y
+- **`.discovery-map.json` regenerado**: el generador reporta **817 archivos** (aspec 249, docs 21,
+  test 26, etc.) y el archivo quedó regenerado en esta corrida. El pack enumera **807 archivos**
+  (~37.266 tokens) porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y
   `public`; además Repomix filtra por sus propios ignores.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
-- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` registran `ancleto: 0.20.0`
+- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` registran `ancleto: 0.20.1`
   (verificado), alineados con `package.json`. Siguen siendo artefactos derivados gitignored y no se
   usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de
-  `0.20.0` es una verificación puntual del estado local, no una fuente de reglas. El propio `check`
+  `0.20.1` es una verificación puntual del estado local, no una fuente de reglas. El propio `check`
   compara ese campo con la versión del CLI y avisa si difieren.
 - **Publicación de `scripts/`**: `package.json` → `files` lista `agents`, `commands`, `skills`,
   `templates`, `profiles`, `src`; no incluye `scripts/`. El refresco del catálogo y el gate de IDs
@@ -103,17 +108,19 @@ skillVersion: '2.3'
   `Select-String` y lecturas directas.
 - **Estado inicial del chequeo**: el CLI regeneró el pack y `.discovery-state.json` antes de esta
   materialización, por lo que `discovery --check` reportó `READY` con `impact: none` y
-  `seedMapPresent: false` (cosmético: el archivo `seed-map.json` existe). El seed anterior describía
-  0.18.16; este describe 0.20.0. La regeneración se hizo completa porque la solicitud lo pidió
-  explícitamente y los documentos no reflejaban 0.19.0/0.20.0.
+  `seedMapPresent: false` (cosmético: el archivo `seed-map.json` existe y el CLI sólo calcula ese
+  campo en la rama `STALE`). El seed anterior describía 0.20.0; este describe 0.20.1. La
+  regeneración se hizo completa porque la solicitud lo pidió explícitamente y el documento debía
+  reflejar el fix de `import --repair`.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.20.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.20.1`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
-  `mcpCommandBroken` por existencia, `readProjectMcp` con `error`, avisos MCP host-aware de
+  `repairProjectMcp` con predicado de escritura, `mcpCommandBroken` por existencia,
+  `readProjectMcp` con `error`, avisos MCP host-aware de
   `checkCommand` y aviso de `repairProjectMcp`, `resolvesHostCompression`/`hostConfigHasCompression`
   y su uso en `install`/`init`/`import`, copia host-scoped de `.opencode/*` en `importCmd`,
   validación de `manifest.mcp`, `TIERS`/`TIER_CHAINS`, `freeTierOnPrimary` y sus dos avisos,
@@ -123,7 +130,8 @@ skillVersion: '2.3'
   módulos de memoria, workflow.
 - **Media (inferido)**: comportamiento de hosts no probados, efecto exacto de cada adaptador en
   cada IDE, resultados de la suite y del workflow, ausencia real del 403 en configuraciones
-  concretas, materialización/saneamiento de la nota de compresión sin ejecución real, salida exacta
+  concretas, materialización/saneamiento de la nota de compresión sin ejecución real, no-escritura
+  de `repairProjectMcp` sobre bytes/mtime sin ejecución real, salida exacta
   de `check`/`doctor` en los escenarios multi-host y salida exacta de `export`/`import` host-neutral
   sin ejecución.
 - **Baja / desconocida**: estado real de la memoria del repo, disponibilidad de modelos en

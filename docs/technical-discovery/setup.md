@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-05T23:05:00Z
-pluginVersion: 0.20.0
+generatedAt: 2026-11-06T12:16:49Z
+pluginVersion: 0.20.1
 skillVersion: '2.3'
 ---
 
@@ -97,6 +97,10 @@ de reemplazo y el exit code no cambian. Desde 0.20.0, `import <bundle>` copia y 
 `.opencode/{agents,commands,skills}` sólo si el host activo es `opencode`; en los demás hosts los
 assets se materializan por `installAgentAssets`.
 
+Desde 0.20.1, `repairProjectMcp` sólo escribe el destino MCP del host activo si el archivo no parsea,
+si la estructura requiere normalización o si hay entradas reparadas/agregadas. Un destino sano no se
+reescribe (mismos bytes y mtime) y un destino inexistente sin nada que reparar no se crea.
+
 ## Refresco del catálogo de modelos
 
 Procedimiento **manual**, con `opencode` instalado en una máquina de mantenimiento. Nunca corre en
@@ -160,8 +164,8 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.20.0)**: `.ancletorc` y `.ancleto/machine-env.md` registran
-`ancleto: 0.20.0`, alineados con `package.json`. Siguen siendo artefactos gitignored que
+**Estado de este checkout (0.20.1)**: `.ancletorc` y `.ancleto/machine-env.md` registran
+`ancleto: 0.20.1`, alineados con `package.json`. Siguen siendo artefactos gitignored que
 `init`/`install`/`upgrade` regeneran; no son fuentes del seed.
 
 ## Entorno de máquina

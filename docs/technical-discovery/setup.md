@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-06T14:20:00Z
-pluginVersion: 0.21.0
+generatedAt: 2026-11-06T17:27:00Z
+pluginVersion: 0.22.0
 skillVersion: '2.3'
 ---
 
@@ -35,6 +35,8 @@ skillVersion: '2.3'
 | Instalar/actualizar assets | `ancleto install [--project <dir>] [--tier ...]` | `src/cli/index.js` |
 | Re-aplicar templates/skills | `ancleto upgrade [--agent <nombre>]` | `src/cli/index.js` |
 | Verificar instalación | `ancleto check` | `src/cli/index.js` |
+| Validar specs canónicos | `ancleto specs check [--change <name>] [--json]` | `src/cli/index.js` |
+| Aplicar delta de specs | `ancleto specs merge --change <slug> [--dry-run] [--json]` | `src/cli/index.js`, `src/core/specs-merge.js` |
 | Diagnóstico de entorno y MCP | `ancleto doctor` | `src/cli/index.js` |
 | Descubrir catálogo (dry-run) | `node scripts/refresh-model-catalog.mjs` | `scripts/refresh-model-catalog.mjs` |
 | Reemplazar snapshot del catálogo | `node scripts/refresh-model-catalog.mjs --write` | `scripts/refresh-model-catalog.mjs` |
@@ -133,8 +135,8 @@ del paquete instalado.
 ## CLI por áreas
 
 - **Instalación**: `install`, `update`, `init`, `upgrade`, `check`, `doctor`, `export`, `import`.
-- **Descubrimiento y análisis**: `discovery`, `affected`, `specs check`, `stats`, `stats failures`,
-  `projects`.
+- **Descubrimiento y análisis**: `discovery`, `affected`, `specs check`, `specs merge`, `stats`,
+  `stats failures`, `projects`.
 - **Memoria**: `memory context|list|doctor|curate|export|import|gc|snapshot|merge|consolidate`,
   `mcp`.
 - **Tiers**: `normal` (opencode-go), `minimo` (cadena contra catálogo), `gratis`
@@ -145,7 +147,12 @@ del paquete instalado.
   `agents/orchestrator.md` y las skills de triage/archive/workflow/continue; `ancleto specs check`
   sólo valida que los specs canónicos usen los keywords literales en inglés. Un change de
   conformidad cita `spec:<capability>#<requirement>` y no lleva delta; el archive lo reporta "sin
-  delta". Esta versión no agrega comandos, flags ni tooling nuevo.
+  delta".
+- **Merge de specs (0.22.0)**: `ancleto specs merge --change <slug>` aplica el delta del change
+  sobre las specs canónicas existentes. `--dry-run` reporta el plan sin escribir y `--json` emite
+  `{ ok, change, dryRun, capabilities, operations, changed, errors }`. Exit `0` en éxito o no-op,
+  `1` por uso o I/O y `2` por conflicto fail-closed (título ambiguo, delta inválido, capability sin
+  spec, change inexistente/ambiguo o slug inválido). No crea capabilities nuevas.
 
 El tier `gratis` está pensado para subagentes: un modelo free sobre un agente con `mode: primary`
 (por ejemplo el `orchestrator`, cuyo frontmatter canónico declara `mode: primary`) puede responder
@@ -169,9 +176,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.21.0)**: `.ancletorc` y `.ancleto/machine-env.md` registran
-`ancleto: 0.21.0`, alineados con `package.json`. Siguen siendo artefactos gitignored que
-`init`/`install`/`upgrade` regeneran; no son fuentes del seed.
+**Estado de este checkout (0.22.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
+la fija `package.json` = `0.22.0`.
 
 ## Entorno de máquina
 

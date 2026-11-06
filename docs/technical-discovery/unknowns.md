@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-06T14:20:00Z
-pluginVersion: 0.21.0
+generatedAt: 2026-11-06T17:27:00Z
+pluginVersion: 0.22.0
 skillVersion: '2.3'
 ---
 
@@ -16,19 +16,22 @@ skillVersion: '2.3'
   Las afirmaciones sobre flujos internos se apoyan en esos comentarios **y** en lectura directa de
   los archivos citados (`src/cli/index.js` → `HOST_MCP_TARGETS`, `resolveHostMcpDestination`,
   `readHostMcpIntent`, `importCmd`, `exportCmd`, `checkCommand`, `doctorCommand`,
-  `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`;
-  `src/core/tier-models.js`), no en el pack solo. El reporte del pack indica 810 archivos
-  (~37.266 tokens); su cuerpo contiene 28 entradas de archivo, porque `**/*.md`, `test/**`,
+  `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`,
+  `specsMergeCommand`, `resolveChangeDir`, `specsCommand`; `src/core/specs-merge.js`;
+  `src/core/tier-models.js`), no en el pack solo. El estado del pack registra 816 fuentes
+  (~37.901 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
   su ignore por defecto de Markdown. `README.md`, `CHANGELOG.md`, `AGENTS.md`, `PRODUCT.md`,
   `agents/**`, `skills/**`, `aspec/specs/**` y `aspec/changes/**` no están en el pack. Las
-  afirmaciones sobre las specs `project-portability`, `agent-install-routing`, `cli-diagnostics` y
-  `prompt-contracts`, sobre los changes archivados `2026-11-05-host-neutral-bundle`,
-  `2026-11-05-mcp-host-write-routing`, `2026-11-05-mcp-oracle-residual-closure` y
-  `2026-11-06-p0-pr5-archive-conformity`, y sobre los conteos de `agents/`/`commands/`/`skills/` se
-  verificaron leyendo esos paths directamente. No se auditó el resto de `aspec/specs/**`.
+  afirmaciones sobre las specs `project-portability`, `agent-install-routing`, `cli-diagnostics`,
+  `prompt-contracts` y `spec-sync`, sobre los changes archivados
+  `2026-11-05-host-neutral-bundle`, `2026-11-05-mcp-host-write-routing`,
+  `2026-11-05-mcp-oracle-residual-closure`, `2026-11-06-p0-pr5-archive-conformity` y
+  `2026-11-06-ch-06a-specs-merge-deterministic`, y sobre los conteos de
+  `agents/`/`commands/`/`skills/` se verificaron leyendo esos paths directamente. No se auditó el
+  resto de `aspec/specs/**`.
 - **Contrato de conformidad 0.21.0**: se describió desde `aspec/specs/prompt-contracts/spec.md`
   (los dos Requirements nuevos), `CHANGELOG.md`, el `proposal.md`/`tasks.md` del archive y las cuatro
   decisiones promovidas leídas de `.ancleto/memory.db` vía `searchMemory`. No se leyó línea por línea
@@ -39,8 +42,9 @@ skillVersion: '2.3'
   verificó leyendo el archivo directamente.
 - **Ejecución de la suite**: no se corrió `npm test` ni `npm run lint` durante la generación. Los
   guards (`test/model-catalog.test.js`, `test/model-catalog-discovery.test.js`,
-  `test/agent-model-coherence.test.js`, `test/content-guards.test.js`, `test/cli.test.js`) se citan
-  por su presencia y propósito declarado, no por un resultado observado.
+  `test/agent-model-coherence.test.js`, `test/content-guards.test.js`, `test/cli.test.js`,
+  `test/specs-merge.test.js`) se citan por su presencia y propósito declarado, no por un resultado
+  observado.
 - **Diagnósticos 0.18.15/0.19.0**: no se ejecutaron `ancleto check` ni `ancleto doctor` para observar
   los avisos nuevos. El comportamiento se describió desde `checkCommand`, `checkTierOrphan`,
   `doctorCommand` y las specs canónicas. No se probaron los escenarios de tier dormido
@@ -62,6 +66,14 @@ skillVersion: '2.3'
   estructural y la no-creación de un destino vacío se leyeron en `repairProjectMcp` y en el change
   archivado `2026-11-06-fix-repair-mcp-noop`. No se probaron archivos con raíz no-objeto, valor de
   esquema no-objeto ni `.jsonc` con comentarios.
+- **Merge de specs 0.22.0**: no se ejecutó `ancleto specs merge` ni `--dry-run`/`--json`. El
+  comportamiento se describió desde `src/core/specs-merge.js` (parser de canónico y delta,
+  `blockKey`, `detectEol`, `applyAdd`/`applyModified`/`applyRemoved`/`applyRenamed`,
+  `mergeSpecText`), desde `specsMergeCommand`/`resolveChangeDir`/`collectDeltaCapabilities` en
+  `src/cli/index.js` y desde `aspec/specs/spec-sync/spec.md` (cinco Requirements). No se observaron
+  en ejecución: idempotencia byte a byte, `mtime` intacto en no-op/dry-run, atomicidad entre
+  capabilities, salida JSON exacta ni los exit codes 0/1/2. `test/specs-merge.test.js` existe pero
+  el pack excluye `test/**` y no se corrió la suite.
 - **Refresco del catálogo**: no se ejecutó `scripts/refresh-model-catalog.mjs`. El snapshot se tomó
   como fuente de verdad declarada (`generated_at: 2026-11-04`, 5 proveedores / 211 IDs), sin
   revalidar contra proveedores.
@@ -94,35 +106,34 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` regenerado**: el generador reporta **820 archivos** (aspec 252, docs 21,
-  test 26, etc.) y el archivo quedó regenerado en esta corrida. El pack enumera **810 archivos**
-  (~37.266 tokens) porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y
-  `public`; además Repomix filtra por sus propios ignores.
+- **`.discovery-map.json` observado**: el generador reporta **826 archivos** (aspec 256, docs 21,
+  test 27, src 19, etc.). El pack registra **816 fuentes** (~37.901 tokens) y 29 entradas de archivo
+  porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además
+  Repomix filtra por sus propios ignores.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
-- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` registran `ancleto: 0.21.0`
-  (verificado), alineados con `package.json`. Siguen siendo artefactos derivados gitignored y no se
-  usan como fuente de contenido.
+- **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
+  gitignored; deben alinearse con `package.json` (`0.22.0`). No se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
-  `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de
-  `0.21.0` es una verificación puntual del estado local, no una fuente de reglas. El propio `check`
-  compara ese campo con la versión del CLI y avisa si difieren.
+  `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
+  versión local es una verificación puntual, no una fuente de reglas. El propio `check` compara ese
+  campo con la versión del CLI y avisa si difieren.
 - **Publicación de `scripts/`**: `package.json` → `files` lista `agents`, `commands`, `skills`,
   `templates`, `profiles`, `src`; no incluye `scripts/`. El refresco del catálogo y el gate de IDs
   existen en el repo fuente pero no viajan en el tarball npm. Se documenta como deuda, no como fallo.
 - **`rg` no disponible** en este entorno (PowerShell 5.1): la evidencia se obtuvo con
   `Select-String` y lecturas directas.
-- **Estado inicial del chequeo**: el CLI regeneró el pack y `.discovery-state.json` antes de esta
-  materialización. El chequeo previo reportó `STALE` con `impact: minor` y esta lista de documentos
-  afectados: `decisions.md`, `index.md`, `integrations.md`, `inventory.md`, `overview.md`, `setup.md`,
-  `units/_map.md`, `units/cli-install.md`, `units/discovery-engine.md`, `units/memory-engine.md` y
-  `unknowns.md`. Todos se reescribieron a 0.21.0 desde el pack y las fuentes citadas; el estado final
-  lo reporta el `discovery --check` posterior. El seed anterior describía 0.20.1.
+- **Estado inicial del chequeo**: el pack y `.discovery-state.json` fueron regenerados antes de esta
+  materialización; no se recibió un reporte de `--check` con `affectedDocs`. Para reflejar 0.22.0 se
+  reescribieron `decisions.md`, `index.md`, `integrations.md`, `inventory.md`, `overview.md`,
+  `setup.md`, `units/_map.md`, `units/cli-install.md`, `units/discovery-engine.md`,
+  `units/memory-engine.md` y `unknowns.md` desde el pack y las fuentes citadas. El estado final lo
+  reporta el `discovery --check` posterior. El seed anterior describía 0.21.0.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.21.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.22.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -134,14 +145,16 @@ skillVersion: '2.3'
   `declaredModelIds`, `modelIdsFromCatalog`, `missingModelIdsInCatalog`, gate de `--write`,
   `looksBinaryMissing`, lint sobre `scripts/`, snapshot de 5 proveedores / 211 IDs, flujo de
   `scripts/refresh-model-catalog.mjs`, `installedPaths` como unión, comandos del CLI, firmas de
-  módulos de memoria, workflow, y los dos Requirements de conformidad de `prompt-contracts`
-  (predicado, archive no-op acotado, ruteo y cuatro decisiones promovidas).
+  módulos de memoria, workflow, los dos Requirements de conformidad de `prompt-contracts`
+  (predicado, archive no-op acotado, ruteo y cuatro decisiones promovidas), y el contrato de
+  `spec-sync` con `parseCanonicalSpec`/`parseDeltaSpec`/`mergeSpecText` y `specsMergeCommand`.
 - **Media (inferido)**: comportamiento de hosts no probados, efecto exacto de cada adaptador en
   cada IDE, resultados de la suite y del workflow, ausencia real del 403 en configuraciones
   concretas, materialización/saneamiento de la nota de compresión sin ejecución real, no-escritura
   de `repairProjectMcp` sobre bytes/mtime sin ejecución real, salida exacta
   de `check`/`doctor` en los escenarios multi-host y salida exacta de `export`/`import` host-neutral
-  sin ejecución; alineación literal de cada skill/agent con la norma de conformidad (se leyó el
+  sin ejecución; idempotencia, atomicidad, exit codes y salida `--json` del merge de specs sin
+  ejecución; alineación literal de cada skill/agent con la norma de conformidad (se leyó el
   contrato y el proposal, no el diff completo de cada archivo).
 - **Baja / desconocida**: estado real de la memoria del repo, disponibilidad de modelos en
   proveedores al momento de leer, contenido de `audit logs/` y `documentation/` (fuera de runtime),

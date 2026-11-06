@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-06T14:20:00Z
-pluginVersion: 0.21.0
+generatedAt: 2026-11-06T17:27:00Z
+pluginVersion: 0.22.0
 skillVersion: '2.3'
 ---
 
@@ -18,7 +18,8 @@ funciones (`PRODUCT.md`, `README.md`):
 1. **Especificar**: ciclo de changes con artifacts `proposal`/`design`/`tasks`/`specs` y comandos
    `/cleto-*`. Desde 0.21.0 distingue un **change de conformidad** —cita un
    `spec:<capability>#<requirement>` existente y no lleva delta— de un cambio funcional, que exige
-   delta (`spec-required`).
+   delta (`spec-required`). Desde 0.22.0 el delta se aplica a las specs canónicas con
+   `ancleto specs merge --change <slug> [--dry-run] [--json]`.
 2. **Descubrir**: mapa topológico del repo y empaquetado de contexto con Repomix, con presupuesto
    por tier.
 3. **Recordar**: memoria persistente local de reglas y decisiones en `.ancleto/memory.db`
@@ -40,6 +41,7 @@ src/core/
   discovery.js          mapa topológico (.discovery-map.json)
   repomix-tier.js       configuración de pack por tier (ignores/compresión/presupuesto)
   affected-set.js       grafo de imports y clausura de dependientes
+  specs-merge.js        merge puro de delta specs sobre specs canónicos (0.22.0)
   machine-env.js        detección y render de .ancleto/machine-env.md
   adapters/frontmatter.js  adaptación pura de frontmatter por host (+ frontmatterValue)
   memory/               motor, DB, tools, MCP, doctor, curaduría, snapshot, working-context
@@ -60,8 +62,11 @@ test/                   suite node --test (content guards incluidos)
   escritura y lectura de esa intención. Ningún comando repite literales de destino por host.
 - **Contrato de conformidad sin código**: desde 0.21.0 la norma de triage vive en
   `agents/orchestrator.md` y la implementan `skills/triage-clarifier`, `skills/ancleto-workflow` y
-  `skills/ancleto-continue`; `src/cli/index.js` no agrega un subcomando `archive` ni cambia su
-  comportamiento (sólo rutea `specs` a `specsCheckCommand`).
+  `skills/ancleto-continue`; `src/cli/index.js` no agrega un subcomando `archive`.
+- **Merge de specs aislado**: desde 0.22.0 `src/core/specs-merge.js` es un módulo **puro** (parseo,
+  plan y serialización sin disco); `src/cli/index.js` resuelve rutas, lee/escribe y emite `--json`.
+  `specsCommand` sólo desvía el token `merge`; `specs check` y `specs` sin argumentos conservan su
+  comportamiento.
 - **Estado local por proyecto**: `.ancletorc` (manifiesto), `.opencode/.ancleto-tier` (tier
   aplicado), el layout nativo de assets por host (`.opencode`, `.claude`, `.agents`,
   `.commandcode`, `.github`, `.cursor`, `.roo`), `.ancleto/memory.db` y
@@ -81,6 +86,7 @@ test/                   suite node --test (content guards incluidos)
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
 | Conformidad SDD | Discriminador conformidad-vs-delta y archive sin delta | `agents/orchestrator.md`, `skills/triage-clarifier`, `skills/ancleto-workflow`, `skills/ancleto-continue`, `aspec/specs/prompt-contracts/spec.md` |
+| Merge de specs | Aplicación determinística de `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED` por título exacto; `--dry-run`, `--json` y fail-closed | `src/core/specs-merge.js`, `src/cli/index.js` → `specsMergeCommand`, `aspec/specs/spec-sync/spec.md` |
 | Entorno de máquina | Shell, EOL y tooling del clon | `src/core/machine-env.js` |
 | Assets | 10 agentes, 16 commands, 21 skills, templates y perfiles | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` |
 
@@ -154,6 +160,14 @@ test/                   suite node --test (content guards incluidos)
     el archive se rechaza; si la spec falta o contradice, el change es funcional (`spec-required`).
     `agents/orchestrator.md` es dueño de la norma y las skills de triage/workflow/continue la
     implementan; no hay subcomando CLI `archive`.
+15. **Merge determinístico de specs (0.22.0)**: `ancleto specs merge --change <slug>` resuelve el
+    change activo (`aspec/changes/<slug>/`) o archivado (`aspec/changes/archive/YYYY-MM-DD-<slug>/`),
+    lee `<changeDir>/specs/<capability>/spec.md` y aplica las operaciones por título exacto de
+    `### Requirement:` sobre `aspec/specs/<capability>/spec.md`. El módulo puro computa todos los
+    planes antes de escribir; cualquier error fail-closed (exit 2) deja cero escrituras, y
+    `--dry-run` nunca escribe. `MODIFIED` reemplaza el bloque completo, `ADDED` idéntico y `REMOVED`
+    ausente son no-op, y `RENAMED` cambia sólo el heading. No crea capabilities nuevas ni modifica
+    deltas, memoria, seed, `package.json`, `specs check` ni affected-set.
 
 ## Recorrido de una instalación con tier `minimo`
 

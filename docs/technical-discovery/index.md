@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-06T14:20:00Z
-pluginVersion: 0.21.0
+generatedAt: 2026-11-06T17:27:00Z
+pluginVersion: 0.22.0
 skillVersion: '2.3'
 ---
 
@@ -11,13 +11,13 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (810 archivos reportados, ~37.266 tokens), `package.json` (`0.21.0`),
-`src/core/model-catalog.json` y el reporte `ancleto discovery --check`. El pack lo generó el CLI
-del propio repo (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier
-excluye `test/**`, `docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones
-elididos). Por eso las áreas Markdown —`aspec/specs/**`, `aspec/changes/**`, `agents/**`,
-`skills/**`, `README.md`, `CHANGELOG.md`— y los detalles finos de comportamiento se verificaron por
-lectura directa de los paths citados (ver `unknowns.md`).
+`minimo` (816 fuentes, ~37.901 tokens), `package.json` (`0.22.0`), `src/core/model-catalog.json` y
+el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
+(`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
+`docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones elididos). Por eso las áreas
+Markdown —`aspec/specs/**`, `aspec/changes/**`, `agents/**`, `skills/**`, `README.md`,
+`CHANGELOG.md`— y los detalles finos de comportamiento se verificaron por lectura directa de los
+paths citados (ver `unknowns.md`).
 
 ## Ruteo por pregunta
 
@@ -28,19 +28,20 @@ lectura directa de los paths citados (ver `unknowns.md`).
 | Reglas, contratos, riesgos, deuda, acoplamiento e impacto de cambios | `decisions.md` |
 | Sistemas externos y dependencias observables (npm, GitHub, Repomix, git, MCP, opencode) | `integrations.md` |
 | Catálogo de unidades (módulos, agents, skills, commands) con propósito y entry point | `units/_map.md` |
+| **Merge de specs (0.22.0)**: `ancleto specs merge --change <slug> [--dry-run] [--json]`, `src/core/specs-merge.js`, capability `spec-sync` | `decisions.md`, `units/cli-install.md`, `units/_map.md` |
 | **Conformidad vs cambio funcional (0.21.0)**: predicado de cita resoluble + ausencia de bloques delta, `spec-required`, ruteo único | `decisions.md`, `overview.md`, `units/_map.md` |
 | **Archive de conformidad sin delta (0.21.0)**: reporte "sin delta", cita fail-closed, garantía acotada, reuso del ledger cerrado | `decisions.md`, `units/cli-install.md` |
 | **Modelos por tier**: `TIERS` agente→string, `TIER_CHAINS`, resolver contra catálogo, `gratis` free-only, oráculo de `check` | `decisions.md`, `setup.md`, `units/cli-install.md` |
 | **Modelo gratis sobre agente primario**: `freeTierOnPrimary(model, mode)`, aviso en `applyTier` (set-time) y en `check` (inspect-time) | `decisions.md`, `units/cli-install.md` |
 | **Diagnósticos `check`/`doctor` (0.18.15–0.19.0)**: deriva de `.ancletorc.version`, tier dormido sin superficie de agentes, precedencia de config MCP y alcance host-aware | `decisions.md`, `setup.md`, `units/cli-install.md` |
 | **Salud MCP (0.18.16–0.19.0)**: `mcpCommandBroken` por existencia, `findProjectMcpFile`/`PROJECT_MCP_CANDIDATES`, avisos de `check` sobre los destinos de los hosts instalados, aviso de `import` | `decisions.md`, `setup.md`, `units/cli-install.md` |
-| **Capabilities `cli-diagnostics`, `agent-install-routing`, `project-portability`, `prompt-contracts`** y changes archivados de diagnóstico, portabilidad y conformidad | `decisions.md`, `overview.md`, `units/cli-install.md` |
+| **Capabilities `cli-diagnostics`, `agent-install-routing`, `project-portability`, `prompt-contracts`, `spec-sync`** y changes archivados de diagnóstico, portabilidad, conformidad y merge de specs | `decisions.md`, `overview.md`, `units/cli-install.md` |
 | **Nota de compresión host-scoped**: `resolvesHostCompression`, gate estado-driven en `install`/`init`/`import`, alcance host activo, excepción M2 | `decisions.md`, `units/cli-install.md` |
 | **Validación de bundles**: `manifest.mcp` debe ser array de entradas con `name` string antes del primer write | `decisions.md`, `units/cli-install.md` |
 | **Catálogo de modelos**: snapshot de 5 proveedores / 211 IDs, helpers `declaredModelIds` / `modelIdsFromCatalog` / `missingModelIdsInCatalog`, guard de integridad | `decisions.md`, `units/discovery-engine.md` |
 | **Integridad de IDs declarados**: fuentes versionadas, helper puro, gate de `--write` y aviso advisory de `check` | `decisions.md`, `units/discovery-engine.md`, `units/cli-install.md` |
 | **Descubrimiento dev-only**: clasificaciones `available`/`binary-missing`/`network-unavailable`/`partial`, `looksBinaryMissing` locale-independent, diff y escritura atómica | `units/discovery-engine.md`, `integrations.md` |
-| CLI: `init`/`install`/`update`/`upgrade`, wizard TTY, rutas por host, adaptadores, MCP, `check`, `doctor` | `units/cli-install.md` |
+| CLI: `init`/`install`/`update`/`upgrade`, wizard TTY, rutas por host, adaptadores, MCP, `check`, `doctor`, `specs merge` | `units/cli-install.md` |
 | **Ruteo MCP por host (0.19.0)**: `HOST_MCP_TARGETS`, `setupHostMcp`, destinos por host, `check`/`doctor` host-aware | `decisions.md`, `units/cli-install.md` |
 | **Bundle host-neutral (0.20.0)**: `readHostMcpIntent`, `export` por host, `import` con copia `.opencode/*` sólo en `opencode` | `decisions.md`, `units/cli-install.md` |
 | **Reparación MCP sin escritura (0.20.1)**: `repairProjectMcp` escribe sólo ante error de parseo, normalización estructural o entradas reparadas/agregadas; destino sano intacto | `decisions.md`, `units/cli-install.md` |
@@ -58,27 +59,27 @@ lectura directa de los paths citados (ver `unknowns.md`).
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local
   (`.ancleto/memory.db`, `node:sqlite`) y control explícito de costo por tier. Desde 0.21.0 el
   ciclo distingue **changes de conformidad** (citan un Requirement existente y no llevan delta) de
-  cambios funcionales.
-- **Versión del repo**: `package.json` = `0.21.0` (HEAD `3844832`, rama `development`).
-  `.ancletorc` y `.ancleto/machine-env.md` también registran `0.21.0`; ambos son artefactos
-  gitignored que se regeneran en `init`/`install`/`upgrade`.
+  cambios funcionales; desde 0.22.0 el merge de delta specs es un comando CLI determinístico.
+- **Versión del repo**: `package.json` = `0.22.0` (rama `development`). `.ancletorc` y
+  `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
+  esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` (0.22.0: módulo puro
+  `src/core/specs-merge.js`, subcomando `specs merge` y capability `spec-sync`),
   `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` (0.21.0: discriminador
   conformidad-vs-delta, archive de conformidad sin delta, ruteo alineado en orchestrator, triage,
   workflow y continue; dos Requirements nuevos en `prompt-contracts`),
   `aspec/changes/archive/2026-11-06-fix-repair-mcp-noop/` (0.20.1: `repairProjectMcp` no reescribe
   un destino MCP sano),
-  `aspec/changes/archive/2026-11-05-host-neutral-bundle/` (bundle host-neutral),
-  `aspec/changes/archive/2026-11-05-mcp-host-write-routing/` (descriptor de destino MCP por host) y
-  `aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure/` (texto y par global de `doctor`).
+  `aspec/changes/archive/2026-11-05-host-neutral-bundle/` (bundle host-neutral) y
+  `aspec/changes/archive/2026-11-05-mcp-host-write-routing/` (descriptor de destino MCP por host).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
-  Sin cambios en 0.19.0–0.21.0. `agents/` (10), `commands/` (16) y `skills/` (21) mantienen el
-  conteo; en 0.21.0 cambió su texto de ruteo, no su cantidad.
-- **Pack actual**: 810 archivos enumerados, ~37.266 tokens. El `.discovery-map.json` regenerado en
-  esta corrida reporta 820 archivos (aspec 252).
-- **Estado del chequeo**: el chequeo previo a esta materialización reportó `STALE` con
-  `impact: minor` y afectó este documento más `overview`, `setup`, `decisions`, `integrations`,
-  `inventory`, `units/_map`, `units/cli-install`, `units/discovery-engine`, `units/memory-engine` y
-  `unknowns`; todos fueron reescritos a 0.21.0 desde el pack y las fuentes citadas. El estado final
-  lo reporta el `discovery --check` posterior del orquestador.
+  Sin cambios en 0.19.0–0.22.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
+  archivos) mantienen el conteo; en 0.22.0 no cambió su cantidad.
+- **Pack actual**: 816 fuentes y ~37.901 tokens (comprimido, tier `minimo`), con 29 entradas de
+  archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos. El
+  `.discovery-map.json` de la corrida reporta 826 archivos (aspec 256, src 19, test 27).
+- **Estado del chequeo**: esta materialización reescribió todos los documentos desde el pack y las
+  fuentes citadas para reflejar 0.22.0. El estado final (`READY`/`STALE`/`PARTIAL`) lo reporta el
+  `ancleto discovery --check` posterior; no se ejecutó un segundo pack.

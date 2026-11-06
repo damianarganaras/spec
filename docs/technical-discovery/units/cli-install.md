@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, ruteo MCP por host, diagnósticos check/doctor, portabilidad host-neutral, reparación MCP sin escritura, entorno de máquina y materialización de los contratos de conformidad"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, ruteo MCP por host, diagnósticos check/doctor, portabilidad host-neutral, reparación MCP sin escritura, merge de specs, entorno de máquina y materialización de los contratos de conformidad"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -34,11 +34,14 @@ covers:
   - validación de manifest.mcp
   - reparación MCP sin escritura
   - conformidad sin delta
+  - merge de specs
+  - specs merge
+  - specs-merge
   - materialización de agents y skills
   - machine-env
-sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-06T14:20:00Z
-pluginVersion: 0.21.0
+sources: ["src/cli/index.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-06T17:27:00Z
+pluginVersion: 0.22.0
 skillVersion: '2.3'
 ---
 
@@ -49,7 +52,7 @@ skillVersion: '2.3'
 `src/cli/index.js` es el entry point único (`ancleto` y `aspec`). Materializa los assets del
 framework en el layout nativo del host elegido, aplica el tier de modelos, mergea templates sin
 destruir personalizaciones, configura MCP y ofrece comandos de operación (memoria, discovery,
-stats, portabilidad, diagnóstico). `src/cli/ui.js` aporta el banner y los menús TTY.
+`specs`, stats, portabilidad, diagnóstico). `src/cli/ui.js` aporta el banner y los menús TTY.
 
 ## Recorrido relevante
 
@@ -155,11 +158,14 @@ fuente canónica byte a byte). Es la vía que materializa el default publicado d
 (`commandcode/deepseek/deepseek-v4.1-flash`) y, desde 0.18.15, el único remediador de la deriva de
 `.ancletorc.version` que `check` reporta.
 
-**0.21.0**: el CLI no cambió. `upgrade` es la vía por la que llegan a los proyectos los cambios de
-ruteo de conformidad de `agents/orchestrator.md`, `skills/triage-clarifier`,
+**0.21.0**: el CLI no cambió en esa versión; `upgrade` es la vía por la que llegaron a los proyectos
+los cambios de ruteo de conformidad de `agents/orchestrator.md`, `skills/triage-clarifier`,
 `skills/ancleto-workflow`, `skills/ancleto-continue`, `skills/ancleto-archive`, `agents/spec-writer.md`,
 `agents/documenter.md`, `agents/coder.md`, `agents/tester.md` y `agents/reviewer.md`; los mirrors
 `.opencode/**` no se editan a mano.
+
+**0.22.0**: el CLI suma el subcomando `specs merge` (ver abajo). `upgrade` sigue siendo la vía de
+materialización de assets; el merge de specs no se aplica durante `install`/`upgrade`.
 
 ### `import` / `export`
 
@@ -326,6 +332,50 @@ global aunque sea inválida. La ruta del proyecto se reporta relativa con separa
 existe ninguno. El parseo es `JSON.parse` estricto sin BOM; un `.jsonc` con comentarios se reporta
 inválido a propósito. `doctor` no valida `.vscode/mcp.json` ni crea MCP para hosts sin destino.
 
+### Merge de specs (0.22.0)
+
+`ancleto specs merge --change <slug> [--dry-run] [--json]` aplica el delta de un change sobre las
+specs canónicas existentes. El módulo `src/core/specs-merge.js` es puro; el CLI resuelve rutas,
+lee/escribe y reporta.
+
+1. `specsCommand(args)` desvía sólo `args[0] === 'merge'` a `specsMergeCommand`; cualquier otra
+   invocación sigue a `specsCheckCommand`, por lo que `specs check` y `specs` sin argumentos
+   conservan comportamiento y exit codes.
+2. `--change <slug>` se valida con `isValidChangeSlug`: rechaza `..`, `/`, `\`, NUL y formas fuera
+   de `^[A-Za-z0-9][A-Za-z0-9._-]*$` con exit 2.
+3. `resolveChangeDir` busca el change activo en `aspec/changes/<slug>/` y el archivado en
+   `aspec/changes/archive/YYYY-MM-DD-<slug>/`. 0 o ≥2 coincidencias son fail-closed (exit 2).
+4. `collectDeltaCapabilities` enumera `<changeDir>/specs/<capability>/spec.md`; si la capability no
+   tiene `aspec/specs/<capability>/spec.md`, el error es fail-closed y **no se crea** la spec.
+5. Fase 1: `mergeSpecText(delta, canonico)` computa el plan de todas las capabilities y acumula
+   errores. Si hay al menos uno, `--json` emite `{ ok: false, ... }` y el proceso sale con exit 2
+   sin escribir ningún archivo.
+6. Fase 2: sin errores y sin `--dry-run`, escribe sólo los planes con `changed: true`. Un plan
+   vacío no escribe y el `mtime` queda intacto. `--dry-run` reporta el plan sin escribir.
+7. Salida: humano por capability con los tipos de operación, o `--json` con
+   `{ ok, change, dryRun, capabilities, operations, changed, errors }`. Exit `0` en éxito/no-op,
+   `1` por uso o I/O, `2` por fail-closed.
+
+Reglas del merge (`src/core/specs-merge.js`):
+
+- Matching **exacto** por título de `### Requirement:`; 0 o ≥2 coincidencias son error. Un heading
+  `###` indentado o un bloque no reconocido también falla cerrado.
+- El bloque de requirement termina en el próximo `##` o `###`, no en `#### Scenario:`; el delta
+  admite un preámbulo H1 opcional (`# Delta: <name>` / `# Spec delta: <name>`) y lo ignora.
+- `ADDED` inserta dentro de `## Requirements`; idéntico es no-op, distinto es conflicto.
+  `MODIFIED` reemplaza cuerpo y escenarios completos. `REMOVED` elimina y es no-op si ya no existe.
+  `RENAMED` cambia el heading de `FROM` a `TO`; no-op si `TO` ya existe, conflicto si están ambos o
+  ninguno, y exige `- FROM:`/`- TO:`.
+- La serialización conserva el EOL dominante del canónico (CRLF sólo si supera estrictamente a los
+  LF sueltos) y recorta líneas en blanco finales; el mismo delta produce el mismo archivo.
+- No toca archivos delta, la carpeta del change, memoria, seed, `package.json`, `specs check`,
+  `mergeLocked` ni el affected-set, y no crea capabilities nuevas. El comando no está cableado en
+  `skills/ancleto-sync-specs`, `skills/ancleto-archive` ni `/cleto-*`.
+
+`specsCheckCommand` sigue siendo el oráculo de keywords: `specIssues` exige `### Requirement:` y,
+si hay `#### Scenario:`, exige `WHEN`/`THEN` y rechaza otros `####` que no sean `Scenario`. Un spec
+traducido o con headings no canónicos puede fallar el merge; `specs check` es la señal temprana.
+
 ## Rutas por host (`AGENT_TARGETS`)
 
 | Host | Skills | Agents | Commands |
@@ -395,14 +445,18 @@ tier puede quedar dormido en `check`.
   fail-closed. No hay subcomando CLI `archive`; la aceptación vive en los contratos de
   `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
   resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
-- **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; en este
-  checkout registran `0.21.0`. No son fuentes del seed.
+- **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; deben
+  alinearse con `package.json` (`0.22.0`). No son fuentes del seed.
+- **Merge de specs 0.22.0**: el fail-closed es por plan, no transaccional ante una caída de I/O a
+  mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs traducidos ni
+  crea capabilities. No está cableado en skills/agentes.
 
 ## Paths clave
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point, subcomandos, instalación, descriptor y ruteo MCP por host, diagnósticos, salud MCP, nota de compresión, validación de bundles, `export`/`import`, MCP, stats |
+| `src/cli/index.js` | Entry point, subcomandos, instalación, descriptor y ruteo MCP por host, diagnósticos, salud MCP, nota de compresión, validación de bundles, `export`/`import`, `specs merge`, MCP, stats |
+| `src/core/specs-merge.js` | Merge puro de delta specs: `parseCanonicalSpec`, `parseDeltaSpec`, `mergeSpecText`, fail-closed y serialización |
 | `src/cli/ui.js` | Banner y menús TTY |
 | `src/core/adapters/frontmatter.js` | Adaptación pura de frontmatter por host y `frontmatterValue` |
 | `src/core/tier-models.js` | Tiers, cadenas, resolver, `freeTierOnPrimary`, `declaredModelIds` |
@@ -413,6 +467,7 @@ tier puede quedar dormido en `check`.
 | `scripts/refresh-model-catalog.mjs` | Refresco manual, gate de `--write` y escritura atómica |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques `LOCKED` |
 | `profiles/test/**` | Overlay del perfil de test |
+| `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` | Change archivado del merge determinístico de specs y la capability `spec-sync` (0.22.0) |
 | `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` | Change archivado del discriminador conformidad-vs-delta y archive sin delta (0.21.0; materializado por `upgrade`) |
 | `aspec/changes/archive/2026-11-06-fix-repair-mcp-noop/` | Change archivado del predicado de escritura de `repairProjectMcp` (0.20.1) |
 | `aspec/changes/archive/2026-11-05-host-neutral-bundle/` | Change archivado del bundle host-neutral (`export`/`import`) |
@@ -422,6 +477,7 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-04-check-doctor-state-parity/` | Change archivado de paridad de diagnósticos (H7/H13/H14) |
 | `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` | Change archivado de la nota de compresión y validación de `manifest.mcp` |
 | `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión, config MCP de `doctor`, salud MCP, avisos de `check` y aviso de `import` |
+| `aspec/specs/spec-sync/spec.md` | Requirements del merge determinístico, idempotencia, fail-closed, dry-run y alcance acotado (0.22.0) |
 | `aspec/specs/prompt-contracts/spec.md` | Requirements de conformidad-vs-delta y archive sin delta (0.21.0) |
 | `aspec/specs/agent-install-routing/spec.md` | Requirements de destinos nativos, ruteo MCP por host y compresión host-scoped |
 | `aspec/specs/project-portability/spec.md` | Requirements de `export` host-neutral, `import` (MCP + `installedPaths`), reparación y nota de compresión |

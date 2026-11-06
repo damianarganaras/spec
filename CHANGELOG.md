@@ -2,6 +2,11 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.20.1] - 2026-11-06
+
+### Fixed
+- **`import --repair` no reescribe un destino MCP sano**: cierra el bug de escritura incondicional de `repairProjectMcp`; cuando la config MCP del proyecto ya es válida, el archivo queda intacto (mismos bytes y mtime), sin cambios de mensajes ni de exit codes.
+
 ## [0.20.0] - 2026-11-05
 
 ### Added

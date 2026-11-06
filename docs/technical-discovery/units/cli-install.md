@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, ruteo MCP por host, diagnósticos check/doctor, portabilidad host-neutral y entorno de máquina"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, ruteo MCP por host, diagnósticos check/doctor, portabilidad host-neutral, reparación MCP sin escritura y entorno de máquina"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -32,10 +32,11 @@ covers:
   - portabilidad e installedPaths
   - bundle host-neutral
   - validación de manifest.mcp
+  - reparación MCP sin escritura
   - machine-env
-sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-05T23:05:00Z
-pluginVersion: 0.20.0
+sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-06T12:16:49Z
+pluginVersion: 0.20.1
 skillVersion: '2.3'
 ---
 
@@ -108,10 +109,10 @@ archivo ausente o un JSON inválido no aporta la tool. Es la misma fuente de ver
 
 - **`install`**: `writesCaveman: Boolean(mcpMap && mcpMap.caveman)`.
 - **`init`**: mismo patrón con su `mcpMap`, resuelto antes de `installAgentAssets`.
-- **`import`**: `writesCaveman: agent === 'opencode' && Boolean(freshProjectMcp.caveman)` e
-  `intendedNames` derivado de `manifest.mcp`. `repairProjectMcp` solo escribe
-  `.opencode/opencode.json`, por eso antigravity depende exclusivamente de su config de workspace ya
-  presente.
+- **`import`**: `writesCaveman: Boolean(freshProjectMcp && freshProjectMcp.caveman)` e
+  `intendedNames` derivado de `manifest.mcp`. `repairProjectMcp` escribe el destino del host activo
+  y, desde 0.20.1, sólo cuando hay error de parseo, normalización estructural o entradas
+  reparadas/agregadas; un destino sano no se toca.
 - **Efecto**: con la config en disco ya en `caveman`, `install --no-mcp` o la ausencia del binario
   conservan la nota; sin `caveman` en disco ni escritura pendiente, la nota se elimina al reescribir
   el orchestrator. Re-ejecutar es idempotente.
@@ -189,6 +190,26 @@ fuente canónica byte a byte). Es la vía que materializa el default publicado d
   faltantes u huérfanos reales. En hosts no-opencode deja de aparecer un `.opencode` fantasma.
 - `--repair` sin bundle repara entradas MCP rotas sin tocar las sanas y sin cambiar
   `installedPaths`; como no reescribe assets, **no sanea** una nota de compresión legada.
+
+### Reparación MCP sin escritura (0.20.1)
+
+`repairProjectMcp` decide ahora **si escribir**, no sólo qué escribir. Escribe el destino del host
+activo sólo si `error || normalized || fixed.length > 0`:
+
+- `error`: el archivo existe y no es JSON parseable (se conserva el aviso y el reemplazo).
+- `normalized`: el documento raíz no es un objeto JSON (`null`, arreglo, string, número, booleano) o
+  la clave de esquema del host está presente con un valor no-objeto.
+- `fixed`: hay al menos una entrada rota reparada o un nombre intencionado agregado.
+
+Un destino con todas las entradas sanas no se reescribe: bytes y mtime quedan intactos y el mensaje
+`MCP sanos en <ruta>, sin cambios` describe lo efectivamente hecho. Una clave de esquema ausente no
+se agrega sólo para normalizar; un destino inexistente sin entradas que reparar o agregar no se crea
+(ni archivo ni directorio). `mkdir` vive dentro de la rama de escritura.
+
+La garantía de no-escritura se acota a `import`/`import --repair` (`repairProjectMcp`).
+`install`/`init` (`setupHostMcp` → `mergeMcp`) y `upgrade` (`refreshCopilotMcp`/
+`refreshCommandCodeMcp`) reescriben el mismo destino y quedan fuera. Un `.jsonc` con comentarios
+sigue sin parsear y se reemplaza (`jsonc-comments-not-supported`).
 
 ### Salud de comandos MCP (0.18.16)
 
@@ -358,8 +379,11 @@ tier puede quedar dormido en `check`.
 - **Bundle host-neutral 0.20.0**: `export` lee la intención con `readHostMcpIntent`; `import` copia
   `.opencode/*` sólo en `opencode`. El formato `ancleto-export/1` no cambia y los bundles legacy
   siguen siendo legibles.
+- **Reparación MCP 0.20.1**: el predicado de escritura evita reescribir destinos sanos y crear
+  destinos vacíos; los mensajes y exit codes no cambian. La garantía se acota a
+  `import`/`import --repair`; `install`/`init` y `upgrade` siguen reescribiendo el destino.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; en este
-  checkout registran `0.20.0`. No son fuentes del seed.
+  checkout registran `0.20.1`. No son fuentes del seed.
 
 ## Paths clave
 
@@ -376,6 +400,7 @@ tier puede quedar dormido en `check`.
 | `scripts/refresh-model-catalog.mjs` | Refresco manual, gate de `--write` y escritura atómica |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques `LOCKED` |
 | `profiles/test/**` | Overlay del perfil de test |
+| `aspec/changes/archive/2026-11-06-fix-repair-mcp-noop/` | Change archivado del predicado de escritura de `repairProjectMcp` (0.20.1) |
 | `aspec/changes/archive/2026-11-05-host-neutral-bundle/` | Change archivado del bundle host-neutral (`export`/`import`) |
 | `aspec/changes/archive/2026-11-05-mcp-host-write-routing/` | Change archivado del descriptor y ruteo de escritura MCP por host |
 | `aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure/` | Change archivado del texto del predicado y par global de `doctor` |

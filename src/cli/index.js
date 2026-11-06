@@ -4264,6 +4264,14 @@ async function repairProjectMcp(projectDir, destination, fresh, intendedNames = 
   if (error) {
     console.error(`ancleto: no se pudo leer ${relative(projectDir, file).replace(/\\/g, '/')} como JSON; se reemplaza por la configuracion MCP nueva`)
   }
+  // Escribe solo si hubo error de parseo, si la estructura requiere normalizacion
+  // (raiz no-objeto o valor de esquema presente no-objeto) o si hay entradas
+  // reparadas/agregadas. Un destino sano no se reescribe y una clave de esquema
+  // ausente no se agrega solo para normalizar.
+  const notObject = (v) => v === null || typeof v !== 'object' || Array.isArray(v)
+  const parsed = error ? undefined : cfg
+  const normalized = parsed !== undefined
+    && (notObject(parsed) || (Object.hasOwn(parsed, schema) && notObject(parsed[schema])))
   if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) cfg = {}
   const current = cfg[schema]
   cfg[schema] = current && typeof current === 'object' && !Array.isArray(current) ? current : {}
@@ -4283,8 +4291,10 @@ async function repairProjectMcp(projectDir, destination, fresh, intendedNames = 
       }
     }
   }
-  await mkdir(dirname(file), { recursive: true })
-  await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
+  if (error || normalized || fixed.length > 0) {
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, JSON.stringify(cfg, null, 2) + '\n')
+  }
   return { file, fixed }
 }
 

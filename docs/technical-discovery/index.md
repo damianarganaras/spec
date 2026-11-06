@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-05T23:05:00Z
-pluginVersion: 0.20.0
+generatedAt: 2026-11-06T12:16:49Z
+pluginVersion: 0.20.1
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (803 archivos reportados, ~37.189 tokens), `package.json` (`0.20.0`),
+`minimo` (807 archivos reportados, ~37.266 tokens), `package.json` (`0.20.1`),
 `src/core/model-catalog.json` y el reporte `ancleto discovery --check`. El pack lo generó el CLI
 del propio repo (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier
 excluye `test/**`, `docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones
@@ -41,6 +41,7 @@ paths citados (ver `unknowns.md`).
 | CLI: `init`/`install`/`update`/`upgrade`, wizard TTY, rutas por host, adaptadores, MCP, `check`, `doctor` | `units/cli-install.md` |
 | **Ruteo MCP por host (0.19.0)**: `HOST_MCP_TARGETS`, `setupHostMcp`, destinos por host, `check`/`doctor` host-aware | `decisions.md`, `units/cli-install.md` |
 | **Bundle host-neutral (0.20.0)**: `readHostMcpIntent`, `export` por host, `import` con copia `.opencode/*` sólo en `opencode` | `decisions.md`, `units/cli-install.md` |
+| **Reparación MCP sin escritura (0.20.1)**: `repairProjectMcp` escribe sólo ante error de parseo, normalización estructural o entradas reparadas/agregadas; destino sano intacto | `decisions.md`, `units/cli-install.md` |
 | Portabilidad `export`/`import`: bundle, `--repair`, `installedPaths` acumulativo | `units/cli-install.md`, `decisions.md` |
 | Discovery: mapa topológico, pack Repomix, estado del seed, `affectedDocs`, affected-set | `units/discovery-engine.md` |
 | Memoria persistente: SQLite+FTS5, tools MCP, recall, refs, working-context, ops, doctor, curate | `units/memory-engine.md` |
@@ -54,10 +55,13 @@ paths citados (ver `unknowns.md`).
 - **Entry point**: `src/cli/index.js` (bins `ancleto` y `aspec` en `package.json`).
 - **Producto**: orquestador SDD para IDEs con descubrimiento técnico, memoria persistente local
   (`.ancleto/memory.db`, `node:sqlite`) y control explícito de costo por tier.
-- **Versión del repo**: `package.json` = `0.20.0` (HEAD `f86f829`, rama `development`).
-  `.ancletorc` y `.ancleto/machine-env.md` también registran `0.20.0`; ambos son artefactos
+- **Versión del repo**: `package.json` = `0.20.1` (HEAD `9a8bb60`, rama `development`).
+  `.ancletorc` y `.ancleto/machine-env.md` también registran `0.20.1`; ambos son artefactos
   gitignored que se regeneran en `init`/`install`/`upgrade`.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-06-fix-repair-mcp-noop/` (0.20.1: `repairProjectMcp` deja de
+  reescribir un destino MCP sano y no crea un destino vacío; bytes y mtime quedan intactos, sin
+  cambios de mensajes ni exit codes),
   `aspec/changes/archive/2026-11-05-host-neutral-bundle/` (bundle host-neutral: intención MCP de
   `export` por host y copia/registro de `.opencode/*` en `import` acotados al host activo),
   `aspec/changes/archive/2026-11-05-mcp-host-write-routing/` (descriptor único de destino MCP por
@@ -68,9 +72,10 @@ paths citados (ver `unknowns.md`).
   advisory).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
-  Sin cambios en 0.19.0 ni 0.20.0. `agents/` (10), `commands/` (16) y `skills/` (21) tampoco cambian.
-- **Pack actual**: 803 archivos enumerados, ~37.189 tokens. El `.discovery-map.json` regenerado en
-  esta corrida reporta 813 archivos (aspec 245).
+  Sin cambios en 0.19.0, 0.20.0 ni 0.20.1. `agents/` (10), `commands/` (16) y `skills/` (21)
+  tampoco cambian.
+- **Pack actual**: 807 archivos enumerados, ~37.266 tokens. El `.discovery-map.json` regenerado en
+  esta corrida reporta 817 archivos (aspec 249).
 - **Estado del chequeo**: el CLI regeneró `.discovery-state.json` antes de materializar este seed,
   por lo que `discovery --check` reporta `READY`; el contenido de los documentos se actualizó igual
-  a 0.20.0 desde el pack de la corrida.
+  a 0.20.1 desde el pack de la corrida.

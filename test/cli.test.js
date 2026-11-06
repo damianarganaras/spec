@@ -3041,13 +3041,42 @@ describe('CLI MCP command health (mcp-command-health)', () => {
           'ancleto-memory': { type: 'local', enabled: true, command: [process.execPath, join(dir, 'fake-mcp.js'), 'mcp'] },
           custom: { type: 'local', enabled: true, command: ['custom-mcp'] }
         })
+        // mtime fijado en el pasado: una escritura sin cambios lo moveria a "ahora".
+        const old = new Date('2020-01-02T03:04:05Z')
+        utimesSync(file, old, old)
         const before = readFileSync(file, 'utf8')
         const beforeHash = fileHash(file)
         const r = run(['import', '--repair'], dir)
         assert.equal(r.status, 0)
         assert.equal(readFileSync(file, 'utf8'), before, 'contenido byte-identico')
         assert.equal(fileHash(file), beforeHash, 'hash sin cambios')
+        assert.equal(statSync(file).mtime.getTime(), old.getTime(), 'mtime sin cambios')
         assert.match(r.stdout, /MCP sanos en /, 'no regenera entradas sanas')
+      })
+    })
+
+    // El invariante negativo "un destino sano no se reescribe" no es exclusivo de
+    // opencode: `repairProjectMcp` es compartido por todos los hosts y aplica su
+    // predicado sobre el archivo del host activo (aqui copilot, esquema `mcp`).
+    it('un destino copilot sano no se reescribe (host no-opencode)', () => {
+      withDir((dir) => {
+        writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ agent: 'copilot', language: 'auto', profile: 'general' }, null, 2))
+        const file = join(dir, 'copilot-mcp.json')
+        writeFileSync(file, JSON.stringify({
+          mcp: { 'ancleto-memory': { type: 'local', enabled: true, command: [process.execPath, join(dir, 'fake-mcp.js'), 'mcp'] } }
+        }, null, 2) + '\n')
+        // mtime fijado en el pasado: una escritura sin cambios lo moveria a "ahora".
+        const old = new Date('2020-01-02T03:04:05Z')
+        utimesSync(file, old, old)
+        const before = readFileSync(file, 'utf8')
+        const beforeHash = fileHash(file)
+        const r = run(['import', '--repair'], dir)
+        assert.equal(r.status, 0)
+        assert.equal(readFileSync(file, 'utf8'), before, 'contenido byte-identico')
+        assert.equal(fileHash(file), beforeHash, 'hash sin cambios')
+        assert.equal(statSync(file).mtime.getTime(), old.getTime(), 'mtime sin cambios')
+        assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false, 'no crea el destino de opencode')
+        assert.match(r.stdout, /MCP sanos en /)
       })
     })
 
@@ -3185,6 +3214,119 @@ describe('CLI MCP command health (mcp-command-health)', () => {
         assert.doesNotMatch(r.stderr, /no se pudo leer .* como JSON; se reemplaza/)
         const cfg = JSON.parse(readFileSync(file, 'utf8'))
         assert.equal(cfg.mcp['ancleto-memory'].command[0], process.execPath, 'repara solo la entrada rota')
+      })
+    })
+
+    // Escenario negativo (project-portability): sin entradas que reparar ni agregar
+    // el repair no materializa el destino ni su directorio.
+    it('un destino inexistente sin entradas que reparar no crea archivo ni directorio', () => {
+      withDir((dir) => {
+        writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ agent: 'opencode', language: 'auto', profile: 'general' }, null, 2))
+        const r = run(['import', '--repair'], dir)
+        assert.equal(r.status, 0)
+        assert.equal(existsSync(join(dir, '.opencode', 'opencode.json')), false, 'no crea el archivo')
+        assert.equal(existsSync(join(dir, '.opencode')), false, 'no crea el directorio')
+        assert.match(r.stdout, /MCP sanos en /, 'mensaje sin cambios')
+      })
+    })
+
+    it('un destino inexistente con una entrada intencionada se crea con su directorio', () => {
+      withDir((dir) => {
+        const project = join(dir, 'proyecto')
+        mkdirSync(project, { recursive: true })
+        writeFileSync(join(project, '.ancletorc'), JSON.stringify({ agent: 'opencode', language: 'auto', profile: 'general' }, null, 2))
+        const bundle = writeMcpBundle(dir, {
+          agent: 'opencode',
+          mcp: [{ name: 'ancleto-memory', type: 'local', enabled: true }]
+        })
+        const r = run(['import', bundle], project)
+        assert.equal(r.status, 0, r.stderr)
+        const file = join(project, '.opencode', 'opencode.json')
+        assert.equal(existsSync(file), true, 'crea el archivo de destino')
+        assert.equal(existsSync(join(project, '.opencode')), true, 'crea el directorio del destino')
+        const cfg = JSON.parse(readFileSync(file, 'utf8'))
+        assert.ok(cfg.mcp['ancleto-memory'], 'materializa la entrada intencionada')
+      })
+    })
+
+    it('una entrada intencionada ausente se agrega y conserva las otras claves', () => {
+      withDir((dir) => {
+        const project = join(dir, 'proyecto')
+        mkdirSync(join(project, '.opencode'), { recursive: true })
+        const file = join(project, '.opencode', 'opencode.json')
+        writeFileSync(file, JSON.stringify({ customTop: 1 }, null, 2) + '\n')
+        const bundle = writeMcpBundle(dir, {
+          agent: 'opencode',
+          mcp: [{ name: 'ancleto-memory', type: 'local', enabled: true }]
+        })
+        const r = run(['import', bundle], project)
+        assert.equal(r.status, 0, r.stderr)
+        const cfg = JSON.parse(readFileSync(file, 'utf8'))
+        assert.ok(cfg.mcp['ancleto-memory'], 'agrega la entrada intencionada ausente')
+        assert.equal(cfg.customTop, 1, 'preserva las claves ajenas al esquema')
+        assert.match(r.stdout, /MCP regenerados en .*ancleto-memory \(agregado\)/)
+      })
+    })
+
+    it('un root no-objeto se reemplaza por un objeto JSON', () => {
+      withDir((dir) => {
+        const variants = [
+          ['arreglo', '[]'],
+          ['string', '"x"'],
+          ['null', 'null'],
+          ['numero', '42'],
+          ['booleano', 'true']
+        ]
+        for (const [label, raw] of variants) {
+          const sub = join(dir, label)
+          mkdirSync(join(sub, '.opencode'), { recursive: true })
+          const file = join(sub, '.opencode', 'opencode.json')
+          writeFileSync(file, raw)
+          const r = run(['import', '--repair'], sub)
+          assert.equal(r.status, 0, `${label}: exit`)
+          const cfg = JSON.parse(readFileSync(file, 'utf8'))
+          assert.equal(cfg !== null && typeof cfg === 'object' && !Array.isArray(cfg), true, `${label}: raiz objeto`)
+          assert.equal(cfg.mcp !== null && typeof cfg.mcp === 'object' && !Array.isArray(cfg.mcp), true, `${label}: mcp objeto`)
+        }
+      })
+    })
+
+    it('un valor de esquema no-objeto presente se reemplaza por un objeto', () => {
+      withDir((dir) => {
+        const variants = [
+          ['arreglo', []],
+          ['string', 'x'],
+          ['null', null],
+          ['numero', 7]
+        ]
+        for (const [label, value] of variants) {
+          const sub = join(dir, label)
+          mkdirSync(join(sub, '.opencode'), { recursive: true })
+          const file = join(sub, '.opencode', 'opencode.json')
+          writeFileSync(file, JSON.stringify({ mcp: value }, null, 2) + '\n')
+          const r = run(['import', '--repair'], sub)
+          assert.equal(r.status, 0, `${label}: exit`)
+          const cfg = JSON.parse(readFileSync(file, 'utf8'))
+          assert.equal(cfg.mcp !== null && typeof cfg.mcp === 'object' && !Array.isArray(cfg.mcp), true, `${label}: mcp normalizado`)
+        }
+      })
+    })
+
+    // Escenario negativo (project-portability): una clave de esquema ausente no se
+    // agrega para normalizar; sin entradas que agregar el archivo no se toca.
+    it('una clave de esquema ausente no se agrega ni reescribe el archivo', () => {
+      withDir((dir) => {
+        mkdirSync(join(dir, '.opencode'), { recursive: true })
+        const file = join(dir, '.opencode', 'opencode.json')
+        const prev = JSON.stringify({ otra: 1 }, null, 2) + '\n'
+        writeFileSync(file, prev)
+        const old = new Date('2020-01-02T03:04:05Z')
+        utimesSync(file, old, old)
+        const r = run(['import', '--repair'], dir)
+        assert.equal(r.status, 0)
+        assert.equal(readFileSync(file, 'utf8'), prev, 'bytes intactos')
+        assert.equal(statSync(file).mtime.getTime(), old.getTime(), 'mtime intacto')
+        assert.equal(Object.hasOwn(JSON.parse(readFileSync(file, 'utf8')), 'mcp'), false, 'no agrega la clave')
       })
     })
   })
@@ -3900,7 +4042,9 @@ describe('CLI compression note consistency (host-compression-note-consistency)',
   it('import opencode con manifest.mcp vacío y binario presente no escribe la nota', () => {
     withDir((dir) => {
       const dst = join(dir, 'destino')
-      mkdirSync(dst)
+      // Destino MCP explicito: con manifest.mcp vacio el repair no lo crea (A4).
+      mkdirSync(join(dst, '.opencode'), { recursive: true })
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({ mcp: {} }, null, 2) + '\n')
       const env = compressionEnv(dir, { caveman: true })
       const r = run(['import', writeMcpBundle(dir, { mcp: [] })], dst, env)
       assert.equal(r.status, 0)
@@ -3972,7 +4116,10 @@ describe('CLI compression note consistency (host-compression-note-consistency)',
   it('import opencode que declara caveman sin binario no escribe la nota', () => {
     withDir((dir) => {
       const dst = join(dir, 'destino')
-      mkdirSync(dst)
+      // Destino MCP explicito: la intencion `caveman` no se materializa sin binario,
+      // asi que el repair no crea el archivo (A4).
+      mkdirSync(join(dst, '.opencode'), { recursive: true })
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({ mcp: {} }, null, 2) + '\n')
       const env = compressionEnv(dir)
       const bundle = writeMcpBundle(dir, { mcp: [{ name: 'caveman', type: 'local', enabled: true }] })
       const r = run(['import', bundle], dst, env)
@@ -4119,7 +4266,9 @@ describe('CLI compression note consistency (host-compression-note-consistency)',
   it('import con manifest.mcp ausente completa y trata la lista como vacía', () => {
     withDir((dir) => {
       const dst = join(dir, 'destino')
-      mkdirSync(dst)
+      // Destino MCP explicito: sin entradas intencionadas el repair no lo crea (A4).
+      mkdirSync(join(dst, '.opencode'), { recursive: true })
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({ mcp: {} }, null, 2) + '\n')
       // Binario presente: la lista ausente igual debe quedar vacía (no se infiere caveman).
       const env = compressionEnv(dir, { caveman: true })
       const bundle = writeMcpBundle(dir, { mcp: [] })

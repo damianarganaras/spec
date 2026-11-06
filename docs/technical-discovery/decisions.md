@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-05T23:05:00Z
-pluginVersion: 0.20.0
+generatedAt: 2026-11-06T12:16:49Z
+pluginVersion: 0.20.1
 skillVersion: '2.3'
 ---
 
@@ -29,7 +29,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.20.0)
+## Modelos y tiers (estado 0.20.1)
 
 ### Tabla y cadenas
 
@@ -545,7 +545,27 @@ de `project-portability`, `agent-install-routing` y `cli-diagnostics`). El forma
 - Estado de tier sin cambios (`bundle-tier-state-unchanged`).
 - Portabilidad de assets custom más allá de los canónicos (se regeneran).
 - Escaneo de secretos o rutas absolutas del contenido del bundle más allá del manifiesto.
-- `repairProjectMcp` reescribiendo bytes cuando `fixed` está vacío y la instalación global.
+
+## Reparación MCP sin escritura (0.20.1)
+
+Change archivado: `aspec/changes/archive/2026-11-06-fix-repair-mcp-noop/` (proposal, tasks y delta de
+`project-portability`). Cierra el defecto de deuda de 0.20.0 sin cambiar mensajes ni exit codes.
+
+- **Predicado de escritura único**: `repairProjectMcp` (`src/cli/index.js`) escribe el destino del
+  host activo sólo si `error || normalized || fixed.length > 0`: el archivo no es JSON parseable, la
+  estructura requiere normalización (raíz no-objeto o clave de esquema presente con valor
+  no-objeto), o hay al menos una entrada reparada/agregada. `mkdir` vive dentro de esa rama.
+- **Destino sano intacto**: un destino con todas las entradas sanas ya no se reescribe; bytes y mtime
+  quedan idénticos y el mensaje `MCP sanos ... sin cambios` describe lo efectivamente hecho.
+- **Destino inexistente**: sin entradas que reparar o agregar no se crea el archivo ni su directorio;
+  se eliminó `!existed` como motivo de escritura.
+- **Alcance acotado**: la garantía aplica a `import`/`import --repair` (`repairProjectMcp`).
+  `install`/`init` (`setupHostMcp` → `mergeMcp`) y `upgrade` (`refreshCopilotMcp`/
+  `refreshCommandCodeMcp`) reescriben el mismo destino y quedan fuera. Decisiones:
+  `repair-mcp-write-predicate` y `repair-mcp-guarantee-scope`.
+- **Preservado**: reemplazo de JSON no parseable con su aviso, reparación de entradas rotas,
+  adición de nombres intencionados y normalización de raíz no-objeto. Un `.jsonc` con comentarios
+  sigue sin parsear (`jsonc-comments-not-supported`).
 
 ## Superficies del `model:` (nota operativa)
 
@@ -586,8 +606,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 803 archivos enumerados, ~37.189 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 813 archivos (aspec 245, docs 21, test 26, etc.).
+- **Pack actual**: tier `minimo`, 807 archivos enumerados, ~37.266 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 817 archivos (aspec 249, docs 21, test 26, etc.).
 
 ## Lint y publicación
 
@@ -645,9 +665,12 @@ sin `--tier` es `normal`.
   hosts instalados (no la config global ni hosts sin destino) y reporta como roto cualquier binario
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
-- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.20.0` en este
+- **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` están en `0.20.1` en este
   checkout; siguen siendo derivados gitignored. Si se regeneran con otra versión, el seed no cambia
   porque no los usa como fuente.
+- **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
+  `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue
+  reemplazándose porque no se agregó parseo tolerante.
 - **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene
   documentación del framework y el seed.
 

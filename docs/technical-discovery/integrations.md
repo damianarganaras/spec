@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-05T23:05:00Z
-pluginVersion: 0.20.0
+generatedAt: 2026-11-06T12:16:49Z
+pluginVersion: 0.20.1
 skillVersion: '2.3'
 ---
 
@@ -47,7 +47,7 @@ skillVersion: '2.3'
 - `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
-  esta generación se produjo con el fallback `npx` y quedó comprimido (803 archivos, ~37.189
+  esta generación se produjo con el fallback `npx` y quedó comprimido (807 archivos, ~37.266
   tokens); los cuerpos de funciones se eliden y Repomix aplica además sus ignores por defecto
   (incluye `**/*.md`), por eso el pack no contiene Markdown (ver `unknowns.md`).
 
@@ -76,7 +76,9 @@ skillVersion: '2.3'
   destino conservan la lectura legacy de `.opencode`. Un destino ausente exporta intención vacía sin
   aviso; uno no parseable exporta intención vacía, avisa una vez y sale con 0.
 - `import` avisa por `stderr` antes de reemplazar un destino no parseable y, desde 0.20.0, copia y
-  registra `.opencode/*` sólo cuando el host activo es `opencode`.
+  registra `.opencode/*` sólo cuando el host activo es `opencode`. Desde 0.20.1, `repairProjectMcp`
+  no reescribe un destino sano (bytes y mtime intactos) ni crea un destino inexistente sin entradas
+  que reparar; la garantía se acota a `import`/`import --repair`.
 - `scripts/refresh-model-catalog.mjs` invoca `opencode models --refresh` y
   `opencode models <provider> --verbose --refresh` en una máquina de mantenimiento. Es la única vía
   de descubrimiento; el runtime consume el snapshot commiteado y no ejecuta procesos ni red.
@@ -123,15 +125,16 @@ skillVersion: '2.3'
 - `freeTierOnPrimary` no consulta ningún sistema externo: cruza el `model:` y el `mode:` ya
   presentes en el frontmatter instalado. Los avisos (set-time en `applyTier`, inspect-time en
   `check`) tampoco hacen red ni ejecutan procesos.
-- Los diagnósticos de 0.18.15/0.18.16/0.19.0 son locales: `check` compara `.ancletorc.version` con
-  `package.json`, evalúa la salud MCP con `existsSync` sobre los destinos de los hosts instalados y
-  `doctor` lee archivos JSON de config MCP. Ninguno hace red ni escribe.
+- Los diagnósticos de 0.18.15/0.18.16/0.19.0/0.20.1 son locales: `check` compara
+  `.ancletorc.version` con `package.json`, evalúa la salud MCP con `existsSync` sobre los destinos de
+  los hosts instalados y `doctor` lee archivos JSON de config MCP. Ninguno hace red ni escribe.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee
   del destino del host activo (fallback legacy `.opencode` para hosts sin destino), y `import` copia
   `.opencode/*` sólo en `opencode`. `import` valida la forma de `manifest.mcp` (array; entradas con
-  `name` string) antes del primer write.
+  `name` string) antes del primer write. Desde 0.20.1, la reparación in place no reescribe un destino
+  sano y no crea uno vacío.
 - Las bases SQLite (`.ancleto/memory.db` y la de opencode) son dependencias de datos locales; no se
   versionan.
 - `documentation/` es material legado de lnx-cli, gitignored y fuera del runtime (`PRODUCT.md`,

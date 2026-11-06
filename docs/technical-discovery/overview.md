@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-06T17:27:00Z
-pluginVersion: 0.22.0
+generatedAt: 2026-11-06T20:07:32Z
+pluginVersion: 0.22.1
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,8 @@ funciones (`PRODUCT.md`, `README.md`):
    `/cleto-*`. Desde 0.21.0 distingue un **change de conformidad** —cita un
    `spec:<capability>#<requirement>` existente y no lleva delta— de un cambio funcional, que exige
    delta (`spec-required`). Desde 0.22.0 el delta se aplica a las specs canónicas con
-   `ancleto specs merge --change <slug> [--dry-run] [--json]`.
+   `ancleto specs merge --change <slug> [--dry-run] [--json]`; 0.22.1 endurece el parser y el
+   fail-closed sin agregar flags.
 2. **Descubrir**: mapa topológico del repo y empaquetado de contexto con Repomix, con presupuesto
    por tier.
 3. **Recordar**: memoria persistente local de reglas y decisiones en `.ancleto/memory.db`
@@ -86,7 +87,8 @@ test/                   suite node --test (content guards incluidos)
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
 | Conformidad SDD | Discriminador conformidad-vs-delta y archive sin delta | `agents/orchestrator.md`, `skills/triage-clarifier`, `skills/ancleto-workflow`, `skills/ancleto-continue`, `aspec/specs/prompt-contracts/spec.md` |
-| Merge de specs | Aplicación determinística de `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED` por título exacto; `--dry-run`, `--json` y fail-closed | `src/core/specs-merge.js`, `src/cli/index.js` → `specsMergeCommand`, `aspec/specs/spec-sync/spec.md` |
+| Merge de specs | Aplicación determinística de `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED` por título exacto; `--dry-run`, `--json` y fail-closed; 0.22.1 agrega preámbulo H1 estructural, contenedor `archive` fail-closed y espaciado único de `ADDED` | `src/core/specs-merge.js`, `src/cli/index.js` → `specsMergeCommand`, `aspec/specs/spec-sync/spec.md` |
+| Ciclo de archive (0.22.1) | Orden merge/sync → preflight read-only → promoción de decisiones → move → commit; fases A/B del documenter y literales de fallo | `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md`, `skills/ancleto-onboard/SKILL.md`, `aspec/specs/memory-ops/spec.md` |
 | Entorno de máquina | Shell, EOL y tooling del clon | `src/core/machine-env.js` |
 | Assets | 10 agentes, 16 commands, 21 skills, templates y perfiles | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` |
 
@@ -160,14 +162,25 @@ test/                   suite node --test (content guards incluidos)
     el archive se rechaza; si la spec falta o contradice, el change es funcional (`spec-required`).
     `agents/orchestrator.md` es dueño de la norma y las skills de triage/workflow/continue la
     implementan; no hay subcomando CLI `archive`.
-15. **Merge determinístico de specs (0.22.0)**: `ancleto specs merge --change <slug>` resuelve el
-    change activo (`aspec/changes/<slug>/`) o archivado (`aspec/changes/archive/YYYY-MM-DD-<slug>/`),
-    lee `<changeDir>/specs/<capability>/spec.md` y aplica las operaciones por título exacto de
-    `### Requirement:` sobre `aspec/specs/<capability>/spec.md`. El módulo puro computa todos los
-    planes antes de escribir; cualquier error fail-closed (exit 2) deja cero escrituras, y
-    `--dry-run` nunca escribe. `MODIFIED` reemplaza el bloque completo, `ADDED` idéntico y `REMOVED`
-    ausente son no-op, y `RENAMED` cambia sólo el heading. No crea capabilities nuevas ni modifica
-    deltas, memoria, seed, `package.json`, `specs check` ni affected-set.
+15. **Merge determinístico de specs (0.22.0–0.22.1)**: `ancleto specs merge --change <slug>` resuelve
+    el change activo (`aspec/changes/<slug>/`) o archivado
+    (`aspec/changes/archive/YYYY-MM-DD-<slug>/`), lee `<changeDir>/specs/<capability>/spec.md` y
+    aplica las operaciones por título exacto de `### Requirement:` sobre
+    `aspec/specs/<capability>/spec.md`. El módulo puro computa todos los planes antes de escribir;
+    cualquier error fail-closed (exit 2) deja cero escrituras, y `--dry-run` nunca escribe, tampoco
+    ante el contenedor `archive`. `MODIFIED` reemplaza el bloque completo, `ADDED` idéntico y
+    `REMOVED` ausente son no-op, y `RENAMED` cambia sólo el heading. 0.22.1 acepta a lo sumo un H1
+    estructural al inicio del delta, rechaza un segundo H1 o contenido suelto, deja exactamente una
+    línea en blanco tras `ADDED` y documenta que la fase de escritura no es transaccional. No crea
+    capabilities nuevas ni modifica deltas, memoria, seed, `package.json`, `specs check` ni
+    affected-set.
+16. **Orden del archive (0.22.1)**: el archive ejecuta merge/sync de specs → preflight read-only de
+    las decisiones `## Decisiones` aprobadas → promoción a `.ancleto/memory.db` → move del change →
+    commit. La promoción ocurre antes del move para que las refs `path:` sigan resolviendo. Si el
+    preflight o la promoción fallan, el change no se mueve y se reporta `no archivado; memoria
+    pendiente`; si el move falla tras promover, se reporta `memoria promovida; NO archivado`. La
+    secuencia vive en `agents/orchestrator.md`, `agents/documenter.md` (fases A y B) y las skills de
+    archive/onboard; `ancleto upgrade` regenera los mirrors.
 
 ## Recorrido de una instalación con tier `minimo`
 

@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate y doctor"
-covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor]
-sources: ["src/core/memory/**"]
-generatedAt: 2026-11-06T17:27:00Z
-pluginVersion: 0.22.0
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
+covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive]
+sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
+generatedAt: 2026-11-06T20:07:32Z
+pluginVersion: 0.22.1
 skillVersion: '2.3'
 ---
 
@@ -16,11 +16,13 @@ skillVersion: '2.3'
 Persistir las reglas y decisiones del proyecto en `.ancleto/memory.db` (SQLite + FTS5 vía
 `node:sqlite`) y exponerlas a los agentes como contexto inyectable y como tools MCP. La memoria es
 local al repositorio, versionable con el equipo y separada de la memoria de sesión del agente.
-Sin cambios de motor en 0.19.0, 0.20.0, 0.20.1, 0.21.0 ni 0.22.0. En 0.21.0 sólo se promovieron como
-datos cuatro decisiones del archive de conformidad (`archive-conformity-discriminator`,
-`archive-noop-does-not-write-canonical-specs`, `conformity-verification-reuses-closed-ledger`,
-`triage-routing-single-contract`); en 0.22.0 el merge de specs tampoco abre ni escribe la DB. El
-esquema, el recall y las ops no cambiaron.
+Sin cambios de motor en 0.19.0, 0.20.0, 0.20.1, 0.21.0, 0.22.0 ni 0.22.1. En 0.21.0 sólo se
+promovieron como datos cuatro decisiones del archive de conformidad
+(`archive-conformity-discriminator`, `archive-noop-does-not-write-canonical-specs`,
+`conformity-verification-reuses-closed-ledger`, `triage-routing-single-contract`); en 0.22.0 el
+merge de specs tampoco abre ni escribe la DB. En 0.22.1 la novedad es de **contrato de archive**: la
+promoción de `## Decisiones` aprobadas ocurre antes del move y su secuencia vive en `agents/` y
+`skills/`, no en el engine. El esquema, el recall y las ops no cambiaron.
 
 ## Recorrido relevante
 
@@ -77,6 +79,35 @@ esquema, el recall y las ops no cambiaron.
 | `curate` | Read-only: refs rotas, no verificables (`commit:`/`workitem:`) y duplicados exactos; advisory, `--strict` convierte hallazgos en exit ≠ 0 |
 | `doctor` | Cinco checks read-only: integridad, FTS5, reglas activas, refs de nodos activos, checkpoint WAL; `--rebuild` es el único camino mutante |
 
+### Promoción al archivar (0.22.1)
+
+El requirement “Promoción al archivar sólo de decisiones duraderas aprobadas” de
+`aspec/specs/memory-ops/spec.md` fija la secuencia canónica del archive:
+
+1. merge/sync de specs si hay delta;
+2. preflight read-only del lote de `## Decisiones`, fail-closed;
+3. promoción de los bloques con `memory_key` propia y `Estado: aprobado`;
+4. move del directorio a `aspec/changes/archive/YYYY-MM-DD-<slug>/` sin modificarlo;
+5. summary/commit.
+
+La promoción corre **después del merge y antes del move** para que las refs `path:` dentro del
+change sigan resolviendo. Sólo se promueven `decision`; nunca `rule`, y el rol que archiva no
+inventa `memory_key`. Un bloque de una línea (`decisión | alternativa | por qué | fuente`) no es
+candidato. El gate valida el lote completo antes de la primera escritura; una violación deja cero
+escrituras y no mueve el change.
+
+`@documenter` separa **fase A** (sólo merge, retorna `phase A complete`) y **fase B** (sólo move,
+invocada tras confirmar la promoción). `@orchestrator` corre Automatic Record en paralelo con la
+fase A, luego la promoción, luego la fase B. La secuencia se replica en
+`skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md` y la Phase 9 de
+`skills/ancleto-onboard/SKILL.md`.
+
+- Fallo de preflight/promoción antes del move: el change no se mueve y se reporta
+  **`no archivado; memoria pendiente`** (`not archived; memory pending`), con `memory_key` y motivo.
+- Fallo del move tras promoción exitosa: **`memoria promovida; NO archivado`**
+  (`memory promoted; NOT archived`).
+- `archivado, memoria pendiente` queda eliminado: presume move-before-promote.
+
 ## Reglas, contratos y riesgos
 
 - **`memory_key` es identidad transversal**: una nueva versión supersede la anterior; los nodos
@@ -92,6 +123,13 @@ esquema, el recall y las ops no cambiaron.
   de estar activo; `gc` usa un cutoff único para SELECT y DELETE.
 - **MCP**: `src/core/memory/mcp-server.js` expone `searchMemory`, `recordRule` y `recordDecision`
   por stdio; stdout es el canal JSON-RPC y los avisos van a stderr.
+- **Orden del archive (0.22.1)**: la promoción es una escritura de memoria disparada por el archive,
+  no por el engine. Un fallo de promoción no mueve el change; un fallo del move posterior no revierte
+  la memoria ya promovida y se reporta con el literal correspondiente. La aceptación vive en los
+  contratos de `agents/`/`skills/` y en `test/content-guards.test.js`.
+- **Sin promoción parcial**: el lote se valida completo antes de escribir; dos bloques con la misma
+  `memory_key` y contenido/refs distintos rechazan el lote entero. Dos claves contradictorias se
+  reportan y se remiten a decisión humana o a `memory merge`.
 
 ## Paths clave
 
@@ -105,4 +143,8 @@ esquema, el recall y las ops no cambiaron.
 | `src/core/memory/doctor.js` | Diagnóstico read-only y rebuild FTS5 |
 | `src/core/memory/curation.js` | Curaduría read-only de refs y duplicados |
 | `src/core/memory/snapshot.js` | Copia consistente con historial |
+| `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move |
+| `agents/orchestrator.md` | Secuencia del archive y delegación de la promoción entre fase A y fase B |
+| `agents/documenter.md` | Fase A (merge, sin move) y fase B (move, sólo tras la promoción) |
+| `skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md`, `skills/ancleto-onboard/SKILL.md` | Gate de promoción, move y literales de fallo |
 | `docs/technical-discovery/decisions.md` | Reglas de memoria y frontera repo/agente |

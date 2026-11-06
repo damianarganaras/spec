@@ -5,7 +5,8 @@
 const REQUIREMENT_RE = /^###\s+Requirement:\s*(.*)$/
 // Heading indentado: no es un requirement válido y debe fallar cerrado.
 const INDENTED_REQUIREMENT_RE = /^\s+###\s+Requirement:/
-// Preámbulo H1 opcional al inicio del delta (p. ej. `# Delta: <name>`): un único `#`.
+// H1 a columna 0 (p. ej. `# Delta: <name>`). El preámbulo admite a lo sumo uno,
+// cualquiera sea su título: no hay allowlist literal.
 const H1_PREAMBLE_RE = /^#\s/
 // Fin de un bloque de requirement: próximo `## ` o `### ` (no `#### Scenario:`).
 const BLOCK_BOUNDARY_RE = /^#{2,3}\s/
@@ -163,12 +164,31 @@ export function parseDeltaSpec(text) {
   const operations = []
   const errors = []
   let current = null
-  // Preámbulo opcional: líneas en blanco y como máximo un H1 (`# `) al inicio.
+  // Preámbulo estructural: blancos opcionales, a lo sumo un H1 a columna 0 y
+  // blancos opcionales hasta la primera sección `## ` reconocida. Un segundo H1
+  // o cualquier línea no vacía y no H1 antes de esa sección es fail-closed.
   let start = 0
-  while (start < lines.length && lines[start].trim() === '') start += 1
-  if (start < lines.length && H1_PREAMBLE_RE.test(lines[start])) {
+  let sawH1 = false
+  while (start < lines.length) {
+    const line = lines[start]
+    if (line.trim() === '') {
+      start += 1
+      continue
+    }
+    if (SECTION_BOUNDARY_RE.test(line)) {
+      if (SECTION_TYPES.has(line.trim())) break
+      errors.push({ requirement: null, reason: `bloque de delta malformado: ${line}` })
+      start = lines.length
+      break
+    }
+    if (H1_PREAMBLE_RE.test(line)) {
+      if (sawH1) errors.push({ requirement: null, reason: `bloque de delta malformado: ${line}` })
+      sawH1 = true
+      start += 1
+      continue
+    }
+    errors.push({ requirement: null, reason: `bloque de delta malformado: ${line}` })
     start += 1
-    while (start < lines.length && lines[start].trim() === '') start += 1
   }
   const flushSection = (end) => {
     if (!current) return
@@ -214,10 +234,16 @@ function applyAdd(lines, op) {
   }
   let end = sectionIndex + 1
   while (end < lines.length && !SECTION_BOUNDARY_RE.test(lines[end])) end += 1
+  // Insertar antes de los blancos de cola de la sección. El bloque y la sección
+  // siguiente (o el EOF) quedan separados por exactamente una línea en blanco.
   let insertAt = end
   while (insertAt > sectionIndex + 1 && lines[insertAt - 1].trim() === '') insertAt -= 1
   const next = [...lines.slice(0, insertAt), '', ...op.block]
-  if (insertAt < lines.length) next.push('', ...lines.slice(insertAt))
+  if (insertAt < lines.length) {
+    let tail = insertAt
+    while (tail < lines.length && lines[tail].trim() === '') tail += 1
+    if (tail < lines.length) next.push('', ...lines.slice(tail))
+  }
   return { lines: next, applied: true }
 }
 

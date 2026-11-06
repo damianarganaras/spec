@@ -43,6 +43,8 @@ You run in one of two modes, set by `@orchestrator`:
 
 The full aspec finalization and archive lifecycle described below, working from an active change folder in `aspec/changes/{change-name}/`. This is the mode used for `spec-required` changes.
 
+In this mode the archive runs in two explicit phases. Phase A merges the deltas into the source of truth and never moves the change folder. Phase B moves the change folder and is invoked only after `@orchestrator` confirms the promotion step ran.
+
 ### 2. Standalone Source-of-Truth Update
 
 Used when `@orchestrator` delegates a documentation update for a completed `direct-implementation` change that has no change folder.
@@ -104,6 +106,12 @@ Do not treat archive as a blind file move.
 
 ## Required Workflow
 
+This workflow runs in Change Archive mode only. It has two explicit phases: Phase A merges the deltas and never moves the change folder; Phase B moves the change folder and runs only after `@orchestrator` confirms the promotion step ran.
+
+### Phase A — Merge
+
+Phase A validates the deltas and updates the source-of-truth specs. Do NOT move the change folder in phase A.
+
 1. Inspect the change folder in `aspec/changes/{change-name}/`
 2. Confirm the presence of the relevant artifacts:
    - `proposal.md`
@@ -113,10 +121,19 @@ Do not treat archive as a blind file move.
 4. Run `ancleto specs check --change {change-name} --json` only when deltas exist, before merging. If a delta spec or its target source-of-truth spec is non-canonical (translated keywords), stop and report it instead of merging into it
 5. If needed, update the relevant source-of-truth specs so they reflect the completed change. For a conformity change, report `sin delta` naming the cited `spec:<capability>#<requirement>` and write nothing under `aspec/specs/**`
 6. If the change is not ready for archive, stop and report the inconsistency clearly
+
+When phase A completes, stop and return a short summary stating **phase A complete**: the deltas merged into `aspec/specs/**` (or `sin delta` naming the cited requirement), the `ancleto specs check` result when deltas existed, and that the change folder was NOT moved. Phase B is a separate invocation.
+
+### Phase B — Move
+
+Run phase B only after `@orchestrator` confirms the Promotion pass ran for approved `proposal ## Decisiones` blocks. A promotion failure means Phase B is NOT invoked: return the promotion failure to `@orchestrator`, which reports `not archived; memory pending`, instead of moving the folder.
+
 7. If the change is ready, archive it by **moving** the folder to `aspec/changes/archive/{YYYY-MM-DD}-{change-name}/`. The archive is a move, not a deletion: the change folder survives inside the archive and no copy of it remains at `aspec/changes/{change-name}/`
 8. After the move, confirm the change folder no longer sits at `aspec/changes/{change-name}/` and that the archived copy is complete; if any file or folder of the change is left outside the archive path, report it as residue instead of leaving silent residue
 9. Never delete a change folder. If the change turns out to be abandoned, stop and report it: the developer discards it, not you
 10. Return a short structured summary of the finalization and archive result
+
+If the move fails after a successful promotion, report the failure to `@orchestrator` so it reports "memory promoted; NOT archived" with a retry instruction.
 
 ## Source-of-Truth Rules
 

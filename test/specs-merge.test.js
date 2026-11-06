@@ -1006,3 +1006,207 @@ describe('specs merge - las cuatro operaciones en un solo merge (R2)', () => {
     })
   })
 })
+
+describe('specs merge - contenedor archive fail-closed (specs-merge-hardening)', () => {
+  it('--change archive sale 2, cero escrituras y nombra el contenedor', () => {
+    withDir((dir) => {
+      writeSpec(dir, specRel('alpha'), canon('alpha', requirement('A', 'A body.')))
+      mkdirSync(join(dir, 'aspec', 'changes', 'archive'), { recursive: true })
+      const before = snapshot(dir)
+      const stamp = setOldMtime(dir, specRel('alpha'))
+      const r = run(['specs', 'merge', '--change', 'archive', '--json'], dir)
+      assert.equal(r.status, 2, `stderr: ${r.stderr}`)
+      const json = JSON.parse(r.stdout)
+      assert.equal(json.ok, false)
+      assert.ok(json.errors.some((e) => /contenedor/.test(e.reason) && /archive/.test(e.reason)))
+      assert.deepEqual(snapshot(dir), before)
+      assert.equal(mtimeOf(dir, specRel('alpha')), stamp)
+    })
+  })
+
+  it('--change archive con --dry-run tambien sale 2 y cero escrituras', () => {
+    withDir((dir) => {
+      writeSpec(dir, specRel('alpha'), canon('alpha', requirement('A', 'A body.')))
+      mkdirSync(join(dir, 'aspec', 'changes', 'archive'), { recursive: true })
+      const before = snapshot(dir)
+      const stamp = setOldMtime(dir, specRel('alpha'))
+      const r = run(['specs', 'merge', '--change', 'archive', '--dry-run', '--json'], dir)
+      assert.equal(r.status, 2, `stderr: ${r.stderr}`)
+      const json = JSON.parse(r.stdout)
+      assert.equal(json.ok, false)
+      assert.equal(json.dryRun, true)
+      assert.ok(json.errors.some((e) => /contenedor/.test(e.reason) && /archive/.test(e.reason)))
+      assert.deepEqual(snapshot(dir), before)
+      assert.equal(mtimeOf(dir, specRel('alpha')), stamp)
+    })
+  })
+
+  it('un delta dentro del contenedor no cuenta como candidato del glob de archives', () => {
+    withDir((dir) => {
+      writeSpec(dir, specRel('alpha'), canon('alpha', requirement('A', 'A body.')))
+      writeSpec(
+        dir,
+        join('aspec', 'changes', 'archive', 'specs', 'alpha', 'spec.md'),
+        '## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n'
+      )
+      const before = snapshot(dir)
+      const r = run(['specs', 'merge', '--change', 'archive', '--json'], dir)
+      assert.equal(r.status, 2, `stderr: ${r.stderr}`)
+      assert.deepEqual(snapshot(dir), before)
+    })
+  })
+})
+
+describe('specs merge - preambulo H1 estructural (specs-merge-hardening)', () => {
+  it('dos H1 al inicio fallan con exit 2 y cero escrituras', () => {
+    withDir((dir) => {
+      writeSpec(dir, specRel('alpha'), canon('alpha', requirement('A', 'A body.')))
+      writeSpec(
+        dir,
+        deltaRel('ch', 'alpha'),
+        '# First: x\n\n# Second: y\n\n## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n'
+      )
+      expectFailClosed(dir, specRel('alpha'), 'ch', /malformado/)
+    })
+  })
+
+  it('contenido no vacio antes de la primera seccion falla con exit 2 y cero escrituras', () => {
+    withDir((dir) => {
+      writeSpec(dir, specRel('alpha'), canon('alpha', requirement('A', 'A body.')))
+      writeSpec(
+        dir,
+        deltaRel('ch', 'alpha'),
+        'texto suelto antes de la seccion\n\n## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n'
+      )
+      expectFailClosed(dir, specRel('alpha'), 'ch', /malformado/)
+    })
+  })
+
+  const LEGACY_H1 = [
+    '# Spec: alpha (delta)',
+    '# Delta Spec: alpha',
+    '# Spec delta: alpha — cap',
+    '# Delta: alpha — desc'
+  ]
+  for (const preamble of LEGACY_H1) {
+    it(`acepta el H1 legacy "${preamble}"`, () => {
+      withDir((dir) => {
+        const before = canon('alpha', requirement('Existing', 'Existing body.'))
+        writeSpec(dir, specRel('alpha'), before)
+        writeSpec(
+          dir,
+          deltaRel('ch', 'alpha'),
+          `${preamble}\n\n## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n`
+        )
+        const r = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+        assert.equal(r.status, 0, `stderr: ${r.stderr}`)
+        assert.equal(JSON.parse(r.stdout).changed, true)
+        assert.equal(readFileSync(join(dir, specRel('alpha')), 'utf8'), `${before}\n### Requirement: New\n\nNew body.\n`)
+      })
+    })
+  }
+
+  it('acepta un unico H1 con titulo arbitrario (sin allowlist literal)', () => {
+    withDir((dir) => {
+      const before = canon('alpha', requirement('Existing', 'Existing body.'))
+      writeSpec(dir, specRel('alpha'), before)
+      writeSpec(
+        dir,
+        deltaRel('ch', 'alpha'),
+        '# Un titulo fuera de toda lista conocida\n\n## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n'
+      )
+      const r = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+      assert.equal(r.status, 0, `stderr: ${r.stderr}`)
+      assert.equal(JSON.parse(r.stdout).changed, true)
+      assert.equal(readFileSync(join(dir, specRel('alpha')), 'utf8'), `${before}\n### Requirement: New\n\nNew body.\n`)
+    })
+  })
+})
+
+describe('specs merge - espaciado ADDED exacto (specs-merge-hardening)', () => {
+  it('deja exactamente una linea en blanco antes de la siguiente seccion ## ', () => {
+    withDir((dir) => {
+      const base = [
+        '# Spec: eta',
+        '',
+        '## Purpose',
+        '',
+        'Purpose for eta.',
+        '',
+        '## Requirements',
+        '',
+        '### Requirement: A',
+        '',
+        'A body.',
+        '',
+        '## Notes',
+        '',
+        'Keep notes.',
+        ''
+      ].join('\n')
+      writeSpec(dir, specRel('eta'), base)
+      writeSpec(dir, deltaRel('ch', 'eta'), '## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n')
+
+      const r = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+      assert.equal(r.status, 0, `stderr: ${r.stderr}`)
+      const expected = [
+        '# Spec: eta',
+        '',
+        '## Purpose',
+        '',
+        'Purpose for eta.',
+        '',
+        '## Requirements',
+        '',
+        '### Requirement: A',
+        '',
+        'A body.',
+        '',
+        '### Requirement: New',
+        '',
+        'New body.',
+        '',
+        '## Notes',
+        '',
+        'Keep notes.',
+        ''
+      ].join('\n')
+      assert.equal(readFileSync(join(dir, specRel('eta')), 'utf8'), expected)
+    })
+  })
+
+  it('deja exactamente una linea en blanco antes del EOF y ninguna extra', () => {
+    withDir((dir) => {
+      const before = canon('alpha', requirement('Existing', 'Existing body.'))
+      writeSpec(dir, specRel('alpha'), before)
+      writeSpec(dir, deltaRel('ch', 'alpha'), '## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n')
+
+      const r = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+      assert.equal(r.status, 0, `stderr: ${r.stderr}`)
+      const after = readFileSync(join(dir, specRel('alpha')), 'utf8')
+      assert.equal(after, `${before}\n### Requirement: New\n\nNew body.\n`)
+      assert.ok(after.endsWith('New body.\n'))
+      assert.equal(after.includes('New body.\n\n'), false)
+    })
+  })
+})
+
+describe('specs merge - RENAMED vacio es no-op (specs-merge-hardening)', () => {
+  it('una seccion ## RENAMED Requirements vacia no cambia contenido ni mtime', () => {
+    withDir((dir) => {
+      const before = canon('alpha', requirement('A', 'A body.'))
+      writeSpec(dir, specRel('alpha'), before)
+      writeSpec(dir, deltaRel('ch', 'alpha'), '## RENAMED Requirements\n')
+      const stamp = setOldMtime(dir, specRel('alpha'))
+      const r = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+      assert.equal(r.status, 0, `stderr: ${r.stderr}`)
+      const json = JSON.parse(r.stdout)
+      assert.equal(json.ok, true)
+      assert.equal(json.changed, false)
+      assert.deepEqual(json.errors, [])
+      assert.deepEqual(json.capabilities, [{ capability: 'alpha', operations: [], changed: false }])
+      assert.equal(readFileSync(join(dir, specRel('alpha')), 'utf8'), before)
+      assert.equal(mtimeOf(dir, specRel('alpha')), stamp)
+    })
+  })
+})

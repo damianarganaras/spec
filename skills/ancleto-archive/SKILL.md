@@ -12,7 +12,7 @@ metadata:
 
 **Artifacts language**: follow the `LOCKED: artifacts-language` block in `AGENTS.md` (single source of truth for artifact language and literal keywords).
 
-Archive a completed change: check completion, sync delta specs, move the directory. No external binaries.
+Archive a completed change: check completion, sync delta specs, promote approved decisions, then move the directory. No external binaries.
 
 **Input**: Optionally a change name (e.g., `add-auth`); if omitted, infer from context. If ambiguous, list `aspec/changes/` dirs (excluding `archive/`) and ask the user to select.
 
@@ -31,7 +31,7 @@ Read `aspec/changes/<name>/tasks.md` (when present); count `- [ ]` (incomplete) 
 
 Check `aspec/changes/<name>/specs/` for a delta requirement block: any `## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED Requirements`, or `## RENAMED Requirements` section. A `specs/` directory that exists but contains no such block (for example, a header-only `specs/`) counts as no delta.
 
-**No delta requirement block (change de conformidad):** before archiving, validate the citation in `proposal.md` fail-closed — a `spec:<capability>#<requirement>` must resolve: the capability directory `aspec/specs/<capability>/` exists and the exact `Requirement:` title exists in `aspec/specs/<capability>/spec.md`. If it does not resolve, REJECT the archive (`se rechaza`): report explicitly that the citation no resuelve or is missing, name it, and instruct: add the delta or fix the citation. Do not move the change and do not promote anything. If it resolves, report explicitly `sin delta` naming the cited `spec:<capability>#<requirement>`, skip the merge entirely, and continue with the move and the promotion.
+**No delta requirement block (change de conformidad):** before archiving, validate the citation in `proposal.md` fail-closed — a `spec:<capability>#<requirement>` must resolve: the capability directory `aspec/specs/<capability>/` exists and the exact `Requirement:` title exists in `aspec/specs/<capability>/spec.md`. If it does not resolve, REJECT the archive (`se rechaza`): report explicitly that the citation no resuelve or is missing, name it, and instruct: add the delta or fix the citation. Do not move the change and do not promote anything. If it resolves, report explicitly `sin delta` naming the cited `spec:<capability>#<requirement>`, skip the merge entirely, and continue with the promotion and the move.
 
 **Citation relevance:** resolvability alone does not prove conformity. The cited `Requirement:` and its scenarios must describe the behavior the change restores. When the cited Requirement does not describe the implemented behavior, reject the archive or stop and ask the user: do not archive on an unrelated citation. Relevance is a semantic judgment the agent makes against the diff and the cited Requirement; it is not mechanically provable. The mechanical gate only proves resolvability and the absence of delta requirement blocks.
 
@@ -60,20 +60,23 @@ Run this while the change is still in place, before moving anything. The shape o
 
 1. Read `proposal.md` and collect the blocks under `## Decisiones`.
 2. A candidate is a block with **its own `memory_key` and `Estado: aprobado`**. A one-line decision is never a candidate: it has no `memory_key` and no `Estado`. Promote only `decision`; a block classified as a permanent rule is not promoted from here.
-3. **Preflight the whole batch before the first write:** own keys, keys unique within the batch, `Estado: aprobado`, refs present and resolvable, no `path:` that points inside `aspec/changes/<change-name>/` (it resolves now but stops resolving once the change is moved to `archive/`), and no session candidate (transcript, task state, session summary). Any violation ⇒ **zero writes**, a per-block report with its location in `proposal.md`, and **the change is not moved**; fix it and re-run the archive. If two blocks share a `memory_key` and differ in content or refs, reject the whole batch and report both.
+3. **Preflight the whole batch before the first write:** own keys, keys unique within the batch, `Estado: aprobado`, refs present and resolvable, no `path:` that points inside `aspec/changes/<change-name>/` (it resolves now but stops resolving once the change is moved to `archive/`), and no session candidate (transcript, task state, session summary). Any violation ⇒ **zero writes**, a per-block report with its location in `proposal.md`, and **the change is not moved**; fix it and re-run the archive. Report the result as **no archivado; memoria pendiente**, naming the affected `memory_key` and the reason, with a retry instruction. If two blocks share a `memory_key` and differ in content or refs, reject the whole batch and report both.
 4. **Zero candidates ⇒ zero memory writes and zero `@memory-keeper` delegations.** Do not ask the memory agent whether there is anything to store.
 
-### 5. Perform the archive
+### 5. Promote approved decisions into persistent memory
+
+Run this after preflight and before moving the change, so every `path:` ref is still resolvable.
+
+1. With valid candidates, delegate `@memory-keeper` **once** in Promotion mode with the change slug and the approved blocks verbatim. It writes one `recordDecision` per approved block with `content` of 1–3 sentences plus the `refs:` block, and reports per key.
+2. If the promotion fails, report **no archivado; memoria pendiente**, naming the `memory_key` and the reason, with a retry instruction. The change is not moved and the gate leaves zero writes.
+
+### 6. Perform the archive
 
 Create `aspec/changes/archive/` if absent. Target: `YYYY-MM-DD-<change-name>` (current date).
 
 - **Target exists**: fail, suggesting a rename or different date.
 - **Otherwise**: move the change directory to `aspec/changes/archive/YYYY-MM-DD-<name>/` without modifying it.
-
-### 6. Promote approved decisions into persistent memory
-
-1. With valid candidates, delegate `@memory-keeper` **once** in Promotion mode with the change slug and the approved blocks verbatim. It writes one `recordDecision` per approved block with `content` of 1–3 sentences plus the `refs:` block, and reports per key.
-2. If a write fails after the change was moved, report **archived, memory pending**, naming the `memory_key` and the reason, with a retry instruction. Never report "archived and memorized" when only the archive happened.
+- **Move fails after a successful promotion**: report **memoria promovida; NO archivado**, with a retry instruction.
 
 ### 7. Display summary
 
@@ -86,7 +89,7 @@ Create `aspec/changes/archive/` if absent. Target: `YYYY-MM-DD-<change-name>` (c
 **Memories promoted:** <list, or "None">
 ```
 
-If a promotion failed after the move, add `**Memory pending:** <memory_key> — <reason> (retry required)`. Never label the archive as memorized when a write is pending.
+If the move failed after a successful promotion, add `**memoria promovida; NO archivado:** <memory_key> — <reason> (retry required)`. Never report "archived and memorized" when only one of the two completed.
 
 When the seed was `STALE`, add a `**Seed:**` line: `Regenerated` or `Stale — regeneration declined`.
 

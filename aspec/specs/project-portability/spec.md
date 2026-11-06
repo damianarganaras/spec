@@ -278,7 +278,11 @@ Para los esquemas `mcpServers` de `antigravity` y `commandcode`, la reparación 
 
 La reparación SHALL limitarse a las entradas rotas: las entradas sanas NO SHALL reescribirse ni alterarse. El exit code de `import --repair` NO SHALL cambiar por este predicado.
 
-Una configuración MCP no parseable NO SHALL reclasificarse aquí: su tratamiento vigente es el de la decisión `m2-nonparseable-config-warn-only` (aviso que nombra el archivo y reemplazo por la configuración nueva), sin reparación por entrada ni aborto. Ese tratamiento SHALL aplicarse sólo a un destino declarado del host activo; un archivo MCP de otro host o de un host sin destino NO SHALL tocarse.
+La reparación SHALL escribir el destino sólo cuando exista al menos una de estas condiciones: el archivo no es JSON parseable, la estructura del documento requiere normalización, o hay al menos una entrada reparada o agregada. La invariante de no-escritura de un destino sano SHALL entenderse acotada a `import` / `import --repair` (`repairProjectMcp`): en ese camino un destino sano NO SHALL reescribirse y sus bytes y su fecha de modificación SHALL permanecer idénticos. Los writers `install` / `init` (`setupHostMcp` → `mergeMcp`) y `upgrade` (`refreshCopilotMcp` / `refreshCommandCodeMcp`) reescriben el mismo destino sin este predicado y quedan fuera de esta garantía. La creación del directorio del destino SHALL ocurrir únicamente como parte de una escritura efectiva.
+
+La estructura SHALL requerir normalización cuando el documento raíz no sea un objeto JSON (`null`, arreglo, string, número o booleano), o cuando la clave de esquema del host esté presente con un valor que no sea un objeto JSON. En un documento de raíz objeto, una clave de esquema ausente NO SHALL agregarse sólo para normalizar: SHALL materializarse únicamente si la reparación agrega entradas. Una raíz no-objeto y una config no parseable sin bundle SHALL escribirse igualmente como la configuración estructural o vacía `{<schema>: {}}`, sin agregar entradas. Un destino inexistente sin entradas que reparar o agregar NO SHALL crearse, ni como archivo ni como directorio.
+
+Una configuración MCP no parseable NO SHALL reclasificarse aquí: su tratamiento vigente es el de la decisión `m2-nonparseable-config-warn-only` (aviso que nombra el archivo y reemplazo por una configuración válida), sin reparación por entrada ni aborto. En `import --repair` sin bundle, el reemplazo SHALL ser la configuración vacía `{<schema>: {}}` del host activo; con bundle, SHALL ser la configuración derivada del bundle. Ese tratamiento SHALL aplicarse sólo a un destino declarado del host activo; un archivo MCP de otro host o de un host sin destino NO SHALL tocarse.
 
 #### Scenario: Import con repair en `opencode`
 
@@ -349,3 +353,34 @@ Una configuración MCP no parseable NO SHALL reclasificarse aquí: su tratamient
 - **AND** se conserva el tratamiento de `m2-nonparseable-config-warn-only`: aviso que nombra el
   archivo y reemplazo por la configuración MCP nueva
 - **AND** el exit code de `import --repair` no cambia por este aviso
+
+#### Scenario: Un destino sano no se reescribe
+
+- **WHEN** el destino MCP del host activo existe y todas sus entradas son sanas según el predicado
+- **THEN** `import --repair` NO SHALL escribir el archivo
+- **AND** los bytes y la fecha de modificación del destino SHALL permanecer idénticos
+- **AND** el mensaje de "MCP sanos" y el exit code no cambian
+
+#### Scenario: Un destino inexistente sin entradas que reparar no se crea
+
+- **WHEN** el destino MCP del host activo no existe y la reparación no tiene entradas que reparar ni agregar
+- **THEN** `import --repair` NO SHALL crear el archivo de destino
+- **AND** NO SHALL crear el directorio que lo contendría
+
+#### Scenario: Un root no-objeto se reemplaza
+
+- **WHEN** el destino MCP del host activo contiene un documento raíz que no es un objeto JSON (`null`, arreglo, string, número o booleano)
+- **THEN** la reparación SHALL normalizar el documento a un objeto JSON en lugar de conservarlo
+- **AND** el resto del tratamiento de entradas se aplica sobre ese objeto normalizado
+
+#### Scenario: Un valor de schema no-objeto se reemplaza
+
+- **WHEN** el destino MCP del host activo contiene la clave de esquema del host con un valor que no es un objeto JSON, por ejemplo `{"mcp": "x"}`
+- **THEN** la reparación SHALL reemplazar ese valor por un objeto JSON
+- **AND** el archivo SHALL escribirse aunque no haya entradas rotas
+
+#### Scenario: Un schema ausente no se agrega
+
+- **WHEN** el destino MCP del host activo es un objeto JSON sin la clave de esquema del host y no hay entradas que reparar ni agregar
+- **THEN** la reparación NO SHALL agregar la clave de esquema vacía
+- **AND** NO SHALL escribir el archivo

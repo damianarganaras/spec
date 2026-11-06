@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, ruteo MCP por host, diagnósticos check/doctor, portabilidad host-neutral, reparación MCP sin escritura y entorno de máquina"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, ruteo MCP por host, diagnósticos check/doctor, portabilidad host-neutral, reparación MCP sin escritura, entorno de máquina y materialización de los contratos de conformidad"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -33,10 +33,12 @@ covers:
   - bundle host-neutral
   - validación de manifest.mcp
   - reparación MCP sin escritura
+  - conformidad sin delta
+  - materialización de agents y skills
   - machine-env
-sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-06T12:16:49Z
-pluginVersion: 0.20.1
+sources: ["src/cli/index.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-06T14:20:00Z
+pluginVersion: 0.21.0
 skillVersion: '2.3'
 ---
 
@@ -152,6 +154,12 @@ Re-aplica templates y skills sobre el proyecto actual, sin aplicar tier (el mirr
 fuente canónica byte a byte). Es la vía que materializa el default publicado de `agents/*.md`
 (`commandcode/deepseek/deepseek-v4.1-flash`) y, desde 0.18.15, el único remediador de la deriva de
 `.ancletorc.version` que `check` reporta.
+
+**0.21.0**: el CLI no cambió. `upgrade` es la vía por la que llegan a los proyectos los cambios de
+ruteo de conformidad de `agents/orchestrator.md`, `skills/triage-clarifier`,
+`skills/ancleto-workflow`, `skills/ancleto-continue`, `skills/ancleto-archive`, `agents/spec-writer.md`,
+`agents/documenter.md`, `agents/coder.md`, `agents/tester.md` y `agents/reviewer.md`; los mirrors
+`.opencode/**` no se editan a mano.
 
 ### `import` / `export`
 
@@ -382,8 +390,13 @@ tier puede quedar dormido en `check`.
 - **Reparación MCP 0.20.1**: el predicado de escritura evita reescribir destinos sanos y crear
   destinos vacíos; los mensajes y exit codes no cambian. La garantía se acota a
   `import`/`import --repair`; `install`/`init` y `upgrade` siguen reescribiendo el destino.
+- **Conformidad 0.21.0**: el archive de un change de conformidad es no-op sobre
+  `aspec/specs/**/*.md`, informa "sin delta" y valida la cita `spec:<capability>#<requirement>`
+  fail-closed. No hay subcomando CLI `archive`; la aceptación vive en los contratos de
+  `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
+  resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; en este
-  checkout registran `0.20.1`. No son fuentes del seed.
+  checkout registran `0.21.0`. No son fuentes del seed.
 
 ## Paths clave
 
@@ -400,6 +413,7 @@ tier puede quedar dormido en `check`.
 | `scripts/refresh-model-catalog.mjs` | Refresco manual, gate de `--write` y escritura atómica |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques `LOCKED` |
 | `profiles/test/**` | Overlay del perfil de test |
+| `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` | Change archivado del discriminador conformidad-vs-delta y archive sin delta (0.21.0; materializado por `upgrade`) |
 | `aspec/changes/archive/2026-11-06-fix-repair-mcp-noop/` | Change archivado del predicado de escritura de `repairProjectMcp` (0.20.1) |
 | `aspec/changes/archive/2026-11-05-host-neutral-bundle/` | Change archivado del bundle host-neutral (`export`/`import`) |
 | `aspec/changes/archive/2026-11-05-mcp-host-write-routing/` | Change archivado del descriptor y ruteo de escritura MCP por host |
@@ -408,6 +422,7 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-04-check-doctor-state-parity/` | Change archivado de paridad de diagnósticos (H7/H13/H14) |
 | `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` | Change archivado de la nota de compresión y validación de `manifest.mcp` |
 | `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión, config MCP de `doctor`, salud MCP, avisos de `check` y aviso de `import` |
+| `aspec/specs/prompt-contracts/spec.md` | Requirements de conformidad-vs-delta y archive sin delta (0.21.0) |
 | `aspec/specs/agent-install-routing/spec.md` | Requirements de destinos nativos, ruteo MCP por host y compresión host-scoped |
 | `aspec/specs/project-portability/spec.md` | Requirements de `export` host-neutral, `import` (MCP + `installedPaths`), reparación y nota de compresión |
 | `aspec/specs/agent-model-tiers/spec.md` | Requirements de tiers, aviso free-on-primary, integridad y tier dormido |

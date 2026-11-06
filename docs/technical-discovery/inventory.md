@@ -2,8 +2,8 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-06T12:16:49Z
-pluginVersion: 0.20.1
+generatedAt: 2026-11-06T14:20:00Z
+pluginVersion: 0.21.0
 skillVersion: '2.3'
 ---
 
@@ -25,7 +25,7 @@ skillVersion: '2.3'
 | `skills/**` | `units/_map.md` | 21 skills del ciclo SDD/discovery/review |
 | `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
 | `profiles/**` | `units/cli-install.md`, `decisions.md` | Overlay del perfil `test` (agents/commands/templates) |
-| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `cli-diagnostics`, `agent-install-routing`, `project-portability`) y changes archivados de diagnóstico y portabilidad (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`) |
+| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`) y changes archivados de diagnóstico, portabilidad y conformidad (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`) |
 | `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery y contenido |
 | `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
 | `eslint.config.js`, `package.json` | `setup.md`, `decisions.md` | Lint sobre `src/`, `test/`, `scripts/` y contrato de publicación |
@@ -38,9 +38,9 @@ skillVersion: '2.3'
 
 ## Áreas raíz observadas (`.discovery-map.json` al empacar)
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (249), `audit logs` (9), `commands` (16),
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (252), `audit logs` (9), `commands` (16),
 `docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (18),
-`templates` (2), `test` (26), más 15 archivos raíz. Total observado: **817 archivos**.
+`templates` (2), `test` (26), más 15 archivos raíz. Total observado: **820 archivos**.
 
 Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime.
 `documentation/` tiene 366 archivos en disco, pero el mapa cuenta 340 tras excluir
@@ -48,7 +48,7 @@ Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son ru
 35 archivos; `test/` tiene 26 archivos, de los cuales 19 son `*.test.js` en la raíz (el patrón
 declarado es `test/*.test.js`). El pack del tier `minimo` excluye `test/**`, `docs/**` y `**/*.md`,
 por lo que la evidencia de esas áreas se verificó por lectura directa. El pack de esta generación
-enumera 807 archivos y ~37.266 tokens.
+enumera 810 archivos y ~37.266 tokens.
 
-El `.discovery-map.json` trackeado quedó regenerado en esta corrida (817 archivos). Ver
+El `.discovery-map.json` trackeado quedó regenerado en esta corrida (820 archivos). Ver
 `unknowns.md`.

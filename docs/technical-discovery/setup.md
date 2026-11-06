@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-06T12:16:49Z
-pluginVersion: 0.20.1
+generatedAt: 2026-11-06T14:20:00Z
+pluginVersion: 0.21.0
 skillVersion: '2.3'
 ---
 
@@ -141,6 +141,11 @@ del paquete instalado.
   (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin `--tier`
   usa `normal`, mientras el default publicado de `agents/*.md` es
   `commandcode/deepseek/deepseek-v4.1-flash` (`README.md`).
+- **Conformidad (0.21.0)**: no hay comando CLI de archive. El flujo es agent-driven y se apoya en
+  `agents/orchestrator.md` y las skills de triage/archive/workflow/continue; `ancleto specs check`
+  sólo valida que los specs canónicos usen los keywords literales en inglés. Un change de
+  conformidad cita `spec:<capability>#<requirement>` y no lleva delta; el archive lo reporta "sin
+  delta". Esta versión no agrega comandos, flags ni tooling nuevo.
 
 El tier `gratis` está pensado para subagentes: un modelo free sobre un agente con `mode: primary`
 (por ejemplo el `orchestrator`, cuyo frontmatter canónico declara `mode: primary`) puede responder
@@ -164,8 +169,8 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.20.1)**: `.ancletorc` y `.ancleto/machine-env.md` registran
-`ancleto: 0.20.1`, alineados con `package.json`. Siguen siendo artefactos gitignored que
+**Estado de este checkout (0.21.0)**: `.ancletorc` y `.ancleto/machine-env.md` registran
+`ancleto: 0.21.0`, alineados con `package.json`. Siguen siendo artefactos gitignored que
 `init`/`install`/`upgrade` regeneran; no son fuentes del seed.
 
 ## Entorno de máquina

@@ -2,10 +2,10 @@
 node: units/memory-engine
 kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
-covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive]
-sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
+covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
+sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.2
+pluginVersion: 0.23.0
 skillVersion: '2.3'
 ---
 
@@ -22,7 +22,9 @@ promovieron como datos cuatro decisiones del archive de conformidad
 `conformity-verification-reuses-closed-ledger`, `triage-routing-single-contract`); en 0.22.0 el
 merge de specs tampoco abre ni escribe la DB. En 0.22.1 la novedad es de **contrato de archive**: la
 promoción de `## Decisiones` aprobadas ocurre antes del move y su secuencia vive en `agents/` y
-`skills/`, no en el engine. El esquema, el recall y las ops no cambiaron.
+`skills/`, no en el engine. El esquema, el recall y las ops no cambiaron. **0.23.0** sí toca el
+engine: `recordNode` trata como no-op la reescritura idéntica de una `memory_key` (ver
+"Escritura y supersesión"); el esquema, el recall y las ops siguen sin cambios.
 
 ## Recorrido relevante
 
@@ -32,6 +34,15 @@ promoción de `## Decisiones` aprobadas ocurre antes del move y su secuencia viv
   (`database.js`); `createReadonlyMemoryEngine` abre sin migrar ni escribir.
 - `recordNode(input, context)` valida refs y secretos **antes** de abrir transacción, resuelve
   `source` desde `context` (nunca del caller) y supersede por `memory_key` sin filtrar `type`/`scope`.
+- **Idempotencia de reescritura idéntica (0.23.0)**: si ya existe un nodo activo con la misma
+  `memory_key` y la tupla `(type, scope, content, justification)` es **exactamente igual**, la
+  escritura es un **no-op total**: no inserta nodo, no supersede, devuelve `superseded: 0` y los
+  valores persistidos del nodo activo, incluido su `created_at` original. `createdAt`, `source` y
+  `confidence` quedan **fuera** de la identidad. Cualquier diferencia en la tupla sigue el camino
+  normal: supersede el activo, inserta un nodo nuevo con UUID nuevo y devuelve `superseded: 1`.
+  La validación de refs y secretos corre antes de la comprobación de identidad, así que un rechazo
+  nunca se convierte en no-op. `importNodes` no cambia: conserva su semántica last-writer-wins por
+  `createdAt`.
 - La procedencia decide una sola cosa: si la escritura pasa por validación de refs. La excepción es
   el valor exacto `runtime`; el resto se valida fail-closed.
 
@@ -110,8 +121,10 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 
 ## Reglas, contratos y riesgos
 
-- **`memory_key` es identidad transversal**: una nueva versión supersede la anterior; los nodos
-  superseded quedan como historia y no se reactivan al importar.
+- **`memory_key` es identidad transversal**: una nueva versión con payload distinto supersede la
+  anterior sin filtrar `type`/`scope`; los nodos superseded quedan como historia y no se reactivan al
+  importar. La única excepción es la reescritura con `(type, scope, content, justification)`
+  exactamente iguales, que es no-op (0.23.0).
 - **Fail-closed**: una ref inválida, un bloque `refs:` múltiple o un secreto rechazan la escritura
   completa; no se escribe parcialmente.
 - **Read-only por defecto**: `list`, `doctor`, `curate` y `consolidate` sin `--apply` no migran ni
@@ -144,6 +157,7 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 | `src/core/memory/curation.js` | Curaduría read-only de refs y duplicados |
 | `src/core/memory/snapshot.js` | Copia consistente con historial |
 | `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move |
+| `aspec/specs/memory-engine/spec.md` | Requirement de idempotencia de reescritura idéntica en `recordNode` (0.23.0) |
 | `agents/orchestrator.md` | Secuencia del archive y delegación de la promoción entre fase A y fase B |
 | `agents/documenter.md` | Fase A (merge, sin move) y fase B (move, sólo tras la promoción) |
 | `skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md`, `skills/ancleto-onboard/SKILL.md` | Gate de promoción, move y literales de fallo |

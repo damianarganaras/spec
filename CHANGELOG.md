@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.23.0] - 2026-11-07
+
+### Added
+- **`import` advisory de bundle legacy**: un bundle sin clave `manifest.mcp` emite un único aviso no bloqueante; el exit code y la salida escrita no cambian, `mcp: []` sigue en silencio y un valor no-array sigue fallando.
+
+### Changed
+- **`recordNode` idempotente ante reescrituras idénticas**: reescribir el mismo `memory_key` con type, scope, content y justification idénticos no crea nodo ni supersede (`superseded: 0`) y devuelve los valores persistidos; cualquier diferencia sigue supersediendo. Las descripciones de las tools MCP se actualizaron en consecuencia.
+- **`reconcileLegacyBlocks` preserva el EOL por línea**: al remover una corrida legacy conserva el fin de línea original de cada línea superviviente y el estado de newline final de la entrada; el camino sin remoción queda byte-idéntico.
+
+### Docs
+- **Specs canónicas sincronizadas**: `memory-engine`, `project-portability` y `prompt-contracts`; en `project-portability` se normalizó el heading filtrado `## ADDED Requirements` a `## Requirements`.
+
 ## [0.22.2] - 2026-11-06
 
 ### Tests

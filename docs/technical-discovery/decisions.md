@@ -3,7 +3,7 @@ node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.2
+pluginVersion: 0.23.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.22.2)
+## Modelos y tiers (estado 0.23.0)
 
 ### Tabla y cadenas
 
@@ -827,6 +827,35 @@ ni después del move. La secuencia se replica en `skills/ancleto-archive/SKILL.m
   `agents/documenter.md`, `skills/ancleto-archive`, `skills/ancleto-bulk-archive` y
   `skills/ancleto-onboard`; la release regenera mirrors con `ancleto upgrade`.
 
+## Idempotencia de escritura, bundle legacy y EOL de templates (0.23.0)
+
+Changes archivados: `2026-11-07-memory-record-idempotency`, `2026-11-07-portability-legacy-bundle-advisory`
+y `2026-11-07-template-legacy-eol-preservation`. Son cambios acotados de comportamiento; no agregan
+comandos, flags ni dependencias.
+
+### `recordNode` no-op ante reescritura idéntica
+
+- La identidad es la tupla `(type, scope, content, justification)` contra el nodo **activo** de la
+  misma `memory_key`; `createdAt`, `source` y `confidence` quedan fuera.
+- Igualdad exacta: cero inserciones, cero supersesiones, `superseded: 0` y retorno de los valores
+  persistidos con el `created_at` original. Cualquier diferencia supersede e inserta un UUID nuevo.
+- La validación de refs y secretos corre antes de la comprobación de identidad. `importNodes` no
+  cambia (last-writer-wins por `createdAt`). Requerimiento:
+  `spec:memory-engine#Idempotencia de reescritura idéntica en recordNode`.
+
+### Bundle legacy sin `manifest.mcp`
+
+- `manifest.mcp === undefined` emite un aviso no bloqueante por `stderr`; el exit code y lo escrito
+  no cambian. `manifest.mcp: []` es silencio; un valor no-array sigue fallando con exit 1.
+- Requerimiento: `spec:project-portability#Aviso de bundle legacy sin intención MCP en el import`.
+
+### `reconcileLegacyBlocks` y EOL
+
+- Al eliminar un run legacy, cada línea superviviente conserva su EOL original y la salida conserva
+  el estado de newline final de la entrada; sin eliminación, el contenido se devuelve byte a byte.
+- La semántica de qué líneas forman el run no cambia. Requerimiento:
+  `spec:prompt-contracts#Preservación del fin de línea por línea al reconciliar bloques legacy`.
+
 ## Superficies del `model:` (nota operativa)
 
 `AGENTS.md` describe tres superficies: `agents/*.md` (canónica publicada), `.opencode/agents/*.md`
@@ -839,7 +868,10 @@ sin `--tier` es `normal`.
 
 - **Ubicación**: `.ancleto/memory.db` (SQLite + FTS5). No sale del repositorio.
 - **Identidad**: `memory_key` es la clave transversal; el `recordNode` supersede sin filtrar por
-  `type`/`scope`.
+  `type`/`scope` cuando el payload difiere. Desde 0.23.0, reescribir la misma `memory_key` con
+  `(type, scope, content, justification)` exactamente iguales es un no-op (`superseded: 0`, sin nodo
+  nuevo, devuelve los valores persistidos incluido el `created_at` original); `createdAt`, `source`
+  y `confidence` no forman parte de la identidad.
 - **Escritura**: toda escritura pasa por `recordNode`; valida refs `spec:`/`change:`/`path:` y
   rechaza secretos de forma incondicional. La única exención de refs es la procedencia `runtime`.
 - **Procedencia (`source`)**: la resuelve el runtime (`context.source`), nunca el caller; valores
@@ -875,8 +907,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 824 fuentes, ~38.087 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 834 archivos (aspec 264, docs 21, test 27, src 19, etc.).
+- **Pack actual**: tier `minimo`, 833 fuentes, ~38.330 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 843 archivos (aspec 273, docs 21, test 27, src 19, etc.).
 
 ## Lint y publicación
 
@@ -935,7 +967,7 @@ sin `--tier` es `normal`.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.22.2`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.23.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
   `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue

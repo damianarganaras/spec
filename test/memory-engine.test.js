@@ -411,6 +411,151 @@ describe('recordNode', () => {
   })
 })
 
+// memory-record-idempotency: la identidad de una escritura es la tupla
+// (memory_key, type, scope, content, justification). `createdAt`, `source` y
+// `confidence` quedan fuera. Una reescritura idéntica es un no-op total.
+describe('recordNode — idempotencia de reescritura idéntica', () => {
+  const IDENTITY_KEYS = ['memory_key', 'type', 'scope', 'content', 'justification', 'created_at']
+
+  it('una reescritura idéntica no inserta, no supersede y conserva el created_at persistido', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const first = eng.recordNode({
+        memory_key: 'idem-identica',
+        type: 'rule',
+        scope: 'project',
+        content: 'misma regla',
+        justification: 'misma justificación',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      })
+      // Mismo payload, `createdAt` distinto: no forma parte de la identidad.
+      const second = eng.recordNode({
+        memory_key: 'idem-identica',
+        type: 'rule',
+        scope: 'project',
+        content: 'misma regla',
+        justification: 'misma justificación',
+        createdAt: '2030-01-01T00:00:00.000Z'
+      })
+
+      const rows = rawAt(`SELECT id, status, created_at FROM memory_nodes WHERE memory_key = 'idem-identica'`)
+      assert.equal(rows.length, 1, 'no se inserta un nodo nuevo')
+      assert.equal(rows[0].status, 'active', 'el nodo activo no se supersede')
+      assert.equal(second.superseded, 0)
+      assert.equal(second.node.created_at, first.node.created_at, 'devuelve el created_at persistido')
+      assert.equal(second.node.created_at, '2026-01-01T00:00:00.000Z')
+      assert.notEqual(second.node.created_at, '2030-01-01T00:00:00.000Z', 'no es el createdAt de la segunda llamada')
+    })
+  })
+
+  it('contenido distinto inserta fila nueva, supersede la previa y devuelve superseded: 1', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'idem-contenido', type: 'rule', scope: 'project', content: 'version uno', justification: 'j' })
+      const second = eng.recordNode({ memory_key: 'idem-contenido', type: 'rule', scope: 'project', content: 'version dos', justification: 'j' })
+
+      const rows = rawAt(`SELECT id, status, content FROM memory_nodes WHERE memory_key = 'idem-contenido' ORDER BY rowid`)
+      assert.equal(rows.length, 2)
+      assert.equal(rows.filter((r) => r.status === 'active').length, 1)
+      assert.equal(rows.filter((r) => r.status === 'superseded').length, 1)
+      assert.equal(rows.find((r) => r.status === 'active').content, 'version dos')
+      assert.equal(second.superseded, 1)
+      assert.equal(second.node.content, 'version dos')
+      assert.notEqual(
+        rows.find((r) => r.status === 'active').id,
+        rows.find((r) => r.status === 'superseded').id,
+        'el nodo activo es una fila nueva con id distinto'
+      )
+    })
+  })
+
+  it('un type distinto con el resto idéntico supersede', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'idem-type', type: 'rule', scope: 'project', content: 'mismo', justification: 'j' })
+      const second = eng.recordNode({ memory_key: 'idem-type', type: 'decision', scope: 'project', content: 'mismo', justification: 'j' })
+
+      assert.equal(second.superseded, 1)
+      const rows = rawAt(`SELECT type, status FROM memory_nodes WHERE memory_key = 'idem-type' ORDER BY rowid`)
+      assert.equal(rows.length, 2)
+      assert.equal(rows.find((r) => r.status === 'active').type, 'decision')
+    })
+  })
+
+  it('un scope distinto con el resto idéntico supersede', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'idem-scope', type: 'rule', scope: 'project', content: 'mismo', justification: 'j' })
+      const second = eng.recordNode({ memory_key: 'idem-scope', type: 'rule', scope: 'feature', content: 'mismo', justification: 'j' })
+
+      assert.equal(second.superseded, 1)
+      const rows = rawAt(`SELECT scope, status FROM memory_nodes WHERE memory_key = 'idem-scope' ORDER BY rowid`)
+      assert.equal(rows.length, 2)
+      assert.equal(rows.find((r) => r.status === 'active').scope, 'feature')
+    })
+  })
+
+  it('la validación de refs corre antes de la identidad: una reescritura idéntica inválida se rechaza sin escribir', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      // Escritura runtime (exenta de refs) deja el nodo activo.
+      eng.recordNode({ memory_key: 'idem-refs', type: 'decision', scope: 'project', content: 'sin refs', justification: 'j' })
+      const before = rawAt(`SELECT id, status FROM memory_nodes WHERE memory_key = 'idem-refs'`)
+      assert.equal(before.length, 1)
+
+      // Idéntica en los cinco campos, pero con source no-runtime: la validación de
+      // refs debe rechazarla ANTES de la comprobación de identidad.
+      assert.throws(
+        () => eng.recordNode(
+          { memory_key: 'idem-refs', type: 'decision', scope: 'project', content: 'sin refs', justification: 'j' },
+          { source: 'agent:tester' }
+        ),
+        /refs: la decision "idem-refs" requiere un bloque refs:/
+      )
+
+      const after = rawAt(`SELECT id, status FROM memory_nodes WHERE memory_key = 'idem-refs'`)
+      assert.deepEqual(after, before, 'no se inserta ni se supersede ningún nodo')
+    })
+  })
+
+  it('importNodes conserva last-writer-wins por createdAt y no aplica la identidad de recordNode', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      eng.recordNode({
+        memory_key: 'idem-import',
+        type: 'rule',
+        scope: 'project',
+        content: 'igual',
+        justification: 'j',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      })
+      // Mismo contenido y justificación, createdAt más reciente: LWW supersede igual.
+      const summary = eng.importNodes([{
+        memory_key: 'idem-import',
+        type: 'rule',
+        scope: 'project',
+        content: 'igual',
+        justification: 'j',
+        createdAt: '2030-01-01T00:00:00.000Z'
+      }])
+
+      assert.deepEqual(summary, { inserted: 0, updated: 1, skipped: 0 })
+      const rows = rawAt(`SELECT status, created_at, source FROM memory_nodes WHERE memory_key = 'idem-import' ORDER BY rowid`)
+      assert.equal(rows.length, 2)
+      assert.equal(rows.find((r) => r.status === 'active').created_at, '2030-01-01T00:00:00.000Z')
+      assert.equal(rows.find((r) => r.status === 'active').source, 'cli:import')
+      assert.equal(rows.find((r) => r.status === 'superseded').created_at, '2026-01-01T00:00:00.000Z')
+    })
+  })
+
+  it('el objeto devuelto tiene exactamente {node, superseded} y node la forma congelada', () => {
+    withFreshEngine((eng) => {
+      const result = eng.recordNode({ memory_key: 'idem-shape', type: 'rule', scope: 'project', content: 'forma', justification: 'j' })
+      assert.deepEqual(Object.keys(result).sort(), ['node', 'superseded'])
+      assert.deepEqual(Object.keys(result.node).sort(), IDENTITY_KEYS.slice().sort())
+
+      // La rama de no-op devuelve exactamente la misma forma.
+      const noop = eng.recordNode({ memory_key: 'idem-shape', type: 'rule', scope: 'project', content: 'forma', justification: 'j' })
+      assert.deepEqual(Object.keys(noop).sort(), ['node', 'superseded'])
+      assert.deepEqual(Object.keys(noop.node).sort(), IDENTITY_KEYS.slice().sort())
+    })
+  })
+})
+
 describe('listNodes — procedencia (memory-actor-provenance)', () => {
   it('incluye source en cada nodo y refleja el valor real', () => {
     engine.recordNode({ memory_key: 'ln-provenance', type: 'rule', scope: 'repo', content: 'con procedencia' + RULE_REFS }, { source: 'agent:tester' })

@@ -453,6 +453,8 @@ cobertura sea confiable, e intake read-only fresco.
 
 > **0.22.1 (2026-11-06):** deuda residual de CH-06a cerrada (ítems 1–4) e ítem 5 documentado como exclusión; CH-06b sigue diferido por proyección incompleta y falta de consumidor probado. Este documento no se reconcilia en esta sesión.
 
+> **0.22.2 (2026-11-06):** el change `test-oracles-hardening` (conformidad, sin delta) cerró los oráculos de CH-06b/affected-set como **tests de conformidad** — idempotencia y cero escrituras del `--dry-run --json`, clasificación de imports dinámicos e invariante negativa de suites spawn-only — **sin implementar la proyección `--tests`**. CH-06b sigue diferido, ahora por razón estructural (suites que spawnean el CLI y content guards sobre markdown no indexado). La clasificación de imports dinámicos ya estaba conforme (`import('node:sqlite')` → externo): no-op, no trabajo pendiente. Este documento no se reconcilia en esta sesión.
+
 ### 5.2 Deuda declarada de MEM-04 (no aplicada en el primer corte)
 
 - **`inspectRefs` no captura errores de I/O.** `readFileSync`/`readdirSync`/`statSync` pueden lanzar

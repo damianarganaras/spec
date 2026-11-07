@@ -55,12 +55,12 @@ export const memoryTools = [
   },
   {
     name: 'recordRule',
-    description: 'Registra una regla del proyecto. Si la clave ya existe, la nueva version la supersede.',
+    description: 'Registra una regla del proyecto. Si la clave ya existe, la nueva version la supersede solo cuando el payload (type, scope, content, justification) difiere; una reescritura identica es un no-op.',
     inputSchema: RECORD_RULE_SCHEMA
   },
   {
     name: 'recordDecision',
-    description: 'Registra una decision con su justificacion. Si la clave ya existe, la nueva version la supersede.',
+    description: 'Registra una decision con su justificacion. Si la clave ya existe, la nueva version la supersede solo cuando el payload (type, scope, content, justification) difiere; una reescritura identica es un no-op.',
     inputSchema: RECORD_DECISION_SCHEMA
   }
 ]

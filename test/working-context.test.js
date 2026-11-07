@@ -506,6 +506,65 @@ describe('working-context — idempotencia (6.7)', () => {
   })
 })
 
+describe('working-context — consecuencia de la idempotencia de recordNode', () => {
+  // Spy del refresh: `writeWorkingContext` renderiza via `buildWorkingContext`, asi que
+  // contar esas llamadas prueba que `shouldRefreshWorkingContext` dio true aunque los
+  // bytes del archivo derivado no cambien en una reescritura identica.
+  const spyHandlers = (toolkit, dir) => {
+    const renders = []
+    const engine = {
+      recordNode: (input, context) => toolkit.engine.recordNode(input, context),
+      buildWorkingContext: (...args) => {
+        renders.push(args)
+        return toolkit.engine.buildWorkingContext(...args)
+      },
+      searchMemory: (args) => toolkit.engine.searchMemory(args)
+    }
+    return {
+      handlers: createMemoryToolHandlers(engine, { source: 'runtime', projectRoot: dir }),
+      renders
+    }
+  }
+
+  it('reescritura identica de rule + project sigue refrescando por contribucion directa, superseded 0', () => {
+    withProject((dir) => {
+      const toolkit = createMemoryToolkit(join(dir, '.ancleto', 'memory.db'), { source: 'runtime', projectRoot: dir })
+      try {
+        const { handlers, renders } = spyHandlers(toolkit, dir)
+        const first = handlers.recordRule({ memory_key: 'wc-ident-rule', content: 'regla estable', scope: 'project' })
+        assert.equal(first.superseded, 0)
+        assert.ok(renders.length > 0, 'precondicion: la primera escritura refresca')
+        const afterFirst = renders.length
+
+        const second = handlers.recordRule({ memory_key: 'wc-ident-rule', content: 'regla estable', scope: 'project' })
+        assert.equal(second.superseded, 0, 'una reescritura identica no supersede')
+        assert.equal(second.node.created_at, first.node.created_at, 'devuelve el nodo activo persistido')
+        assert.ok(renders.length > afterFirst, 'la contribucion directa sigue disparando el refresh')
+        assert.match(readFileSync(workingContextPath(dir), 'utf8'), /\[wc-ident-rule\] regla estable/)
+      } finally {
+        toolkit.engine.close()
+      }
+    })
+  })
+
+  it('reescritura identica de una decision no dispara refresh porque no hubo supersede', () => {
+    withProject((dir) => {
+      const toolkit = createMemoryToolkit(join(dir, '.ancleto', 'memory.db'), { source: 'runtime', projectRoot: dir })
+      try {
+        const { handlers, renders } = spyHandlers(toolkit, dir)
+        const first = handlers.recordDecision({ memory_key: 'wc-ident-dec', content: 'decision estable', scope: 'project' })
+        assert.equal(first.superseded, 0)
+        const second = handlers.recordDecision({ memory_key: 'wc-ident-dec', content: 'decision estable', scope: 'project' })
+        assert.equal(second.superseded, 0, 'una reescritura identica no supersede')
+        assert.equal(renders.length, 0, 'decision identica: ni supersede ni contribucion directa')
+        assert.equal(existsSync(workingContextPath(dir)), false, 'no se crea el working-context')
+      } finally {
+        toolkit.engine.close()
+      }
+    })
+  })
+})
+
 describe('working-context — raiz del server MCP (6.8)', () => {
   it('escribe bajo la raiz detectada por .ancletorc y usa su topologia, no el cwd', () => {
     withProject((dir) => {

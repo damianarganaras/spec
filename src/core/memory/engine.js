@@ -692,6 +692,11 @@ function buildReadonlyEngine(db, dbPath) {
 function buildEngine(db, dbPath) {
 
   const findActive = db.prepare(`SELECT id, type FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
+  // Lookup propio de `recordNode`: la identidad compara los cinco campos del nodo
+  // activo. No se muta `findActive` porque otros consumidores esperan solo `id, type`.
+  const findActiveIdentity = db.prepare(
+    `SELECT id, memory_key, type, scope, content, justification, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`
+  )
   const findActivePublic = db.prepare(`SELECT ${PUBLIC_COLUMNS} FROM memory_nodes n WHERE n.memory_key = ? AND n.status = 'active'`)
   const findActiveRow = db.prepare(`SELECT id, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
   const findLatestStatus = db.prepare(`SELECT status FROM memory_nodes WHERE memory_key = ? ORDER BY rowid DESC LIMIT 1`)
@@ -932,14 +937,36 @@ function buildEngine(db, dbPath) {
 
     db.exec('BEGIN IMMEDIATE')
     let prev = null
+    let unchanged = null
     try {
-      prev = findActive.get(memory_key)
-      if (prev) getSupersede().run(id, new Date().toISOString(), prev.id)
-      insertNode.run(id, memory_key, type, scope, content, justification, source, confidence, created_at)
+      prev = findActiveIdentity.get(memory_key)
+      // Idempotencia: reescritura identica al nodo activo es un no-op total.
+      // `createdAt`, `source` y `confidence` quedan fuera de la identidad.
+      if (prev && prev.type === type && prev.scope === scope &&
+          prev.content === content && prev.justification === justification) {
+        unchanged = prev
+      } else {
+        if (prev) getSupersede().run(id, new Date().toISOString(), prev.id)
+        insertNode.run(id, memory_key, type, scope, content, justification, source, confidence, created_at)
+      }
       db.exec('COMMIT')
     } catch (err) {
       db.exec('ROLLBACK')
       throw err
+    }
+
+    if (unchanged) {
+      return {
+        node: {
+          memory_key: unchanged.memory_key,
+          type: unchanged.type,
+          scope: unchanged.scope,
+          content: unchanged.content,
+          justification: unchanged.justification,
+          created_at: unchanged.created_at
+        },
+        superseded: 0
+      }
     }
 
     return {

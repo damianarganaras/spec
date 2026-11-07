@@ -3,7 +3,7 @@ node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.2
+pluginVersion: 0.23.0
 skillVersion: '2.3'
 ---
 
@@ -19,15 +19,15 @@ skillVersion: '2.3'
 | `src/core/specs-merge.js` | `decisions.md`, `units/cli-install.md` | Merge puro de delta specs: parseo, plan por título exacto, fail-closed y serialización; 0.22.1 endurece H1, `archive` y espaciado (0.22.0–0.22.1) |
 | `src/core/adapters/frontmatter.js` | `units/cli-install.md` | Adaptación pura de frontmatter por host y `frontmatterValue` |
 | `src/core/machine-env.js` | `units/cli-install.md`, `setup.md` | Detección de shell/EOL/tooling y exclusión local |
-| `src/core/memory/**` | `units/memory-engine.md` | Motor, DB, tools, MCP, doctor, curaduría, snapshot |
+| `src/core/memory/**` | `units/memory-engine.md` | Motor, DB, tools, MCP, doctor, curaduría, snapshot; idempotencia de `recordNode` (0.23.0) |
 | `scripts/**` | `decisions.md`, `units/discovery-engine.md` | Descubrimiento dev-only del catálogo; no se publica |
 | `agents/**` | `units/_map.md`, `units/cli-install.md` | 10 agentes instalables (superficie de producto) |
 | `commands/**` | `units/_map.md` | 16 comandos `/cleto-*` |
 | `skills/**` | `units/_map.md` | 21 skills del ciclo SDD/discovery/review |
 | `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
 | `profiles/**` | `units/cli-install.md`, `decisions.md` | Overlay del perfil `test` (agents/commands/templates) |
-| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`) y changes archivados de diagnóstico, portabilidad, conformidad, merge y orden del archive (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`) |
-| `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery, contenido y `specs-merge.test.js` |
+| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y changes archivados de diagnóstico, portabilidad, conformidad, merge, orden del archive, idempotencia de memoria, aviso de bundle legacy y EOL de templates (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory`, `template-legacy-eol-preservation`) |
+| `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery, contenido, `specs-merge.test.js` y `memory-engine.test.js` |
 | `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
 | `eslint.config.js`, `package.json` | `setup.md`, `decisions.md` | Lint sobre `src/`, `test/`, `scripts/` y contrato de publicación |
 | `docs/technical-discovery/**` | `index.md` | Este seed (excluido del hash de fuentes) |
@@ -39,9 +39,9 @@ skillVersion: '2.3'
 
 ## Áreas raíz observadas (`.discovery-map.json` al empacar)
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (264), `audit logs` (9), `commands` (16),
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (273), `audit logs` (9), `commands` (16),
 `docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (19),
-`templates` (2), `test` (27), más 15 archivos raíz. Total observado: **834 archivos**.
+`templates` (2), `test` (27), más 15 archivos raíz. Total observado: **843 archivos**.
 
 Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime.
 `documentation/` tiene 366 archivos en disco, pero el mapa cuenta 340 tras excluir
@@ -49,8 +49,8 @@ Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son ru
 35 archivos; `test/` tiene 27 archivos, todos `*.test.js` en la raíz (20, incluido
 `specs-merge.test.js`; el patrón declarado es `test/*.test.js`). El pack del tier `minimo` excluye
 `test/**`, `docs/**` y `**/*.md`, por lo que la evidencia de esas áreas se verificó por lectura
-directa. El pack de esta generación registra 824 fuentes y ~38.087 tokens, con 29 entradas de
+directa. El pack de esta generación registra 833 fuentes y ~38.330 tokens, con 29 entradas de
 archivo en el cuerpo.
 
-El `.discovery-map.json` observado en esta corrida reporta 834 archivos (aspec 264, src 19,
+El `.discovery-map.json` observado en esta corrida reporta 843 archivos (aspec 273, src 19,
 test 27). Ver `unknowns.md`.

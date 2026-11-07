@@ -39,11 +39,13 @@ covers:
   - specs-merge
   - endurecimiento specs merge 0.22.1
   - orden del archive
+  - aviso de bundle legacy
+  - preservación de EOL legacy
   - materialización de agents y skills
   - machine-env
-sources: ["src/cli/index.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+sources: ["src/cli/index.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.2
+pluginVersion: 0.23.0
 skillVersion: '2.3'
 ---
 
@@ -196,6 +198,12 @@ no se aplica durante `install`/`upgrade`, y el orden del archive vive en `agents
   no-array aborta con `bundle invalido (manifest.mcp no es un arreglo)`; una entrada inválida, con
   `bundle invalido (manifest.mcp con entradas invalidas)`. Ambos casos salen con exit 1. La
   validación evita un import parcial, porque `intendedMcpNames` se consume después del primer write.
+- **Aviso de bundle legacy (0.23.0)**: si el bundle **omite** la clave `mcp`
+  (`manifest.mcp === undefined`), `import` emite por `stderr` un aviso **no bloqueante**
+  (`ancleto: aviso: el bundle no declara intención MCP (formato previo); no se aplicará
+  configuración MCP desde el bundle`). El exit code y la salida escrita no cambian: el bundle
+  simplemente no aporta configuración MCP. Un `manifest.mcp: []` explícito es un estado moderno y
+  **no** produce el aviso; un valor no-array sigue fallando con exit 1 como antes.
 - **`installedPaths` (0.18.13)**: cuando el bundle trae `.ancletorc`, el manifiesto se escribe
   **después** de `installAgentAssets`, del overlay de perfil y de la aplicación de tier, con
   `unionInstalledPaths(<installedPaths del destino>, <lo escrito por este import>)` para
@@ -424,6 +432,13 @@ tier puede quedar dormido en `check`.
 - **Templates**: el merge reemplaza bloques `LOCKED` conocidos, inserta bloques nuevos en el ancla
   correcta y **no toca** un bloque mal formado o personalizado; avisa. La reconciliación legacy es
   idempotente y solo elimina con coincidencia exacta.
+- **Reconciliación legacy y EOL (0.23.0)**: `reconcileLegacyBlocks` divide el contenido capturando
+  el EOL de cada línea y re-join usando el EOL **propio de cada línea superviviente**, no el
+  dominante del archivo; un archivo de EOL mixto no se normaliza al eliminar un run legacy. También
+  preserva el estado de newline final de la entrada: la salida termina en newline si y sólo si la
+  entrada terminaba en newline (sin newline final se eliminan todas las secuencias EOL finales del
+  resultado). Cuando no se elimina ningún run (`removed === false`) el contenido se devuelve **byte
+  a byte**, sin normalizar EOL. La semántica de qué líneas constituyen el run no cambia.
 - **Perfil `test`**: overlay sobre `profiles/test/` (agents/commands/templates); el package base no
   se modifica. El tier sigue siendo dueño de `model:` en install/init; `upgrade` devuelve el
   overlay a su fuente. Un guard test-only exige que `profiles/test/agents/*.md` declaren `^model:`.
@@ -461,7 +476,7 @@ tier puede quedar dormido en `check`.
   `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
   resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; deben
-  alinearse con `package.json` (`0.22.2`). No son fuentes del seed.
+  alinearse con `package.json` (`0.23.0`). No son fuentes del seed.
 - **Merge de specs 0.22.0–0.22.1**: el fail-closed es por plan, no transaccional ante una caída de
   I/O a mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs
   traducidos ni crea capabilities. No está cableado en skills/agentes. El contenedor `archive` ya
@@ -485,6 +500,8 @@ tier puede quedar dormido en `check`.
 | `scripts/refresh-model-catalog.mjs` | Refresco manual, gate de `--write` y escritura atómica |
 | `templates/AGENTS.md`, `templates/PRODUCT.md` | Templates con bloques `LOCKED` |
 | `profiles/test/**` | Overlay del perfil de test |
+| `aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory/` | Change archivado del aviso no bloqueante de bundle legacy sin `manifest.mcp` (0.23.0) |
+| `aspec/changes/archive/2026-11-07-template-legacy-eol-preservation/` | Change archivado de la preservación de EOL por línea y newline final en `reconcileLegacyBlocks` (0.23.0) |
 | `aspec/changes/archive/2026-11-06-specs-merge-hardening/` | Change archivado del endurecimiento de `specs merge` (0.22.1): contenedor `archive`, H1 estructural, `ADDED` y atomicidad acotada |
 | `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` | Change archivado del merge determinístico de specs y la capability `spec-sync` (0.22.0) |
 | `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` | Change archivado del discriminador conformidad-vs-delta y archive sin delta (0.21.0; materializado por `upgrade`) |

@@ -3,7 +3,7 @@ node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.2
+pluginVersion: 0.23.0
 skillVersion: '2.3'
 ---
 
@@ -21,7 +21,7 @@ skillVersion: '2.3'
 | Diagnósticos de estado | `check` (tier dormido, deriva de versión, salud MCP host-aware) y `doctor` (precedencia host activo→instalados→global) | `src/cli/index.js` → `checkCommand`, `checkTierOrphan`, `doctorCommand` | `units/cli-install.md` |
 | Salud de comandos MCP | `mcpCommandBroken`, `resolveExistingHostMcpDestinations`, `HOST_MCP_TARGETS`; avisos de `check` y aviso de `import` | `src/cli/index.js` | `units/cli-install.md` |
 | Nota de compresión host-scoped | `resolvesHostCompression` + `hostConfigHasCompression`; gate estado-driven en `install`/`init`/`import` | `src/cli/index.js` | `units/cli-install.md` |
-| Portabilidad | Bundle `export` host-neutral; `import` con `--repair`, validación de `manifest.mcp`, tier, `installedPaths` acumulativo y reparación MCP sin escritura sobre destino sano (0.20.1) | `src/cli/index.js` → `exportCmd`/`importCmd`, `repairProjectMcp` | `units/cli-install.md` |
+| Portabilidad | Bundle `export` host-neutral; `import` con `--repair`, validación de `manifest.mcp`, aviso no bloqueante de bundle legacy sin `mcp` (0.23.0), tier, `installedPaths` acumulativo y reparación MCP sin escritura sobre destino sano (0.20.1) | `src/cli/index.js` → `exportCmd`/`importCmd`, `repairProjectMcp` | `units/cli-install.md` |
 | Conformidad SDD (0.21.0) | Discriminador conformidad-vs-delta; archive sin delta con cita resoluble y reporte "sin delta"; ruteo único del triage | `agents/orchestrator.md`, `skills/triage-clarifier/SKILL.md`, `skills/ancleto-workflow/SKILL.md`, `skills/ancleto-continue/SKILL.md`, `skills/ancleto-archive/SKILL.md`, `aspec/specs/prompt-contracts/spec.md` | — |
 | Merge de specs (0.22.0–0.22.1) | `specs merge --change <slug> [--dry-run] [--json]`: `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED` por título exacto, idempotencia, fail-closed sin escrituras parciales; H1 estructural, contenedor `archive` fail-closed y `ADDED` con una línea en blanco | `src/core/specs-merge.js`, `src/cli/index.js` → `specsMergeCommand`, `specsCommand`, `aspec/specs/spec-sync/spec.md` | `units/cli-install.md` |
 | Orden del archive (0.22.1) | merge/sync → preflight read-only → promoción de `## Decisiones` → move → commit; fases A/B del documenter y literales de fallo | `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md`, `skills/ancleto-onboard/SKILL.md`, `aspec/specs/memory-ops/spec.md` | `units/memory-engine.md` |
@@ -29,7 +29,7 @@ skillVersion: '2.3'
 | Empaquetado Repomix | Args e ignores por tier; presupuesto de tokens | `src/core/repomix-tier.js` | `units/discovery-engine.md` |
 | Affected-set | Grafo de imports y clausura de dependientes | `src/core/affected-set.js` | `units/discovery-engine.md` |
 | Entorno de máquina | Shell, EOL, tooling e invocabilidad; exclusión local | `src/core/machine-env.js` | `units/cli-install.md` |
-| Motor de memoria | SQLite+FTS5, supersesión, refs, secretos, recall, ops | `src/core/memory/engine.js`, `database.js` | `units/memory-engine.md` |
+| Motor de memoria | SQLite+FTS5, supersesión, idempotencia de reescritura idéntica (0.23.0), refs, secretos, recall, ops | `src/core/memory/engine.js`, `database.js` | `units/memory-engine.md` |
 | Tools y MCP | `searchMemory`, `recordRule`, `recordDecision`; server stdio | `src/core/memory/tools.js`, `mcp-server.js` | `units/memory-engine.md` |
 | Working-context | Render y refresh de `.ancleto/working-context.md` | `src/core/memory/working-context.js` | `units/memory-engine.md` |
 | Doctor y curaduría | Chequeos read-only, refs rotas, duplicados exactos | `src/core/memory/doctor.js`, `curation.js` | `units/memory-engine.md` |
@@ -39,7 +39,7 @@ skillVersion: '2.3'
 | Skills | 21 skills del ciclo SDD/discovery/review | `skills/*/SKILL.md` | — |
 | Templates | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` | `templates/*.md` | — |
 | Perfil test | Overlay de tester/reviewer y commands de test | `profiles/test/**` | `units/cli-install.md` |
-| Specs y changes | Specs canónicos (`prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`) y ciclo de cambios (archives de `mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening` y `archive-order-correctness`) | `aspec/specs/**`, `aspec/changes/**` | — |
+| Specs y changes | Specs canónicos (`prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y ciclo de cambios (archives de `mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory` y `template-legacy-eol-preservation`) | `aspec/specs/**`, `aspec/changes/**` | — |
 | Stats | Tokens por sesión y fallos de tool parts de opencode | `src/cli/index.js` (`stats`) | `units/cli-install.md` |
 | Lint y publicación | `eslint src/ test/ scripts/`, npm publish y GitHub Release | `eslint.config.js`, `.github/workflows/publish.yml` | — |
 | Suite de tests | Guards de modelos, integridad del catálogo, discovery, memoria, adapters, CLI y merge de specs | `test/*.test.js` | — |

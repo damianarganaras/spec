@@ -3,7 +3,7 @@ node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.2
+pluginVersion: 0.23.0
 skillVersion: '2.3'
 ---
 
@@ -103,6 +103,11 @@ Desde 0.20.1, `repairProjectMcp` sólo escribe el destino MCP del host activo si
 si la estructura requiere normalización o si hay entradas reparadas/agregadas. Un destino sano no se
 reescribe (mismos bytes y mtime) y un destino inexistente sin nada que reparar no se crea.
 
+Desde 0.23.0, `import` de un bundle que omite la clave `manifest.mcp` emite un aviso no bloqueante
+por `stderr` (el exit code y la salida escrita no cambian; `manifest.mcp: []` no avisa y un valor
+no-array sigue fallando con exit 1). La reconciliación de bloques legacy de templates preserva el
+EOL de cada línea superviviente y el estado de newline final de la entrada.
+
 ## Refresco del catálogo de modelos
 
 Procedimiento **manual**, con `opencode` instalado en una máquina de mantenimiento. Nunca corre en
@@ -178,9 +183,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.22.2)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.23.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-la fija `package.json` = `0.22.2`.
+la fija `package.json` = `0.23.0`.
 
 ## Entorno de máquina
 

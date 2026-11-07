@@ -3,7 +3,7 @@ node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
 generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.22.2
+pluginVersion: 0.23.0
 skillVersion: '2.3'
 ---
 
@@ -181,6 +181,16 @@ test/                   suite node --test (content guards incluidos)
     pendiente`; si el move falla tras promover, se reporta `memoria promovida; NO archivado`. La
     secuencia vive en `agents/orchestrator.md`, `agents/documenter.md` (fases A y B) y las skills de
     archive/onboard; `ancleto upgrade` regenera los mirrors.
+17. **Idempotencia de memoria (0.23.0)**: `recordNode` compara la tupla
+    `(type, scope, content, justification)` contra el nodo activo de la misma `memory_key`. Si es
+    exactamente igual, no inserta ni supersede (`superseded: 0`) y devuelve los valores persistidos
+    con su `created_at` original; `createdAt`, `source` y `confidence` no cuentan. Cualquier
+    diferencia supersede como antes. `importNodes` conserva su semántica last-writer-wins.
+18. **Portabilidad y templates (0.23.0)**: `import` de un bundle sin la clave `manifest.mcp` emite un
+    aviso no bloqueante (exit code y salida escrita sin cambios; `mcp: []` es silencioso y un valor
+    no-array sigue fallando con exit 1). `reconcileLegacyBlocks` preserva el EOL de cada línea
+    superviviente y el estado de newline final de la entrada al eliminar un run legacy; sin
+    eliminación devuelve el contenido byte a byte.
 
 ## Recorrido de una instalación con tier `minimo`
 

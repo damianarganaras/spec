@@ -1680,8 +1680,16 @@ function reconcileLegacyBlocks(content, filename, source = '') {
     sig.filename === filename && (!source || !sig.requiresInSource || sig.requiresInSource.test(source))
   )
   if (signatures.length === 0) return content
-  const eol = content.includes('\r\n') ? '\r\n' : '\n'
-  const lines = content.split(/\r?\n/)
+  // Division capturando el EOL de cada linea: el re-join usa el EOL propio de cada
+  // linea superviviente (un archivo de EOL mixto no se normaliza al eliminar).
+  const parts = content.split(/(\r\n|\n)/)
+  const lines = []
+  const eols = []
+  for (let k = 0; k < parts.length; k += 2) {
+    lines.push(parts[k])
+    eols.push(parts[k + 1] ?? '')
+  }
+  const hadTrailingNewline = /\n$/.test(content)
   const masked = maskLockedLines(lines)
   const trimEnd = (line) => line.replace(/\s+$/, '')
   // La lista sigue si la linea es otro item (cualquier marcador `*`/`+`/`-`) o una
@@ -1710,7 +1718,7 @@ function reconcileLegacyBlocks(content, filename, source = '') {
         i = last
         // Consumir un blanco adyacente para no dejar dobles blancos.
         if (i + 1 < lines.length && trimEnd(lines[i + 1]) === '' &&
-            (out.length === 0 || trimEnd(out[out.length - 1]) === '')) {
+            (out.length === 0 || trimEnd(lines[out[out.length - 1]]) === '')) {
           i++
         }
         removed = true
@@ -1720,7 +1728,7 @@ function reconcileLegacyBlocks(content, filename, source = '') {
         console.warn(`ancleto: bloque legado de ${sig.label} no reconocido en ${filename}; revisar`)
         warned.add(sig.id)
       }
-      out.push(lines[i])
+      out.push(i)
       continue
     }
     if (sig) {
@@ -1740,11 +1748,18 @@ function reconcileLegacyBlocks(content, filename, source = '') {
         warned.add(sig.id)
       }
     }
-    out.push(lines[i])
+    out.push(i)
   }
   // Sin eliminaciones, el contenido se devuelve byte a byte: un rejoin
   // normalizaria un EOL mixto sin motivo.
-  return removed ? out.join(eol) : content
+  if (!removed) return content
+  // Re-join con el EOL propio de cada linea superviviente (no el dominante).
+  let result = out.map((idx) => lines[idx] + eols[idx]).join('')
+  // El estado de newline final se conserva: si la entrada no terminaba en salto
+  // de linea, el resultado tampoco. Se quitan TODOS los EOL finales porque el
+  // rejoin puede dejar el EOL de una linea en blanco superviviente (run en EOF).
+  if (!hadTrailingNewline) result = result.replace(/(?:\r?\n)+$/, '')
+  return result
 }
 
 // Merge de un template sobre el contenido local: reconcilia los bloques planos
@@ -4606,6 +4621,11 @@ async function importCmd(args) {
     ))) {
       console.error('ancleto: bundle invalido (manifest.mcp con entradas invalidas)')
       process.exit(1)
+    }
+    // Bundle previo a la intencion MCP host-aware: su configuracion MCP no viajo
+    // en el bundle. Aviso informativo (no bloqueante, no altera lo escrito).
+    if (manifest.mcp === undefined) {
+      console.warn('ancleto: aviso: el bundle no declara intención MCP (formato previo); no se aplicará configuración MCP desde el bundle')
     }
     const localVersion = await packageVersion()
     if (manifest.ancletoVersion && manifest.ancletoVersion !== localVersion) {

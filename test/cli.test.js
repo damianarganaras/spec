@@ -4284,6 +4284,57 @@ describe('CLI compression note consistency (host-compression-note-consistency)',
     })
   })
 
+  // portability-legacy-bundle-advisory: un bundle sin la clave `mcp` precede a la
+  // intención MCP host-aware. El aviso es informativo: una sola línea, exit 0 y sin
+  // alterar lo escrito. `mcp: []` es un estado moderno legítimo y no avisa.
+  const LEGACY_MCP_ADVISORY = /no declara intención MCP \(formato previo\)/
+
+  it('import con manifest.mcp ausente emite exactamente un aviso no bloqueante', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(join(dst, '.opencode'), { recursive: true })
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({ mcp: {} }, null, 2) + '\n')
+      const env = compressionEnv(dir)
+      const bundle = writeMcpBundle(dir, { mcp: [] })
+      const manifestPath = join(bundle, 'manifest.json')
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+      delete manifest.mcp
+      writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+
+      const r = run(['import', bundle], dst, env)
+      assert.equal(r.status, 0)
+      assert.equal((r.stderr.match(LEGACY_MCP_ADVISORY) || []).length, 1, 'exactamente un aviso')
+      // El aviso no escribe config MCP: el destino conserva su config previa vacía.
+      const cfg = JSON.parse(readFileSync(join(dst, '.opencode', 'opencode.json'), 'utf8'))
+      assert.deepEqual(cfg.mcp, {}, 'el aviso no agrega MCP')
+    })
+  })
+
+  it('import con manifest.mcp vacío no emite el aviso de bundle legacy', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(join(dst, '.opencode'), { recursive: true })
+      writeFileSync(join(dst, '.opencode', 'opencode.json'), JSON.stringify({ mcp: {} }, null, 2) + '\n')
+      const env = compressionEnv(dir)
+      const r = run(['import', writeMcpBundle(dir, { mcp: [] })], dst, env)
+      assert.equal(r.status, 0)
+      assert.doesNotMatch(r.stderr, LEGACY_MCP_ADVISORY, 'el vacío explícito no avisa')
+    })
+  })
+
+  it('import con manifest.mcp no-array falla con exit 1 y no emite el aviso', () => {
+    withDir((dir) => {
+      const dst = join(dir, 'destino')
+      mkdirSync(dst)
+      const env = compressionEnv(dir)
+      const r = run(['import', writeMcpBundle(dir, { mcp: { caveman: {} } })], dst, env)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /manifest\.mcp no es un arreglo/)
+      assert.doesNotMatch(r.stderr, LEGACY_MCP_ADVISORY, 'un bundle inválido no avisa')
+      assert.deepEqual(readdirSync(dst), [], 'sin writes parciales')
+    })
+  })
+
   it('check mantiene exit 0 en divergencia advisory y exit 1 con faltantes', () => {
     withDir((dir) => {
       const env = compressionEnv(dir)
@@ -5312,6 +5363,130 @@ describe('CLI merge y reconciliacion (parche de bordes)', () => {
       const r = run(['upgrade'], dir)
       assert.equal(r.status, 0, r.stderr)
       assert.equal(readFileSync(path, 'utf8'), before, 'no se normaliza el EOL mixto')
+    })
+  })
+
+  // template-legacy-eol-preservation: al eliminar un run legacy, el re-join usa el
+  // EOL propio de cada línea superviviente (no el dominante). Sin eliminación, el
+  // contenido se devuelve byte a byte y el estado de newline final no cambia.
+  it('al eliminar un run legacy de un archivo de EOL mixto, cada línea superviviente conserva su EOL', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const fresh = readFileSync(path, 'utf8')
+      const legacyCrlf = LEGACY_FLAT.replace(/\n/g, '\r\n')
+      const before = fresh + '\r\n' + '## Seccion del usuario\r\n' + legacyCrlf + 'linea LF\n' + 'linea CRLF final\r\n'
+      writeFileSync(path, before)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const expected = fresh + '\r\n' + '## Seccion del usuario\r\n' + 'linea LF\n' + 'linea CRLF final\r\n'
+      assert.equal(readFileSync(path, 'utf8'), expected, 'cada línea conserva su EOL original')
+    })
+  })
+
+  it('sin run legacy y sin newline final, el contenido se devuelve byte a byte', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const before = readFileSync(path, 'utf8') + '\r\n## Seccion\r\nlinea LF\nfinal sin newline'
+      writeFileSync(path, before)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.equal(readFileSync(path, 'utf8'), before, 'byte a byte, sin normalizar EOL ni agregar newline final')
+    })
+  })
+
+  it('un archivo CRLF homogéneo sigue siendo CRLF al eliminar un run legacy', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const crlfFresh = readFileSync(path, 'utf8').replace(/\n/g, '\r\n')
+      const legacyCrlf = LEGACY_FLAT.replace(/\n/g, '\r\n')
+      const before = crlfFresh + '\r\n' + '## Seccion del usuario\r\n' + legacyCrlf + 'linea final\r\n'
+      writeFileSync(path, before)
+      // El source del bundle también es CRLF: el merge LOCKED no introduce LF.
+      const bundle = writeBundle(dir, { 'AGENTS.md': crlfFresh })
+
+      const r = run(['import', bundle], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const after = readFileSync(path, 'utf8')
+      const expected = crlfFresh + '\r\n' + '## Seccion del usuario\r\n' + 'linea final\r\n'
+      assert.equal(after, expected, 'todas las líneas supervivientes conservan CRLF')
+      assert.doesNotMatch(after, /(^|[^\r])\n/, 'el archivo resultante no mezcla EOL')
+    })
+  })
+
+  it('un archivo LF homogéneo sigue siendo LF al eliminar un run legacy', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const fresh = readFileSync(path, 'utf8')
+      const before = fresh + '\n' + '## Seccion\n' + LEGACY_FLAT + 'linea final\n'
+      writeFileSync(path, before)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const after = readFileSync(path, 'utf8')
+      assert.equal(after, fresh + '\n' + '## Seccion\n' + 'linea final\n', 'todas las líneas supervivientes conservan LF')
+      assert.equal(after.includes('\r'), false, 'el archivo resultante no mezcla EOL')
+    })
+  })
+
+  it('la eliminación no agrega ni quita la línea final', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const fresh = readFileSync(path, 'utf8')
+
+      // Entrada SIN newline final: el resultado tampoco lo agrega.
+      writeFileSync(path, fresh + '\n' + '## Seccion\n' + LEGACY_FLAT.replace(/\n$/, ''))
+      let r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      let after = readFileSync(path, 'utf8')
+      assert.equal(after, fresh + '\n' + '## Seccion')
+      assert.equal(after.endsWith('\n'), false, 'sin newline final se conserva sin newline final')
+
+      // Entrada CON newline final: el resultado lo conserva.
+      writeFileSync(path, fresh + '\n' + '## Seccion\n' + LEGACY_FLAT + 'linea final\n')
+      r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      after = readFileSync(path, 'utf8')
+      assert.equal(after, fresh + '\n' + '## Seccion\n' + 'linea final\n')
+      assert.equal(after.endsWith('\n'), true, 'con newline final se conserva el newline final')
+    })
+  })
+
+  // EOF del run legacy: sin newline final, el re-join no deja ningun EOL colgante
+  // (el strip final elimina los EOL de las lineas en blanco supervivientes); con
+  // newline final, el estado de newline se conserva byte a byte.
+  it('run legacy en EOF sin newline final: el resultado es el prefijo exacto, sin EOL final', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      // "A" = archivo canonico sin su newline final; blanco previo + run sin newline final.
+      const base = readFileSync(path, 'utf8').replace(/\r?\n$/, '')
+      const legacyRun = LEGACY_FLAT.replace(/\n$/, '')
+      writeFileSync(path, base + '\n\n' + legacyRun)
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.equal(readFileSync(path, 'utf8'), base, 'exactamente "A", sin newline final')
+    })
+  })
+
+  it('run legacy en EOF con newline final: se conserva el estado de newline final', () => {
+    withDir((dir) => {
+      run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      const path = join(dir, 'AGENTS.md')
+      const base = readFileSync(path, 'utf8').replace(/\r?\n$/, '')
+      const legacyRun = LEGACY_FLAT.replace(/\n$/, '')
+      writeFileSync(path, base + '\n\n' + legacyRun + '\n')
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.equal(readFileSync(path, 'utf8'), base + '\n\n', 'exactamente "A\\n\\n": newline final preservado')
     })
   })
 

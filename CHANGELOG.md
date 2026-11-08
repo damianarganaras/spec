@@ -2,6 +2,12 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.25.0] - 2026-11-08
+
+### Changed
+- **Archive delta-sync ruteado por `specs merge`**: el sync de delta en archive y bulk-archive pasa exclusivamente por `ancleto specs merge --change <slug>`; el guard canónico fail-closed de headings de delta ahora aplica también al camino de archive. El comando standalone `ancleto-sync-specs` y el modo Standalone del documenter no cambian.
+- **`--help`/`-h` en subcomandos que mutan estado**: en `install`, `update`, `upgrade`, `init`, `memory`, `import`, `export`, `mcp`, `specs`, `specs merge`, `projects` y `list --projects`, el flag de ayuda imprime el uso en stdout, sale con exit 0 y no escribe nada; `discovery --help` y la ayuda global no cambian.
+
 ## [0.24.0] - 2026-11-08
 
 ### Fixed

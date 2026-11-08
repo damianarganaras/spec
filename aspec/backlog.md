@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-08 (release 0.24.0).
+> Última actualización: 2026-11-08 (release 0.25.0).
 
 ## Prioridad de ejecución
 
@@ -164,3 +164,21 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 - **El flujo de archive no pasa por `mergeSpecText`:** `skills/ancleto-archive` / `ancleto-bulk-archive` aplican deltas editando `aspec/specs/<capability>/spec.md` directamente. El nuevo guard de heading de delta en canónica NO cubre ese camino. Candidato: rutear el sync del archive por `ancleto specs merge` o agregar la validación en la skill.
 - **`--help` de subcomandos ejecuta el subcomando:** `upgradeCmd` no tiene handler de ayuda, así que `ancleto upgrade --help` corre el upgrade completo. Candidato: agregar handlers de `--help` a los subcomandos que mutan estado.
+
+→ **Cerrada en 0.25.0** por `archive-sync-via-specs-merge` (routing del archive por `specs merge`) y `cli-subcommand-help-guards` (guards de `--help`). Ver `## Relación con 0.25.0`.
+
+## Relación con 0.25.0
+
+0.25.0 contiene dos changes, ambos archivados. Release minor por cambio observable (`--help`) y por superficie de producto (skills).
+
+- **`archive-sync-via-specs-merge`:** el delta-sync del archive/bulk-archive ahora rutea exclusivamente por `ancleto specs merge --change <slug>` (el guard fail-closed de heading de delta en canónica aplica al camino de archive); exit≠0 aborta el move; sin delta sigue "sin delta"; `ancleto-sync-specs` standalone y documenter Standalone mode quedan fuera y sin cambios. Delta en `prompt-contracts`.
+- **`cli-subcommand-help-guards`:** `--help`/`-h` en subcomandos que mutan estado (install, update, upgrade, init, memory, import, export, mcp, specs, specs merge, projects, `list --projects`) imprime uso a stdout, exit 0, cero escrituras; `discovery --help` y la ayuda global no cambian; read-only (`check`/`doctor`/`stats`/plain `list`/`affected`/`specs check`) queda fuera. Delta en `cli-diagnostics`.
+- **Validaciones:** 1188 tests / 0 fail / 5 skips preexistentes; `npm run lint` passed; format `not-configured`; typecheck n/a. Review en dos rondas; R1 y R2 cerrados con código+test; GUARANTEE sustained.
+- **Release:** tag anotado `v0.25.0` @ merge `bacca2ede06e54bbc640c155d968f0e06f792142` (2 padres); main == tag; run `42528205947` success con `+ @ancleto/spec@0.25.0`; npm version/dist-tag/gitHead (== merge) OK; tarball HTTP 200.
+- **Seed:** regenerado `READY / impact none`; `pluginVersion` 0.25.0 en los 11 docs; 845 archivos/fuentes. `seedMapPresent:false` en READY es un quirk pre-existente de `checkDiscovery` (sólo se asigna en el branch STALE), documentado en `unknowns.md`.
+- **Memoria:** 3 decisiones promovidas (`archive-sync-routes-through-specs-merge`, `archive-sync-canonical-surface-documenter`, `subcommand-help-guard-zero-write`); 325 totales / 218 activas / 701 refs / 0 sin resolver. `projects-guarded-registry-write` quedó `propuesto` (no promovido).
+
+**Descartado / diferido en 0.25.0 (sigue pendiente, no hecho):**
+
+- **#4 exclusión mutua de escritores / #18 seed stale por diseño / T27 / CH-06b / CH-10 / CH-08-MEM-06 / MEM-05 / MEM-01 / CH-00 / CH-07 / CH-09a–g:** diferimientos previos sin cambios (sin evidencia nueva + no offline-testeable).
+- **F — housekeeping de memoria `tier-minimo-*`:** no ejecutado; requiere OK explícito del usuario. El conflicto `tier-minimo-fallback-chain-resolution` (3-chain) vs `tier-minimo-opencode-go-alignment` (2-chain) sigue activo.

@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
 covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
 sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-08T16:31:24Z
-pluginVersion: 0.24.0
+generatedAt: 2026-11-08T21:55:07Z
+pluginVersion: 0.25.0
 skillVersion: '2.3'
 ---
 
@@ -26,7 +26,9 @@ promoción de `## Decisiones` aprobadas ocurre antes del move y su secuencia viv
 engine: `recordNode` trata como no-op la reescritura idéntica de una `memory_key` (ver
 "Escritura y supersesión"); el esquema, el recall y las ops siguen sin cambios. **0.24.0** tampoco
 toca el motor: la alineación del tier `minimo` y el guard de `specs merge` viven en
-`src/core/tier-models.js` y `src/core/specs-merge.js`, fuera de `src/core/memory/**`.
+`src/core/tier-models.js` y `src/core/specs-merge.js`, fuera de `src/core/memory/**`. **0.25.0**
+tampoco: sólo cambia el contrato de prompt del archive (el sync invoca `specs merge`) y el guard de
+`--help` en el dispatch del CLI.
 
 ## Recorrido relevante
 
@@ -97,7 +99,9 @@ toca el motor: la alineación del tier `minimo` y el guard de `specs merge` vive
 El requirement “Promoción al archivar sólo de decisiones duraderas aprobadas” de
 `aspec/specs/memory-ops/spec.md` fija la secuencia canónica del archive:
 
-1. merge/sync de specs si hay delta;
+1. merge/sync de specs si hay delta — desde 0.25.0, siempre mediante
+   `ancleto specs merge --change <slug>`; un exit no cero aborta el archive antes del preflight y del
+   move;
 2. preflight read-only del lote de `## Decisiones`, fail-closed;
 3. promoción de los bloques con `memory_key` propia y `Estado: aprobado`;
 4. move del directorio a `aspec/changes/archive/YYYY-MM-DD-<slug>/` sin modificarlo;

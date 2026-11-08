@@ -43,9 +43,9 @@ covers:
   - preservación de EOL legacy
   - materialización de agents y skills
   - machine-env
-sources: ["src/cli/index.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-08-agent-model-minimo-migration", "aspec/changes/archive/2026-11-08-specs-merge-canonical-guard", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-08T16:31:24Z
-pluginVersion: 0.24.0
+sources: ["src/cli/index.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-08-archive-sync-via-specs-merge", "aspec/changes/archive/2026-11-08-cli-subcommand-help-guards", "aspec/changes/archive/2026-11-08-agent-model-minimo-migration", "aspec/changes/archive/2026-11-08-specs-merge-canonical-guard", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-08T21:55:07Z
+pluginVersion: 0.25.0
 skillVersion: '2.3'
 ---
 
@@ -173,6 +173,18 @@ los cambios de ruteo de conformidad de `agents/orchestrator.md`, `skills/triage-
 **0.22.0–0.22.1**: el CLI suma el subcomando `specs merge` (0.22.0) y lo endurece sin flags nuevos
 en 0.22.1 (ver abajo). `upgrade` sigue siendo la vía de materialización de assets; el merge de specs
 no se aplica durante `install`/`upgrade`, y el orden del archive vive en `agents/`/`skills/`.
+
+### Ayuda sin ejecución (0.25.0)
+
+`SUBCOMMAND_HELP` (`src/cli/index.js`) declara el texto de uso por subcomando y el guard corre en el
+dispatch, antes del `switch`: si `--help` o `-h` aparece en cualquier posición del argv del
+subcomando, imprime el uso en stdout y termina con exit 0 **sin ejecutar el comando**. El conjunto
+cubierto es `install`, `update`, `upgrade`, `init`, `memory` (incl. `memory <subcomando> --help`),
+`import`, `export`, `mcp`, `specs` a secas, `specs merge`, `projects` (incl. sus subcomandos) y
+`list --projects` (alias de `projects`). `discovery` conserva su propio handler y la ayuda global
+(`ancleto --help`, `-h` o sin argumentos) su camino; `check`, `doctor`, `stats`, `affected`,
+`list --help` y `specs check --help` quedan fuera del guard. El alcance es de solo lectura: no se
+toca `.ancletorc` ni `.opencode/**` (`aspec/specs/cli-diagnostics/spec.md`).
 
 ### `import` / `export`
 
@@ -345,13 +357,14 @@ global aunque sea inválida. La ruta del proyecto se reporta relativa con separa
 existe ninguno. El parseo es `JSON.parse` estricto sin BOM; un `.jsonc` con comentarios se reporta
 inválido a propósito. `doctor` no valida `.vscode/mcp.json` ni crea MCP para hosts sin destino.
 
-### Merge de specs (0.22.0–0.24.0)
+### Merge de specs (0.22.0–0.25.0)
 
 `ancleto specs merge --change <slug> [--dry-run] [--json]` aplica el delta de un change sobre las
 specs canónicas existentes. El módulo `src/core/specs-merge.js` es puro; el CLI resuelve rutas,
 lee/escribe y reporta. 0.22.1 no agrega comandos ni flags: endurece el parser, el contenedor
 `archive` y el espaciado de `ADDED`. 0.24.0 tampoco agrega flags: añade un guard canónica-only en la
-fase de plan.
+fase de plan. 0.25.0 no cambia el módulo ni el CLI del comando: convierte a `specs merge` en la
+única vía de sync de delta del archive y del bulk-archive.
 
 1. `specsCommand(args)` desvía sólo `args[0] === 'merge'` a `specsMergeCommand`; cualquier otra
    invocación sigue a `specsCheckCommand`, por lo que `specs check` y `specs` sin argumentos
@@ -404,8 +417,11 @@ Reglas del merge (`src/core/specs-merge.js`):
   legítimos, y no repara la canónica: `copilot-support`, `legacy-import` y `test-profile` se
   normalizaron a `## Requirements` como higiene, sostenida por `test/content-guards.test.js`.
 - No toca archivos delta, la carpeta del change, memoria, seed, `package.json`, `specs check`,
-  `mergeLocked` ni el affected-set, y no crea capabilities nuevas. El comando no está cableado en
-  `skills/ancleto-sync-specs`, `skills/ancleto-archive` ni `/cleto-*`.
+  `mergeLocked` ni el affected-set, y no crea capabilities nuevas. Desde 0.25.0 es la **única vía de
+  escritura** de las specs canónicas durante el archive y el bulk-archive
+  (`skills/ancleto-archive`, `skills/ancleto-bulk-archive`, `agents/documenter.md`): un exit no cero
+  aborta el archive antes del preflight, la promoción y el move, y no se permite la edición manual.
+  La skill standalone `skills/ancleto-sync-specs` no cambia y `/cleto-*` no invoca el comando.
 
 `specsCheckCommand` sigue siendo el oráculo de keywords: `specIssues` exige `### Requirement:` y,
 si hay `#### Scenario:`, exige `WHEN`/`THEN` y rechaza otros `####` que no sean `Scenario`. Un spec
@@ -488,11 +504,15 @@ tier puede quedar dormido en `check`.
   `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
   resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; deben
-  alinearse con `package.json` (`0.24.0`). No son fuentes del seed.
+  alinearse con `package.json` (`0.25.0`). No son fuentes del seed.
 - **Merge de specs 0.22.0–0.22.1**: el fail-closed es por plan, no transaccional ante una caída de
   I/O a mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs
-  traducidos ni crea capabilities. No está cableado en skills/agentes. El contenedor `archive` ya
-  no se trata como change.
+  traducidos ni crea capabilities. El contenedor `archive` ya no se trata como change. Desde 0.25.0
+  el archive depende de ese exit code: si el CLI no está disponible, el archive se detiene en vez de
+  editar la canónica a mano.
+- **Ayuda 0.25.0**: el guard sólo cubre los subcomandos declarados en `SUBCOMMAND_HELP` y el alias
+  `list --projects`; el texto de uso es por comando y no reemplaza la ayuda global. `discovery`
+  mantiene su propio handler y los comandos read-only no lo aplican.
 - **Orden del archive 0.22.1**: la promoción corre antes del move y se documenta en `agents/` y
   `skills/`; no cambia `src/`. La aceptación depende de content guards, no de un subcomando CLI.
 
@@ -516,6 +536,8 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-07-template-legacy-eol-preservation/` | Change archivado de la preservación de EOL por línea y newline final en `reconcileLegacyBlocks` (0.23.0) |
 | `aspec/changes/archive/2026-11-08-agent-model-minimo-migration/` | Change archivado de la alineación de `TIERS.minimo`/`MINIMO_CHAIN` a `opencode-go/deepseek-v4.1-flash` y la cadena de dos candidatos (0.24.0) |
 | `aspec/changes/archive/2026-11-08-specs-merge-canonical-guard/` | Change archivado del guard de headings de delta en la canónica y la normalización de `copilot-support`, `legacy-import` y `test-profile` (0.24.0) |
+| `aspec/changes/archive/2026-11-08-archive-sync-via-specs-merge/` | Change archivado del ruteo del sync de delta del archive/bulk-archive por `specs merge` (0.25.0); delta de `prompt-contracts` |
+| `aspec/changes/archive/2026-11-08-cli-subcommand-help-guards/` | Change archivado del guard de `--help`/`-h` en subcomandos que mutan estado (0.25.0); delta de `cli-diagnostics` |
 | `aspec/changes/archive/2026-11-06-specs-merge-hardening/` | Change archivado del endurecimiento de `specs merge` (0.22.1): contenedor `archive`, H1 estructural, `ADDED` y atomicidad acotada |
 | `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` | Change archivado del merge determinístico de specs y la capability `spec-sync` (0.22.0) |
 | `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` | Change archivado del discriminador conformidad-vs-delta y archive sin delta (0.21.0; materializado por `upgrade`) |
@@ -526,12 +548,12 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-05-mcp-command-health/` | Change archivado de salud MCP, descubrimiento único y avisos de check/import |
 | `aspec/changes/archive/2026-11-04-check-doctor-state-parity/` | Change archivado de paridad de diagnósticos (H7/H13/H14) |
 | `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` | Change archivado de la nota de compresión y validación de `manifest.mcp` |
-| `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión, config MCP de `doctor`, salud MCP, avisos de `check` y aviso de `import` |
+| `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión, config MCP de `doctor`, salud MCP, avisos de `check`, aviso de `import` y manejo de `--help` sin ejecución (0.25.0) |
 | `aspec/specs/spec-sync/spec.md` | Requirements del merge determinístico, idempotencia, fail-closed, dry-run y alcance acotado; 0.22.1 agrega H1 estructural, contenedor `archive` y atomicidad acotada; 0.24.0 agrega el guard canónica-only de headings de delta para los cuatro tipos |
 | `aspec/specs/copilot-support/spec.md`, `aspec/specs/legacy-import/spec.md`, `aspec/specs/test-profile/spec.md` | Canónicas normalizadas a `## Requirements` (0.24.0) |
 | `aspec/specs/memory-ops/spec.md` | Requirements de memoria y de la promoción de decisiones al archivar antes del move (0.22.1) |
 | `aspec/changes/archive/2026-11-06-archive-order-correctness/` | Change archivado del orden del archive y la semántica de fallo (0.22.1) |
-| `aspec/specs/prompt-contracts/spec.md` | Requirements de conformidad-vs-delta y archive sin delta (0.21.0) |
+| `aspec/specs/prompt-contracts/spec.md` | Requirements de conformidad-vs-delta y archive sin delta (0.21.0) y del sync de delta al archivar ruteado por `specs merge` (0.25.0) |
 | `aspec/specs/agent-install-routing/spec.md` | Requirements de destinos nativos, ruteo MCP por host y compresión host-scoped |
 | `aspec/specs/project-portability/spec.md` | Requirements de `export` host-neutral, `import` (MCP + `installedPaths`), reparación y nota de compresión |
 | `aspec/specs/agent-model-tiers/spec.md` | Requirements de tiers, aviso free-on-primary, integridad y tier dormido |

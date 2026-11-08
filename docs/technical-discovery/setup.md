@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-08T16:31:24Z
-pluginVersion: 0.24.0
+generatedAt: 2026-11-08T21:55:07Z
+pluginVersion: 0.25.0
 skillVersion: '2.3'
 ---
 
@@ -165,7 +165,13 @@ del paquete instalado.
   canónica que contenga `## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED
   Requirements` o `## RENAMED Requirements`; el guard cubre los cuatro tipos y no se aplica al delta.
   `copilot-support`, `legacy-import` y `test-profile` ya usan `## Requirements`. `--json` mantiene
-  `ok:false` y `errors:[...]`, sin campos nuevos.
+  `ok:false` y `errors:[...]`, sin campos nuevos. Desde 0.25.0, el sync de delta del archive y del
+  bulk-archive invoca exclusivamente `ancleto specs merge --change <slug>`; un exit no cero aborta
+  el archive sin preflight, promoción ni move.
+- **Ayuda sin ejecución (0.25.0)**: en `install`, `update`, `upgrade`, `init`, `memory`, `import`,
+  `export`, `mcp`, `specs`, `specs merge`, `projects` y `list --projects`, `--help`/`-h` imprime el
+  uso en stdout y sale con exit 0 sin escribir nada. `discovery --help`, la ayuda global y los
+  comandos read-only (`check`, `doctor`, `stats`, `affected`, `specs check`) quedan fuera del guard.
 
 El tier `gratis` está pensado para subagentes: un modelo free sobre un agente con `mode: primary`
 (por ejemplo el `orchestrator`, cuyo frontmatter canónico declara `mode: primary`) puede responder
@@ -189,9 +195,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.24.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.25.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-la fija `package.json` = `0.24.0`.
+la fija `package.json` = `0.25.0`.
 
 ## Entorno de máquina
 

@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-08T16:31:24Z
-pluginVersion: 0.24.0
+generatedAt: 2026-11-08T21:55:07Z
+pluginVersion: 0.25.0
 skillVersion: '2.3'
 ---
 
@@ -19,8 +19,8 @@ skillVersion: '2.3'
   `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`,
   `reconcileLegacyBlocks`, `specsMergeCommand`, `resolveChangeDir`, `specsCommand`,
   `src/core/memory/engine.js` → `recordNode`; `src/core/specs-merge.js`;
-  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 839 fuentes
-  (~38.408 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
+  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 845 fuentes
+  (~38.610 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
@@ -85,6 +85,16 @@ skillVersion: '2.3'
   candidatos, la igualdad `TIERS.minimo[n] === agents/<n>.md === TIER_CHAINS.minimo[n][0]` y el
   error por catálogo sin candidatos se leyeron en `src/core/tier-models.js` y en el delta archivado;
   no se observó la salida de `check` sobre los diez agentes.
+- **Ayuda sin ejecución 0.25.0**: no se ejecutó `ancleto <subcomando> --help` para observar stdout,
+  exit code ni la no-escritura. El guard se describió desde `SUBCOMMAND_HELP`, `wantsHelp` y el
+  dispatch de `src/cli/index.js`, y desde el requirement de `aspec/specs/cli-diagnostics/spec.md`.
+  No se verificaron las formas `-h`, `memory <subcomando> --help`, `projects <subcomando> --help`
+  ni la exclusión explícita de `specs check --help` en una corrida real.
+- **Sync del archive por `specs merge` 0.25.0**: no se archivó ni se hizo bulk-archive de un change
+  real. El ruteo se leyó en `skills/ancleto-archive/SKILL.md`,
+  `skills/ancleto-bulk-archive/SKILL.md`, `agents/documenter.md` y el requirement de
+  `aspec/specs/prompt-contracts/spec.md`; no se observó el abort del archive ante exit 2 ni el
+  bloqueo cuando el CLI no está disponible.
 - **Orden del archive 0.22.1**: no se archivó un change real. La secuencia merge/sync → preflight →
   promoción → move → commit y los literales de fallo se verificaron leyendo
   `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`,
@@ -123,15 +133,15 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **849 archivos** (aspec 279, docs 21,
-  test 27, src 19, etc.). El pack registra **839 fuentes** (~38.408 tokens) y 29 entradas de archivo
+- **`.discovery-map.json` observado**: el generador reporta **855 archivos** (aspec 285, docs 21,
+  test 27, src 19, etc.). El pack registra **845 fuentes** (~38.610 tokens) y 29 entradas de archivo
   porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además
   Repomix filtra por sus propios ignores.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.24.0`). No se usan como fuente de contenido.
+  gitignored; deben alinearse con `package.json` (`0.25.0`). No se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
   versión local es una verificación puntual, no una fuente de reglas. El propio `check` compara ese
@@ -149,10 +159,19 @@ skillVersion: '2.3'
   `units/cli-install.md`, `units/discovery-engine.md`, `units/memory-engine.md` y `unknowns.md` desde
   el pack y las fuentes citadas. El estado final lo reporta el `discovery --check` posterior. El seed
   anterior describía 0.23.0.
+- **Estado inicial del chequeo (0.25.0)**: igual que en la generación anterior, el pack y
+  `.discovery-state.json` se regeneraron antes de esta materialización y el `discovery --check`
+  inicial devolvió `READY`/`impact: none` con los documentos todavía en 0.24.0 (el oráculo no compara
+  la versión del frontmatter). Para reflejar 0.25.0 se actualizaron los once documentos del seed
+  desde el pack y las fuentes citadas; el estado final lo reporta el `discovery --check` posterior.
+- **`seedMapPresent` en `READY`**: `checkDiscovery` sólo calcula `seedMapPresent` cuando el hash de
+  fuentes difiere del guardado (rama `STALE`); en `READY` el campo se emite con su valor inicial
+  `false` aunque `seed-map.json` exista y sea válido (`src/cli/index.js` → `readSeedMap`).
+  `affectedDocs` sólo se puebla en la misma rama `STALE`.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.24.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.25.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -164,7 +183,8 @@ skillVersion: '2.3'
   con EOL por línea y newline final (0.23.0), `recordNode` idempotente ante reescritura idéntica
   (0.23.0), `TIERS`/`TIER_CHAINS` con la cadena `minimo` de dos candidatos y la igualdad con la
   canónica (0.24.0), `freeTierOnPrimary` y sus dos avisos,
-  `findDeltaSectionHeadings` y el guard canónica-only de `mergeSpecText` (0.24.0),
+  `findDeltaSectionHeadings` y el guard canónica-only de `mergeSpecText` (0.24.0), el guard central
+  `SUBCOMMAND_HELP`/`wantsHelp` (0.25.0) y el ruteo del sync del archive por `specs merge` (0.25.0),
   `declaredModelIds`, `modelIdsFromCatalog`, `missingModelIdsInCatalog`, gate de `--write`,
   `looksBinaryMissing`, lint sobre `scripts/`, snapshot de 5 proveedores / 211 IDs, flujo de
   `scripts/refresh-model-catalog.mjs`, `installedPaths` como unión, comandos del CLI, firmas de

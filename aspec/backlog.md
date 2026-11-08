@@ -1,11 +1,11 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-07 (release 0.23.0).
+> Última actualización: 2026-11-08 (release 0.24.0).
 
 ## Prioridad de ejecución
 
-1. **0.20.1 — `fix(cli)`**: guard de escritura en `repairProjectMcp` (`fixed` vacío + sin error → no tocar bytes). Bug contra contrato vigente; test de bytes/mtime; sin delta de spec. Change propuesto: `fix-repair-mcp-noop`.
+1. **NO-OP en 0.24.0 — ya implementado y archivado (`2026-11-06-fix-repair-mcp-noop`); el predicate `error || normalized || fixed.length>0` está en `src/cli/index.js` y los tests cubren bytes/mtime.** ~~**0.20.1 — `fix(cli)`**: guard de escritura en `repairProjectMcp` (`fixed` vacío + sin error → no tocar bytes). Bug contra contrato vigente; test de bytes/mtime; sin delta de spec. Change propuesto: `fix-repair-mcp-noop`.~~ *(histórico)*
 2. **0.21.0 — `feat(cli)`**: **cerrado en 0.23.0** por `portability-legacy-bundle-advisory` (mitad bundle legacy sin intención MCP). La mitad `.opencode/*` histórico quedó **refutada**: `check` ya imprime `✔ .opencode/agents` en un install sano y el dir faltante ya falla con exit 1.
 3. **Reingeniería P0**: PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`. PR-4 ya está cumplido.
 4. **Reingeniería P1**: CH-00 baseline (runbook, prerrequisito) → CH-06a merge determinístico de delta specs **cerrado en 0.22.0** (`ch-06a-specs-merge-deterministic`) → CH-06b selección de tests por affected-set (diferido) → CH-07 A/B de prefijos/caché/modelos (bloqueado por CH-00).
@@ -21,7 +21,7 @@
 
 | Ítem | Estado | Destino | Evidencia |
 |---|---|---|---|
-| `repairProjectMcp` no reescribe un destino sano | open | 0.20.1 `fix-repair-mcp-noop` | `src/cli/index.js` (`repairProjectMcp`); `aspec/specs/project-portability/spec.md` (entradas sanas no se reescriben) |
+| `repairProjectMcp` no reescribe un destino sano | NO-OP (ya implementado y archivado) | 0.20.1 `fix-repair-mcp-noop` | `src/cli/index.js` (`repairProjectMcp`); `aspec/specs/project-portability/spec.md` (entradas sanas no se reescriben) |
 | `.opencode/*` histórico en `installedPaths` | descartado (premisa refutada) | — | `check` ya imprime `✔ .opencode/agents` en install sano; dir faltante ya da `✖ ... (directorio faltante)` con exit 1; contradice `import-installed-paths-union-not-copy` |
 | Bundle legacy sin intención MCP host-aware | cerrado en 0.23.0 | `portability-legacy-bundle-advisory` | `importCmd` emite un advisory no bloqueante cuando `manifest.mcp === undefined`; `mcp: []` sigue silencioso |
 | Consumo runtime de `copilot-mcp.json` | limitación aceptada | documentar | `HOST_MCP_TARGETS`; `docs/technical-discovery/unknowns.md` |
@@ -138,3 +138,29 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **F / #6:** la mitad de orden ya está corregida (merge → preflight read-only → promover → mover → commit) y guardada en cinco archivos canónicos; la formulación vieja "archive→merge" la contradice. La mitad "tope de verificación" no tiene oráculo offline medible.
 - **G — CH-10 / T30:** CH-10 necesita una matriz multi-host real (no offline-testeable); la premisa de T30 no coincide con el código (`opencode` es un adapter passthrough que nunca mezcla `bash`/`task` con `shell`/`subagent`).
 - **H — CH-08/MEM-06, MEM-05/MEM-01/CH-09a, CH-00/CH-07:** diferimientos previos sin cambios (multi-worktree / curaduría de DB con aprobación / no publicable en npm).
+
+## Relación con 0.24.0
+
+0.24.0 contiene dos changes, ambos archivados. Release minor por cambio observable de modelo.
+
+- **`specs-merge-canonical-guard` (patch-class):** `ancleto specs merge` falla cerrado (exit 2, cero escrituras) cuando la spec canónica contiene un heading de sección de delta (`## ADDED/MODIFIED/REMOVED/RENAMED Requirements`), para los 4 tipos, en fase de plan; el guard aplica sólo a canónicas, nunca a delta specs. Se normalizaron `copilot-support`, `legacy-import` y `test-profile` a `## Requirements`. Delta en `spec-sync`.
+- **`agent-model-minimo-migration` (observable):** `TIERS.minimo` y `MINIMO_CHAIN` alineados a `opencode-go/deepseek-v4.1-flash` (cadena de 2: `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`), completando el commit `9e45105` que migró `agents/*.md`/`opencode.json` sin actualizar la tabla de tiers (11 tests rojos). Se pluralizó el aviso (`1 agente`/`N agentes`) y se alinearon README/AGENTS. Delta en `agent-model-tiers`.
+- **Validaciones:** suite 1173/1168 pass / 0 fail / 5 skips preexistentes; `npm run lint` passed; format `not-configured`; typecheck n/a. Review en dos rondas; R1/R2 sin CRITICAL ni GUARANTEE NOT SUSTAINED.
+- **Release:** tag anotado `v0.24.0` @ merge `2d5d82751ff0c44b0fc55d39282bcf5f6742dc42`; main == origin/main == tag; run `42502061685` success con `+ @ancleto/spec@0.24.0`; npm version/dist-tag/gitHead OK y tarball HTTP 200.
+- **Seed:** regenerado y alineado `READY / impact none`; 849 archivos / 839 fuentes; `pluginVersion` 0.24.0 en los 11 docs.
+- **Memoria:** 322 nodos activos / 687 refs / 0 sin resolver; 42 reglas project, 8 renderizadas, 34 omitidas. Promovidas: `specs-merge-canonical-heading-fail-closed`, `specs-merge-canonical-guard-canonical-scope`, `repair-mcp-noop-already-shipped`, `tier-minimo-opencode-go-alignment`, `agent-model-migration-source-of-truth`.
+
+**Descartado / diferido en 0.24.0 (sigue pendiente, no hecho):**
+
+- **#4 exclusión mutua de escritores:** diferido — sólo prosa, sin mutex ejecutable ni consumidor offline; tocar `agents/**`/`skills/**` obliga a upgrade sin defecto observado.
+- **#18 seed stale por diseño:** diferido — el release ya regenera el seed post-bump; cambiar `MATERIAL_FILE_RES`/`DEFAULT_IGNORES` invalidaría todos los estados persistidos y no hay spec canónica del detector.
+- **T27 reindex desde proposals:** diferido — sin consumidor ni prueba e2e offline; requiere MEM-01.
+- **CH-06b `--tests`:** sigue diferido por razón estructural (tercera vez); sin consumidor probado.
+- **CH-10 / CH-08-MEM-06 / MEM-05 / MEM-01 / CH-00 / CH-07 / CH-09a–g:** diferimientos previos sin cambios.
+- **Item 1 `repairProjectMcp`:** **NO-OP** — ya implementado y archivado en 0.20.1 (`2026-11-06-fix-repair-mcp-noop`); la fila del backlog estaba desactualizada.
+- **T30 V1/V2:** **NO-OP** — premisa refutada: el adapter `opencode` es passthrough y no mezcla `bash`/`task` con `shell`/`subagent`.
+
+**Deuda descubierta en 0.24.0:**
+
+- **El flujo de archive no pasa por `mergeSpecText`:** `skills/ancleto-archive` / `ancleto-bulk-archive` aplican deltas editando `aspec/specs/<capability>/spec.md` directamente. El nuevo guard de heading de delta en canónica NO cubre ese camino. Candidato: rutear el sync del archive por `ancleto specs merge` o agregar la validación en la skill.
+- **`--help` de subcomandos ejecuta el subcomando:** `upgradeCmd` no tiene handler de ayuda, así que `ancleto upgrade --help` corre el upgrade completo. Candidato: agregar handlers de `--help` a los subcomandos que mutan estado.

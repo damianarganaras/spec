@@ -121,6 +121,36 @@ ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FT
   ancleto --version                   Version del paquete
 `
 
+// Lista de uso de `memory`, compartida por la ayuda (STDOUT) y el error de
+// subcomando desconocido (stderr) para que no derive.
+const MEMORY_USAGE = [
+  'ancleto memory context [--scope X] [--out file]',
+  'ancleto memory list [--type X] [--scope X] [--all] [--json]',
+  'ancleto memory doctor [--rebuild]',
+  'ancleto memory export [--out <archivo>]',
+  'ancleto memory import <archivo>',
+  'ancleto memory gc [--dry-run] [--days <n>]',
+  'ancleto memory snapshot --out <archivo.db> [--force] [--json]',
+  'ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]',
+  'ancleto memory consolidate [--dry-run] [--apply] [--json]',
+  'ancleto memory curate [--json] [--strict]'
+]
+
+const INSTALL_USAGE = `ancleto install|update [--project <dir>] [--global]
+  --global fuerza el alcance global aunque el cwd tenga .ancletorc
+  --no-mcp / --with-engram / --tier <nivel> / --lang <codigo>
+  --exclude <globs> / --agent <nombre> / --profile <perfil>`
+
+const SPECS_USAGE = `ancleto specs check [--change <name>] [--json]
+  Valida keywords canonicos (### Requirement:, WHEN, THEN) en aspec/specs
+ancleto specs merge --change <slug> [--dry-run] [--json]
+  Aplica el delta del change sobre los specs canonicos existentes`
+
+// Uso de `projects`, compartido por la ayuda (STDOUT) y el error de subcomando
+// desconocido (stderr) para que no derive.
+const PROJECTS_USAGE =
+  'ancleto projects [list|scan <raiz>|prune|info <ruta>|update] [--update] [--all] [--json] [--dry-run]'
+
 async function exists(p) {
   try { await access(p); return true } catch { return false }
 }
@@ -527,7 +557,7 @@ async function projectsCommand(args) {
     }
     default:
       console.error(`ancleto: subcomando desconocido: projects ${sub}`)
-      console.error('ancleto: uso: ancleto projects [list|scan <raiz>|prune|info <ruta>|update] [--update] [--all] [--json] [--dry-run]')
+      console.error(`ancleto: uso: ${PROJECTS_USAGE}`)
       process.exit(1)
   }
 }
@@ -2949,16 +2979,7 @@ async function memoryCmd(args) {
     return
   }
   console.error(`ancleto: subcomando de memory desconocido: ${sub || '(ninguno)'}`)
-  console.error('ancleto: uso: ancleto memory context [--scope X] [--out file]')
-  console.error('ancleto: uso: ancleto memory list [--type X] [--scope X] [--all] [--json]')
-  console.error('ancleto: uso: ancleto memory doctor [--rebuild]')
-  console.error('ancleto: uso: ancleto memory export [--out <archivo>]')
-  console.error('ancleto: uso: ancleto memory import <archivo>')
-  console.error('ancleto: uso: ancleto memory gc [--dry-run] [--days <n>]')
-  console.error('ancleto: uso: ancleto memory snapshot --out <archivo.db> [--force] [--json]')
-  console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]')
-  console.error('ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--json]')
-  console.error('ancleto: uso: ancleto memory curate [--json] [--strict]')
+  for (const line of MEMORY_USAGE) console.error(`ancleto: uso: ${line}`)
   process.exit(1)
 }
 
@@ -4820,7 +4841,38 @@ async function doctorCommand() {
 
 const [cmd, ...rest] = process.argv.slice(2)
 
-switch (cmd) {
+// Uso por subcomando para el guard central de `--help`/`-h`. Sólo cubre comandos que
+// mutan estado o corren largo: `discovery` mantiene su propio handler y la ayuda global
+// su propio camino; los read-only (`specs check`, `check`, `doctor`, etc.) quedan fuera.
+const SUBCOMMAND_HELP = {
+  install: INSTALL_USAGE,
+  update: INSTALL_USAGE,
+  upgrade: 'ancleto upgrade [--agent <nombre>]   Re-aplica templates (LOCKED) y skills sobre el proyecto actual',
+  init: `ancleto init [--with-azure] [--agent <nombre>] [--tier <nivel>] [--lang <codigo>] [--exclude <globs>] [--no-mcp] [--profile <perfil>]
+  Crea .ancletorc en el repositorio actual y configura el MCP del host`,
+  memory: ['ancleto memory <subcomando> [opciones]', ...MEMORY_USAGE].join('\n'),
+  import: `ancleto import <bundle> [--repair]    Restaura el bundle regenerando el MCP local
+ancleto import --repair               Repara in place la config MCP rota`,
+  export: 'ancleto export [--tar <file>]         Empaqueta lo portable del proyecto (bundle + manifest.json sin rutas)',
+  mcp: 'ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE',
+  specs: SPECS_USAGE,
+  projects: PROJECTS_USAGE
+}
+
+const wantsHelp = rest.includes('--help') || rest.includes('-h')
+// El dispatch trata cualquier primer token de `specs` distinto de `merge` como el
+// camino read-only de `check`; sólo `specs` a secas y `specs merge` usan la ayuda.
+const specsSub = cmd === 'specs' ? rest.find((a) => !a.startsWith('-')) : undefined
+const specsGuard = cmd !== 'specs' || specsSub === undefined || specsSub === 'merge'
+// `ancleto list --projects` delega en `projectsCommand`, así que el guard cubre el alias.
+const usage = Object.hasOwn(SUBCOMMAND_HELP, cmd)
+  ? SUBCOMMAND_HELP[cmd]
+  : cmd === 'list' && rest.includes('--projects') ? PROJECTS_USAGE : null
+const helpText = usage && wantsHelp && specsGuard ? usage : null
+
+if (helpText) {
+  console.log(helpText)
+} else switch (cmd) {
   case 'install':
   case 'update':
     await install(rest)

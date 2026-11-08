@@ -7793,3 +7793,286 @@ describe('CLI memory consolidate', () => {
     })
   })
 })
+
+// Guard central de `--help`/`-h` para subcomandos que mutan estado o corren largo.
+// La invariante es doble: uso en STDOUT con exit 0 (sin handler) y cero escrituras en el
+// proyecto; los read-only y la ayuda global quedan fuera y no cambian.
+describe('CLI subcommand --help guards', () => {
+  const GUARDED = [
+    { args: ['install', '--help'], usage: /ancleto install\|update \[--project <dir>\]/ },
+    { args: ['update', '-h'], usage: /ancleto install\|update \[--project <dir>\]/ },
+    { args: ['upgrade', '--help'], usage: /ancleto upgrade \[--agent <nombre>\]/ },
+    { args: ['init', '--help'], usage: /ancleto init \[--with-azure\]/ },
+    { args: ['memory', '--help'], usage: /ancleto memory <subcomando>/ },
+    { args: ['memory', 'context', '--help'], usage: /ancleto memory <subcomando>/ },
+    { args: ['import', '--help'], usage: /ancleto import <bundle>/ },
+    { args: ['export', '--help'], usage: /ancleto export \[--tar <file>\]/ },
+    { args: ['mcp', '--help'], usage: /ancleto mcp\s+Servidor MCP/ },
+    { args: ['specs', '--help'], usage: /ancleto specs merge --change <slug>/ },
+    { args: ['specs', 'merge', '--help'], usage: /ancleto specs merge --change <slug>/ }
+  ]
+
+  // Bytes y mtime por archivo relativo: una escritura idéntica en contenido mueve el mtime
+  // y debe romper la invariante igual que una creación o un cambio de bytes.
+  function snapshotMtimes(dir) {
+    const files = {}
+    const walk = (rel) => {
+      for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
+        const childRel = rel ? `${rel}/${entry.name}` : entry.name
+        if (entry.isDirectory()) {
+          files[`${childRel}/`] = '<dir>'
+          walk(childRel)
+        } else {
+          const file = join(dir, childRel)
+          files[childRel] = `${statSync(file).mtimeMs}:${readFileSync(file).toString('base64')}`
+        }
+      }
+    }
+    walk('')
+    return files
+  }
+
+  it('cada subcomando con --help/-h imprime su uso en stdout, sale 0 y no escribe', () => {
+    for (const { args, usage } of GUARDED) {
+      withDir((dir) => {
+        const before = snapshotMtimes(dir)
+        const r = run(args, dir)
+        assert.equal(r.status, 0, `${args.join(' ')}: ${r.stderr}`)
+        assert.match(r.stdout, usage, `${args.join(' ')} debe imprimir su uso en STDOUT`)
+        assert.deepEqual(snapshotMtimes(dir), before, `${args.join(' ')} no debe escribir archivos`)
+      })
+    }
+  })
+
+  // `--global` es un flag documentado de install/update: si desaparece del uso, el guard
+  // seguiría imprimiendo algo plausible y el flag quedaría indocumentado en silencio.
+  it('install y update --help documentan --global', () => {
+    withDir((dir) => {
+      for (const cmd of ['install', 'update']) {
+        const r = run([cmd, '--help'], dir)
+        assert.equal(r.status, 0, `${cmd} --help: ${r.stderr}`)
+        assert.match(r.stdout, /\[--global\]/, `${cmd} --help debe incluir --global en la sinopsis`)
+        assert.match(r.stdout, /--global fuerza el alcance global/, `${cmd} --help debe describir --global`)
+      }
+    })
+  })
+
+  // `-h` es alias exacto de `--help`: mismo uso, mismo exit code y cero escrituras.
+  // Se corre cada forma en su propio directorio temporal para no contaminar la comparación.
+  it('`-h` es equivalente a `--help` en todo el conjunto guardado', () => {
+    const COMMANDS = [
+      ['install'],
+      ['update'],
+      ['upgrade'],
+      ['init'],
+      ['memory'],
+      ['import'],
+      ['export'],
+      ['mcp'],
+      ['specs'],
+      ['specs', 'merge'],
+      ['projects']
+    ]
+    for (const base of COMMANDS) {
+      withDir((dir) => {
+        const env = { ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') }
+        const before = snapshotMtimes(dir)
+        const long = run([...base, '--help'], dir, env)
+        assert.equal(long.status, 0, `${base.join(' ')} --help: ${long.stderr}`)
+        assert.ok(long.stdout.trim(), `${base.join(' ')} --help debe imprimir uso en STDOUT`)
+        // `projects` corre `list` por defecto si el guard no intercepta: sin este oráculo la
+        // equivalencia `-h`/`--help` se cumpliría igual y el test no probaría nada.
+        if (base[0] === 'projects') {
+          assert.match(
+            long.stdout,
+            /ancleto projects \[list\|scan <raiz>\|prune\|info <ruta>\|update\]/,
+            'projects --help debe imprimir el uso y no ejecutar list'
+          )
+          assert.equal(existsSync(join(dir, 'registry.json')), false, 'projects --help no debe crear el registro aislado')
+        }
+        assert.deepEqual(snapshotMtimes(dir), before, `${base.join(' ')} --help no debe escribir`)
+
+        const short = run([...base, '-h'], dir, env)
+        assert.equal(short.status, 0, `${base.join(' ')} -h: ${short.stderr}`)
+        assert.equal(short.stdout, long.stdout, `${base.join(' ')}: -h debe imprimir el mismo uso que --help`)
+        assert.equal(short.stderr, long.stderr, `${base.join(' ')}: -h no debe diferir de --help en stderr`)
+        assert.deepEqual(snapshotMtimes(dir), before, `${base.join(' ')} -h no debe escribir`)
+      })
+    }
+  })
+
+  it('la ayuda no escribe ni siquiera en un proyecto ya inicializado', () => {
+    withDir((dir) => {
+      const seed = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir)
+      assert.equal(seed.status, 0, seed.stderr)
+      const before = snapshotMtimes(dir)
+      assert.ok(before['.ancletorc'], 'el proyecto base debe tener .ancletorc')
+      assert.ok(
+        Object.keys(before).some((key) => key.startsWith('.opencode/')),
+        'el proyecto base debe tener .opencode/**'
+      )
+      for (const { args } of GUARDED) {
+        const r = run(args, dir)
+        assert.equal(r.status, 0, `${args.join(' ')}: ${r.stderr}`)
+      }
+      assert.deepEqual(snapshotMtimes(dir), before, 'ningún --help puede escribir .ancletorc ni .opencode/**')
+    })
+  })
+
+  it('--help en cualquier posición evita ejecutar el handler', () => {
+    withDir((dir) => {
+      const before = snapshotMtimes(dir)
+      // Sin el guard, `specs merge --change no-existe` fallaría por change inexistente.
+      const r = run(['specs', 'merge', '--change', 'no-existe', '--help'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /ancleto specs merge --change <slug>/)
+      assert.deepEqual(snapshotMtimes(dir), before)
+    })
+  })
+
+  // El registro de proyectos es el único estado que `projects` puede tocar: se aísla
+  // con `ANCLETO_PROJECTS_FILE` y se verifica que el archivo no se cree ni se reescriba.
+  // El mtime se fija en el pasado para que una reescritura idéntica también rompa.
+  it('projects --help no crea ni modifica el registro en ningún subcomando ni en el alias list --projects', () => {
+    const CASES = [
+      ['projects', '--help'],
+      ['projects', 'scan', '--help'],
+      ['projects', 'prune', '--help'],
+      ['projects', 'update', '--help'],
+      ['projects', 'list', '--update', '--help'],
+      ['list', '--projects', 'prune', '--help']
+    ]
+    const usage = /ancleto projects \[list\|scan <raiz>\|prune\|info <ruta>\|update\]/
+    for (const args of CASES) {
+      withDir((dir) => {
+        const registry = join(dir, 'registry.json')
+        const env = { ANCLETO_PROJECTS_FILE: registry }
+
+        // Sin registro previo: el guard no debe crear el archivo.
+        const missing = run(args, dir, env)
+        assert.equal(missing.status, 0, `${args.join(' ')}: ${missing.stderr}`)
+        assert.match(missing.stdout, usage, `${args.join(' ')} debe imprimir el uso de projects en STDOUT`)
+        assert.equal(existsSync(registry), false, `${args.join(' ')} no debe crear el registro`)
+
+        // Con registro previo: bytes y mtime intactos.
+        writeFileSync(registry, JSON.stringify({ schemaVersion: 1, projects: {} }, null, 2) + '\n')
+        const past = new Date('2001-01-01T00:00:00Z')
+        utimesSync(registry, past, past)
+        const beforeBytes = readFileSync(registry).toString('base64')
+        const beforeMtime = statSync(registry).mtimeMs
+
+        const r = run(args, dir, env)
+        assert.equal(r.status, 0, `${args.join(' ')}: ${r.stderr}`)
+        assert.match(r.stdout, usage, `${args.join(' ')} debe imprimir el uso de projects en STDOUT`)
+        assert.equal(readFileSync(registry).toString('base64'), beforeBytes, `${args.join(' ')} no debe modificar los bytes del registro`)
+        assert.equal(statSync(registry).mtimeMs, beforeMtime, `${args.join(' ')} no debe tocar el mtime del registro`)
+      })
+    }
+  })
+
+  it('discovery --help y la ayuda global conservan su salida y exit code', () => {
+    withDir((dir) => {
+      const discovery = run(['discovery', '--help'], dir)
+      assert.equal(discovery.status, 0)
+      assert.match(discovery.stdout, /ancleto discovery \[--compress\]/)
+      assert.match(discovery.stdout, /--check/)
+      assert.match(discovery.stdout, /El seed en si lo genera la skill/)
+      assert.doesNotMatch(discovery.stdout, /Aplica el delta del change/)
+
+      const globalHelp = run(['--help'], dir)
+      const shortHelp = run(['-h'], dir)
+      const bare = run([], dir)
+      assert.equal(globalHelp.status, 0)
+      assert.equal(shortHelp.status, 0)
+      assert.equal(bare.status, 0)
+      assert.match(globalHelp.stdout, /orquestador SDD liviano/)
+      assert.equal(shortHelp.stdout, globalHelp.stdout, '`-h` sin subcomando imprime la misma ayuda global que `--help`')
+      assert.equal(shortHelp.stderr, globalHelp.stderr, '`-h` sin subcomando no difiere de `--help` en stderr')
+      assert.equal(bare.stdout, globalHelp.stdout, 'sin argumentos sigue imprimiendo la ayuda global')
+    })
+  })
+
+  // Conjunto excluido vigente: `check`, `doctor`, `stats`, `list` sin `--projects`,
+  // `affected` y `specs check`. La prueba usa representativos con efecto observable
+  // (el handler corre en lugar de imprimir el guard) y un overreach guard: `projects`
+  // NO está excluido y debe quedar interceptado.
+  it('los read-only quedan fuera del guard y `projects` sí entra', () => {
+    withDir((dir) => {
+      const specs = run(['specs', 'check', '--help'], dir)
+      assert.equal(specs.status, 0, specs.stderr)
+      assert.match(specs.stdout, /no hay specs para revisar/)
+      assert.doesNotMatch(specs.stdout, /Aplica el delta del change/)
+
+      const check = run(['check', '--help'], dir)
+      assert.notEqual(check.status, 0, 'check no se rutea por el guard: corre su handler y falla sin .ancletorc')
+      assert.match(check.stderr, /\.ancletorc/)
+      assert.doesNotMatch(check.stdout, /ancleto install\|update/)
+
+      const list = run(['list', '--help'], dir)
+      assert.equal(list.status, 1, 'list sin --projects no se rutea por el guard')
+      assert.match(list.stderr, /ancleto list --projects/)
+      assert.doesNotMatch(list.stdout, /ancleto projects \[list\|scan/)
+
+      const projects = run(['projects', '--help'], dir, { ANCLETO_PROJECTS_FILE: join(dir, 'registry.json') })
+      assert.equal(projects.status, 0, 'projects NO debe quedar fuera: el guard lo intercepta')
+      assert.match(projects.stdout, /ancleto projects \[list\|scan/)
+    })
+  })
+
+  // Pinea el texto completo de MEMORY_USAGE tal como sale por stderr: el guard de
+  // `--help` reutiliza esta lista, así que un drift en una línea debe romper el test.
+  it('MEMORY_USAGE conserva su texto exacto en stderr', () => {
+    withDir((dir) => {
+      const r = run(['memory', 'no-existe'], dir)
+      assert.equal(r.status, 1)
+      const expected = [
+        'ancleto: subcomando de memory desconocido: no-existe',
+        'ancleto: uso: ancleto memory context [--scope X] [--out file]',
+        'ancleto: uso: ancleto memory list [--type X] [--scope X] [--all] [--json]',
+        'ancleto: uso: ancleto memory doctor [--rebuild]',
+        'ancleto: uso: ancleto memory export [--out <archivo>]',
+        'ancleto: uso: ancleto memory import <archivo>',
+        'ancleto: uso: ancleto memory gc [--dry-run] [--days <n>]',
+        'ancleto: uso: ancleto memory snapshot --out <archivo.db> [--force] [--json]',
+        'ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]',
+        'ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--json]',
+        'ancleto: uso: ancleto memory curate [--json] [--strict]'
+      ]
+      assert.deepEqual(r.stderr.split(/\r?\n/).filter(Boolean), expected)
+    })
+  })
+
+  // Pinea PROJECTS_USAGE tal como sale por stderr: el guard y el error de subcomando
+  // desconocido comparten la constante, así que un drift en cualquier flag debe romper.
+  it('PROJECTS_USAGE conserva su texto exacto en stderr', () => {
+    withDir((dir) => {
+      const registry = join(dir, 'registry.json')
+      const r = run(['projects', 'no-existe'], dir, { ANCLETO_PROJECTS_FILE: registry })
+      assert.equal(r.status, 1)
+      const expected = [
+        'ancleto: subcomando desconocido: projects no-existe',
+        'ancleto: uso: ancleto projects [list|scan <raiz>|prune|info <ruta>|update] [--update] [--all] [--json] [--dry-run]'
+      ]
+      assert.deepEqual(r.stderr.split(/\r?\n/).filter(Boolean), expected)
+      assert.equal(existsSync(registry), false, 'el error de uso no debe crear el registro')
+    })
+  })
+
+  it('una invocación sin --help conserva su comportamiento', () => {
+    withDir((dir) => {
+      const memory = run(['memory'], dir)
+      assert.equal(memory.status, 1)
+      assert.match(memory.stderr, /subcomando de memory desconocido/)
+      assert.match(memory.stderr, /ancleto memory context/)
+
+      const specs = run(['specs'], dir)
+      assert.equal(specs.status, 0)
+      assert.match(specs.stdout, /no hay specs para revisar/)
+      assert.doesNotMatch(specs.stdout, /Aplica el delta del change/)
+
+      const imprt = run(['import'], dir)
+      assert.equal(imprt.status, 1)
+      assert.match(imprt.stderr, /uso: ancleto import <bundle>/)
+    })
+  })
+})

@@ -119,7 +119,7 @@ Phase A validates the deltas and updates the source-of-truth specs. Do NOT move 
    - `specs/` when the change includes delta specs
 3. Determine whether the change includes spec deltas that must be reflected in `aspec/specs/`. The absence of `specs/` is not a defect: a change with no delta is a conformity change only when the `spec:<capability>#<requirement>` cited in `proposal.md` resolves (the capability directory `aspec/specs/<capability>/` exists and the exact `Requirement:` title exists in `aspec/specs/<capability>/spec.md`)
 4. Run `ancleto specs check --change {change-name} --json` only when deltas exist, before merging. If a delta spec or its target source-of-truth spec is non-canonical (translated keywords), stop and report it instead of merging into it
-5. If needed, update the relevant source-of-truth specs so they reflect the completed change. For a conformity change, report `sin delta` naming the cited `spec:<capability>#<requirement>` and write nothing under `aspec/specs/**`
+5. When deltas exist, sync the source-of-truth specs exclusively with `ancleto specs merge --change {change-name} --json`; never edit `aspec/specs/<capability>/spec.md` by hand and never apply `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED` yourself. Exit code 0 ⇒ the deltas are merged (`changed:false` on a re-run means they were already applied); continue. Any non-zero exit code (in particular 2 for a fail-closed conflict) ⇒ stop Phase A and report the capability, the requirement and the reason; do not run Phase B. If the CLI is unavailable, stop and report the blockage instead of editing the canonical spec by hand. For a conformity change, report `sin delta` naming the cited `spec:<capability>#<requirement>` and write nothing under `aspec/specs/**`
 6. If the change is not ready for archive, stop and report the inconsistency clearly
 
 When phase A completes, stop and return a short summary stating **phase A complete**: the deltas merged into `aspec/specs/**` (or `sin delta` naming the cited requirement), the `ancleto specs check` result when deltas existed, and that the change folder was NOT moved. Phase B is a separate invocation.
@@ -141,13 +141,7 @@ When a completed change modifies behavior through aspec deltas, `aspec/specs/` m
 
 **Language**: follow the `LOCKED: artifacts-language` block in `AGENTS.md` (single source of truth for artifact language and literal keywords). Paths, file names, and identifiers stay unchanged.
 
-Handle these delta sections carefully:
-
-- `ADDED Requirements`
-- `MODIFIED Requirements`
-- `REMOVED Requirements`
-
-Do not silently archive the change if the source-of-truth specs remain outdated.
+Deltas are applied ONLY through `ancleto specs merge --change {change-name} --json`. Never apply the `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED` sections by hand, and do not silently archive the change if the source-of-truth specs remain outdated.
 
 Every "updated" or "confirmed" claim must carry the `file:line` of the touched requirement. Use `bash`, `glob`, or `read` to obtain it. Never claim "updated" or "confirmed" without evidence: when the `file:line` cannot be produced, report the gap instead.
 

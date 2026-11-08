@@ -1,8 +1,8 @@
 ---
 name: ancleto-archive
-description: Archive a completed change, syncing delta specs first when needed. Use when implementation and verification are done. Promotes approved decisions into persistent memory. No external binaries required.
+description: Archive a completed change, syncing delta specs first when needed. Use when implementation and verification are done. Promotes approved decisions into persistent memory. Requires the `ancleto` CLI for the delta-sync step (stops if unavailable); no other external binaries required.
 license: MIT
-compatibility: No external binaries required. Works with any agent runtime.
+compatibility: Requires the `ancleto` CLI for the archive delta-sync step (stops if unavailable); no other external binaries required. Works with any agent runtime.
 metadata:
   author: ancleto
   version: '1.0'
@@ -12,7 +12,7 @@ metadata:
 
 **Artifacts language**: follow the `LOCKED: artifacts-language` block in `AGENTS.md` (single source of truth for artifact language and literal keywords).
 
-Archive a completed change: check completion, sync delta specs, promote approved decisions, then move the directory. No external binaries.
+Archive a completed change: check completion, sync delta specs, promote approved decisions, then move the directory. Requires the `ancleto` CLI for the delta-sync step; no other external binaries.
 
 **Input**: Optionally a change name (e.g., `add-auth`); if omitted, infer from context. If ambiguous, list `aspec/changes/` dirs (excluding `archive/`) and ask the user to select.
 
@@ -43,12 +43,11 @@ Check `aspec/changes/<name>/specs/` for a delta requirement block: any `## ADDED
 
 - Diff each delta against its main spec at `aspec/specs/<capability>/spec.md`; show a combined summary of adds/modifications/removals/renames.
 - Prompt: "Sync now (recommended)" vs "Archive without syncing" (or "Archive now" / "Sync anyway" / "Cancel" when already synced).
-- If the user chooses sync, edit `aspec/specs/<capability>/spec.md`:
-  - `## ADDED Requirements` → add new blocks (skip those already present).
-  - `## MODIFIED Requirements` → update the matching requirement, preserving scenarios not mentioned in the delta.
-  - `## REMOVED Requirements` → remove the entire requirement block.
-  - `## RENAMED Requirements` → rename using the `FROM:`/`TO:` pair.
-- Proceed to archive regardless of the choice.
+- If the user chooses sync, run `ancleto specs merge --change <name> --json`. That command is the only writer of the canonical specs during the archive/bulk-archive: never edit `aspec/specs/<capability>/spec.md` by hand and never apply `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED` yourself.
+  - **Exit code 0**: sync succeeded (`changed:false` on a re-run means it was already applied); continue with the preflight, the promotion and the move.
+  - **Any non-zero exit code** (in particular 2 for a fail-closed conflict): ABORT the archive of this change. Do not run the preflight, do not promote, do not move the directory, and report the capability, the requirement and the reason returned by the command.
+  - **CLI unavailable**: STOP and report the blockage. Never fall back to editing the canonical spec by hand.
+- If the user chooses "Archive without syncing" (or "Archive now"), proceed to archive without invoking `specs merge`.
 
 ### 3. Check technical seed freshness
 

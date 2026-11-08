@@ -73,6 +73,21 @@ function findRequirementsSectionIndex(lines) {
   return lines.findIndex((line) => REQUIREMENTS_SECTION_RE.test(line))
 }
 
+// Heading de sección de delta (`## ADDED Requirements`, `## MODIFIED
+// Requirements`, ...) dentro de una spec canónica: estado inválido y fail-closed.
+// Se reconoce con la misma semántica que `parseDeltaSpec` (columna 0, espacios
+// finales tolerados). Los delta specs usan esos headings legítimamente, así que
+// el guard corre sólo sobre la canónica.
+function findDeltaSectionHeadings(lines) {
+  const headings = []
+  for (const line of lines) {
+    if (!SECTION_BOUNDARY_RE.test(line)) continue
+    const heading = line.trim()
+    if (SECTION_TYPES.has(heading)) headings.push(heading)
+  }
+  return headings
+}
+
 function extractRenameTitle(value) {
   const stripped = String(value).trim().replace(/^`+/, '').replace(/`+$/, '').trim()
   const match = REQUIREMENT_RE.exec(stripped)
@@ -308,6 +323,18 @@ function operationReport(op) {
 
 export function mergeSpecText(deltaText, canonicalText) {
   const original = String(canonicalText)
+  const deltaHeadings = findDeltaSectionHeadings(splitLines(original))
+  if (deltaHeadings.length > 0) {
+    return {
+      output: original,
+      operations: [],
+      errors: deltaHeadings.map((heading) => ({
+        requirement: null,
+        reason: `canonical spec contains delta section heading "${heading}"`
+      })),
+      changed: false
+    }
+  }
   const parsed = parseDeltaSpec(deltaText)
   const errors = parsed.errors.map((error) => ({ ...error }))
   const operations = []

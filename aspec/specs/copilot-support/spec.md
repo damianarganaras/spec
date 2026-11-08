@@ -1,6 +1,6 @@
 # Spec: copilot-support
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Instalación de prompts de Copilot
 

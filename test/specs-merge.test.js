@@ -1280,3 +1280,246 @@ describe('specs merge - dry-run idempotente y cero escrituras (test-oracles-hard
     })
   })
 })
+
+describe('specs merge - guard de heading de delta en la canónica (specs-merge-canonical-guard)', () => {
+  const GUARD_REASON = 'canonical spec contains delta section heading'
+
+  // Canónica inválida: `## Requirements` presente y, además, un heading de
+  // sección de delta. El merge debe rechazarla sin escribir.
+  function canonWithDeltaHeading(capability, heading, ...blocks) {
+    return `# Spec: ${capability}\n\n## Purpose\n\nPurpose for ${capability}.\n\n## Requirements\n\n${blocks.join('\n\n')}\n\n${heading}\n`
+  }
+
+  const guardError = (json, capability, heading) =>
+    (json.errors || []).find(
+      (error) =>
+        error.capability === capability &&
+        error.requirement === null &&
+        typeof error.reason === 'string' &&
+        error.reason.includes(GUARD_REASON) &&
+        error.reason.includes(`"${heading}"`)
+    )
+
+  // Cada operación cubre además un heading ofensor distinto: entre los cuatro
+  // casos quedan ejercitados los cuatro headings que el guard debe detectar.
+  const OPERATION_CASES = [
+    {
+      label: 'MODIFIED',
+      offending: '## ADDED Requirements',
+      canonical: [requirement('A', 'Old A body.')],
+      delta: '## MODIFIED Requirements\n\n### Requirement: A\n\nNew A body.\n'
+    },
+    {
+      label: 'REMOVED',
+      offending: '## MODIFIED Requirements',
+      canonical: [requirement('Keep', 'Keep body.'), requirement('Drop', 'Drop body.')],
+      delta: '## REMOVED Requirements\n\n### Requirement: Drop\n'
+    },
+    {
+      label: 'RENAMED',
+      offending: '## REMOVED Requirements',
+      canonical: [requirement('Old', 'Old body.'), requirement('Other', 'Other body.')],
+      delta: '## RENAMED Requirements\n\n- FROM: `### Requirement: Old`\n- TO: `### Requirement: New`\n'
+    },
+    {
+      label: 'ADDED',
+      offending: '## RENAMED Requirements',
+      canonical: [requirement('Existing', 'Existing body.')],
+      delta: '## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n'
+    }
+  ]
+
+  for (const { label, offending, canonical, delta } of OPERATION_CASES) {
+    it(`${label} sobre una canónica con heading de delta sale 2, nombra capability y heading, y no escribe`, () => {
+      withDir((dir) => {
+        const capability = 'alpha'
+        const before = canonWithDeltaHeading(capability, offending, ...canonical)
+        writeSpec(dir, specRel(capability), before)
+        writeSpec(dir, deltaRel('ch', capability), delta)
+
+        const stamp = setOldMtime(dir, specRel(capability))
+        const r = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+        assert.equal(r.status, 2, `stderr: ${r.stderr}`)
+        const json = JSON.parse(r.stdout)
+        assert.equal(json.ok, false)
+        assert.equal(json.changed, false)
+        assert.deepEqual(
+          Object.keys(json).sort(),
+          ['capabilities', 'change', 'changed', 'dryRun', 'errors', 'ok', 'operations'],
+          'el reporte --json no agrega campos nuevos'
+        )
+        const error = guardError(json, capability, offending)
+        assert.ok(error, `errors: ${JSON.stringify(json.errors)}`)
+        assert.deepEqual(Object.keys(error).sort(), ['capability', 'reason', 'requirement'])
+        assert.equal(readFileSync(join(dir, specRel(capability)), 'utf8'), before)
+        assert.equal(mtimeOf(dir, specRel(capability)), stamp)
+      })
+    })
+  }
+
+  it('el mensaje humano nombra la capability y el heading ofensor', () => {
+    withDir((dir) => {
+      const capability = 'alpha'
+      const offending = '## ADDED Requirements'
+      const before = canonWithDeltaHeading(capability, offending, requirement('A', 'A body.'))
+      writeSpec(dir, specRel(capability), before)
+      writeSpec(dir, deltaRel('ch', capability), '## MODIFIED Requirements\n\n### Requirement: A\n\nNew A body.\n')
+
+      const stamp = setOldMtime(dir, specRel(capability))
+      const r = run(['specs', 'merge', '--change', 'ch'], dir)
+      assert.equal(r.status, 2, `stderr: ${r.stderr}`)
+      assert.ok(r.stderr.includes(capability), `stderr: ${r.stderr}`)
+      assert.ok(r.stderr.includes(offending), `stderr: ${r.stderr}`)
+      assert.equal(readFileSync(join(dir, specRel(capability)), 'utf8'), before)
+      assert.equal(mtimeOf(dir, specRel(capability)), stamp)
+    })
+  })
+
+  it('--dry-run con canónica inválida sale 2 y no escribe', () => {
+    withDir((dir) => {
+      const capability = 'alpha'
+      const offending = '## MODIFIED Requirements'
+      const before = canonWithDeltaHeading(capability, offending, requirement('A', 'A body.'))
+      writeSpec(dir, specRel(capability), before)
+      writeSpec(dir, deltaRel('ch', capability), '## MODIFIED Requirements\n\n### Requirement: A\n\nNew A body.\n')
+
+      const stamp = setOldMtime(dir, specRel(capability))
+      const beforeHash = treeHash(dir)
+      const r = run(['specs', 'merge', '--change', 'ch', '--dry-run', '--json'], dir)
+      assert.equal(r.status, 2, `stderr: ${r.stderr}`)
+      const json = JSON.parse(r.stdout)
+      assert.equal(json.ok, false)
+      assert.equal(json.dryRun, true)
+      assert.ok(guardError(json, capability, offending), `errors: ${JSON.stringify(json.errors)}`)
+      assert.equal(readFileSync(join(dir, specRel(capability)), 'utf8'), before)
+      assert.equal(mtimeOf(dir, specRel(capability)), stamp)
+      assert.equal(treeHash(dir), beforeHash)
+    })
+  })
+
+  it('atomicidad del plan: una capability válida no se escribe si otra tiene heading de delta', () => {
+    withDir((dir) => {
+      const alphaBefore = canon('alpha', requirement('A', 'Old A body.'))
+      const betaBefore = canonWithDeltaHeading('beta', '## REMOVED Requirements', requirement('B', 'Old B body.'))
+      writeSpec(dir, specRel('alpha'), alphaBefore)
+      writeSpec(dir, specRel('beta'), betaBefore)
+      writeSpec(dir, deltaRel('ch', 'alpha'), '## MODIFIED Requirements\n\n### Requirement: A\n\nNew A body.\n')
+      writeSpec(dir, deltaRel('ch', 'beta'), '## MODIFIED Requirements\n\n### Requirement: B\n\nNew B body.\n')
+
+      const stampAlpha = setOldMtime(dir, specRel('alpha'))
+      const stampBeta = setOldMtime(dir, specRel('beta'))
+      const beforeHash = treeHash(dir)
+
+      const r = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+      assert.equal(r.status, 2, `stderr: ${r.stderr}`)
+      const json = JSON.parse(r.stdout)
+      assert.equal(json.ok, false)
+      assert.ok(guardError(json, 'beta', '## REMOVED Requirements'), `errors: ${JSON.stringify(json.errors)}`)
+
+      // alpha era aplicable: el plan la computa como changed, pero no se escribe.
+      const alphaPlan = json.capabilities.find((entry) => entry.capability === 'alpha')
+      assert.ok(alphaPlan, 'el plan debe incluir la capability válida')
+      assert.equal(alphaPlan.changed, true)
+      assert.equal(readFileSync(join(dir, specRel('alpha')), 'utf8'), alphaBefore)
+      assert.equal(readFileSync(join(dir, specRel('beta')), 'utf8'), betaBefore)
+      assert.equal(mtimeOf(dir, specRel('alpha')), stampAlpha)
+      assert.equal(mtimeOf(dir, specRel('beta')), stampBeta)
+      assert.equal(treeHash(dir), beforeHash)
+    })
+  })
+
+  it('control positivo: un delta con ## ADDED Requirements sobre canónica normalizada aplica y es idempotente', () => {
+    withDir((dir) => {
+      const capability = 'alpha'
+      const before = canon(capability, requirement('Existing', 'Existing body.'))
+      writeSpec(dir, specRel(capability), before)
+      writeSpec(dir, deltaRel('ch', capability), '## ADDED Requirements\n\n### Requirement: New\n\nNew body.\n')
+
+      const first = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+      assert.equal(first.status, 0, `stderr: ${first.stderr}`)
+      const firstJson = JSON.parse(first.stdout)
+      assert.equal(firstJson.ok, true)
+      assert.deepEqual(firstJson.errors, [])
+      const afterFirst = readFileSync(join(dir, specRel(capability)), 'utf8')
+      assert.equal(afterFirst, `${before}\n### Requirement: New\n\nNew body.\n`)
+
+      const stamp = setOldMtime(dir, specRel(capability))
+      const second = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+      assert.equal(second.status, 0, `stderr: ${second.stderr}`)
+      assert.equal(JSON.parse(second.stdout).changed, false)
+      assert.equal(readFileSync(join(dir, specRel(capability)), 'utf8'), afterFirst)
+      assert.equal(mtimeOf(dir, specRel(capability)), stamp)
+    })
+  })
+
+  it('invariante negativa: un delta con los cuatro headings no es rechazado si la canónica es válida', () => {
+    withDir((dir) => {
+      const capability = 'combo'
+      const before = canon(
+        capability,
+        requirement('A', 'Old A body.'),
+        requirement('B', 'B body.'),
+        requirement('Old', 'Old body.'),
+        requirement('Keep', 'Keep body.')
+      )
+      writeSpec(dir, specRel(capability), before)
+      writeSpec(
+        dir,
+        deltaRel('ch', capability),
+        [
+          '## ADDED Requirements',
+          '',
+          '### Requirement: New',
+          '',
+          'New body.',
+          '',
+          '## MODIFIED Requirements',
+          '',
+          '### Requirement: A',
+          '',
+          'New A body.',
+          '',
+          '## REMOVED Requirements',
+          '',
+          '### Requirement: B',
+          '',
+          '## RENAMED Requirements',
+          '',
+          '- FROM: `### Requirement: Old`',
+          '- TO: `### Requirement: Renamed`',
+          ''
+        ].join('\n')
+      )
+
+      const r = run(['specs', 'merge', '--change', 'ch', '--json'], dir)
+      assert.equal(r.status, 0, `stderr: ${r.stderr}`)
+      const json = JSON.parse(r.stdout)
+      assert.equal(json.ok, true)
+      assert.deepEqual(json.errors, [])
+      assert.deepEqual(
+        json.capabilities[0].operations.map((op) => op.type),
+        ['ADDED', 'MODIFIED', 'REMOVED', 'RENAMED']
+      )
+      // El único origen de rechazo del guard es la canónica: los headings del
+      // delta no producen ningún error de guard.
+      assert.equal(
+        json.errors.some((error) => typeof error.reason === 'string' && error.reason.includes(GUARD_REASON)),
+        false
+      )
+      assert.match(readFileSync(join(dir, specRel(capability)), 'utf8'), /### Requirement: Renamed/)
+    })
+  })
+
+  it('el guard corre antes de parsear el delta (una delta malformada no lo desplaza)', () => {
+    const capability = 'alpha'
+    const canonical = canonWithDeltaHeading(capability, '## ADDED Requirements', requirement('A', 'A body.'))
+    const merged = mergeSpecText('## BOGUS Requirements\n\nbasura\n', canonical)
+    assert.equal(merged.output, canonical)
+    assert.equal(merged.changed, false)
+    assert.ok(merged.errors.length >= 1)
+    assert.ok(
+      merged.errors.every((error) => error.reason.includes(GUARD_REASON)),
+      `errors: ${JSON.stringify(merged.errors)}`
+    )
+  })
+})

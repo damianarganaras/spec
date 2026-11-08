@@ -3279,7 +3279,7 @@ async function checkAgentsFrontmatter(cwd, dirRel, actual, expected, fileExt, mo
     }
   }
   if (tierDiff > 0) {
-    console.log(`  ⚠ ${dirRel} (tier '${tier}' aplica un modelo distinto al de su fuente en ${tierDiff} agentes; install/update reescribirá model:)`)
+    console.log(`  ⚠ ${dirRel} (tier '${tier}' aplica un modelo distinto al de su fuente en ${tierDiff} ${tierDiff === 1 ? 'agente' : 'agentes'}; install/update reescribirá model:)`)
   }
   if (catalogUnavailable) {
     console.log(`  ⚠ ${dirRel} (no se pudo verificar el catálogo de modelos; se aceptan los candidatos estáticos del tier '${tier}')`)

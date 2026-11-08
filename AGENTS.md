@@ -124,7 +124,7 @@ El `model:` del frontmatter de los agentes existe en tres superficies y hay que 
 antes de tocarlo:
 
 - `agents/*.md` — fuente canónica y **publicada en el paquete**; define el **default publicado**
-  (`commandcode/deepseek/deepseek-v4.1-flash`). No es el tier que un `install` sin `--tier`
+  (`opencode-go/deepseek-v4.1-flash`). No es el tier que un `install` sin `--tier`
   selecciona —ese default es `normal`— y no es donde se cambia el modelo de una máquina concreta.
 - `.opencode/agents/*.md` — mirror del proyecto que regenera `ancleto upgrade`; **no se edita a
   mano**. En este setup es la copia que el runtime carga (verificado con `opencode debug config`).

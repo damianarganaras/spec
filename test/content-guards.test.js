@@ -10,7 +10,7 @@ import {
   rmSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join, dirname, basename, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderMachineEnv } from '../src/core/machine-env.js'
 
@@ -2810,5 +2810,53 @@ describe('content guards - atomicidad acotada de specs merge', () => {
       () => guardBoundedAtomicity(`${text}\nLa fase de escritura es atómica.\n`),
       'una promesa de atomicidad de escritura debe romper el guard'
     )
+  })
+})
+
+describe('content guards - specs canónicas sin headings de delta (specs-merge-canonical-guard)', () => {
+  // Los headings de sección de delta son sintaxis legítima SOLO en
+  // `aspec/changes/**`. En la canónica son un estado inválido que el merge
+  // rechaza fail-closed.
+  const DELTA_SECTION_HEADINGS = [
+    '## ADDED Requirements',
+    '## MODIFIED Requirements',
+    '## REMOVED Requirements',
+    '## RENAMED Requirements'
+  ]
+
+  const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const headingPattern = (heading) => new RegExp(`^${escapeRegExp(heading)}\\s*$`, 'm')
+
+  // `mdFiles` es el helper de lectura recursiva existente. El scan arranca en
+  // `aspec/specs`, así que `aspec/changes/**` queda excluido por construcción:
+  // este mismo repo tiene deltas con esos headings y el guard no debe verlos.
+  function canonicalSpecFiles() {
+    return mdFiles(join(ROOT, 'aspec', 'specs')).filter((file) => basename(file) === 'spec.md')
+  }
+
+  it('ninguna aspec/specs/**/spec.md contiene un heading de sección de delta', () => {
+    const files = canonicalSpecFiles()
+    assert.ok(files.length > 0, 'el scan debe encontrar specs canónicas')
+    for (const file of files) {
+      const rel = relative(ROOT, file).replace(/\\/g, '/')
+      assert.ok(rel.startsWith('aspec/specs/'), `${rel} no es una spec canónica`)
+      assert.ok(!rel.startsWith('aspec/changes/'), `${rel} no debe entrar al scan canónico`)
+      const text = readFileSync(file, 'utf8')
+      for (const heading of DELTA_SECTION_HEADINGS) {
+        assert.doesNotMatch(text, headingPattern(heading), `${rel} contiene "${heading}"`)
+      }
+    }
+  })
+
+  it('las tres canonales reparadas usan ## Requirements y no conservan el heading de delta', () => {
+    for (const capability of ['copilot-support', 'legacy-import', 'test-profile']) {
+      const file = join(ROOT, 'aspec', 'specs', capability, 'spec.md')
+      assert.ok(existsSync(file), `falta ${capability}/spec.md`)
+      const text = readFileSync(file, 'utf8')
+      assert.match(text, /^## Requirements\s*$/m, `${capability} debe usar ## Requirements`)
+      for (const heading of DELTA_SECTION_HEADINGS) {
+        assert.doesNotMatch(text, headingPattern(heading), `${capability} conserva "${heading}"`)
+      }
+    }
   })
 })

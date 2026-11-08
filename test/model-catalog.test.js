@@ -247,9 +247,13 @@ describe('declaredModelIds', () => {
         })
       }
     }
-    // `opencode/deepseek-v4.1-flash-free` sólo se declara a través de TIER_CHAINS.
+    // `opencode/deepseek-v4.1-flash-free` sólo se declara a través de TIER_CHAINS,
+    // no a través del índice concreto que ocupe en la cadena de dos.
     const chainOnly = TIER_CHAINS.minimo.coder[TIER_CHAINS.minimo.coder.length - 1]
-    assert.match(declared.get(chainOnly), /^TIER_CHAINS\.minimo\..+\[2\]$/)
+    assert.ok(
+      declared.get(chainOnly).startsWith('TIER_CHAINS.minimo.'),
+      `${chainOnly} se declara vía TIER_CHAINS.minimo.* (origen: ${declared.get(chainOnly)})`
+    )
     assert.equal(declared.has('inherit'), false)
   })
 
@@ -322,9 +326,8 @@ describe('resolver puro de cadenas', () => {
     assert.deepEqual(resolved.unresolved, [])
   })
 
-  it('sin la cabeza elige el segundo; sin cabeza ni segundo elige el tercero', () => {
+  it('sin la cabeza elige el segundo candidato de la cadena', () => {
     assert.equal(resolveTierModels('minimo', catalogWith(chain.slice(1))).models.coder, chain[1])
-    assert.equal(resolveTierModels('minimo', catalogWith(chain.slice(2))).models.coder, chain[2])
   })
 
   it('sin ningún candidato lanza un error que nombra el agente y la cadena', () => {

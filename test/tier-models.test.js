@@ -70,6 +70,11 @@ describe('cadenas de preferencia', () => {
     for (const [name, chain] of Object.entries(TIER_CHAINS.minimo)) {
       assert.ok(chain.length > 0, `${name} tiene cadena`)
       assert.equal(TIERS.minimo[name], chain[0], `${name}: TIERS.minimo es la cabeza de la cadena`)
+      assert.equal(
+        chain.includes('commandcode/deepseek/deepseek-v4.1-flash'),
+        false,
+        `${name}: la cadena no reintroduce el modelo de commandcode`
+      )
     }
   })
 

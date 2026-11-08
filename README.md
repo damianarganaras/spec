@@ -514,7 +514,7 @@ Esto escribe `azure.enabled: true` en tu `.ancletorc`. Después completá la sec
 ## Referencia: agentes y modelos por tier
 
 Los 10 agentes instalados y el modelo que usa cada uno según tu tier. El **default publicado** es el
-valor `model:` de los archivos canónicos `agents/*.md` (`commandcode/deepseek/deepseek-v4.1-flash`),
+valor `model:` de los archivos canónicos `agents/*.md` (`opencode-go/deepseek-v4.1-flash`),
 que es lo que materializa `ancleto upgrade`. NO es el tier que selecciona un `install` sin `--tier`:
 ese tier por defecto es `normal`. Al instalar en el host `opencode`, el tier elegido se escribe en la
 línea `model:` de cada agente (los adaptadores de claude/vscode/copilot/commandcode quitan `model:` y
@@ -523,20 +523,20 @@ modelo distinto al canónico.
 
 | Agente | `normal` | `minimo` | `gratis` |
 |---|---|---|---|
-| orchestrator | `opencode-go/qwen3.7-plus` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| coder | `opencode-go/minimax-m3` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| tester | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| spec-writer | `opencode-go/qwen3.7-plus` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| reviewer | `opencode-go/qwen3.8-max` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| technical-discovery | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| technical-seed-writer | `opencode-go/minimax-m3` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| memory-keeper | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| context-resolver | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
-| documenter | `opencode-go/deepseek-v4.1-flash` | `commandcode/deepseek/deepseek-v4.1-flash` | ver nota |
+| orchestrator | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| coder | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| tester | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| spec-writer | `opencode-go/qwen3.7-plus` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| reviewer | `opencode-go/qwen3.8-max` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| technical-discovery | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| technical-seed-writer | `opencode-go/minimax-m3` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| memory-keeper | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| context-resolver | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
+| documenter | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` | ver nota |
 
 El tier `minimo` resuelve cada agente por una cadena de preferencia contra el catálogo verificado
-(`src/core/model-catalog.json`): `commandcode/deepseek/deepseek-v4.1-flash` →
-`opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`. Se escribe el primer
+(`src/core/model-catalog.json`): `opencode-go/deepseek-v4.1-flash` →
+`opencode/deepseek-v4.1-flash-free`. Se escribe el primer
 candidato disponible; con la cabeza disponible, aplicarlo sobre la canónica sigue siendo un no-op.
 Si ningún candidato está disponible, `install`/`init`/`import` abortan con un error explícito sin
 escribir un modelo inexistente. El snapshot se refresca manualmente desde el repositorio fuente con

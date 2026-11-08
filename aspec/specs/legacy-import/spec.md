@@ -1,6 +1,6 @@
 # Spec: legacy-import
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Detección de OpenSpec externo con confirmación
 

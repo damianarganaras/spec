@@ -2,6 +2,17 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.24.0] - 2026-11-08
+
+### Fixed
+- **`specs merge` falla cerrado ante una spec canónica con watermark de delta**: si la spec canónica contiene un heading de sección de delta (`ADDED`/`MODIFIED`/`REMOVED`/`RENAMED`) el comando falla cerrado con exit 2 y cero escrituras, sin merge parcial; se normalizaron las specs canónicas `copilot-support`, `legacy-import` y `test-profile`.
+
+### Changed
+- **Tier `minimo` alineado a `opencode-go/deepseek-v4.1-flash`**: la cadena de fallback del tier queda en dos modelos (`opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`); el mensaje de divergencia de frontmatter pluraliza el conteo (`1 agente`/`N agentes`); `README` y `AGENTS` alineados al mismo tier.
+
+### Docs
+- **Changes archivados**: `specs-merge-canonical-guard` y `agent-model-minimo-migration`.
+
 ## [0.23.0] - 2026-11-07
 
 ### Added

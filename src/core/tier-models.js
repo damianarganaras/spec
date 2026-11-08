@@ -22,16 +22,16 @@ export const TIERS = {
     documenter: 'opencode-go/deepseek-v4.1-flash'
   },
   minimo: {
-    orchestrator: 'commandcode/deepseek/deepseek-v4.1-flash',
-    coder: 'commandcode/deepseek/deepseek-v4.1-flash',
-    tester: 'commandcode/deepseek/deepseek-v4.1-flash',
-    'spec-writer': 'commandcode/deepseek/deepseek-v4.1-flash',
-    reviewer: 'commandcode/deepseek/deepseek-v4.1-flash',
-    'technical-discovery': 'commandcode/deepseek/deepseek-v4.1-flash',
-    'technical-seed-writer': 'commandcode/deepseek/deepseek-v4.1-flash',
-    'memory-keeper': 'commandcode/deepseek/deepseek-v4.1-flash',
-    'context-resolver': 'commandcode/deepseek/deepseek-v4.1-flash',
-    documenter: 'commandcode/deepseek/deepseek-v4.1-flash'
+    orchestrator: 'opencode-go/deepseek-v4.1-flash',
+    coder: 'opencode-go/deepseek-v4.1-flash',
+    tester: 'opencode-go/deepseek-v4.1-flash',
+    'spec-writer': 'opencode-go/deepseek-v4.1-flash',
+    reviewer: 'opencode-go/deepseek-v4.1-flash',
+    'technical-discovery': 'opencode-go/deepseek-v4.1-flash',
+    'technical-seed-writer': 'opencode-go/deepseek-v4.1-flash',
+    'memory-keeper': 'opencode-go/deepseek-v4.1-flash',
+    'context-resolver': 'opencode-go/deepseek-v4.1-flash',
+    documenter: 'opencode-go/deepseek-v4.1-flash'
   },
   gratis: {
     orchestrator: 'opencode/big-pickle',
@@ -50,7 +50,6 @@ export const TIERS = {
 // Cadena de preferencia por agente para `minimo`. El primer candidato disponible en
 // el catalogo verificado gana; si ninguno esta, la resolucion falla de forma explicita.
 const MINIMO_CHAIN = [
-  'commandcode/deepseek/deepseek-v4.1-flash',
   'opencode-go/deepseek-v4.1-flash',
   'opencode/deepseek-v4.1-flash-free'
 ]

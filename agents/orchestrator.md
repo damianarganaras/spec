@@ -1,7 +1,7 @@
 ---
 description: Orchestrates tasks and delegates to subagents for spec-driven development
 mode: primary
-model: commandcode/deepseek/deepseek-v4.1-flash
+model: opencode-go/deepseek-v4.1-flash
 color: '#6366f1'
 tools:
   read: true

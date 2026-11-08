@@ -1,7 +1,7 @@
 ---
 description: Generates or regenerates the technical seed from one Repomix pack when delegated by the orchestrator
 mode: subagent
-model: commandcode/deepseek/deepseek-v4.1-flash
+model: opencode-go/deepseek-v4.1-flash
 temperature: 0.1
 color: '#10b981'
 tools:

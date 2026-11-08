@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.23.0
+generatedAt: 2026-11-08T16:31:24Z
+pluginVersion: 0.24.0
 skillVersion: '2.3'
 ---
 
@@ -19,8 +19,8 @@ skillVersion: '2.3'
   `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`,
   `reconcileLegacyBlocks`, `specsMergeCommand`, `resolveChangeDir`, `specsCommand`,
   `src/core/memory/engine.js` → `recordNode`; `src/core/specs-merge.js`;
-  `src/core/tier-models.js`), no en el pack solo. El estado del pack registra 833 fuentes
-  (~38.330 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
+  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 839 fuentes
+  (~38.408 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
@@ -68,7 +68,7 @@ skillVersion: '2.3'
   estructural y la no-creación de un destino vacío se leyeron en `repairProjectMcp` y en el change
   archivado `2026-11-06-fix-repair-mcp-noop`. No se probaron archivos con raíz no-objeto, valor de
   esquema no-objeto ni `.jsonc` con comentarios.
-- **Merge de specs 0.22.0–0.22.1**: no se ejecutó `ancleto specs merge` ni `--dry-run`/`--json`.
+- **Merge de specs 0.22.0–0.24.0**: no se ejecutó `ancleto specs merge` ni `--dry-run`/`--json`.
   El comportamiento se describió desde `src/core/specs-merge.js` (parser de canónico y delta,
   `blockKey`, `detectEol`, preámbulo H1 estructural, `applyAdd`/`applyModified`/`applyRemoved`/
   `applyRenamed`, `mergeSpecText`), desde `specsMergeCommand`/`resolveChangeDir`/
@@ -77,7 +77,14 @@ skillVersion: '2.3'
   ejecución: contenedor `archive` con exit 2, H1 estructural, una sola línea en blanco tras
   `ADDED`, `RENAMED` vacío, idempotencia byte a byte, `mtime` intacto en no-op/dry-run, salida JSON
   exacta ni los exit codes 0/1/2. `test/specs-merge.test.js` existe pero el pack excluye `test/**`
-  y no se corrió la suite.
+  y no se corrió la suite. **Guard canónico 0.24.0**: el fail-closed por heading de delta en la
+  canónica se describió desde `findDeltaSectionHeadings` y `mergeSpecText`; no se ejecutó el
+  `--dry-run` ni se verificó en corrida el `mtime` intacto, la salida `--json` ni la normalización de
+  las tres canónicas (se confirmó por lectura del heading `## Requirements`).
+- **Tier `minimo` 0.24.0**: no se ejecutó `install`/`init`/`import --tier minimo`. La cadena de dos
+  candidatos, la igualdad `TIERS.minimo[n] === agents/<n>.md === TIER_CHAINS.minimo[n][0]` y el
+  error por catálogo sin candidatos se leyeron en `src/core/tier-models.js` y en el delta archivado;
+  no se observó la salida de `check` sobre los diez agentes.
 - **Orden del archive 0.22.1**: no se archivó un change real. La secuencia merge/sync → preflight →
   promoción → move → commit y los literales de fallo se verificaron leyendo
   `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`,
@@ -116,15 +123,15 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **843 archivos** (aspec 273, docs 21,
-  test 27, src 19, etc.). El pack registra **833 fuentes** (~38.330 tokens) y 29 entradas de archivo
+- **`.discovery-map.json` observado**: el generador reporta **849 archivos** (aspec 279, docs 21,
+  test 27, src 19, etc.). El pack registra **839 fuentes** (~38.408 tokens) y 29 entradas de archivo
   porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además
   Repomix filtra por sus propios ignores.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.23.0`). No se usan como fuente de contenido.
+  gitignored; deben alinearse con `package.json` (`0.24.0`). No se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
   versión local es una verificación puntual, no una fuente de reglas. El propio `check` compara ese
@@ -136,16 +143,16 @@ skillVersion: '2.3'
   `Select-String` y lecturas directas.
 - **Estado inicial del chequeo**: el pack y `.discovery-state.json` se regeneraron antes de esta
   materialización y el `discovery --check` inicial devolvió `READY`/`impact: none`, aunque los
-  documentos del seed todavía declaraban la versión 0.22.2 en el frontmatter (el oráculo no compara
-  la versión del frontmatter). Para reflejar 0.23.0 se actualizaron `decisions.md`, `index.md`,
+  documentos del seed todavía declaraban la versión 0.23.0 en el frontmatter (el oráculo no compara
+  la versión del frontmatter). Para reflejar 0.24.0 se actualizaron `decisions.md`, `index.md`,
   `integrations.md`, `inventory.md`, `overview.md`, `setup.md`, `units/_map.md`,
   `units/cli-install.md`, `units/discovery-engine.md`, `units/memory-engine.md` y `unknowns.md` desde
   el pack y las fuentes citadas. El estado final lo reporta el `discovery --check` posterior. El seed
-  anterior describía 0.22.2.
+  anterior describía 0.23.0.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.23.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.24.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -155,7 +162,9 @@ skillVersion: '2.3'
   y su uso en `install`/`init`/`import`, copia host-scoped de `.opencode/*` en `importCmd`,
   validación de `manifest.mcp` y aviso de bundle legacy sin `mcp` (0.23.0), `reconcileLegacyBlocks`
   con EOL por línea y newline final (0.23.0), `recordNode` idempotente ante reescritura idéntica
-  (0.23.0), `TIERS`/`TIER_CHAINS`, `freeTierOnPrimary` y sus dos avisos,
+  (0.23.0), `TIERS`/`TIER_CHAINS` con la cadena `minimo` de dos candidatos y la igualdad con la
+  canónica (0.24.0), `freeTierOnPrimary` y sus dos avisos,
+  `findDeltaSectionHeadings` y el guard canónica-only de `mergeSpecText` (0.24.0),
   `declaredModelIds`, `modelIdsFromCatalog`, `missingModelIdsInCatalog`, gate de `--write`,
   `looksBinaryMissing`, lint sobre `scripts/`, snapshot de 5 proveedores / 211 IDs, flujo de
   `scripts/refresh-model-catalog.mjs`, `installedPaths` como unión, comandos del CLI, firmas de

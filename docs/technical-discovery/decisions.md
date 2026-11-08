@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.23.0
+generatedAt: 2026-11-08T16:31:24Z
+pluginVersion: 0.24.0
 skillVersion: '2.3'
 ---
 
@@ -32,16 +32,17 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.23.0)
+## Modelos y tiers (estado 0.24.0)
 
 ### Tabla y cadenas
 
 - `TIERS` conserva la forma **agente → string**; para los tiers con cadena, cada valor es la
   **cabeza** de su cadena. `TIERS.normal.reviewer = 'opencode-go/qwen3.8-max'`; el resto de
   `normal` sigue en `opencode-go` (`src/core/tier-models.js`).
-- `TIER_CHAINS` se exporta desde el mismo módulo. `minimo` comparte una única cadena para los diez
-  agentes: `commandcode/deepseek/deepseek-v4.1-flash` → `opencode-go/deepseek-v4.1-flash` →
-  `opencode/deepseek-v4.1-flash-free`.
+- `TIER_CHAINS` se exporta desde el mismo módulo. `minimo` comparte una única cadena de **dos**
+  candidatos para los diez agentes: `opencode-go/deepseek-v4.1-flash` →
+  `opencode/deepseek-v4.1-flash-free`. La cabeza es el modelo que publican los `agents/*.md`;
+  `commandcode/deepseek/deepseek-v4.1-flash` ya no es candidato de la cadena.
 - `resolveTierModels(tier, catalog, …)` es **puro e inyectable** (recibe el catálogo). Devuelve
   `models`, `candidates` (todos los candidatos estáticos por agente) y `unresolved`. En modo
   estricto lanza error explícito si ningún candidato está disponible; `allowUnresolved` lo usa
@@ -100,9 +101,9 @@ skillVersion: '2.3'
   red ni ejecuta procesos.
 - El guard estructural `test/agent-model-coherence.test.js` + `test/model-catalog.test.js` detecta
   IDs de `TIERS`, `TIER_CHAINS`, `agents/*.md` o `profiles/*/agents/*.md` ausentes del snapshot.
-- **0.21.0–0.22.1 no modifican** el catálogo ni sus consumidores: los cambios de 0.21.0 viven en
-  contratos de prompt, `agents/` y `skills/`; los de 0.22.0 y 0.22.1, en el merge de specs y en el
-  orden del archive.
+- **0.21.0–0.24.0 no modifican** el snapshot del catálogo: los cambios de 0.21.0 viven en contratos
+  de prompt, `agents/` y `skills/`; los de 0.22.0 y 0.22.1, en el merge de specs y en el orden del
+  archive; 0.24.0 sólo alinea los valores de `TIERS.minimo`/`MINIMO_CHAIN` (no el snapshot).
 
 ### Integridad de IDs declarados (0.18.12, consolidada en 0.18.13)
 
@@ -856,12 +857,55 @@ comandos, flags ni dependencias.
 - La semántica de qué líneas forman el run no cambia. Requerimiento:
   `spec:prompt-contracts#Preservación del fin de línea por línea al reconciliar bloques legacy`.
 
+## Tier `minimo` y guard canónico (0.24.0)
+
+Changes archivados: `2026-11-08-agent-model-minimo-migration` y
+`2026-11-08-specs-merge-canonical-guard`. El primero es minor-class (cambia el modelo observable de
+un tier); el segundo es patch-class (vuelve fail-closed un estado que el merge ya debía rechazar).
+
+### `minimo` alineado a la canónica
+
+- La canónica `agents/*.md` (y `opencode.json`) declara `opencode-go/deepseek-v4.1-flash` para los
+  diez agentes desde el commit `9e45105`. La tabla derivada `TIERS.minimo[agente]` y la cabeza de
+  `TIER_CHAINS.minimo[agente]` se alinearon al mismo ID; la cadena queda
+  `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`.
+- `MINIMO_CHAIN` retira `commandcode/deepseek/deepseek-v4.1-flash`: el proveedor dejó de usarse y
+  conservarlo habría permitido instalar un modelo que la canónica nunca publica.
+- La invariante es `TIERS.minimo[agente] === model: de agents/<agente>.md === cabeza de
+  TIER_CHAINS.minimo[agente]`, cubierta por `test/agent-model-coherence.test.js` y el guard de la
+  spec. La forma de `TIERS` no cambia; `resolveTierModels`, `applyTier` y `check` conservan su firma.
+- `install`/`init`/`import --tier minimo` sobre `opencode` escriben el modelo canónico; si ningún
+  candidato está en el catálogo, el error explícito nombra al agente y la cadena completa.
+- Decisiones: `tier-minimo-opencode-go-alignment` (alinear la tabla derivada, no inventar IDs) y
+  `agent-model-migration-source-of-truth` (la canónica manda; la tabla la sigue).
+
+### Guard de heading de delta en la spec canónica
+
+- `mergeSpecText(deltaText, canonicalText)` valida la canónica **antes** de parsear el delta:
+  `findDeltaSectionHeadings` detecta `## ADDED Requirements`, `## MODIFIED Requirements`,
+  `## REMOVED Requirements` o `## RENAMED Requirements` en columna 0 (misma semántica que el parser
+  de delta, espacios finales tolerados; sin rastreo de code fences).
+- Al detectarlo, devuelve el texto original intacto y errores que nombran el heading ofensor; el CLI
+  agrega la capability y sale con exit 2 con cero escrituras en todo el lote, para los **cuatro**
+  tipos de operación, no sólo `ADDED`. `--dry-run` produce el mismo exit 2 y tampoco escribe; `--json`
+  reutiliza `ok:false`/`errors:[...]` sin campos nuevos.
+- El guard es **canónica-only**: los delta specs bajo `aspec/changes/**/specs/**` conservan esos
+  headings como sintaxis legítima. El merge rechaza la canónica; no la repara ni la reescribe.
+- Reparación de higiene del repositorio: `aspec/specs/copilot-support/spec.md`,
+  `aspec/specs/legacy-import/spec.md` y `aspec/specs/test-profile/spec.md` normalizaron su heading a
+  `## Requirements`; `test/content-guards.test.js` impide que vuelva a aparecer un heading de delta
+  en `aspec/specs/**`.
+- Decisiones: `specs-merge-canonical-heading-fail-closed` (rechazar, no auto-normalizar) y
+  `specs-merge-canonical-guard-canonical-scope` (sólo canónicas). El change también registró
+  `repair-mcp-noop-already-shipped` como NO-OP: el predicado de no-escritura de `repairProjectMcp`
+  ya estaba implementado y no se reabre.
+
 ## Superficies del `model:` (nota operativa)
 
 `AGENTS.md` describe tres superficies: `agents/*.md` (canónica publicada), `.opencode/agents/*.md`
 (mirror que regenera `ancleto upgrade`) y `~/.config/opencode/agents/*.md` (instalación global).
 `opencode.json` → `agent.<nombre>.model` aplica al agente primario, no a los subagentes. El default
-publicado de los agentes es `commandcode/deepseek/deepseek-v4.1-flash`; el tier que aplica `install`
+publicado de los agentes es `opencode-go/deepseek-v4.1-flash`; el tier que aplica `install`
 sin `--tier` es `normal`.
 
 ## Memoria persistente
@@ -907,8 +951,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 833 fuentes, ~38.330 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 843 archivos (aspec 273, docs 21, test 27, src 19, etc.).
+- **Pack actual**: tier `minimo`, 839 fuentes, ~38.408 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 849 archivos (aspec 279, docs 21, test 27, src 19, etc.).
 
 ## Lint y publicación
 
@@ -967,17 +1011,20 @@ sin `--tier` es `normal`.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.23.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.24.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
   `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue
   reemplazándose porque no se agregó parseo tolerante.
 - **Conformidad 0.21.0**: la compuerta mecánica no prueba relevancia semántica ni cubre un archive
   ejecutable; la aceptación depende de contratos de texto y content guards. `MEM-01` queda fuera.
-- **Merge de specs 0.22.0–0.22.1**: el comando exige specs canónicos en inglés y un título exacto;
+- **Merge de specs 0.22.0–0.24.0**: el comando exige specs canónicos en inglés y un título exacto;
   no repara specs traducidos ni crea capabilities. La no-escritura de `--dry-run`, la idempotencia y
   la atomicidad acotada al plan se describen desde el código y la spec, no desde una corrida
-  observada en esta generación. El contenedor `archive` falla cerrado por identidad de path.
+  observada en esta generación. El contenedor `archive` falla cerrado por identidad de path. El
+  guard 0.24.0 rechaza la canónica con heading de sección de delta pero no la normaliza; la
+  reparación es de higiene del repositorio y el content guard la sostiene. No cubre a las skills de
+  archive que editan `aspec/specs/**` directamente sin pasar por `mergeSpecText`.
 - **Orden del archive 0.22.1**: la corrección vive en contratos de prompt (agentes y skills), no en
   `src/`; la aceptación se apoya en `test/content-guards.test.js`, que no se ejecutó en esta
   generación. Editar sólo `agents/`/`skills/` y regenerar con `ancleto upgrade`; no tocar

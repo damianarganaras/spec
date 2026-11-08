@@ -1,6 +1,6 @@
 # Spec: test-profile
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Perfil test instalable
 

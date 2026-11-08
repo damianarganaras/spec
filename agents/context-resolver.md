@@ -1,7 +1,7 @@
 ---
 description: Resolves intake grounding context (Work Item / card) before triage, so the orchestrator classifies and delegates with the real card content
 mode: subagent
-model: commandcode/deepseek/deepseek-v4.1-flash
+model: opencode-go/deepseek-v4.1-flash
 temperature: 0.1
 color: '#8b5cf6'
 tools:

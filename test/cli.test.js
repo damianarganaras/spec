@@ -1129,7 +1129,7 @@ describe('CLI test profile (test-automation-profile)', () => {
     })
   })
 
-  it('check con profile test: tester/reviewer no divergen del overlay y exit 0', () => {
+  it('check con profile test: tester/reviewer no divergen del adaptador y solo reviewer difiere del tier', () => {
     withDir((dir) => {
       run(['install', '--project', dir, '--profile', 'test', '--no-mcp', '--tier', 'minimo'], dir)
       assert.equal(run(['upgrade'], dir).status, 0)
@@ -1138,10 +1138,15 @@ describe('CLI test profile (test-automation-profile)', () => {
       assert.match(r.stdout, /0 faltantes/)
       assert.doesNotMatch(r.stdout, /\.opencode\/agents\/(tester|reviewer)\.md \(frontmatter diverge del adaptador/)
       // Tras upgrade el overlay conserva el modelo del perfil; install/update lo
-      // reescribiria con el tier, asi que el aviso es cierto para esos 2 agentes.
+      // reescribiria con el tier. `tester` ya coincide con la cabeza del tier `minimo`,
+      // asi que el aviso cuenta un solo agente: `reviewer`.
+      const installedModel = (name) => readFileSync(join(dir, '.opencode', 'agents', `${name}.md`), 'utf8')
+        .match(/^model: (.+)$/m)[1].trim()
+      assert.equal(installedModel('tester'), TIER_CHAINS.minimo.tester[0], 'tester coincide con la cabeza del tier')
+      assert.notEqual(installedModel('reviewer'), TIER_CHAINS.minimo.reviewer[0], 'reviewer es el unico que difiere')
       assert.match(
         r.stdout,
-        /⚠ \.opencode\/agents \(tier 'minimo' aplica un modelo distinto al de su fuente en 2 agentes; install\/update reescribirá model:\)/
+        /⚠ \.opencode\/agents \(tier 'minimo' aplica un modelo distinto al de su fuente en 1 agente; install\/update reescribirá model:\)/
       )
     })
   })
@@ -1161,17 +1166,23 @@ describe('CLI test profile (test-automation-profile)', () => {
     })
   })
 
-  it('check sin upgrade: profile test + minimo solo reescribiria el modelo del overlay (2 agentes)', () => {
+  it('check sin upgrade: profile test + minimo solo reescribiria el modelo del overlay (1 agente: reviewer)', () => {
     withDir((dir) => {
       assert.equal(run(['init', '--profile', 'test', '--tier', 'minimo'], dir).status, 0)
       const r = run(['check'], dir)
       assert.equal(r.status, 0)
       assert.match(r.stdout, /0 faltantes/)
       assert.doesNotMatch(r.stdout, /frontmatter diverge del adaptador/)
-      // `minimo` coincide con la canónica: solo el overlay del perfil difiere.
+      // `minimo` coincide con la canónica: solo el overlay del perfil difiere. En el
+      // profile `test`, `tester` ya publica la cabeza del tier; el unico divergente es
+      // `reviewer`.
+      const overlayModel = (name) => readFileSync(join(TEST_DIR, '..', 'profiles', 'test', 'agents', `${name}.md`), 'utf8')
+        .match(/^model: (.+)$/m)[1].trim()
+      assert.equal(overlayModel('tester'), TIER_CHAINS.minimo.tester[0], 'tester coincide con la cabeza del tier')
+      assert.notEqual(overlayModel('reviewer'), TIER_CHAINS.minimo.reviewer[0], 'reviewer es el unico que difiere')
       assert.match(
         r.stdout,
-        /⚠ \.opencode\/agents \(tier 'minimo' aplica un modelo distinto al de su fuente en 2 agentes; install\/update reescribirá model:\)/
+        /⚠ \.opencode\/agents \(tier 'minimo' aplica un modelo distinto al de su fuente en 1 agente; install\/update reescribirá model:\)/
       )
     })
   })
@@ -2355,17 +2366,17 @@ describe('CLI check (G3)', () => {
     })
   })
 
-  it('install minimo sin la cabeza ni el segundo candidato escribe el tercero', () => {
+  it('install minimo sin la cabeza escribe el segundo candidato', () => {
     withDir((dir) => {
       const chain = TIER_CHAINS.minimo.orchestrator
-      const catalog = catalogWithout(dir, [chain[0], chain[1]])
+      const catalog = catalogWithout(dir, [chain[0]])
       const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, { ANCLETO_MODEL_CATALOG: catalog })
       assert.equal(r.status, 0)
       for (const f of readdirSync(join(TEST_DIR, '..', 'agents'))) {
         assert.match(
           readFileSync(join(dir, '.opencode', 'agents', f), 'utf8'),
-          new RegExp(`model: ${chain[2].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
-          `${f}: escribe el tercer candidato`
+          new RegExp(`model: ${chain[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+          `${f}: escribe el segundo candidato`
         )
       }
     })
@@ -2378,7 +2389,8 @@ describe('CLI check (G3)', () => {
       const r = run(['install', '--project', dir, '--no-mcp', '--tier', 'minimo'], dir, { ANCLETO_MODEL_CATALOG: catalog })
       assert.equal(r.status, 1)
       assert.match(r.stderr, /no hay ningún candidato disponible/)
-      assert.match(r.stderr, /commandcode\/deepseek\/deepseek-v4\.1-flash/)
+      assert.ok(r.stderr.includes(chain.join(' -> ')), 'el error nombra la cadena completa')
+      assert.doesNotMatch(r.stderr, /commandcode\/deepseek\/deepseek-v4\.1-flash/)
       assert.equal(existsSync(join(dir, '.opencode', 'agents', 'orchestrator.md')), false)
     })
   })

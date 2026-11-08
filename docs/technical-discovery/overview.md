@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.23.0
+generatedAt: 2026-11-08T16:31:24Z
+pluginVersion: 0.24.0
 skillVersion: '2.3'
 ---
 
@@ -87,7 +87,7 @@ test/                   suite node --test (content guards incluidos)
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
 | Conformidad SDD | Discriminador conformidad-vs-delta y archive sin delta | `agents/orchestrator.md`, `skills/triage-clarifier`, `skills/ancleto-workflow`, `skills/ancleto-continue`, `aspec/specs/prompt-contracts/spec.md` |
-| Merge de specs | Aplicación determinística de `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED` por título exacto; `--dry-run`, `--json` y fail-closed; 0.22.1 agrega preámbulo H1 estructural, contenedor `archive` fail-closed y espaciado único de `ADDED` | `src/core/specs-merge.js`, `src/cli/index.js` → `specsMergeCommand`, `aspec/specs/spec-sync/spec.md` |
+| Merge de specs | Aplicación determinística de `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED` por título exacto; `--dry-run`, `--json` y fail-closed; 0.22.1 agrega preámbulo H1 estructural, contenedor `archive` fail-closed y espaciado único de `ADDED`; 0.24.0 rechaza headings de sección de delta en la canónica para los cuatro tipos | `src/core/specs-merge.js`, `src/cli/index.js` → `specsMergeCommand`, `aspec/specs/spec-sync/spec.md` |
 | Ciclo de archive (0.22.1) | Orden merge/sync → preflight read-only → promoción de decisiones → move → commit; fases A/B del documenter y literales de fallo | `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md`, `skills/ancleto-onboard/SKILL.md`, `aspec/specs/memory-ops/spec.md` |
 | Entorno de máquina | Shell, EOL y tooling del clon | `src/core/machine-env.js` |
 | Assets | 10 agentes, 16 commands, 21 skills, templates y perfiles | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` |
@@ -171,9 +171,13 @@ test/                   suite node --test (content guards incluidos)
     ante el contenedor `archive`. `MODIFIED` reemplaza el bloque completo, `ADDED` idéntico y
     `REMOVED` ausente son no-op, y `RENAMED` cambia sólo el heading. 0.22.1 acepta a lo sumo un H1
     estructural al inicio del delta, rechaza un segundo H1 o contenido suelto, deja exactamente una
-    línea en blanco tras `ADDED` y documenta que la fase de escritura no es transaccional. No crea
-    capabilities nuevas ni modifica deltas, memoria, seed, `package.json`, `specs check` ni
-    affected-set.
+     línea en blanco tras `ADDED` y documenta que la fase de escritura no es transaccional. Desde
+     0.24.0, la fase de plan también rechaza (exit 2, cero escrituras, `--dry-run` incluido) una spec
+     canónica que contenga `## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED
+     Requirements` o `## RENAMED Requirements`; el guard aplica a los cuatro tipos y sólo a la
+     canónica, no al delta. Las canónicas `copilot-support`, `legacy-import` y `test-profile` se
+     normalizaron a `## Requirements`. No crea capabilities nuevas ni modifica deltas, memoria, seed,
+     `package.json`, `specs check` ni affected-set.
 16. **Orden del archive (0.22.1)**: el archive ejecuta merge/sync de specs → preflight read-only de
     las decisiones `## Decisiones` aprobadas → promoción a `.ancleto/memory.db` → move del change →
     commit. La promoción ocurre antes del move para que las refs `path:` sigan resolviendo. Si el
@@ -191,13 +195,19 @@ test/                   suite node --test (content guards incluidos)
     no-array sigue fallando con exit 1). `reconcileLegacyBlocks` preserva el EOL de cada línea
     superviviente y el estado de newline final de la entrada al eliminar un run legacy; sin
     eliminación devuelve el contenido byte a byte.
+19. **Tier `minimo` alineado a la canónica (0.24.0)**: `TIERS.minimo` y la cabeza de
+    `TIER_CHAINS.minimo` quedan en `opencode-go/deepseek-v4.1-flash`, el `model:` que publican los
+    diez `agents/*.md`; `MINIMO_CHAIN` queda con dos candidatos
+    (`opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`) y retira
+    `commandcode/deepseek/deepseek-v4.1-flash`. `install`/`init`/`import --tier minimo` escriben el
+    mismo modelo que la canónica y `check` deja de reportar divergencia.
 
 ## Recorrido de una instalación con tier `minimo`
 
 `ancleto install --project . --tier minimo` → `resolveTierMap('minimo')` carga
 `src/core/model-catalog.json` y elige por agente el primer candidato disponible de
-`TIER_CHAINS.minimo` (`commandcode/deepseek/deepseek-v4.1-flash` →
-`opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`) → si ninguno está,
+`TIER_CHAINS.minimo` (`opencode-go/deepseek-v4.1-flash` →
+`opencode/deepseek-v4.1-flash-free`) → si ninguno está,
 aborta sin escribir modelos inventados → `applyTier` reescribe `model:` en
 `.opencode/agents/*.md` → se persiste `minimo` en `.opencode/.ancleto-tier`.
 

@@ -1,19 +1,19 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-06 (release 0.22.2).
+> Última actualización: 2026-11-07 (release 0.23.0).
 
 ## Prioridad de ejecución
 
 1. **0.20.1 — `fix(cli)`**: guard de escritura en `repairProjectMcp` (`fixed` vacío + sin error → no tocar bytes). Bug contra contrato vigente; test de bytes/mtime; sin delta de spec. Change propuesto: `fix-repair-mcp-noop`.
-2. **0.21.0 — `feat(cli)`**: advisories read-only de deriva legacy (`.opencode/*` histórico; bundle legacy sin intención MCP). Deltas MODIFIED en `project-portability` y `cli-diagnostics`; exit codes sin cambios. Change propuesto: `portability-followup-diagnostics`.
+2. **0.21.0 — `feat(cli)`**: **cerrado en 0.23.0** por `portability-legacy-bundle-advisory` (mitad bundle legacy sin intención MCP). La mitad `.opencode/*` histórico quedó **refutada**: `check` ya imprime `✔ .opencode/agents` en un install sano y el dir faltante ya falla con exit 1.
 3. **Reingeniería P0**: PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`. PR-4 ya está cumplido.
 4. **Reingeniería P1**: CH-00 baseline (runbook, prerrequisito) → CH-06a merge determinístico de delta specs **cerrado en 0.22.0** (`ch-06a-specs-merge-deterministic`) → CH-06b selección de tests por affected-set (diferido) → CH-07 A/B de prefijos/caché/modelos (bloqueado por CH-00).
-5. **Reingeniería P2 colaboración**: CH-08/MEM-06 → T25/T27 (`formatVersion`, reindex) → T20 (idempotencia) → T30 (V1/V2) → CH-10 (matriz de hosts).
+5. **Reingeniería P2 colaboración**: CH-08/MEM-06 (pendiente) → T25 `formatVersion` (**refutado en 0.23.0**) → T27 (reindex, pendiente) → T20 (idempotencia) **cerrado en 0.23.0** → T30 (V1/V2, pendiente) → CH-10 (matriz de hosts, pendiente).
 6. **Reingeniería P2 motor/host restante**: #4 (exclusión mutua de escritores), #6 (tope de verificación / orden archive→merge), #18 (seed stale por diseño).
-7. **Deuda declarada**: MEM-05c–g, CH-09a–h.
+7. **Deuda declarada**: MEM-05c–e pendientes, MEM-05f cerrado, MEM-05g diferido, CH-09a–g pendientes, CH-09h refutado.
 
-> Nota: el paso 2 (0.21.0) es chico y cierra la línea de portabilidad, pero su valor estratégico es menor que P0. Si se quiere llegar antes a PR-5, se puede diferir 0.21.0.
+> Nota: el paso 2 (0.21.0) quedó **cerrado en 0.23.0** por `portability-legacy-bundle-advisory`; su mitad `.opencode/*` fue refutada. La nota histórica de diferirlo ya no aplica.
 
 > **Actualización 0.22.1 (2026-11-06):** se cerró la deuda residual de CH-06a (ítems 1–4) y se documentó el ítem 5 como exclusión explícita; también quedó fijado el orden archive → merge. CH-06b sigue **diferido** (proyección de tests incompleta, sin consumidor probado) y CH-07 sigue **bloqueado por CH-00**.
 
@@ -22,8 +22,8 @@
 | Ítem | Estado | Destino | Evidencia |
 |---|---|---|---|
 | `repairProjectMcp` no reescribe un destino sano | open | 0.20.1 `fix-repair-mcp-noop` | `src/cli/index.js` (`repairProjectMcp`); `aspec/specs/project-portability/spec.md` (entradas sanas no se reescriben) |
-| `.opencode/*` histórico en `installedPaths` | open (advisory / opt-in prune) | 0.21.0 `portability-followup-diagnostics` | `installedHostsFromPaths`; `unionInstalledPaths` |
-| Bundle legacy sin intención MCP host-aware | open (advisory) | 0.21.0 | `importCmd` (`manifest.mcp` vacío) |
+| `.opencode/*` histórico en `installedPaths` | descartado (premisa refutada) | — | `check` ya imprime `✔ .opencode/agents` en install sano; dir faltante ya da `✖ ... (directorio faltante)` con exit 1; contradice `import-installed-paths-union-not-copy` |
+| Bundle legacy sin intención MCP host-aware | cerrado en 0.23.0 | `portability-legacy-bundle-advisory` | `importCmd` emite un advisory no bloqueante cuando `manifest.mcp === undefined`; `mcp: []` sigue silencioso |
 | Consumo runtime de `copilot-mcp.json` | limitación aceptada | documentar | `HOST_MCP_TARGETS`; `docs/technical-discovery/unknowns.md` |
 | Working-context omite reglas por tamaño | aceptado / por diseño | curaduría de memoria (aparte) | renderer de working-context |
 | Extensión VS Code | diferido | no tocar | `aspec/changes/ancleto-vscode-extension/` |
@@ -61,8 +61,9 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
   estable, recuperar el resto por tarea y fallar explícito (con `memory_key`) cuando una regla crítica
   no entra. Detalle y criterio de aceptación: `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` §5.
   Núcleo archivado el 2026-11-02; el "set universal estable" sigue pendiente y queda fuera de 0.22.0: requiere curaduría de memoria (MEM-01) y definición de criticality (CH-09a, diferido), y no es código offline-testeable.
-- **P2 colaboración:** `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10).
-- **P2 motor/host:** T20 idempotencia, T30 V1/V2, CH-10 matriz de hosts, #4, #6, #18.
+  **MEM-05f cerrado en 0.23.0** (`template-legacy-eol-preservation`): `reconcileLegacyBlocks` preserva el EOL por línea y el estado de newline final. **MEM-05g diferido**: inalcanzable — 0 code fences dentro de todo bloque `LOCKED` de `templates/`, `profiles/test/templates/` y `AGENTS.md`/`PRODUCT.md` raíz; sólo input artesanal dispara el cierre temprano.
+- **P2 colaboración:** `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10). **T25 (`formatVersion`) refutado en 0.23.0**: los exports viejos ya importan sin pérdida, `importNodes` ignora claves extra y exige `Array.isArray`, y ningún consumidor lee una versión; se reabre cuando CH-08 defina el lector.
+- **P2 motor/host:** T20 idempotencia **cerrado en 0.23.0** (`memory-record-idempotency`); T30 V1/V2, CH-10 matriz de hosts, #4, #6, #18 pendientes.
 - **Deuda:** MEM-05c–g, CH-09a–h.
 
 ### Deuda residual de CH-06a — cerrada en 0.22.1
@@ -113,3 +114,27 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **B — clasificación `import('node:sqlite')`:** **NO-OP** — ya estaba implementado (`staticCallSpecifier` acepta literal puro; los no relativos suman `externalCount`). Reproducido: `import('node:sqlite')` → externo; el reporte real no lo lista en `unresolved` (22 unresolved: 8 `import(<dynamic>)`, 4 `require(<dynamic>)`, 10 relativos). Cierra como "ya conforme", no como trabajo pendiente.
 - **C — atomicidad multi-archivo de `specs merge`:** rechazado otra vez — temp+backup+rollback no da atomicidad real entre renames, agrega sidecars fuera del alcance declarado y convertiría una exclusión explícita en garantía no sostenible. La propiedad valiosa es el fail-closed del plan con cero escrituras.
 - **D–H:** sin evidencia + no offline-testeable (CH-08/MEM-06 requiere multi-worktree; MEM-05/MEM-01/CH-09a requieren curaduría de DB y aprobación; CH-00/CH-07 no publicables; P2 motor/host y deuda CH-09/MEM-05c–g sin trigger).
+
+## Relación con 0.23.0
+
+0.23.0 contiene tres changes, todos archivados. No agrega comandos ni flags nuevos.
+
+- **`memory-record-idempotency` (T20):** `recordNode` trata la reescritura del mismo `memory_key` con `(type, scope, content, justification)` exactamente iguales como no-op — sin insert, sin supersede, `superseded: 0`, y devuelve los valores persistidos incluido el `created_at` original; cualquier diferencia sigue supersediendo. `createdAt`/`source`/`confidence` quedan fuera de la identidad; orden de validación y forma de retorno sin cambios. Delta en `memory-engine`: `Idempotencia de reescritura idéntica en recordNode`.
+- **`portability-legacy-bundle-advisory`:** `import` emite **un** advisory no bloqueante cuando `manifest.mcp === undefined` (bundle previo a la intención MCP host-aware); exit code y salida escrita sin cambios; `mcp: []` sigue silencioso; no-array sigue exit 1. Delta en `project-portability`: `Aviso de bundle legacy sin intención MCP en el import`. Al mergear se normalizó en la canónica un `## ADDED Requirements` filtrado a `## Requirements`.
+- **`template-legacy-eol-preservation` (MEM-05f):** `reconcileLegacyBlocks` preserva el EOL original de cada línea sobreviviente al eliminar un run legacy (antes rejuntaba todo el archivo con el EOL dominante: un archivo 2×CRLF/6×LF quedaba todo CRLF) y preserva exactamente el estado de newline final de la entrada; el camino sin remoción sigue byte-idéntico. Delta en `prompt-contracts`: `Preservación del fin de línea por línea al reconciliar bloques legacy`.
+- **Validaciones:** suite 1161 total / 1156 pass / 0 fail / 5 skips preexistentes (antes 1142/1137/5/0); `npm run lint` passed; format `not-configured`; typecheck n/a. Review en dos rondas, aprobado; R2 levantó dos hallazgos (borde de newline en EOF y oráculos delgados), ambos cerrados con código/tests.
+- **Versiones y verificaciones:** tag anotado `v0.23.0` @ merge commit `ce857ebede4cf8c85161b4082817720f4343bac9`; main == origin/main == tag; run de publish `42352804831` success con `+ @ancleto/spec@0.23.0`; npm version 0.23.0, `dist-tags.latest` 0.23.0, `gitHead` == merge commit; tarball HTTP 200. `ancleto upgrade` corrió limpio sin cambios en la superficie de producto trackeada.
+- **Archivos:** `aspec/changes/archive/2026-11-07-memory-record-idempotency/`, `.../2026-11-07-portability-legacy-bundle-advisory/`, `.../2026-11-07-template-legacy-eol-preservation/`.
+- **Decisiones promovidas a memoria:** `recordnode-identical-rewrite-is-noop`, `recordnode-identity-excludes-createdat-source-confidence`, `recordnode-identical-noop-suppresses-supersede-only`, `legacy-bundle-missing-mcp-key-advisory-only`, `reconcile-legacy-preserves-per-line-eol`.
+- **Seed:** regenerado y alineado `READY / impact none`; 843 archivos / 833 fuentes; `pluginVersion` 0.23.0 en todos los docs.
+- **Memoria:** 315 nodos activos / 667 refs / 0 sin resolver; 40 reglas project, 8 renderizadas, 32 omitidas (gap MEM-05 sin cambios).
+
+**Descartado / diferido en 0.23.0 (sigue pendiente, no hecho):**
+
+- **A1 — advisory para `.opencode/*` en `installedPaths`:** **refutado** — `check` ya imprime `✔ .opencode/agents` en un install moderno sano; un advisory dispararía en todo install correcto, y el dir faltante ya da `✖ ... (directorio faltante)` con exit 1. Además contradice la decisión `import-installed-paths-union-not-copy` (registrar esos paths es historia multi-host correcta). Registrado como decisión descartada `opencode-installed-paths-not-drift`.
+- **B / T25 — `formatVersion` en `memory export`:** **refutado** — reproducido: los exports viejos ya importan sin pérdida, `importNodes` ignora claves extra de nodo y exige `Array.isArray` (un envelope lanza), y ningún consumidor lee una versión. Un marcador sin lector es especulativo; se reabre cuando CH-08 defina el lector.
+- **MEM-05g / D-g — fences dentro de un bloque `LOCKED`:** **diferido** — inalcanzable: 0 code fences dentro de todo bloque `LOCKED` de `templates/`, `profiles/test/templates/` y `AGENTS.md`/`PRODUCT.md` raíz; sólo input artesanal dispara el cierre temprano. Registrado como decisión descartada `locked-inner-fence-hardening-deferred`.
+- **E — CH-09e / CH-09h:** CH-09h **refutado** — el índice parcial `UNIQUE` se crea en el mismo array `MIGRATIONS` que la tabla (`database.js:20-21`) y un insert activo duplicado se rechaza (`UNIQUE constraint failed`), así que dos activas por clave son físicamente imposibles en cualquier DB creada por este código. CH-09e sin consumidor (`consolidate` ya agrupa por `type` + contenido normalizado) y su disparador documentado es "cuando un consumidor necesite desambiguar por tipo".
+- **F / #6:** la mitad de orden ya está corregida (merge → preflight read-only → promover → mover → commit) y guardada en cinco archivos canónicos; la formulación vieja "archive→merge" la contradice. La mitad "tope de verificación" no tiene oráculo offline medible.
+- **G — CH-10 / T30:** CH-10 necesita una matriz multi-host real (no offline-testeable); la premisa de T30 no coincide con el código (`opencode` es un adapter passthrough que nunca mezcla `bash`/`task` con `shell`/`subagent`).
+- **H — CH-08/MEM-06, MEM-05/MEM-01/CH-09a, CH-00/CH-07:** diferimientos previos sin cambios (multi-worktree / curaduría de DB con aprobación / no publicable en npm).

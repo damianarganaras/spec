@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
 covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
 sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.23.0
+generatedAt: 2026-11-08T16:31:24Z
+pluginVersion: 0.24.0
 skillVersion: '2.3'
 ---
 
@@ -24,7 +24,9 @@ merge de specs tampoco abre ni escribe la DB. En 0.22.1 la novedad es de **contr
 promoción de `## Decisiones` aprobadas ocurre antes del move y su secuencia vive en `agents/` y
 `skills/`, no en el engine. El esquema, el recall y las ops no cambiaron. **0.23.0** sí toca el
 engine: `recordNode` trata como no-op la reescritura idéntica de una `memory_key` (ver
-"Escritura y supersesión"); el esquema, el recall y las ops siguen sin cambios.
+"Escritura y supersesión"); el esquema, el recall y las ops siguen sin cambios. **0.24.0** tampoco
+toca el motor: la alineación del tier `minimo` y el guard de `specs merge` viven en
+`src/core/tier-models.js` y `src/core/specs-merge.js`, fuera de `src/core/memory/**`.
 
 ## Recorrido relevante
 

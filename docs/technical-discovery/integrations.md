@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.23.0
+generatedAt: 2026-11-08T16:31:24Z
+pluginVersion: 0.24.0
 skillVersion: '2.3'
 ---
 
@@ -47,7 +47,7 @@ skillVersion: '2.3'
 - `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
-  esta generación se produjo con el fallback `npx` y quedó comprimido (833 fuentes, ~38.330
+  esta generación se produjo con el fallback `npx` y quedó comprimido (839 fuentes, ~38.408
   tokens); los cuerpos de funciones se eliden y Repomix aplica además sus ignores por defecto
   (incluye `**/*.md`), por eso el pack no contiene Markdown (ver `unknowns.md`).
 
@@ -135,6 +135,9 @@ skillVersion: '2.3'
   (`aspec/changes/**` → `aspec/specs/**`), sin red, procesos externos ni servicios. No consume
   MCP, git, opencode ni Repomix. El orden del archive de 0.22.1 es una secuencia de contratos de
   prompt y estado local (`.ancleto/memory.db`), sin integración nueva.
+- **0.24.0 no agrega integraciones**: la alineación del tier `minimo` sólo cambia valores en
+  `src/core/tier-models.js`, y el guard de headings de delta es una validación local de
+  `src/core/specs-merge.js` sobre archivos de `aspec/specs/**`. Sin red, procesos ni servicios.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee

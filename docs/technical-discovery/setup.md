@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-06T20:07:32Z
-pluginVersion: 0.23.0
+generatedAt: 2026-11-08T16:31:24Z
+pluginVersion: 0.24.0
 skillVersion: '2.3'
 ---
 
@@ -144,10 +144,11 @@ del paquete instalado.
   `stats failures`, `projects`.
 - **Memoria**: `memory context|list|doctor|curate|export|import|gc|snapshot|merge|consolidate`,
   `mcp`.
-- **Tiers**: `normal` (opencode-go), `minimo` (cadena contra catálogo), `gratis`
-  (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin `--tier`
-  usa `normal`, mientras el default publicado de `agents/*.md` es
-  `commandcode/deepseek/deepseek-v4.1-flash` (`README.md`).
+- **Tiers**: `normal` (opencode-go), `minimo` (cadena de dos candidatos
+  `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free` contra el catálogo),
+  `gratis` (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin
+  `--tier` usa `normal`, mientras el default publicado de `agents/*.md` es
+  `opencode-go/deepseek-v4.1-flash` (`README.md`).
 - **Conformidad (0.21.0)**: no hay comando CLI de archive. El flujo es agent-driven y se apoya en
   `agents/orchestrator.md` y las skills de triage/archive/workflow/continue; `ancleto specs check`
   sólo valida que los specs canónicos usen los keywords literales en inglés. Un change de
@@ -159,7 +160,12 @@ del paquete instalado.
   no-op, `1` por uso o I/O y `2` por conflicto fail-closed (título ambiguo, delta inválido,
   capability sin spec, change inexistente/ambiguo, slug inválido o contenedor `archive`). 0.22.1
   acepta a lo sumo un H1 estructural al inicio del delta, deja una sola línea en blanco tras
-  `ADDED` y declara que sólo el plan es atómico; no crea capabilities nuevas ni agrega flags.
+  `ADDED` y declara que sólo el plan es atómico; no crea capabilities nuevas ni agrega flags. Desde
+  0.24.0, la fase de plan rechaza con exit 2 y cero escrituras (también con `--dry-run`) toda spec
+  canónica que contenga `## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED
+  Requirements` o `## RENAMED Requirements`; el guard cubre los cuatro tipos y no se aplica al delta.
+  `copilot-support`, `legacy-import` y `test-profile` ya usan `## Requirements`. `--json` mantiene
+  `ok:false` y `errors:[...]`, sin campos nuevos.
 
 El tier `gratis` está pensado para subagentes: un modelo free sobre un agente con `mode: primary`
 (por ejemplo el `orchestrator`, cuyo frontmatter canónico declara `mode: primary`) puede responder
@@ -183,9 +189,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.23.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.24.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-la fija `package.json` = `0.23.0`.
+la fija `package.json` = `0.24.0`.
 
 ## Entorno de máquina
 

@@ -2860,3 +2860,158 @@ describe('content guards - specs canónicas sin headings de delta (specs-merge-c
     }
   })
 })
+
+describe('content guards - archive sync via specs merge (archive-sync-via-specs-merge)', () => {
+  const readFile = (...parts) => readFileSync(join(ROOT, ...parts), 'utf8')
+
+  const SURFACES = [
+    { label: 'skills/ancleto-archive/SKILL.md', text: () => readFile('skills', 'ancleto-archive', 'SKILL.md') },
+    { label: 'skills/ancleto-bulk-archive/SKILL.md', text: () => readFile('skills', 'ancleto-bulk-archive', 'SKILL.md') },
+    { label: 'agents/documenter.md', text: () => readFile('agents', 'documenter.md') }
+  ]
+
+  // Las formas concretas del bypass que el ruteo elimina. La mera lista de headings de
+  // delta no es una instruccion de edicion y no se prohibe.
+  const MANUAL_EDIT_INSTRUCTIONS = [
+    /edit `aspec\/specs\/<capability>\/spec\.md`:/,
+    /apply the delta to `aspec\/specs\/<capability>\/spec\.md`/,
+    /If needed, update the relevant source-of-truth specs/
+  ]
+
+  // MODIFIED reemplaza el bloque completo: una promesa de preservacion contradice la
+  // spec canonica y produce una spec distinta de la real.
+  const PRESERVATION_CLAIM = /preserv\w*\b[^.\n]{0,60}(?:scenarios not mentioned|unmentioned scenarios)/i
+
+  function guardRoutesThroughMerge(text) {
+    assert.match(text, /ancleto specs merge --change/, 'debe rutear el sync por specs merge')
+    assert.match(text, /never edit `aspec\/specs\/<capability>\/spec\.md` by hand/i, 'debe prohibir la edicion manual')
+    assert.match(
+      text,
+      /never apply `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED` yourself/i,
+      'debe prohibir aplicar las cuatro operaciones a mano'
+    )
+    for (const pattern of MANUAL_EDIT_INSTRUCTIONS) {
+      assert.doesNotMatch(text, pattern, `reintroduce la instruccion de edicion manual: ${pattern}`)
+    }
+    assert.doesNotMatch(text, PRESERVATION_CLAIM, 'no debe prometer que MODIFIED preserva scenarios no mencionados')
+  }
+
+  // El camino sin delta no se toca: sigue reportando `sin delta` y el skip de bulk §5c.
+  function guardNoDeltaPath(text) {
+    assert.match(text, /`sin delta` naming the cited `spec:<capability>#<requirement>`/)
+  }
+
+  it('las dos skills y el documenter rutean el sync por specs merge y no editan a mano', () => {
+    for (const surface of SURFACES) guardRoutesThroughMerge(surface.text())
+
+    const archive = SURFACES[0].text()
+    // Mutacion 1: revertir la invocacion a la edicion manual de las cuatro operaciones.
+    assertMutationBreaks(guardRoutesThroughMerge, archive, [
+      [
+        'run `ancleto specs merge --change <name> --json`',
+        'edit `aspec/specs/<capability>/spec.md`:\n  - `## ADDED Requirements` → add new blocks'
+      ]
+    ])
+    // Mutacion 2: conservar el merge pero reintroducir la promesa de preservacion.
+    assertMutationBreaks(guardRoutesThroughMerge, archive, [
+      [
+        'never apply `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED` yourself',
+        'MODIFIED Requirements → update the matching requirement, preserving scenarios not mentioned in the delta'
+      ]
+    ])
+    // Mutacion 3: la misma reversión en el bulk y en el documenter rompe el guard.
+    assertMutationBreaks(guardRoutesThroughMerge, SURFACES[1].text(), [
+      [
+        'run `ancleto specs merge --change <name> --json`',
+        'apply the delta to `aspec/specs/<capability>/spec.md` (ADDED adds; MODIFIED updates preserving unmentioned scenarios)'
+      ]
+    ])
+    assertMutationBreaks(guardRoutesThroughMerge, SURFACES[2].text(), [
+      ['`ancleto specs merge --change {change-name} --json`', 'If needed, update the relevant source-of-truth specs']
+    ])
+  })
+
+  it('el camino sin delta conserva `sin delta` en archive y documenter, y el skip de bulk §5c', () => {
+    const archive = SURFACES[0].text()
+    const bulk = SURFACES[1].text()
+    const documenter = SURFACES[2].text()
+    guardNoDeltaPath(archive)
+    guardNoDeltaPath(documenter)
+    assert.match(bulk, /neither → skip sync, warn the user/, 'el skip de §5c no debe cambiar')
+
+    assertMutationBreaks(guardNoDeltaPath, archive, [['`sin delta` naming the cited', 'the citation']])
+  })
+
+  // Texto CORE del contrato fail-closed: si desaparece, el archive puede mover el change
+  // sin sincronizar, perder el motivo del conflicto o frenar el resto del lote.
+  function guardFailClosedCore(archiveText, bulkText) {
+    const archive = normalize(archiveText)
+    const bulk = normalize(bulkText)
+    for (const [label, t] of [['ancleto-archive', archive], ['ancleto-bulk-archive', bulk]]) {
+      assert.match(t, /any non-zero exit code/i, `${label}: falta el corte por exit code != 0`)
+      assert.match(t, /in particular 2 for a fail-closed conflict/i, `${label}: falta el abort por exit 2`)
+      assert.match(
+        t,
+        /report the capability, the requirement and the reason/i,
+        `${label}: falta el reporte de capability + requirement + reason`
+      )
+      assert.match(t, /`changed:false`/, `${label}: falta la idempotencia con changed:false`)
+    }
+    // (a) cada skill aborta SU change sin preflight, sin promoción y sin move.
+    assert.match(
+      archive,
+      /ABORT the archive of this change\. Do not run the preflight, do not promote, do not move the directory/,
+      'ancleto-archive: el abort debe excluir preflight, promoción y move'
+    )
+    assert.match(
+      bulk,
+      /record that change as failed, do not run its preflight or promotion, do not move it/,
+      'ancleto-bulk-archive: el abort debe excluir preflight, promoción y move'
+    )
+    // (d) el fallo de un change no frena el resto del lote.
+    assert.match(bulk, /continue with the rest of the batch/, 'ancleto-bulk-archive: el lote debe continuar')
+  }
+
+  it('el fail-closed de specs merge queda pineado en archive y bulk archive', () => {
+    const archive = SURFACES[0].text()
+    const bulk = SURFACES[1].text()
+    assert.doesNotThrow(() => guardFailClosedCore(archive, bulk))
+
+    // (a) revertir el abort del archive rompe el guard.
+    assertMutationBreaks(
+      (text) => assert.match(normalize(text), /ABORT the archive of this change\. Do not run the preflight, do not promote, do not move the directory/),
+      archive,
+      [['Do not run the preflight, do not promote, do not move the directory', 'Run the preflight and the promotion, then move the directory']]
+    )
+    // (a) revertir el abort per-change del bulk y (d) frenar el lote rompen el guard.
+    assertMutationBreaks(
+      (text) => assert.match(normalize(text), /record that change as failed, do not run its preflight or promotion, do not move it/),
+      bulk,
+      [['record that change as failed, do not run its preflight or promotion, do not move it', 'continue with its preflight, promotion and move']]
+    )
+    assertMutationBreaks(
+      (text) => assert.match(normalize(text), /continue with the rest of the batch/),
+      bulk,
+      [['continue with the rest of the batch', 'abort the whole batch', { all: true }]]
+    )
+    // (b) el reporte capability + requirement + reason no puede degradarse.
+    assertMutationBreaks(
+      (text) => assert.match(normalize(text), /report the capability, the requirement and the reason/i),
+      bulk,
+      [['report the capability, the requirement and the reason', 'report the failure']]
+    )
+    // (c) la idempotencia no puede perderse.
+    assertMutationBreaks(
+      (text) => assert.match(normalize(text), /`changed:false`/),
+      archive,
+      [['`changed:false` on a re-run means it was already applied', 'a re-run applies it again']]
+    )
+  })
+
+  it('el documenter ya no instruye el manejo manual de secciones delta y rutea por specs merge', () => {
+    const t = SURFACES[2].text()
+    assert.doesNotMatch(t, /Handle these delta sections carefully/i, 'no debe quedar la instrucción manual removida')
+    assert.doesNotMatch(t, /ADDED\/MODIFIED\/REMOVED/, 'no debe reaparecer la lista manual de operaciones')
+    assert.match(t, /ancleto specs merge --change \{change-name\} --json/, 'debe rutear el sync por specs merge')
+  })
+})

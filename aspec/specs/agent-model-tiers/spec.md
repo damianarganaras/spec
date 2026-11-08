@@ -89,8 +89,14 @@ la canónica más las notas de host que correspondan)._
 El tier `minimo` SHALL resolverse por una cadena ordenada de candidatos por agente, declarada en
 `TIER_CHAINS` y exportada desde `src/core/tier-models.js`. Para cada agente, el sistema SHALL elegir
 el primer candidato de la cadena que figure en el snapshot de catálogo verificado; la cadena inicial
-SHALL ser `commandcode/deepseek/deepseek-v4.1-flash` → `opencode-go/deepseek-v4.1-flash` →
-`opencode/deepseek-v4.1-flash-free`.
+SHALL ser `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`.
+
+La cabeza de la cadena SHALL ser el modelo que publica la canónica `agents/*.md`. Para los diez
+agentes, `TIERS.minimo[agente]` SHALL ser igual al `model:` de `agents/<agente>.md` y SHALL ser igual
+a la cabeza de `TIER_CHAINS.minimo[agente]`. El identificador
+`commandcode/deepseek/deepseek-v4.1-flash` NO SHALL figurar como candidato de la cadena: el proveedor
+dejó de usarse y la canónica ya migró a `opencode-go/deepseek-v4.1-flash`. La tabla de tiers es
+derivada y NO SHALL declarar un modelo que la canónica no publique.
 
 La forma de `TIERS` NO SHALL cambiar: cada tier SHALL seguir siendo un objeto plano agente→string y
 `TIERS.minimo[agente]` SHALL conservar la cabeza de su cadena. La resolución SHALL exponerse como una
@@ -108,21 +114,17 @@ escriben `model:`").
 
 #### Scenario: La cabeza de la cadena está disponible
 
-- **WHEN** el catálogo contiene `commandcode/deepseek/deepseek-v4.1-flash`
+- **WHEN** el catálogo contiene `opencode-go/deepseek-v4.1-flash`
 - **THEN** la resolución de `minimo` elige ese ID para cada agente
 - **AND** el modelo escrito coincide con la cabeza declarada en `TIERS.minimo`
+- **AND** coincide con el `model:` de `agents/<agente>.md`
 
-#### Scenario: La cabeza no está disponible y el segundo candidato sí
+#### Scenario: La cabeza no está disponible y el candidato restante sí
 
-- **WHEN** el catálogo no contiene la cabeza de la cadena pero sí contiene `opencode-go/deepseek-v4.1-flash`
-- **THEN** la resolución de `minimo` elige `opencode-go/deepseek-v4.1-flash` para cada agente
-- **AND** no se escribe la cabeza ausente
-
-#### Scenario: Sólo el tercer candidato está disponible
-
-- **WHEN** el catálogo no contiene ni la cabeza ni el segundo candidato pero sí `opencode/deepseek-v4.1-flash-free`
+- **WHEN** el catálogo no contiene la cabeza de la cadena pero sí contiene
+  `opencode/deepseek-v4.1-flash-free`
 - **THEN** la resolución de `minimo` elige `opencode/deepseek-v4.1-flash-free` para cada agente
-- **AND** no se escribe ningún candidato ausente
+- **AND** no se escribe la cabeza ausente ni `commandcode/deepseek/deepseek-v4.1-flash`
 
 #### Scenario: Ningún candidato de la cadena está en el catálogo
 

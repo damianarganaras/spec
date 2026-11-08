@@ -866,3 +866,14 @@ varianza es inmedible con ese N.
 Este backlog **no** autoriza escrituras. La ejecución empieza por abrir
 `aspec/changes/reingenieria-memoria-first/` y por el snapshot de PR-1. Todo ítem que toque
 `.ancleto/memory.db` requiere la aprobación humana explícita que el runbook MEM-01 documenta.
+
+## Actualización 0.24.0 (2026-11-08)
+
+Nota mínima de cierre del release 0.24.0; este documento NO se reconcilia.
+
+- **#4 (exclusión mutua de escritores):** sigue diferido — sólo prosa, sin mutex ejecutable reproducible offline.
+- **#18 (seed stale por diseño):** sigue diferido — el release ya regenera el seed post-bump; cambiar el detector invalidaría estados persistidos.
+- **T27 (reindex desde proposals):** sigue diferido — sin consumidor e2e offline; requiere MEM-01.
+- **CH-06b (proyección `--tests`):** sigue diferido (razón estructural, tercera vez).
+- **Hallazgo nuevo:** el flujo de archive (`skills/ancleto-archive` / `ancleto-bulk-archive`) aplica deltas editando la canónica directamente y no pasa por `specs merge`, así que el guard de heading de delta no lo cubre.
+- **NO-OP confirmados:** item 1 `repairProjectMcp` (ya implementado/archivado en 0.20.1) y T30 V1/V2 (premisa refutada).

@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-08T16:31:24Z
-pluginVersion: 0.24.0
+generatedAt: 2026-11-08T21:55:07Z
+pluginVersion: 0.25.0
 skillVersion: '2.3'
 ---
 
@@ -87,7 +87,7 @@ test/                   suite node --test (content guards incluidos)
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
 | Conformidad SDD | Discriminador conformidad-vs-delta y archive sin delta | `agents/orchestrator.md`, `skills/triage-clarifier`, `skills/ancleto-workflow`, `skills/ancleto-continue`, `aspec/specs/prompt-contracts/spec.md` |
-| Merge de specs | Aplicación determinística de `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED` por título exacto; `--dry-run`, `--json` y fail-closed; 0.22.1 agrega preámbulo H1 estructural, contenedor `archive` fail-closed y espaciado único de `ADDED`; 0.24.0 rechaza headings de sección de delta en la canónica para los cuatro tipos | `src/core/specs-merge.js`, `src/cli/index.js` → `specsMergeCommand`, `aspec/specs/spec-sync/spec.md` |
+| Merge de specs | Aplicación determinística de `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED` por título exacto; `--dry-run`, `--json` y fail-closed; 0.22.1 agrega preámbulo H1 estructural, contenedor `archive` fail-closed y espaciado único de `ADDED`; 0.24.0 rechaza headings de sección de delta en la canónica para los cuatro tipos; desde 0.25.0 es la única vía de sync de delta del archive | `src/core/specs-merge.js`, `src/cli/index.js` → `specsMergeCommand`, `aspec/specs/spec-sync/spec.md` |
 | Ciclo de archive (0.22.1) | Orden merge/sync → preflight read-only → promoción de decisiones → move → commit; fases A/B del documenter y literales de fallo | `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md`, `skills/ancleto-onboard/SKILL.md`, `aspec/specs/memory-ops/spec.md` |
 | Entorno de máquina | Shell, EOL y tooling del clon | `src/core/machine-env.js` |
 | Assets | 10 agentes, 16 commands, 21 skills, templates y perfiles | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` |
@@ -199,8 +199,14 @@ test/                   suite node --test (content guards incluidos)
     `TIER_CHAINS.minimo` quedan en `opencode-go/deepseek-v4.1-flash`, el `model:` que publican los
     diez `agents/*.md`; `MINIMO_CHAIN` queda con dos candidatos
     (`opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`) y retira
-    `commandcode/deepseek/deepseek-v4.1-flash`. `install`/`init`/`import --tier minimo` escriben el
-    mismo modelo que la canónica y `check` deja de reportar divergencia.
+     `commandcode/deepseek/deepseek-v4.1-flash`. `install`/`init`/`import --tier minimo` escriben el
+     mismo modelo que la canónica y `check` deja de reportar divergencia.
+20. **Archive ruteado y ayuda sin ejecución (0.25.0)**: el sync de delta del archive y del
+    bulk-archive se hace exclusivamente con `ancleto specs merge --change <slug>`; el guard canónico
+    fail-closed aplica también a ese camino y un exit no cero aborta el archive antes del preflight,
+    la promoción y el move. En paralelo, un guard central en el dispatch (`SUBCOMMAND_HELP` +
+    `wantsHelp`) hace que `--help`/`-h` en los subcomandos que mutan estado imprima el uso, salga con
+    exit 0 y no escriba nada; `discovery` conserva su handler y la ayuda global su propio camino.
 
 ## Recorrido de una instalación con tier `minimo`
 

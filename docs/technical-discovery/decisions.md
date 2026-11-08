@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-08T16:31:24Z
-pluginVersion: 0.24.0
+generatedAt: 2026-11-08T21:55:07Z
+pluginVersion: 0.25.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.24.0)
+## Modelos y tiers (estado 0.25.0)
 
 ### Tabla y cadenas
 
@@ -101,9 +101,10 @@ skillVersion: '2.3'
   red ni ejecuta procesos.
 - El guard estructural `test/agent-model-coherence.test.js` + `test/model-catalog.test.js` detecta
   IDs de `TIERS`, `TIER_CHAINS`, `agents/*.md` o `profiles/*/agents/*.md` ausentes del snapshot.
-- **0.21.0–0.24.0 no modifican** el snapshot del catálogo: los cambios de 0.21.0 viven en contratos
+- **0.21.0–0.25.0 no modifican** el snapshot del catálogo: los cambios de 0.21.0 viven en contratos
   de prompt, `agents/` y `skills/`; los de 0.22.0 y 0.22.1, en el merge de specs y en el orden del
-  archive; 0.24.0 sólo alinea los valores de `TIERS.minimo`/`MINIMO_CHAIN` (no el snapshot).
+  archive; 0.24.0 sólo alinea los valores de `TIERS.minimo`/`MINIMO_CHAIN` (no el snapshot); 0.25.0
+  sólo rutea el sync del archive por `specs merge` y agrega el guard de `--help`.
 
 ### Integridad de IDs declarados (0.18.12, consolidada en 0.18.13)
 
@@ -900,6 +901,43 @@ un tier); el segundo es patch-class (vuelve fail-closed un estado que el merge y
   `repair-mcp-noop-already-shipped` como NO-OP: el predicado de no-escritura de `repairProjectMcp`
   ya estaba implementado y no se reabre.
 
+## Archive ruteado y ayuda sin ejecución (0.25.0)
+
+Changes archivados: `2026-11-08-archive-sync-via-specs-merge` (delta de `prompt-contracts`) y
+`2026-11-08-cli-subcommand-help-guards` (delta de `cli-diagnostics`). Ambos son patch-class: no
+agregan comandos ni flags y no cambian el formato de ningún artefacto.
+
+### Sync de delta al archivar ruteado por `specs merge`
+
+- El requirement “Sync de delta al archivar ruteado por specs merge” de
+  `aspec/specs/prompt-contracts/spec.md` fija que, durante `Archive` y Change Archive, la única vía
+  de escritura sobre `aspec/specs/<capability>/spec.md` es `ancleto specs merge --change <slug>`.
+  Nunca se edita la canónica a mano ni se aplican `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED`.
+- `skills/ancleto-archive` y `skills/ancleto-bulk-archive` invocan el comando (una vez por change en
+  bulk, en el orden determinado); `agents/documenter.md` delega el sync en la fase A. Un exit code
+  distinto de 0 —en particular 2 por fail-closed— **aborta** el archive de ese change: no hay
+  preflight, ni promoción, ni move.
+- Si el CLI no está disponible, el archive se detiene y reporta el bloqueo; no hay fallback de
+  edición manual.
+- Un change de conformidad (sin bloque de delta) no invoca `specs merge`. La skill standalone
+  `skills/ancleto-sync-specs` y el modo Standalone del documenter no cambian.
+- Riesgo: el guard canónico de 0.24.0 ahora también cubre el camino de archive; una canónica con
+  heading de sección de delta bloquea el archive completo en vez de dejar una escritura parcial.
+
+### `--help`/`-h` en subcomandos que mutan estado
+
+- El requirement “Manejo de `--help` sin ejecución en subcomandos que mutan estado” de
+  `aspec/specs/cli-diagnostics/spec.md` cubre `install`, `update`, `upgrade`, `init`, `memory`
+  (incl. subcomandos), `import`, `export`, `mcp`, `specs` a secas, `specs merge`, `projects`
+  (incl. subcomandos) y el alias `list --projects`.
+- El guard es central en el dispatch (`SUBCOMMAND_HELP` + `wantsHelp`, `src/cli/index.js`): imprime
+  el uso en **stdout**, sale con **exit 0** y no ejecuta el comando, sin escribir `.ancletorc` ni
+  `.opencode/**`. `-h` es equivalente a `--help` en todo el conjunto.
+- `discovery --help` conserva su handler y su texto; la ayuda global (`ancleto --help`, `-h` o sin
+  argumentos) conserva `HELP`. `check`, `doctor`, `stats`, `affected`, `list --help` y
+  `specs check --help` quedan fuera del guard, igual que las invocaciones sin flag, cuyo parseo,
+  errores y exit codes no cambian.
+
 ## Superficies del `model:` (nota operativa)
 
 `AGENTS.md` describe tres superficies: `agents/*.md` (canónica publicada), `.opencode/agents/*.md`
@@ -951,8 +989,8 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 839 fuentes, ~38.408 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 849 archivos (aspec 279, docs 21, test 27, src 19, etc.).
+- **Pack actual**: tier `minimo`, 845 fuentes, ~38.610 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 855 archivos (aspec 285, docs 21, test 27, src 19, etc.).
 
 ## Lint y publicación
 
@@ -1011,20 +1049,21 @@ sin `--tier` es `normal`.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.24.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.25.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
   `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue
   reemplazándose porque no se agregó parseo tolerante.
 - **Conformidad 0.21.0**: la compuerta mecánica no prueba relevancia semántica ni cubre un archive
   ejecutable; la aceptación depende de contratos de texto y content guards. `MEM-01` queda fuera.
-- **Merge de specs 0.22.0–0.24.0**: el comando exige specs canónicos en inglés y un título exacto;
+- **Merge de specs 0.22.0–0.25.0**: el comando exige specs canónicos en inglés y un título exacto;
   no repara specs traducidos ni crea capabilities. La no-escritura de `--dry-run`, la idempotencia y
   la atomicidad acotada al plan se describen desde el código y la spec, no desde una corrida
   observada en esta generación. El contenedor `archive` falla cerrado por identidad de path. El
   guard 0.24.0 rechaza la canónica con heading de sección de delta pero no la normaliza; la
-  reparación es de higiene del repositorio y el content guard la sostiene. No cubre a las skills de
-  archive que editan `aspec/specs/**` directamente sin pasar por `mergeSpecText`.
+  reparación es de higiene del repositorio y el content guard la sostiene. Desde 0.25.0 las skills
+  de archive ya no editan `aspec/specs/**` directamente: invocan `specs merge` y abortan el archive
+  ante un exit no cero, así que el guard alcanza también ese camino.
 - **Orden del archive 0.22.1**: la corrección vive en contratos de prompt (agentes y skills), no en
   `src/`; la aceptación se apoya en `test/content-guards.test.js`, que no se ejecutó en esta
   generación. Editar sólo `agents/`/`skills/` y regenerar con `ancleto upgrade`; no tocar

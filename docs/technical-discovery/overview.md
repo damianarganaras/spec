@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-08T21:55:07Z
-pluginVersion: 0.25.0
+generatedAt: 2026-11-09T01:42:25Z
+pluginVersion: 0.26.0
 skillVersion: '2.3'
 ---
 
@@ -207,6 +207,11 @@ test/                   suite node --test (content guards incluidos)
     la promoción y el move. En paralelo, un guard central en el dispatch (`SUBCOMMAND_HELP` +
     `wantsHelp`) hace que `--help`/`-h` en los subcomandos que mutan estado imprima el uso, salga con
     exit 0 y no escriba nada; `discovery` conserva su handler y la ayuda global su propio camino.
+21. **`seedMapPresent` state-independent (0.26.0)**: `discovery --check` calcula `seedMapPresent`
+    antes de clasificar el estado, así que un `seed-map.json` con `docs` objeto plano da `true` en
+    `READY`, `STALE`, `PARTIAL` y `MISSING`; `readSeedMap` rechaza un `docs` que no sea objeto plano
+    (arreglo o `null`). `affectedDocs` sigue dependiendo de `changedAreas` y sólo se puebla en
+    `STALE`.
 
 ## Recorrido de una instalación con tier `minimo`
 

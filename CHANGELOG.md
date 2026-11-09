@@ -2,6 +2,11 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.26.0] - 2026-11-08
+
+### Fixed
+- **`ancleto discovery --check` reporta `seedMapPresent` en todos los estados**: el flag se calcula antes de clasificar el estado y se emite también en `MISSING` y `FRESH` (antes sólo en `STALE`); un `seed-map.json` cuyo `docs` no es un objeto plano (arreglo o `null`) se rechaza como seed-map inválido.
+
 ## [0.25.0] - 2026-11-08
 
 ### Changed

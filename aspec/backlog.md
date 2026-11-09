@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-08 (release 0.25.0).
+> Última actualización: 2026-11-08 (release 0.26.0).
 
 ## Prioridad de ejecución
 
@@ -175,10 +175,29 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **`cli-subcommand-help-guards`:** `--help`/`-h` en subcomandos que mutan estado (install, update, upgrade, init, memory, import, export, mcp, specs, specs merge, projects, `list --projects`) imprime uso a stdout, exit 0, cero escrituras; `discovery --help` y la ayuda global no cambian; read-only (`check`/`doctor`/`stats`/plain `list`/`affected`/`specs check`) queda fuera. Delta en `cli-diagnostics`.
 - **Validaciones:** 1188 tests / 0 fail / 5 skips preexistentes; `npm run lint` passed; format `not-configured`; typecheck n/a. Review en dos rondas; R1 y R2 cerrados con código+test; GUARANTEE sustained.
 - **Release:** tag anotado `v0.25.0` @ merge `bacca2ede06e54bbc640c155d968f0e06f792142` (2 padres); main == tag; run `42528205947` success con `+ @ancleto/spec@0.25.0`; npm version/dist-tag/gitHead (== merge) OK; tarball HTTP 200.
-- **Seed:** regenerado `READY / impact none`; `pluginVersion` 0.25.0 en los 11 docs; 845 archivos/fuentes. `seedMapPresent:false` en READY es un quirk pre-existente de `checkDiscovery` (sólo se asigna en el branch STALE), documentado en `unknowns.md`.
+- **Seed:** regenerado `READY / impact none`; `pluginVersion` 0.25.0 en los 11 docs; 845 archivos/fuentes. `seedMapPresent:false` en READY es un quirk pre-existente de `checkDiscovery` (sólo se asigna en el branch STALE), documentado en `unknowns.md` (corregido en 0.26.0 por fix-discovery-seedmap-present).
 - **Memoria:** 3 decisiones promovidas (`archive-sync-routes-through-specs-merge`, `archive-sync-canonical-surface-documenter`, `subcommand-help-guard-zero-write`); 325 totales / 218 activas / 701 refs / 0 sin resolver. `projects-guarded-registry-write` quedó `propuesto` (no promovido).
 
 **Descartado / diferido en 0.25.0 (sigue pendiente, no hecho):**
 
 - **#4 exclusión mutua de escritores / #18 seed stale por diseño / T27 / CH-06b / CH-10 / CH-08-MEM-06 / MEM-05 / MEM-01 / CH-00 / CH-07 / CH-09a–g:** diferimientos previos sin cambios (sin evidencia nueva + no offline-testeable).
 - **F — housekeeping de memoria `tier-minimo-*`:** no ejecutado; requiere OK explícito del usuario. El conflicto `tier-minimo-fallback-chain-resolution` (3-chain) vs `tier-minimo-opencode-go-alignment` (2-chain) sigue activo.
+
+## Relación con 0.26.0
+
+0.26.0 contiene un change funcional, archivado. Release patch: corrige un reporte de diagnóstico, sin comandos ni flags nuevos.
+
+- **`fix-discovery-seedmap-present` (funcional, delta ADDED en `cli-diagnostics`):** `ancleto discovery --check` ahora calcula `seedMapPresent` de forma independiente del estado (READY/PARTIAL/MISSING/STALE con `seed-map.json` válido ⇒ `true`); `affectedDocs` sigue STALE-only; `readSeedMap` rechaza `docs` no-objeto-plano (arreglo/null). Antes, en READY siempre reportaba `false` (sólo se asignaba en el branch STALE). Archivado en `aspec/changes/archive/2026-11-08-fix-discovery-seedmap-present/`. Archivos: `src/cli/index.js`, `test/cli.test.js`, `aspec/specs/cli-diagnostics/spec.md`.
+- **Validaciones:** 1196 tests / 1191 pass / 5 skips preexistentes / 0 fail; `npm run lint` passed; format `not-configured`; typecheck n/a. Review en dos rondas (R1/R2) sin CRITICAL/MAJOR ni GUARANTEE NOT SUSTAINED.
+- **Release:** tag anotado `v0.26.0` @ merge `cd2858e64d94014e57282dbe4b0340a16917fee9` (2 padres `bacca2e` + `2f0e2f1`); `main == origin/main == tag`; run `42547593509` success con `+ @ancleto/spec@0.26.0`; npm `version`/`dist-tags.latest` = 0.26.0, `gitHead` == merge, tarball HTTP 200.
+- **Seed:** regenerado `READY / impact none`; `pluginVersion` 0.26.0 en los 11 docs; 848 archivos/fuentes; el quirk `seedMapPresent:false` en READY se eliminó de `docs/technical-discovery/unknowns.md` y se documentó el contrato vigente.
+- **Memoria:** 1 decisión promovida (`discovery-seedmap-present-state-independent`); 326 nodos totales / 219 activos / 705 refs / 0 sin resolver; 42 reglas `scope:project`, 8 renderizadas, 34 omitidas (gap MEM-05 sin cambios).
+
+**Descartado / diferido en 0.26.0 (sigue pendiente, no hecho):**
+
+- **A2 #18 seed stale por diseño:** diferido — sin defecto observado, invalidaría los `.discovery-state.json` persistidos, sin spec canónica del detector.
+- **A3 #4 exclusión mutua de escritores:** diferido — la spec canónica exige paralelización; prosa-only, sin mutex ejecutable.
+- **A4 MEM-05 presupuesto working-context:** diferido — presupuesto/orden congelados en `memory-engine`; depende MEM-01 + CH-09a.
+- **A5 CH-06b `--tests`:** diferido — `--tests` no existe; incompletitud estructural (spawn sin arista + content guards markdown).
+- **A6 T27 / CH-10 / CH-08-MEM-06 / CH-00 / CH-07 / CH-09a–g:** diferidos — sin evidencia nueva / no offline-testeable.
+- **A7 housekeeping de memoria:** NO ejecutado — requiere OK literal del usuario (no otorgado); el conflicto `tier-minimo-fallback-chain-resolution` (3-chain) vs `tier-minimo-opencode-go-alignment` (2-chain) sigue activo.

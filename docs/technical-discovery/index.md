@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-08T21:55:07Z
-pluginVersion: 0.25.0
+generatedAt: 2026-11-09T01:42:25Z
+pluginVersion: 0.26.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (845 fuentes, ~38.610 tokens), `package.json` (`0.25.0`), `src/core/model-catalog.json` y
+`minimo` (848 fuentes, ~38.610 tokens), `package.json` (`0.26.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones elididos). Por eso las áreas
@@ -69,7 +69,7 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.25.0` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.26.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
@@ -107,10 +107,11 @@ paths citados (ver `unknowns.md`).
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
    archivos) mantienen el conteo; en 0.22.1-0.25.0 no cambió su cantidad.
-- **Pack actual**: 845 fuentes y ~38.610 tokens (comprimido, tier `minimo`), con 29 entradas de
+- **Pack actual**: 848 fuentes y ~38.610 tokens (comprimido, tier `minimo`), con 29 entradas de
    archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos. El
-   `.discovery-map.json` de la corrida reporta 855 archivos (aspec 285, docs 21, test 27, src 19).
+   `.discovery-map.json` de la corrida reporta 858 archivos (aspec 288, docs 21, test 27, src 19).
 - **Estado del chequeo**: esta materialización actualizó los documentos afectados desde el pack y
-   las fuentes citadas para reflejar 0.25.0, preservando la estructura del seed. El estado final
-   (`READY`/`STALE`/`PARTIAL`) lo reporta el `ancleto discovery --check` posterior; no se ejecutó un
-   segundo pack.
+   las fuentes citadas para reflejar 0.26.0, preservando la estructura del seed. En 0.26.0
+   `discovery --check` calcula `seedMapPresent` antes de clasificar el estado (vale en
+   `READY`/`STALE`/`PARTIAL`/`MISSING`) y `affectedDocs` sigue poblándose sólo en `STALE`. El estado
+   final lo reporta el `ancleto discovery --check` posterior; no se ejecutó un segundo pack.

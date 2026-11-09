@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-08T21:55:07Z
-pluginVersion: 0.25.0
+generatedAt: 2026-11-09T01:42:25Z
+pluginVersion: 0.26.0
 skillVersion: '2.3'
 ---
 
@@ -47,7 +47,7 @@ skillVersion: '2.3'
 - `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
-  esta generación se produjo con el fallback `npx` y quedó comprimido (845 fuentes, ~38.610
+  esta generación se produjo con el fallback `npx` y quedó comprimido (848 fuentes, ~38.610
    tokens); los cuerpos de funciones se eliden y Repomix aplica además sus ignores por defecto
   (incluye `**/*.md`), por eso el pack no contiene Markdown (ver `unknowns.md`).
 

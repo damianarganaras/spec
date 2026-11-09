@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-08T21:55:07Z
-pluginVersion: 0.25.0
+generatedAt: 2026-11-09T01:42:25Z
+pluginVersion: 0.26.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.25.0)
+## Modelos y tiers (estado 0.26.0)
 
 ### Tabla y cadenas
 
@@ -983,14 +983,18 @@ sin `--tier` es `normal`.
   con `impact: material|minor`; `PARTIAL`/`MISSING` por documentos faltantes.
 - **Área**: directorio de primer nivel; los archivos raíz son su propia área. `seed-map.json` mapea
   documento → áreas y permite calcular `affectedDocs`.
+- **`seedMapPresent` (0.26.0)**: se calcula antes de clasificar el estado, así que un
+  `seed-map.json` con `docs` objeto plano reporta `true` también en `READY`, `PARTIAL` y `MISSING`;
+  `readSeedMap` rechaza un `docs` que no sea objeto plano (arreglo o `null`). `affectedDocs` sigue
+  dependiendo de `changedAreas` y sólo se puebla en `STALE`.
 - **Materialidad**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`, `index.html`,
   `src/(main|index).*` y la aparición/desaparición de áreas raíz fuerzan `impact: material`.
 - **Exclusiones**: `node_modules`, `.git`, `dist` siempre; el `outputDir` del seed se excluye del
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 845 fuentes, ~38.610 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 855 archivos (aspec 285, docs 21, test 27, src 19, etc.).
+- **Pack actual**: tier `minimo`, 848 fuentes, ~38.610 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 858 archivos (aspec 288, docs 21, test 27, src 19, etc.).
 
 ## Lint y publicación
 
@@ -1049,7 +1053,7 @@ sin `--tier` es `normal`.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.25.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.26.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
   `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue

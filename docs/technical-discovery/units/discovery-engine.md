@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-generatedAt: 2026-11-08T21:55:07Z
-pluginVersion: 0.25.0
+generatedAt: 2026-11-09T01:42:25Z
+pluginVersion: 0.26.0
 skillVersion: '2.3'
 ---
 
@@ -38,13 +38,16 @@ empaquetado y el affected-set siguen igual. **0.25.0** tampoco los toca: el rute
 2. `ancleto discovery --compress` (`src/cli/index.js` → `packDiscovery`) escribe el mapa, genera el
    pack y guarda `.discovery-state.json` con la lista de fuentes, el hash por archivo y el hash
    global.
-3. `discovery --check` compara el hash actual con el guardado:
+3. `discovery --check` calcula primero `seedMapPresent` (independiente del estado): un
+   `seed-map.json` con `docs` objeto plano da `true` en `READY`, `STALE`, `PARTIAL` y `MISSING`; un
+   `docs` que no es objeto plano (arreglo o `null`) se rechaza (`readSeedMap`). Después compara el
+   hash actual con el guardado:
    - `READY` si coincide.
    - `STALE` + `impact: material` si cambió un archivo material o apareció/desapareció un área raíz.
    - `STALE` + `impact: minor` si solo cambiaron contenidos no materiales.
    - `PARTIAL`/`MISSING` según documentos esperados ausentes.
 4. `seed-map.json` (lo escribe la skill) mapea documento → áreas; `affectedDocs` es la intersección
-   con `changedAreas`.
+   con `changedAreas` y sólo se puebla en `STALE`.
 
 ### Empaquetado por tier
 
@@ -180,8 +183,8 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 845 fuentes y ~38.610 tokens, tier `minimo` (comprimido), con 29 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 855 archivos (aspec 285, src 19,
+- **Pack actual**: 848 fuentes y ~38.610 tokens, tier `minimo` (comprimido), con 29 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 858 archivos (aspec 288, src 19,
   test 27, docs 21). El estado quedó en `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
   runtime/CI" y la separación `model-catalog.js` (puro) / `scripts/` (procesos).

@@ -2303,7 +2303,7 @@ async function readSeedMap(outputDir) {
   try {
     const raw = await readFile(join(outputDir, 'seed-map.json'), 'utf8')
     const parsed = JSON.parse(raw.replace(/^\uFEFF/, ''))
-    if (!parsed || typeof parsed.docs !== 'object' || parsed.docs === null) return null
+    if (!parsed || typeof parsed.docs !== 'object' || parsed.docs === null || Array.isArray(parsed.docs)) return null
     return parsed.docs
   } catch {
     return null
@@ -2341,7 +2341,9 @@ async function checkDiscovery() {
   const { outputDir } = config
   const tier = readProjectTier(process.cwd())
   const present = await presentDocs(outputDir)
-  let state, action, message, missingDocs, impact = 'none', changedAreas = [], materialReasons = [], notes = [], affectedDocs = [], seedMapPresent = false
+  const seedMap = await readSeedMap(outputDir)
+  const seedMapPresent = seedMap !== null
+  let state, action, message, missingDocs, impact = 'none', changedAreas = [], materialReasons = [], notes = [], affectedDocs = []
   if (present.length === 0) {
     state = 'MISSING'
     action = 'generate'
@@ -2377,8 +2379,6 @@ async function checkDiscovery() {
       changedAreas = diff.changedAreas
       materialReasons = diff.materialReasons
       notes = diff.notes
-      const seedMap = await readSeedMap(outputDir)
-      seedMapPresent = seedMap !== null
       affectedDocs = affectedDocsFor(seedMap, changedAreas)
       state = 'STALE'
       if (impact === 'material') {

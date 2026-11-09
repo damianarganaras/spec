@@ -6596,11 +6596,128 @@ describe('CLI discovery --check impact (minor vs material)', () => {
     withDir((dir) => {
       seedFixture(dir, BASE, { seedMap: 'esto no es json{' })
       writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+      const before = projectSnapshot(dir)
       const r = run(['discovery', '--check'], dir)
       assert.equal(r.status, 0)
       const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
       assert.equal(j.seedMapPresent, false)
       assert.deepEqual(j.affectedDocs, [])
+      assert.deepEqual(projectSnapshot(dir), before, 'discovery --check no escribe')
+    })
+  })
+
+  it('READY con seed-map valido: seedMapPresent true sin affectedDocs', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE, {
+        seedMap: { version: 1, generatedAt: 'x', docs: { 'overview.md': ['src'], 'setup.md': ['package.json'] } }
+      })
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('READY sin seed-map: seedMapPresent false', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.seedMapPresent, false)
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('seed-map con docs array: se ignora y seedMapPresent false', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE, { seedMap: { version: 1, docs: [] } })
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.seedMapPresent, false)
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('seed-map con docs null: se ignora y seedMapPresent false', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE, { seedMap: { version: 1, docs: null } })
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.seedMapPresent, false)
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('PARTIAL con seed-map valido: seedMapPresent true sin affectedDocs', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, BASE, {
+        seedMap: { version: 1, generatedAt: 'x', docs: { 'overview.md': ['src'] } }
+      })
+      rmSync(join(docsDir, 'unknowns.md'))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'PARTIAL')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('MISSING con seed-map valido: seedMapPresent true sin affectedDocs', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, BASE, {
+        seedMap: { version: 1, generatedAt: 'x', docs: { 'overview.md': ['src'] } }
+      })
+      for (const d of DOCS) rmSync(join(docsDir, d))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'MISSING')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('STALE sin estado previo con seed-map: seedMapPresent true y affectedDocs vacio', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, BASE, {
+        seedMap: { version: 1, generatedAt: 'x', docs: { 'overview.md': ['src'] } }
+      })
+      rmSync(join(docsDir, '.discovery-state.json'))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('STALE material con seed-map: seedMapPresent true y affectedDocs de la interseccion', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE, {
+        seedMap: { version: 1, generatedAt: 'x', docs: { 'setup.md': ['package.json'], 'overview.md': ['src'] } }
+      })
+      writeFileSync(join(dir, 'package.json'), '{"name":"x","version":"1.0.0"}\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.affectedDocs, ['setup.md'])
     })
   })
 })

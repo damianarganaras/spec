@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-generatedAt: 2026-11-10T19:26:36Z
-pluginVersion: 0.26.2
+generatedAt: 2026-11-10T21:34:06Z
+pluginVersion: 0.26.3
 skillVersion: '2.3'
 ---
 
@@ -29,7 +29,9 @@ empaquetado y el affected-set siguen igual. **0.25.0** tampoco los toca: el rute
 `specs merge` y el guard de `--help` viven en `skills/`, `agents/` y el dispatch del CLI.
 **0.26.0** cambia sólo el cálculo de `seedMapPresent` (state-independent); **0.26.1** no cambia
 runtime: documenta y pinea el detector de frescura vigente en `cli-diagnostics`; **0.26.2**
-tampoco cambia runtime: consolida walkers de snapshot read-only y pines de frescura en tests.
+tampoco cambia runtime: consolida walkers de snapshot read-only y pines de frescura en tests;
+**0.26.3** alinea `cli-diagnostics` al `recommendedAction` real (`generate` en `MISSING`, `complete`
+en `PARTIAL`) y lo pinea, también sin tocar `src/`.
 
 ## Recorrido relevante
 
@@ -69,8 +71,10 @@ El contrato del detector quedó fijado en 0.26.1 (delta `ADDED` de `cli-diagnost
   contrato. Sin `fileHashes` previos y sin `changedAreas`, `notes` agrega el texto
   `estado previo sin hashes por archivo: el cambio de contenido no se puede atribuir a un area` y
   fuerza `minor`.
-- `impact` sigue la precedencia `material` > `minor` > `none`; `recommendedAction` sólo es
-  `regenerate` para `material`. Sin estado o sin `hash`, `STALE`/`material` con arreglos vacíos.
+- `impact` sigue la precedencia `material` > `minor` > `none`; `recommendedAction` es
+  `regenerate` para `material`, `continue` para `minor` o `none`, y `generate`/`complete` cuando el
+  estado es `MISSING`/`PARTIAL` (excepción documentada en 0.26.3). Sin estado o sin `hash`,
+  `STALE`/`material` con arreglos vacíos.
 - Un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`, `areaOf` o
   `computeImpact` es comportamiento y exige delta `MODIFIED` (release minor), no un patch
   documental.
@@ -209,8 +213,8 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 853 fuentes y ~38.610 tokens, tier `minimo` (comprimido), con 29 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 863 archivos (aspec 293,
+- **Pack actual**: 856 fuentes y ~38.610 tokens, tier `minimo` (comprimido), con 29 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 866 archivos (aspec 296,
   `.opencode` 66, src 19, test 27, docs 21). El estado quedó en
   `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en

@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-10T19:26:36Z
-pluginVersion: 0.26.2
+generatedAt: 2026-11-10T21:34:06Z
+pluginVersion: 0.26.3
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
   `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`,
   `reconcileLegacyBlocks`, `specsMergeCommand`, `resolveChangeDir`, `specsCommand`,
   `src/core/memory/engine.js` → `recordNode`; `src/core/specs-merge.js`;
-  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 853 fuentes
+  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 856 fuentes
   (~38.610 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
@@ -105,6 +105,10 @@ skillVersion: '2.3'
 - **Consolidación de tests 0.26.2**: no se ejecutó `test/cli.test.js` ni la suite completa; el
   alcance (walkers de snapshot read-only y pines de frescura) se leyó en `CHANGELOG.md`. No cambia
   runtime ni comportamiento observable.
+- **Alineación 0.26.3**: no se ejecutó la suite. El alcance (excepción de `recommendedAction`
+  `generate`/`complete`) se verificó leyendo `CHANGELOG.md`, el delta archivado, el Requirement de
+  `aspec/specs/cli-diagnostics/spec.md` y `src/cli/index.js` → `checkDiscovery`; no se probó el
+  cambio de pin en el test.
 - **Orden del archive 0.22.1**: no se archivó un change real. La secuencia merge/sync → preflight →
   promoción → move → commit y los literales de fallo se verificaron leyendo
   `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`,
@@ -143,8 +147,8 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **863 archivos** (aspec 293,
-  `.opencode` 66, docs 21, test 27, src 19, etc.). El pack registra **853 fuentes** (~38.610 tokens)
+- **`.discovery-map.json` observado**: el generador reporta **866 archivos** (aspec 296,
+  `.opencode` 66, docs 21, test 27, src 19, etc.). El pack registra **856 fuentes** (~38.610 tokens)
   y 29 entradas de archivo
   porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además
   Repomix filtra por sus propios ignores.
@@ -152,7 +156,7 @@ skillVersion: '2.3'
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.26.2`). No se usan como fuente de contenido.
+  gitignored; deben alinearse con `package.json` (`0.26.3`). No se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
   versión local es una verificación puntual, no una fuente de reglas. El propio `check` compara ese
@@ -188,10 +192,16 @@ skillVersion: '2.3'
   `seedMapPresent: true` y `affectedDocs: []`, mientras los documentos todavía declaraban 0.26.1.
   Para reflejar 0.26.2 se actualizaron los once documentos del seed desde el pack y las fuentes
   citadas; 0.26.2 es un release exclusivamente de tests, sin cambio de runtime.
+- **Estado inicial del chequeo (0.26.3)**: el pack y `.discovery-state.json` se regeneraron antes
+  de esta materialización; el `discovery --check` de validación devolvió `READY`/`impact: none`,
+  `seedMapPresent: true` y `affectedDocs: []`, mientras los documentos todavía declaraban 0.26.2.
+  Para reflejar 0.26.3 se actualizaron los once documentos del seed desde el pack y las fuentes
+  citadas; 0.26.3 alinea la spec `cli-diagnostics` al `recommendedAction` real y lo pinea en tests,
+  sin cambio de runtime.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.26.2`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.26.3`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -207,7 +217,8 @@ skillVersion: '2.3'
   `SUBCOMMAND_HELP`/`wantsHelp` (0.25.0) y el ruteo del sync del archive por `specs merge` (0.25.0),
   el cálculo state-independent de `seedMapPresent` y el rechazo de `docs` no-objeto-plano en
   `readSeedMap` (0.26.0), el contrato del detector de frescura y su lista cerrada de archivos
-  materiales (0.26.1, `aspec/specs/cli-diagnostics/spec.md`), `declaredModelIds`,
+  materiales (0.26.1, `aspec/specs/cli-diagnostics/spec.md`), la excepción de `recommendedAction`
+  (`generate` en `MISSING`, `complete` en `PARTIAL`) documentada y pineada (0.26.3), `declaredModelIds`,
   `modelIdsFromCatalog`, `missingModelIdsInCatalog`,
   gate de `--write`,
   `looksBinaryMissing`, lint sobre `scripts/`, snapshot de 5 proveedores / 211 IDs, flujo de

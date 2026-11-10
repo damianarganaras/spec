@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-09T01:42:25Z
-pluginVersion: 0.26.0
+generatedAt: 2026-11-10T15:47:25Z
+pluginVersion: 0.26.1
 skillVersion: '2.3'
 ---
 
@@ -168,6 +168,10 @@ del paquete instalado.
   `ok:false` y `errors:[...]`, sin campos nuevos. Desde 0.25.0, el sync de delta del archive y del
   bulk-archive invoca exclusivamente `ancleto specs merge --change <slug>`; un exit no cero aborta
   el archive sin preflight, promoción ni move.
+- **Discovery y frescura (0.26.0–0.26.1)**: `ancleto discovery --check` es read-only, emite
+  `schemaVersion: 2` y clasifica `READY`/`STALE`/`PARTIAL`/`MISSING`; `impact` sólo es `material`
+  por archivos materiales o áreas raíz nuevas/eliminadas. No escribe el seed, el estado ni el
+  `seed-map.json`, así que es seguro correrlo como validación antes de cerrar un change.
 - **Ayuda sin ejecución (0.25.0)**: en `install`, `update`, `upgrade`, `init`, `memory`, `import`,
   `export`, `mcp`, `specs`, `specs merge`, `projects` y `list --projects`, `--help`/`-h` imprime el
   uso en stdout y sale con exit 0 sin escribir nada. `discovery --help`, la ayuda global y los
@@ -195,9 +199,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.26.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.26.1)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-la fija `package.json` = `0.26.0`.
+la fija `package.json` = `0.26.1`.
 
 ## Entorno de máquina
 

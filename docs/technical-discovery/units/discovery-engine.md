@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-generatedAt: 2026-11-09T01:42:25Z
-pluginVersion: 0.26.0
+generatedAt: 2026-11-10T15:47:25Z
+pluginVersion: 0.26.1
 skillVersion: '2.3'
 ---
 
@@ -27,6 +27,8 @@ topología, empaquetado, affected-set ni catálogo. En **0.24.0** sí cambian lo
 `TIERS.minimo` y `MINIMO_CHAIN` (alineación a la canónica); el catálogo, la topología, el
 empaquetado y el affected-set siguen igual. **0.25.0** tampoco los toca: el ruteo del archive por
 `specs merge` y el guard de `--help` viven en `skills/`, `agents/` y el dispatch del CLI.
+**0.26.0** cambia sólo el cálculo de `seedMapPresent` (state-independent); **0.26.1** no cambia
+runtime: documenta y pinea el detector de frescura vigente en `cli-diagnostics`.
 
 ## Recorrido relevante
 
@@ -48,6 +50,29 @@ empaquetado y el affected-set siguen igual. **0.25.0** tampoco los toca: el rute
    - `PARTIAL`/`MISSING` según documentos esperados ausentes.
 4. `seed-map.json` (lo escribe la skill) mapea documento → áreas; `affectedDocs` es la intersección
    con `changedAreas` y sólo se puebla en `STALE`.
+
+El contrato del detector quedó fijado en 0.26.1 (delta `ADDED` de `cli-diagnostics`) sin tocar
+`src/`:
+
+- La salida es `schemaVersion: 2`, JSON, exit 0 y **read-only**: no escribe el seed, el estado ni
+  el `seed-map.json`.
+- **Archivos materiales (lista cerrada)**: `package.json` sólo en la raíz; `tsconfig.json`,
+  `tsconfig.<sufijo>.json` y `jsconfig.json`; configs de
+  `vite|webpack|rollup|next|nuxt|astro|svelte|tailwind`; `docker-compose.yml|yaml`; `Dockerfile`;
+  `index.html`; `src/(main|index).[cm]?[jt]sx?` en esa profundidad. Un `package.json` anidado y
+  `package-lock.json` no son materiales.
+- **Área** = primer segmento del path; un archivo raíz es su propia área (`areaOf`).
+- `computeImpact` compara `sources`/`fileHashes` persistidos con el árbol actual y emite en
+  `materialReasons` sólo las formas `archivo material nuevo|eliminado|modificado: <rel>`,
+  `area raiz nueva: <área>` y `area raiz eliminada: <área>`; el orden y la cardinalidad no son
+  contrato. Sin `fileHashes` previos y sin `changedAreas`, `notes` agrega el texto
+  `estado previo sin hashes por archivo: el cambio de contenido no se puede atribuir a un area` y
+  fuerza `minor`.
+- `impact` sigue la precedencia `material` > `minor` > `none`; `recommendedAction` sólo es
+  `regenerate` para `material`. Sin estado o sin `hash`, `STALE`/`material` con arreglos vacíos.
+- Un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`, `areaOf` o
+  `computeImpact` es comportamiento y exige delta `MODIFIED` (release minor), no un patch
+  documental.
 
 ### Empaquetado por tier
 
@@ -183,9 +208,10 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 848 fuentes y ~38.610 tokens, tier `minimo` (comprimido), con 29 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 858 archivos (aspec 288, src 19,
-  test 27, docs 21). El estado quedó en `docs/technical-discovery/.discovery-state.json`.
+- **Pack actual**: 851 fuentes y ~38.610 tokens, tier `minimo` (comprimido), con 29 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 861 archivos (aspec 291,
+  `.opencode` 66, src 19, test 27, docs 21). El estado quedó en
+  `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
   runtime/CI" y la separación `model-catalog.js` (puro) / `scripts/` (procesos).
 - **Un solo dueño de la extracción de IDs**: `modelIdsFromCatalog` vive en `model-catalog.js` y
@@ -212,3 +238,5 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 | `src/cli/index.js` (`packDiscovery`, `checkDiscovery`, `checkAgentsFrontmatter`, `declaredAgentModels`) | Empaquetado, estado del seed y avisos de `check` |
 | `docs/technical-discovery/.discovery-state.json` | Último hash/pack del seed |
 | `docs/technical-discovery/seed-map.json` | Documento → áreas de evidencia |
+| `aspec/specs/cli-diagnostics/spec.md` | Contrato del detector de frescura (0.26.1) y de `seedMapPresent` (0.26.0) |
+| `aspec/changes/archive/2026-11-10-spec-seed-freshness-detector/` | Change archivado que documenta y pinea el detector (sin cambio de runtime) |

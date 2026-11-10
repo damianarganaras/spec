@@ -87,9 +87,14 @@ function readRc(dir) {
   return JSON.parse(readFileSync(join(dir, '.ancletorc'), 'utf8'))
 }
 
-// Foto determinista del proyecto para afirmar que `check`/`doctor` no escriben:
-// cada archivo se guarda por ruta relativa con `/` y contenido en base64.
-function projectSnapshot(dir) {
+// Único recorrido determinista para afirmar que `check`/`doctor`/`--help` no escriben:
+// cada archivo se guarda por ruta relativa con `/`. `mode` elige la representación de
+// hoja: base64 string (default), `{ bytes, mtimeMs }` ('mtime') o
+// `${mtimeMs}:${base64}` ('mtimeMs').
+function snapshotTree(dir, mode = 'base64') {
+  if (!['base64', 'mtime', 'mtimeMs'].includes(mode)) {
+    throw new Error(`snapshotTree: modo desconocido "${mode}" (esperado: base64 | mtime | mtimeMs)`)
+  }
   const files = {}
   const walk = (rel) => {
     for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
@@ -98,13 +103,52 @@ function projectSnapshot(dir) {
         files[`${childRel}/`] = '<dir>'
         walk(childRel)
       } else {
-        files[childRel] = readFileSync(join(dir, childRel)).toString('base64')
+        const abs = join(dir, childRel)
+        const bytes = readFileSync(abs).toString('base64')
+        if (mode === 'mtime') files[childRel] = { bytes, mtimeMs: statSync(abs).mtimeMs }
+        else if (mode === 'mtimeMs') files[childRel] = `${statSync(abs).mtimeMs}:${bytes}`
+        else files[childRel] = bytes
       }
     }
   }
   walk('')
   return files
 }
+
+// Foto byte-only por defecto: conserva el contrato de los call sites existentes.
+function projectSnapshot(dir) {
+  return snapshotTree(dir)
+}
+
+// Invariante de la parametrización: un cambio sólo de mtime no debe colapsar las
+// representaciones. El modo por defecto (bytes) no observa mtime; los modos que lo
+// portan sí. Fecha pasada fija para no depender de la resolución del filesystem.
+describe('snapshotTree modos read-only', () => {
+  it('un cambio sólo de mtime no altera el modo byte-only y sí los modos con mtime', () => {
+    withDir((dir) => {
+      const file = join(dir, 'archivo.txt')
+      writeFileSync(file, 'mismo contenido\n')
+      const bytesBefore = snapshotTree(dir)
+      const mtimeBefore = snapshotTree(dir, 'mtime')
+      const mtimeMsBefore = snapshotTree(dir, 'mtimeMs')
+      const old = new Date('2020-01-02T03:04:05Z')
+      utimesSync(file, old, old)
+      assert.deepEqual(snapshotTree(dir), bytesBefore, 'el modo byte-only ignora mtime')
+      assert.notDeepEqual(snapshotTree(dir, 'mtime'), mtimeBefore, 'el modo mtime observa el cambio')
+      assert.notDeepEqual(snapshotTree(dir, 'mtimeMs'), mtimeMsBefore, 'el modo mtimeMs observa el cambio')
+    })
+  })
+
+  it('un modo desconocido falla cerrado en vez de degradar a byte-only', () => {
+    withDir((dir) => {
+      assert.throws(
+        () => snapshotTree(dir, 'mtimeMS'),
+        /modo desconocido|unknown mode/i,
+        'un typo de modo debe lanzar, no caer silenciosamente a bytes'
+      )
+    })
+  })
+})
 
 // Catálogo alternativo por `ANCLETO_MODEL_CATALOG`: seam de test/manual, mismo
 // precedente que `ANCLETO_PROJECTS_FILE`. Se arma desde el snapshot commiteado
@@ -6496,21 +6540,7 @@ describe('CLI discovery --check impact (minor vs material)', () => {
   // Snapshot de bytes + mtime por archivo para afirmar que `discovery --check`
   // no escribe nada (incluido el seed, el estado y el seed-map.json).
   function snapshotWithMtime(dir) {
-    const files = {}
-    const walk = (rel) => {
-      for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
-        const childRel = rel ? `${rel}/${entry.name}` : entry.name
-        if (entry.isDirectory()) {
-          files[`${childRel}/`] = '<dir>'
-          walk(childRel)
-        } else {
-          const abs = join(dir, childRel)
-          files[childRel] = { bytes: readFileSync(abs).toString('base64'), mtimeMs: statSync(abs).mtimeMs }
-        }
-      }
-    }
-    walk('')
-    return files
+    return snapshotTree(dir, 'mtime')
   }
 
   const BASE = { 'src/app.js': 'console.log(1)\n', 'package.json': '{"name":"x"}\n' }
@@ -6679,6 +6709,8 @@ describe('CLI discovery --check impact (minor vs material)', () => {
     })
   })
 
+  // MISSING/PARTIAL: se omite `recommendedAction` a propósito; el código devuelve
+  // generate/complete mientras la regla canónica de `impact: none` dice `continue`.
   it('PARTIAL con seed-map valido: seedMapPresent true sin affectedDocs', () => {
     withDir((dir) => {
       const docsDir = seedFixture(dir, BASE, {
@@ -6689,7 +6721,11 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       assert.equal(r.status, 0)
       const j = JSON.parse(r.stdout)
       assert.equal(j.state, 'PARTIAL')
+      assert.equal(j.impact, 'none')
       assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
       assert.deepEqual(j.affectedDocs, [])
     })
   })
@@ -6704,7 +6740,11 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       assert.equal(r.status, 0)
       const j = JSON.parse(r.stdout)
       assert.equal(j.state, 'MISSING')
+      assert.equal(j.impact, 'none')
       assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
       assert.deepEqual(j.affectedDocs, [])
     })
   })
@@ -6887,6 +6927,31 @@ describe('CLI discovery --check impact (minor vs material)', () => {
     withDir((dir) => {
       const docsDir = seedFixture(dir, BASE)
       rmSync(join(docsDir, '.discovery-state.json'))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  // El estado existe pero no declara `hash`: rama `!stored?.hash` (spec.md:677-682),
+  // distinta de "archivo ausente" y de "sin fileHashes". `seedFixture` convierte
+  // `hash: null`/`undefined` en un hash real, así que se omite la clave.
+  it('pin: estado existente sin hash es STALE material con arreglos vacios', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, BASE)
+      const statePath = join(docsDir, '.discovery-state.json')
+      const state = JSON.parse(readFileSync(statePath, 'utf8'))
+      delete state.hash
+      writeFileSync(statePath, JSON.stringify(state, null, 2))
+      assert.equal(existsSync(statePath), true, 'el estado debe existir en disco')
+      assert.equal(Object.hasOwn(JSON.parse(readFileSync(statePath, 'utf8')), 'hash'), false, 'el estado no declara hash')
       const r = run(['discovery', '--check'], dir)
       assert.equal(r.status, 0)
       const j = JSON.parse(r.stdout)
@@ -8183,21 +8248,7 @@ describe('CLI subcommand --help guards', () => {
   // Bytes y mtime por archivo relativo: una escritura idéntica en contenido mueve el mtime
   // y debe romper la invariante igual que una creación o un cambio de bytes.
   function snapshotMtimes(dir) {
-    const files = {}
-    const walk = (rel) => {
-      for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
-        const childRel = rel ? `${rel}/${entry.name}` : entry.name
-        if (entry.isDirectory()) {
-          files[`${childRel}/`] = '<dir>'
-          walk(childRel)
-        } else {
-          const file = join(dir, childRel)
-          files[childRel] = `${statSync(file).mtimeMs}:${readFileSync(file).toString('base64')}`
-        }
-      }
-    }
-    walk('')
-    return files
+    return snapshotTree(dir, 'mtimeMs')
   }
 
   it('cada subcomando con --help/-h imprime su uso en stdout, sale 0 y no escribe', () => {

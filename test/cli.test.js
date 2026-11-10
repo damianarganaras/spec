@@ -6709,8 +6709,8 @@ describe('CLI discovery --check impact (minor vs material)', () => {
     })
   })
 
-  // MISSING/PARTIAL: se omite `recommendedAction` a propósito; el código devuelve
-  // generate/complete mientras la regla canónica de `impact: none` dice `continue`.
+  // MISSING/PARTIAL: `recommendedAction` ya es canónico (spec alineado al código):
+  // generate para MISSING y complete para PARTIAL, aun con impact: none. Se afirma abajo.
   it('PARTIAL con seed-map valido: seedMapPresent true sin affectedDocs', () => {
     withDir((dir) => {
       const docsDir = seedFixture(dir, BASE, {
@@ -6722,6 +6722,7 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       const j = JSON.parse(r.stdout)
       assert.equal(j.state, 'PARTIAL')
       assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'complete')
       assert.equal(j.seedMapPresent, true)
       assert.deepEqual(j.changedAreas, [])
       assert.deepEqual(j.materialReasons, [])
@@ -6741,6 +6742,7 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       const j = JSON.parse(r.stdout)
       assert.equal(j.state, 'MISSING')
       assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'generate')
       assert.equal(j.seedMapPresent, true)
       assert.deepEqual(j.changedAreas, [])
       assert.deepEqual(j.materialReasons, [])

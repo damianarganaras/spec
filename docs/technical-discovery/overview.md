@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-10T15:47:25Z
-pluginVersion: 0.26.1
+generatedAt: 2026-11-10T19:26:36Z
+pluginVersion: 0.26.2
 skillVersion: '2.3'
 ---
 
@@ -218,6 +218,11 @@ test/                   suite node --test (content guards incluidos)
     un `ADDED` de `aspec/specs/cli-diagnostics/spec.md` y cubierto por tests de pin. No cambia
     `src/`: un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`, `areaOf` o
     `computeImpact` exige un delta `MODIFIED`, no un patch documental.
+23. **Consolidación de tests (0.26.2)**: los tres walkers de snapshot read-only de
+    `test/cli.test.js` pasan a un único helper parametrizado por modo (con guard fail-closed ante un
+    modo desconocido e invariante de `mtime` discriminante), y se pinean los estados `MISSING`/
+    `PARTIAL` de `discovery --check` y la variante "estado existente sin `hash`" (`STALE`/`material`/
+    `regenerate`). No cambia runtime ni comportamiento observable.
 
 ## Recorrido de una instalación con tier `minimo`
 

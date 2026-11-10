@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-10T15:47:25Z
-pluginVersion: 0.26.1
+generatedAt: 2026-11-10T19:26:36Z
+pluginVersion: 0.26.2
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
   `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`,
   `reconcileLegacyBlocks`, `specsMergeCommand`, `resolveChangeDir`, `specsCommand`,
   `src/core/memory/engine.js` → `recordNode`; `src/core/specs-merge.js`;
-  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 851 fuentes
+  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 853 fuentes
   (~38.610 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
@@ -102,6 +102,9 @@ skillVersion: '2.3'
   los nueve scenarios del contrato (archivo material nuevo/modificado/eliminado, área raíz
   nueva/eliminada, ignores/outputDir, sin estado, sin `fileHashes` y snapshot de read-only con
   bytes/mtime), que quedan cubiertos por los tests de pin. No se corrió la suite.
+- **Consolidación de tests 0.26.2**: no se ejecutó `test/cli.test.js` ni la suite completa; el
+  alcance (walkers de snapshot read-only y pines de frescura) se leyó en `CHANGELOG.md`. No cambia
+  runtime ni comportamiento observable.
 - **Orden del archive 0.22.1**: no se archivó un change real. La secuencia merge/sync → preflight →
   promoción → move → commit y los literales de fallo se verificaron leyendo
   `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`,
@@ -140,8 +143,8 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **861 archivos** (aspec 291,
-  `.opencode` 66, docs 21, test 27, src 19, etc.). El pack registra **851 fuentes** (~38.610 tokens)
+- **`.discovery-map.json` observado**: el generador reporta **863 archivos** (aspec 293,
+  `.opencode` 66, docs 21, test 27, src 19, etc.). El pack registra **853 fuentes** (~38.610 tokens)
   y 29 entradas de archivo
   porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además
   Repomix filtra por sus propios ignores.
@@ -149,7 +152,7 @@ skillVersion: '2.3'
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.26.1`). No se usan como fuente de contenido.
+  gitignored; deben alinearse con `package.json` (`0.26.2`). No se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
   versión local es una verificación puntual, no una fuente de reglas. El propio `check` compara ese
@@ -180,10 +183,15 @@ skillVersion: '2.3'
   `affectedDocs: []`, mientras los documentos todavía declaraban 0.26.0. Para reflejar 0.26.1 se
   actualizaron los once documentos del seed desde el pack y las fuentes citadas; 0.26.1 es un
   release documental/test: no cambia `src/` ni integraciones.
+- **Estado inicial del chequeo (0.26.2)**: el pack y `.discovery-state.json` se regeneraron antes
+  de esta materialización; el `discovery --check` de validación devolvió `READY`/`impact: none`,
+  `seedMapPresent: true` y `affectedDocs: []`, mientras los documentos todavía declaraban 0.26.1.
+  Para reflejar 0.26.2 se actualizaron los once documentos del seed desde el pack y las fuentes
+  citadas; 0.26.2 es un release exclusivamente de tests, sin cambio de runtime.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.26.1`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.26.2`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,

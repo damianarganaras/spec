@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.26.2] - 2026-11-10
+
+### Tests
+- **Walkers de snapshot read-only consolidados**: los tres walkers de `test/cli.test.js` pasan a un único helper parametrizado por modo, con guard fail-closed ante un modo desconocido e invariante de `mtime` discriminante.
+- **Pins de frescura de `discovery --check`**: se fijan los estados `MISSING`/`PARTIAL` (`impact:none` y arreglos vacíos; `recommendedAction` no se pinea por una divergencia spec/código documentada) y la variante "estado existente sin `hash`" (`STALE/material/regenerate` y arreglos vacíos).
+
+### Notas
+- Sin cambio de runtime ni de comportamiento observable: alcance exclusivamente de tests.
+
 ## [0.26.1] - 2026-11-10
 
 ### Added

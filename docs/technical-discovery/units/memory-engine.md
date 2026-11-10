@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
 covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
 sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-10T15:47:25Z
-pluginVersion: 0.26.1
+generatedAt: 2026-11-10T19:26:36Z
+pluginVersion: 0.26.2
 skillVersion: '2.3'
 ---
 
@@ -29,8 +29,9 @@ toca el motor: la alineación del tier `minimo` y el guard de `specs merge` vive
 `src/core/tier-models.js` y `src/core/specs-merge.js`, fuera de `src/core/memory/**`. **0.25.0**
 tampoco: sólo cambia el contrato de prompt del archive (el sync invoca `specs merge`) y el guard de
 `--help` en el dispatch del CLI. **0.26.0–0.26.1** tampoco lo tocan: el cálculo state-independent
-de `seedMapPresent` y el detector de frescura viven en `checkDiscovery`, y el motor, el esquema, el
-recall y las ops siguen sin cambios.
+de `seedMapPresent` y el detector de frescura viven en `checkDiscovery`; **0.26.2** sólo agrega
+tests (walkers de snapshot y pines de frescura), y el motor, el esquema, el recall y las ops siguen
+sin cambios.
 
 ## Recorrido relevante
 

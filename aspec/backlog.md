@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-08 (release 0.26.0).
+> Última actualización: 2026-11-10 (release 0.26.1).
 
 ## Prioridad de ejecución
 
@@ -195,9 +195,29 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 **Descartado / diferido en 0.26.0 (sigue pendiente, no hecho):**
 
-- **A2 #18 seed stale por diseño:** diferido — sin defecto observado, invalidaría los `.discovery-state.json` persistidos, sin spec canónica del detector.
+- **A2 #18 seed stale por diseño:** diferido — sin defecto observado, invalidaría los `.discovery-state.json` persistidos, sin spec canónica del detector. → **cerrado (pieza documental) en 0.26.1**; A2c sigue diferido.
 - **A3 #4 exclusión mutua de escritores:** diferido — la spec canónica exige paralelización; prosa-only, sin mutex ejecutable.
 - **A4 MEM-05 presupuesto working-context:** diferido — presupuesto/orden congelados en `memory-engine`; depende MEM-01 + CH-09a.
 - **A5 CH-06b `--tests`:** diferido — `--tests` no existe; incompletitud estructural (spawn sin arista + content guards markdown).
 - **A6 T27 / CH-10 / CH-08-MEM-06 / CH-00 / CH-07 / CH-09a–g:** diferidos — sin evidencia nueva / no offline-testeable.
 - **A7 housekeeping de memoria:** NO ejecutado — requiere OK literal del usuario (no otorgado); el conflicto `tier-minimo-fallback-chain-resolution` (3-chain) vs `tier-minimo-opencode-go-alignment` (2-chain) sigue activo.
+
+## Relación con 0.26.1
+
+0.26.1 contiene un change documental/test, archivado. Release patch: fija y pinea el detector de frescura del seed, sin cambio observable ni de runtime.
+
+- **`spec-seed-freshness-detector` (funcional, delta ADDED en `cli-diagnostics`):** documenta el comportamiento VIGENTE de `ancleto discovery --check` (impact `material`/`minor`/`none`, `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `areaOf`, `computeImpact`, `materialReasons`, `notes`, `affectedDocs`) como Requirement canónico y lo pinea con 14 tests en `test/cli.test.js`. No se tocó `src/cli/index.js` ni ninguna constante. Archivado en `aspec/changes/archive/2026-11-10-spec-seed-freshness-detector/`. Archivos: `test/cli.test.js`, `aspec/specs/cli-diagnostics/spec.md`.
+- **Hecho operativo:** el pack transitorio del seed NO debe guardarse dentro de `.ancleto` (cuenta como área de `sources` y reintroduce `STALE`/`minor`); el pack se copia fuera del repo (tmp) y el seed documental se materializa desde ahí. Seed final `READY`/`impact none`, `seedMapPresent:true`, `pluginVersion 0.26.1` en los 11 docs, 851 fuentes/861 archivos.
+- **Validaciones:** 1210 tests / 1205 pass / 5 skips preexistentes / 0 fail; `npm run lint` passed; format `not-configured`; typecheck n/a. Review en dos rondas (R1/R2) aprobado; sin CRITICAL ni `GUARANTEE NOT SUSTAINED`.
+- **Release:** tag anotado `v0.26.1` @ merge `dbe84baeab1dc412d81ecf7753086e842e02299e` (2 padres `cd2858e` + `247dba2`); main == tag; run `42849233559` success con `+ @ancleto/spec@0.26.1`; npm version/dist-tag/gitHead OK; tarball HTTP 200.
+- **Memoria:** 2 decisiones promovidas (`seed-freshness-detector-documented-in-cli-diagnostics`, `seed-freshness-rule-change-requires-minor`); 328 totales / 221 activas / 711 refs / 0 sin resolver; 42 reglas project, 8 renderizadas, 34 omitidas (gap MEM-05 sin cambios).
+
+**Descartado / diferido en 0.26.1 (sigue pendiente, no hecho):**
+
+- **A2c #18 (producto: que el bump deje de contar / regeneración al checklist):** diferido — sin decisión de producto; riesgo alto (invalida estados persistidos).
+- **A3 #4 exclusión mutua de escritores:** diferido — prosa-only, sin mutex ejecutable; la spec exige paralelización.
+- **A4 MEM-05 presupuesto working-context:** diferido — depende de MEM-01 + CH-09a.
+- **A5 CH-06b `--tests`:** diferido — estructural (spawn sin arista + content guards markdown).
+- **A6 T27 / CH-10 / CH-08-MEM-06 / CH-00 / CH-07 / CH-09a–g:** diferidos — sin evidencia nueva / no offline-testeable.
+- **A7 housekeeping de memoria:** NO ejecutado — requiere OK literal; el conflicto `tier-minimo-*` sigue activo.
+- **Follow-up de tests (WARNING R2):** `snapshotWithMtime` en `test/cli.test.js` duplica el walker de `projectSnapshot`; consolidar en un helper con opción `mtime` (bajo riesgo, sin cambio de contrato).

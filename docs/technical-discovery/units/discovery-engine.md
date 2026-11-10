@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-generatedAt: 2026-11-10T15:47:25Z
-pluginVersion: 0.26.1
+generatedAt: 2026-11-10T19:26:36Z
+pluginVersion: 0.26.2
 skillVersion: '2.3'
 ---
 
@@ -28,7 +28,8 @@ topología, empaquetado, affected-set ni catálogo. En **0.24.0** sí cambian lo
 empaquetado y el affected-set siguen igual. **0.25.0** tampoco los toca: el ruteo del archive por
 `specs merge` y el guard de `--help` viven en `skills/`, `agents/` y el dispatch del CLI.
 **0.26.0** cambia sólo el cálculo de `seedMapPresent` (state-independent); **0.26.1** no cambia
-runtime: documenta y pinea el detector de frescura vigente en `cli-diagnostics`.
+runtime: documenta y pinea el detector de frescura vigente en `cli-diagnostics`; **0.26.2**
+tampoco cambia runtime: consolida walkers de snapshot read-only y pines de frescura en tests.
 
 ## Recorrido relevante
 
@@ -208,8 +209,8 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 851 fuentes y ~38.610 tokens, tier `minimo` (comprimido), con 29 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 861 archivos (aspec 291,
+- **Pack actual**: 853 fuentes y ~38.610 tokens, tier `minimo` (comprimido), con 29 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 863 archivos (aspec 293,
   `.opencode` 66, src 19, test 27, docs 21). El estado quedó en
   `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en

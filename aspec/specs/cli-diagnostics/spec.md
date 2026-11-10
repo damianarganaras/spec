@@ -572,7 +572,8 @@ SHALL salir con exit code 0 cuando completa. El campo `impact` SHALL pertenecer 
 {`none`, `minor`, `material`} y SHALL calcularse con esta precedencia: `material` cuando
 `materialReasons` no está vacío; en caso contrario `minor` cuando `changedAreas` o `notes` no están
 vacíos; en caso contrario `none`. `recommendedAction` SHALL ser `regenerate` cuando `impact` es
-`material` y `continue` cuando es `minor` o `none`.
+`material` y `continue` cuando es `minor` o `none`, excepto cuando el estado es `MISSING` (que
+reporta `generate`) o `PARTIAL` (que reporta `complete`), aun cuando su `impact` es `none`.
 
 SHALL considerarse archivo material, anclado al repositorio, exactamente:
 
@@ -613,12 +614,13 @@ ese caso SHALL forzar `impact: minor`.
 El cálculo de `affectedDocs` NO SHALL ser redefinido por este Requirement: queda regido por el
 Requirement existente de `discovery --check` sobre la presencia del seed-map.
 
-La estructura de estado SHALL ser: si faltan documentos esperados, `MISSING` o `PARTIAL` con
-`impact: none` y arreglos vacíos; si están completos y `stored.hash` coincide, `READY` con
-`impact: none` y arreglos vacíos; si no existe `.discovery-state.json` o el estado no tiene `hash`,
-`STALE` con `impact: material`, `recommendedAction: regenerate` y `changedAreas`,
-`materialReasons`, `notes` y `affectedDocs` vacíos, sin atribuir materialidad por archivo ni por
-área.
+La estructura de estado SHALL ser: si faltan documentos esperados, `MISSING` (con
+`recommendedAction: generate`) o `PARTIAL` (con `recommendedAction: complete`) con `impact: none` y
+con `changedAreas`, `materialReasons`, `notes` y `affectedDocs` vacíos (`missingDocs` lista los
+documentos faltantes); si están completos y `stored.hash` coincide, `READY` con `impact: none` y arreglos
+vacíos; si no existe `.discovery-state.json` o el estado no tiene `hash`, `STALE` con
+`impact: material`, `recommendedAction: regenerate` y `changedAreas`, `materialReasons`, `notes` y
+`affectedDocs` vacíos, sin atribuir materialidad por archivo ni por área.
 
 El comando NO SHALL modificar ningún archivo del proyecto. En particular, `discovery --check` NO
 SHALL escribir ni regenerar el seed, el estado ni el `seed-map.json`.
@@ -673,6 +675,13 @@ y el significado de los `.discovery-state.json` ya persistidos.
   dentro de `docs/technical-discovery/` (el `outputDir` del discovery)
 - **THEN** la salida reporta `state:READY`, `impact:none` y `recommendedAction:continue`
 - **AND** `materialReasons`, `changedAreas` y `notes` quedan vacíos
+
+#### Scenario: MISSING y PARTIAL recomiendan generar o completar
+
+- **WHEN** faltan todos o parte de los documentos esperados del seed
+- **THEN** la salida reporta `state:MISSING` con `recommendedAction:generate`, o `state:PARTIAL` con
+  `recommendedAction:complete`, según el caso
+- **AND** `impact` es `none` y `changedAreas`, `materialReasons`, `notes` y `affectedDocs` son `[]`
 
 #### Scenario: Sin estado persistido el resultado es material con arreglos vacíos
 

@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-10 (release 0.26.1).
+> Última actualización: 2026-11-10 (release 0.26.2).
 
 ## Prioridad de ejecución
 
@@ -220,4 +220,31 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **A5 CH-06b `--tests`:** diferido — estructural (spawn sin arista + content guards markdown).
 - **A6 T27 / CH-10 / CH-08-MEM-06 / CH-00 / CH-07 / CH-09a–g:** diferidos — sin evidencia nueva / no offline-testeable.
 - **A7 housekeeping de memoria:** NO ejecutado — requiere OK literal; el conflicto `tier-minimo-*` sigue activo.
-- **Follow-up de tests (WARNING R2):** `snapshotWithMtime` en `test/cli.test.js` duplica el walker de `projectSnapshot`; consolidar en un helper con opción `mtime` (bajo riesgo, sin cambio de contrato).
+- **Follow-up de tests (WARNING R2):** `snapshotWithMtime` en `test/cli.test.js` duplica el walker de `projectSnapshot`; consolidar en un helper con opción `mtime` (bajo riesgo, sin cambio de contrato). → **COMPLETADO en 0.26.2** (F1: consolidación de los walkers en `snapshotTree(dir, mode)`).
+
+## Relación con 0.26.2
+
+0.26.2 contiene un change de conformidad, archivado. Release patch **test-only**: no cambia runtime, comandos ni flags.
+
+- **`readonly-helper-and-freshness-pins` (conformidad, sin delta):** cita `spec:cli-diagnostics#Clasificación determinista de frescura del seed en discovery --check`. Archivado en `aspec/changes/archive/2026-11-10-readonly-helper-and-freshness-pins/`.
+  - **F1:** los 3 walkers read-only (`projectSnapshot`, `snapshotWithMtime`, `snapshotMtimes`) se consolidaron en un único `snapshotTree(dir, mode)` con guard fail-closed para modo desconocido; shapes de hoja preservadas; invariante discriminante mtime-only (bytes no cambia, mtime sí).
+  - **F2:** los pins MISSING/PARTIAL ahora afirman `impact:'none'` + arreglos vacíos (`changedAreas`/`materialReasons`/`notes`/`affectedDocs`); `recommendedAction` NO se pinea (ver pendiente).
+  - **F3:** nuevo pin "estado existente sin `hash`" → `STALE`/`material`/`regenerate` + arreglos vacíos (la clave `hash` se OMITE; `seedFixture` convierte null/undefined en hash real).
+- **Tests resueltos:** el follow-up "WARNING R2" (bullet de arriba) quedó **COMPLETADO en 0.26.2** con la consolidación de walkers (F1).
+- **Release:** tag anotado `v0.26.2` @ merge `e1c0a4fa6f3ca6f5fcfdb513a0abeab11b3515cc`; npm `0.26.2` (latest), tarball servido, `gitHead == e1c0a4f`.
+- **Seed:** regenerado a 0.26.2 (853 fuentes/863 archivos); `discovery --check` `READY`/`impact none`; `seedMapPresent:true`.
+- **Memoria:** 3 decisiones promovidas: `test-readonly-snapshot-single-walker`, `discovery-freshness-pins-conformity-no-delta`, `readonly-f3-must-omit-hash-key`.
+
+**Descartado / diferido en 0.26.2 (sigue pendiente, no hecho):**
+
+- **A2c #18 (producto):** diferido — sin la frase literal "APROBADO: A2c producto"; aplicarlo invalidaría todos los `.discovery-state.json` persistidos.
+- **A3 #4 exclusión mutua de escritores:** diferido — prosa-only; la spec canónica exige paralelización.
+- **A4 / MEM-05 presupuesto working-context:** diferido — requiere curaduría MEM-01 + criticality CH-09a; no offline-testeable.
+- **A5 / CH-06b `--tests` por affected-set:** diferido — estructural: spawn sin arista + content guards markdown.
+- **A6 T27 / CH-10 / CH-08-MEM-06 / CH-00 / CH-07 / CH-09a–g:** diferidos — sin evidencia nueva.
+- **A7 housekeeping de memoria:** NO ejecutado — sin la frase literal "APROBADO: memoria housekeeping"; el conflicto `tier-minimo-*` sigue abierto.
+- **D deuda MEM-05c–e / CH-09e–g:** diferida — sin evidencia + offline + sin disparador.
+
+**Pendiente nuevo en 0.26.2 (requiere cambio funcional):**
+
+- **Divergencia spec↔código en `recommendedAction` para MISSING/PARTIAL:** el código devuelve `generate`/`complete` (`src/cli/index.js:2347-2356`) mientras `spec.md:574-575` manda `continue` cuando `impact` es `none`. NO se pineó (sería oráculo no canónico). Resolverlo requiere un change FUNCIONAL con delta MODIFIED + bump minor. No se agregó regla de memoria de cierre para no duplicar este ítem.

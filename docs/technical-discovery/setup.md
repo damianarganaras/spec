@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-10T19:26:36Z
-pluginVersion: 0.26.2
+generatedAt: 2026-11-10T21:34:06Z
+pluginVersion: 0.26.3
 skillVersion: '2.3'
 ---
 
@@ -168,10 +168,12 @@ del paquete instalado.
   `ok:false` y `errors:[...]`, sin campos nuevos. Desde 0.25.0, el sync de delta del archive y del
   bulk-archive invoca exclusivamente `ancleto specs merge --change <slug>`; un exit no cero aborta
   el archive sin preflight, promoción ni move.
-- **Discovery y frescura (0.26.0–0.26.1)**: `ancleto discovery --check` es read-only, emite
+- **Discovery y frescura (0.26.0–0.26.1, 0.26.3)**: `ancleto discovery --check` es read-only, emite
   `schemaVersion: 2` y clasifica `READY`/`STALE`/`PARTIAL`/`MISSING`; `impact` sólo es `material`
   por archivos materiales o áreas raíz nuevas/eliminadas. No escribe el seed, el estado ni el
-  `seed-map.json`, así que es seguro correrlo como validación antes de cerrar un change.
+  `seed-map.json`, así que es seguro correrlo como validación antes de cerrar un change. Desde
+  0.26.3, `recommendedAction` queda documentado y pineado como `generate` en `MISSING` y `complete`
+  en `PARTIAL`, excepción a la regla `impact:none` → `continue`.
 - **Ayuda sin ejecución (0.25.0)**: en `install`, `update`, `upgrade`, `init`, `memory`, `import`,
   `export`, `mcp`, `specs`, `specs merge`, `projects` y `list --projects`, `--help`/`-h` imprime el
   uso en stdout y sale con exit 0 sin escribir nada. `discovery --help`, la ayuda global y los
@@ -199,9 +201,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.26.2)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.26.3)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-la fija `package.json` = `0.26.2`.
+la fija `package.json` = `0.26.3`.
 
 ## Entorno de máquina
 

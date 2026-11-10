@@ -2,6 +2,17 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.26.3] - 2026-11-10
+
+### Docs
+- **`cli-diagnostics` alineada al comportamiento real de `discovery --check`**: `recommendedAction` queda documentado como `generate` para `MISSING` y `complete` para `PARTIAL`, como excepción a la regla `impact:none` → `continue`, con el escenario correspondiente.
+
+### Tests
+- **Pins de `recommendedAction`**: se fijan los valores `generate` (`MISSING`) y `complete` (`PARTIAL`) en los tests del detector de frescura.
+
+### Notas
+- Sin cambio de runtime ni de comportamiento observable: alcance exclusivo de spec y tests.
+
 ## [0.26.2] - 2026-11-10
 
 ### Tests

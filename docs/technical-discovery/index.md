@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-10T15:47:25Z
-pluginVersion: 0.26.1
+generatedAt: 2026-11-10T19:26:36Z
+pluginVersion: 0.26.2
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (851 fuentes, ~38.610 tokens), `package.json` (`0.26.1`), `src/core/model-catalog.json` y
+`minimo` (853 fuentes, ~38.610 tokens), `package.json` (`0.26.2`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones elididos). Por eso las áreas
@@ -70,7 +70,7 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.26.1` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.26.2` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
@@ -112,16 +112,17 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-   archivos) mantienen el conteo; en 0.22.1-0.26.1 no cambió su cantidad.
-- **Pack actual**: 851 fuentes y ~38.610 tokens (comprimido, tier `minimo`), con 29 entradas de
+   archivos) mantienen el conteo; en 0.22.1-0.26.2 no cambió su cantidad.
+- **Pack actual**: 853 fuentes y ~38.610 tokens (comprimido, tier `minimo`), con 29 entradas de
    archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos. El
-   `.discovery-map.json` de la corrida reporta 861 archivos (aspec 291, `.opencode` 66, docs 21,
+   `.discovery-map.json` de la corrida reporta 863 archivos (aspec 293, `.opencode` 66, docs 21,
    test 27, src 19).
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
-   citadas para reflejar 0.26.1, preservando la estructura del seed. En 0.26.0 `discovery --check`
+   citadas para reflejar 0.26.2, preservando la estructura del seed. En 0.26.0 `discovery --check`
    pasó a calcular `seedMapPresent` antes de clasificar el estado (vale en
    `READY`/`STALE`/`PARTIAL`/`MISSING`) y en 0.26.1 el detector de frescura quedó documentado y
-   pineado en `cli-diagnostics` sin cambio de runtime; `affectedDocs` sigue poblándose sólo en
-   `STALE`. El `ancleto discovery --check` de validación reportó `STALE`/`impact: minor` con
-   `changedAreas: [".ancleto"]`, `seedMapPresent: true` y `affectedDocs: []`; no se ejecutó un
-   segundo pack.
+   pineado en `cli-diagnostics` sin cambio de runtime. 0.26.2 no cambia runtime ni contrato: sólo
+   consolida walkers de snapshot read-only y pines de frescura en tests; `affectedDocs` sigue
+   poblándose sólo en `STALE`. El `ancleto discovery --check` de validación reportó
+   `READY`/`impact: none` con `changedAreas: []`, `seedMapPresent: true` y `affectedDocs: []`; no
+   se ejecutó un segundo pack.

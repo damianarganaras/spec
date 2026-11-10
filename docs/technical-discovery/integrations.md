@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-09T01:42:25Z
-pluginVersion: 0.26.0
+generatedAt: 2026-11-10T15:47:25Z
+pluginVersion: 0.26.1
 skillVersion: '2.3'
 ---
 
@@ -47,7 +47,7 @@ skillVersion: '2.3'
 - `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
-  esta generación se produjo con el fallback `npx` y quedó comprimido (848 fuentes, ~38.610
+  esta generación se produjo con el fallback `npx` y quedó comprimido (851 fuentes, ~38.610
    tokens); los cuerpos de funciones se eliden y Repomix aplica además sus ignores por defecto
   (incluye `**/*.md`), por eso el pack no contiene Markdown (ver `unknowns.md`).
 
@@ -142,6 +142,9 @@ skillVersion: '2.3'
   secuencia de contratos de prompt (`skills/ancleto-archive`, `skills/ancleto-bulk-archive`,
   `agents/documenter.md`) sobre archivos locales, y el guard de `--help`/`-h` es un `console.log`
   del uso antes del dispatch, sin escritura de archivos. Sin red, procesos externos ni servicios.
+- **0.26.0–0.26.1 no agregan integraciones**: `discovery --check` ya era una lectura local de
+  `.config`/estado/hashes, y el detector de frescura de 0.26.1 sólo se documenta y pinea en tests.
+  No hay llamadas a red, procesos externos, MCP ni Repomix involucradas en el chequeo.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee

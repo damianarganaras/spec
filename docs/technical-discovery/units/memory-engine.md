@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
 covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
 sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-09T01:42:25Z
-pluginVersion: 0.26.0
+generatedAt: 2026-11-10T15:47:25Z
+pluginVersion: 0.26.1
 skillVersion: '2.3'
 ---
 
@@ -28,7 +28,9 @@ engine: `recordNode` trata como no-op la reescritura idéntica de una `memory_ke
 toca el motor: la alineación del tier `minimo` y el guard de `specs merge` viven en
 `src/core/tier-models.js` y `src/core/specs-merge.js`, fuera de `src/core/memory/**`. **0.25.0**
 tampoco: sólo cambia el contrato de prompt del archive (el sync invoca `specs merge`) y el guard de
-`--help` en el dispatch del CLI.
+`--help` en el dispatch del CLI. **0.26.0–0.26.1** tampoco lo tocan: el cálculo state-independent
+de `seedMapPresent` y el detector de frescura viven en `checkDiscovery`, y el motor, el esquema, el
+recall y las ops siguen sin cambios.
 
 ## Recorrido relevante
 
@@ -164,6 +166,7 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 | `src/core/memory/snapshot.js` | Copia consistente con historial |
 | `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move |
 | `aspec/specs/memory-engine/spec.md` | Requirement de idempotencia de reescritura idéntica en `recordNode` (0.23.0) |
+| `aspec/specs/cli-diagnostics/spec.md` | Fuera de esta unidad: contrato de frescura del seed (0.26.1) que no toca el motor |
 | `agents/orchestrator.md` | Secuencia del archive y delegación de la promoción entre fase A y fase B |
 | `agents/documenter.md` | Fase A (merge, sin move) y fase B (move, sólo tras la promoción) |
 | `skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md`, `skills/ancleto-onboard/SKILL.md` | Gate de promoción, move y literales de fallo |

@@ -2,6 +2,11 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.26.1] - 2026-11-10
+
+### Added
+- `ancleto discovery --check`: el comportamiento vigente del detector de frescura del seed (clasificación material/minor/none, `materialReasons`, `notes`, áreas y `affectedDocs`) queda fijado en la spec canónica `cli-diagnostics` y pineado con 14 tests. Sin cambio de runtime.
+
 ## [0.26.0] - 2026-11-08
 
 ### Fixed

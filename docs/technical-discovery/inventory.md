@@ -2,8 +2,8 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-09T01:42:25Z
-pluginVersion: 0.26.0
+generatedAt: 2026-11-10T15:47:25Z
+pluginVersion: 0.26.1
 skillVersion: '2.3'
 ---
 
@@ -26,7 +26,7 @@ skillVersion: '2.3'
 | `skills/**` | `units/_map.md` | 21 skills del ciclo SDD/discovery/review |
 | `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
 | `profiles/**` | `units/cli-install.md`, `decisions.md` | Overlay del perfil `test` (agents/commands/templates) |
-| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y changes archivados de diagnóstico, portabilidad, conformidad, merge, orden del archive, idempotencia de memoria, aviso de bundle legacy y EOL de templates (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory`, `template-legacy-eol-preservation`, `agent-model-minimo-migration`, `specs-merge-canonical-guard`, `archive-sync-via-specs-merge`, `cli-subcommand-help-guards`) |
+| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y changes archivados de diagnóstico, portabilidad, conformidad, merge, orden del archive, idempotencia de memoria, aviso de bundle legacy y EOL de templates (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory`, `template-legacy-eol-preservation`, `agent-model-minimo-migration`, `specs-merge-canonical-guard`, `archive-sync-via-specs-merge`, `cli-subcommand-help-guards`, `fix-discovery-seedmap-present`, `spec-seed-freshness-detector`) |
 | `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery, contenido, `specs-merge.test.js` y `memory-engine.test.js` |
 | `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
 | `eslint.config.js`, `package.json` | `setup.md`, `decisions.md` | Lint sobre `src/`, `test/`, `scripts/` y contrato de publicación |
@@ -39,9 +39,9 @@ skillVersion: '2.3'
 
 ## Áreas raíz observadas (`.discovery-map.json` al empacar)
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (288), `audit logs` (9), `commands` (16),
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (291), `audit logs` (9), `commands` (16),
 `docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (19),
-`templates` (2), `test` (27), más 15 archivos raíz. Total observado: **858 archivos**.
+`templates` (2), `test` (27), más 15 archivos raíz. Total observado: **861 archivos**.
 
 Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime.
 `documentation/` tiene 366 archivos en disco, pero el mapa cuenta 340 tras excluir
@@ -49,8 +49,8 @@ Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son ru
 35 archivos; `test/` tiene 27 archivos, todos `*.test.js` en la raíz (20, incluido
 `specs-merge.test.js`; el patrón declarado es `test/*.test.js`). El pack del tier `minimo` excluye
 `test/**`, `docs/**` y `**/*.md`, por lo que la evidencia de esas áreas se verificó por lectura
-directa. El pack de esta generación registra 848 fuentes y ~38.610 tokens, con 29 entradas de
+directa. El pack de esta generación registra 851 fuentes y ~38.610 tokens, con 29 entradas de
 archivo en el cuerpo.
 
-El `.discovery-map.json` observado en esta corrida reporta 858 archivos (aspec 288, src 19,
-test 27). Ver `unknowns.md`.
+El `.discovery-map.json` observado en esta corrida reporta 861 archivos (aspec 291, `.opencode` 66,
+src 19, test 27). Ver `unknowns.md`.

@@ -6493,6 +6493,26 @@ describe('CLI discovery --check impact (minor vs material)', () => {
     return docsDir
   }
 
+  // Snapshot de bytes + mtime por archivo para afirmar que `discovery --check`
+  // no escribe nada (incluido el seed, el estado y el seed-map.json).
+  function snapshotWithMtime(dir) {
+    const files = {}
+    const walk = (rel) => {
+      for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
+        const childRel = rel ? `${rel}/${entry.name}` : entry.name
+        if (entry.isDirectory()) {
+          files[`${childRel}/`] = '<dir>'
+          walk(childRel)
+        } else {
+          const abs = join(dir, childRel)
+          files[childRel] = { bytes: readFileSync(abs).toString('base64'), mtimeMs: statSync(abs).mtimeMs }
+        }
+      }
+    }
+    walk('')
+    return files
+  }
+
   const BASE = { 'src/app.js': 'console.log(1)\n', 'package.json': '{"name":"x"}\n' }
 
   it('sin cambios: READY, impact none', () => {
@@ -6718,6 +6738,237 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       assert.equal(j.impact, 'material')
       assert.equal(j.seedMapPresent, true)
       assert.deepEqual(j.affectedDocs, ['setup.md'])
+    })
+  })
+
+  // Pines del Requirement "Clasificación determinista de frescura del seed en
+  // discovery --check": cada caso afirma state/impact/recommendedAction y los
+  // arreglos, no sólo impact.
+
+  it('pin: cambio no material en area existente (package-lock.json raiz) es minor', () => {
+    withDir((dir) => {
+      seedFixture(dir, { 'src/app.js': 'console.log(1)\n', 'package-lock.json': '{"lockfileVersion":3}\n' })
+      writeFileSync(join(dir, 'package-lock.json'), '{"lockfileVersion":3,"packages":{}}\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.changedAreas, ['package-lock.json'])
+      assert.deepEqual(j.notes, [])
+    })
+  })
+
+  it('pin: archivo material nuevo src/index.ts es material con la razon exacta', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      writeFileSync(join(dir, 'src', 'index.ts'), 'export const x = 1\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material nuevo: src/index.ts'))
+      assert.deepEqual(j.changedAreas, ['src'])
+    })
+  })
+
+  it('pin: package.json raiz modificado es material con la razon exacta', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      writeFileSync(join(dir, 'package.json'), '{"name":"x","version":"1.0.0"}\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material modificado: package.json'))
+      assert.deepEqual(j.changedAreas, ['package.json'])
+    })
+  })
+
+  it('pin: Dockerfile raiz eliminado es material (archivo + area raiz)', () => {
+    withDir((dir) => {
+      seedFixture(dir, { ...BASE, Dockerfile: 'FROM node:20\n' })
+      rmSync(join(dir, 'Dockerfile'))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material eliminado: Dockerfile'))
+      assert.ok(j.materialReasons.includes('area raiz eliminada: Dockerfile'))
+    })
+  })
+
+  it('pin: area raiz nueva por archivo no material (NOTES.md) es material', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      writeFileSync(join(dir, 'NOTES.md'), '# notas\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('area raiz nueva: NOTES.md'))
+    })
+  })
+
+  it('pin: archivo no material nuevo dentro de un area existente (src/util.js) es minor', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      writeFileSync(join(dir, 'src', 'util.js'), 'export const y = 2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.changedAreas, ['src'])
+      assert.deepEqual(j.notes, [])
+    })
+  })
+
+  it('pin: area raiz eliminada al borrar el ultimo archivo (lib/x.js) es material', () => {
+    withDir((dir) => {
+      seedFixture(dir, { ...BASE, 'lib/x.js': 'module.exports = 1\n' })
+      rmSync(join(dir, 'lib', 'x.js'))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('area raiz eliminada: lib'))
+    })
+  })
+
+  it('pin: archivo ignorado dist/x.js no afecta el estado (READY none)', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      mkdirSync(join(dir, 'dist'), { recursive: true })
+      writeFileSync(join(dir, 'dist', 'x.js'), 'x\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+    })
+  })
+
+  it('pin: archivo dentro del outputDir no afecta el estado (READY none)', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, BASE)
+      writeFileSync(join(docsDir, 'extra.md'), '# extra\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+    })
+  })
+
+  it('pin: sin .discovery-state.json es STALE material con arreglos vacios', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, BASE)
+      rmSync(join(docsDir, '.discovery-state.json'))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('pin: estado sin fileHashes y contenido cambiado es minor con la nota exacta', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE, { withHashes: false, hash: 'deadbeef' })
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(9)\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.ok(j.notes.includes('estado previo sin hashes por archivo: el cambio de contenido no se puede atribuir a un area'))
+    })
+  })
+
+  it('pin: affectedDocs es la interseccion en STALE y [] en READY', () => {
+    const seedMap = {
+      version: 1,
+      generatedAt: 'x',
+      docs: {
+        'overview.md': ['src', 'package.json'],
+        'units/palette.md': ['src'],
+        'setup.md': ['package.json']
+      }
+    }
+    withDir((dir) => {
+      seedFixture(dir, BASE, { seedMap })
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.affectedDocs, ['overview.md', 'units/palette.md'])
+    })
+    withDir((dir) => {
+      seedFixture(dir, BASE, { seedMap })
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('pin: discovery --check es read-only en caso material (bytes + mtime)', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      writeFileSync(join(dir, 'package.json'), '{"name":"x","version":"1.0.0"}\n')
+      const before = snapshotWithMtime(dir)
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.schemaVersion, 2)
+      assert.deepEqual(snapshotWithMtime(dir), before)
+    })
+  })
+
+  it('pin: discovery --check es read-only sin estado persistido (bytes + mtime)', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, BASE)
+      rmSync(join(docsDir, '.discovery-state.json'))
+      const before = snapshotWithMtime(dir)
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.schemaVersion, 2)
+      assert.deepEqual(snapshotWithMtime(dir), before)
     })
   })
 })

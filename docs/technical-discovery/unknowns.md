@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-09T01:42:25Z
-pluginVersion: 0.26.0
+generatedAt: 2026-11-10T15:47:25Z
+pluginVersion: 0.26.1
 skillVersion: '2.3'
 ---
 
@@ -19,7 +19,7 @@ skillVersion: '2.3'
   `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`,
   `reconcileLegacyBlocks`, `specsMergeCommand`, `resolveChangeDir`, `specsCommand`,
   `src/core/memory/engine.js` → `recordNode`; `src/core/specs-merge.js`;
-  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 848 fuentes
+  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 851 fuentes
   (~38.610 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
@@ -30,8 +30,9 @@ skillVersion: '2.3'
   `prompt-contracts`, `spec-sync` y `memory-ops`, sobre los changes archivados
   `2026-11-05-host-neutral-bundle`, `2026-11-05-mcp-host-write-routing`,
   `2026-11-05-mcp-oracle-residual-closure`, `2026-11-06-p0-pr5-archive-conformity`,
-  `2026-11-06-ch-06a-specs-merge-deterministic`, `2026-11-06-specs-merge-hardening` y
-  `2026-11-06-archive-order-correctness`, y sobre los conteos de
+  `2026-11-06-ch-06a-specs-merge-deterministic`, `2026-11-06-specs-merge-hardening`,
+  `2026-11-06-archive-order-correctness`, `2026-11-08-fix-discovery-seedmap-present` y
+  `2026-11-10-spec-seed-freshness-detector`, y sobre los conteos de
   `agents/`/`commands/`/`skills/` se verificaron leyendo esos paths directamente. No se auditó el
   resto de `aspec/specs/**`.
 - **Contrato de conformidad 0.21.0**: se describió desde `aspec/specs/prompt-contracts/spec.md`
@@ -95,6 +96,12 @@ skillVersion: '2.3'
   `skills/ancleto-bulk-archive/SKILL.md`, `agents/documenter.md` y el requirement de
   `aspec/specs/prompt-contracts/spec.md`; no se observó el abort del archive ante exit 2 ni el
   bloqueo cuando el CLI no está disponible.
+- **Detector de frescura 0.26.1**: se ejecutó `ancleto discovery --check` una vez sobre este
+  checkout (observado: `STALE`/`minor`, `changedAreas: [".ancleto"]`, `seedMapPresent: true`,
+  `affectedDocs: []`) y se leyó el Requirement canónico y el delta archivado; **no** se ejecutaron
+  los nueve scenarios del contrato (archivo material nuevo/modificado/eliminado, área raíz
+  nueva/eliminada, ignores/outputDir, sin estado, sin `fileHashes` y snapshot de read-only con
+  bytes/mtime), que quedan cubiertos por los tests de pin. No se corrió la suite.
 - **Orden del archive 0.22.1**: no se archivó un change real. La secuencia merge/sync → preflight →
   promoción → move → commit y los literales de fallo se verificaron leyendo
   `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`,
@@ -133,15 +140,16 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **858 archivos** (aspec 288, docs 21,
-  test 27, src 19, etc.). El pack registra **848 fuentes** (~38.610 tokens) y 29 entradas de archivo
+- **`.discovery-map.json` observado**: el generador reporta **861 archivos** (aspec 291,
+  `.opencode` 66, docs 21, test 27, src 19, etc.). El pack registra **851 fuentes** (~38.610 tokens)
+  y 29 entradas de archivo
   porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además
   Repomix filtra por sus propios ignores.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.26.0`). No se usan como fuente de contenido.
+  gitignored; deben alinearse con `package.json` (`0.26.1`). No se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
   versión local es una verificación puntual, no una fuente de reglas. El propio `check` compara ese
@@ -166,10 +174,16 @@ skillVersion: '2.3'
   final lo reporta el `discovery --check` posterior. El único cambio funcional de 0.26.0 es el
   contrato de `seedMapPresent`/`readSeedMap`, documentado en `units/discovery-engine.md` y
   `decisions.md`.
+- **Estado inicial del chequeo (0.26.1)**: el pack y `.discovery-state.json` se regeneraron antes
+  de esta materialización y el `discovery --check` de validación devolvió `STALE`/`impact: minor`
+  con `changedAreas: [".ancleto"]`, `materialReasons: []`, `seedMapPresent: true` y
+  `affectedDocs: []`, mientras los documentos todavía declaraban 0.26.0. Para reflejar 0.26.1 se
+  actualizaron los once documentos del seed desde el pack y las fuentes citadas; 0.26.1 es un
+  release documental/test: no cambia `src/` ni integraciones.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.26.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.26.1`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -184,7 +198,9 @@ skillVersion: '2.3'
   `findDeltaSectionHeadings` y el guard canónica-only de `mergeSpecText` (0.24.0), el guard central
   `SUBCOMMAND_HELP`/`wantsHelp` (0.25.0) y el ruteo del sync del archive por `specs merge` (0.25.0),
   el cálculo state-independent de `seedMapPresent` y el rechazo de `docs` no-objeto-plano en
-  `readSeedMap` (0.26.0), `declaredModelIds`, `modelIdsFromCatalog`, `missingModelIdsInCatalog`,
+  `readSeedMap` (0.26.0), el contrato del detector de frescura y su lista cerrada de archivos
+  materiales (0.26.1, `aspec/specs/cli-diagnostics/spec.md`), `declaredModelIds`,
+  `modelIdsFromCatalog`, `missingModelIdsInCatalog`,
   gate de `--write`,
   `looksBinaryMissing`, lint sobre `scripts/`, snapshot de 5 proveedores / 211 IDs, flujo de
   `scripts/refresh-model-catalog.mjs`, `installedPaths` como unión, comandos del CLI, firmas de

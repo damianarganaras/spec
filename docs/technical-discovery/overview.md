@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-09T01:42:25Z
-pluginVersion: 0.26.0
+generatedAt: 2026-11-10T15:47:25Z
+pluginVersion: 0.26.1
 skillVersion: '2.3'
 ---
 
@@ -212,6 +212,12 @@ test/                   suite node --test (content guards incluidos)
     `READY`, `STALE`, `PARTIAL` y `MISSING`; `readSeedMap` rechaza un `docs` que no sea objeto plano
     (arreglo o `null`). `affectedDocs` sigue dependiendo de `changedAreas` y sólo se puebla en
     `STALE`.
+22. **Detector de frescura documentado y pineado (0.26.1)**: el comportamiento vigente de
+    `discovery --check` —precedencia de `impact`, lista cerrada de archivos materiales, `areaOf`,
+    formas exactas de `materialReasons`/`notes`, estructura de estado y read-only— queda fijado en
+    un `ADDED` de `aspec/specs/cli-diagnostics/spec.md` y cubierto por tests de pin. No cambia
+    `src/`: un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`, `areaOf` o
+    `computeImpact` exige un delta `MODIFIED`, no un patch documental.
 
 ## Recorrido de una instalación con tier `minimo`
 

@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-10T21:34:06Z
-pluginVersion: 0.26.3
+generatedAt: 2026-11-11T03:08:32Z
+pluginVersion: 0.26.4
 skillVersion: '2.3'
 ---
 
@@ -223,10 +223,15 @@ test/                   suite node --test (content guards incluidos)
     modo desconocido e invariante de `mtime` discriminante), y se pinean los estados `MISSING`/
     `PARTIAL` de `discovery --check` y la variante "estado existente sin `hash`" (`STALE`/`material`/
     `regenerate`). No cambia runtime ni comportamiento observable.
-24. **`recommendedAction` alineado en `cli-diagnostics` (0.26.3)**: el Requirement de frescura queda
+24. **`recommendedAction` alineado en `cli-diagnostics` (0.26.x)**: el Requirement de frescura queda
     documentado con la excepción que el CLI ya implementa —`generate` en `MISSING` y `complete` en
     `PARTIAL`, aun con `impact: none`, en lugar de `continue`— y los tests de pin fijan ambos
     valores. No cambia `src/` ni el comportamiento observable: release documental/test.
+25. **Guard estructural de deltas activos (0.26.4)**: `test/delta-spec-structure.test.js` recorre
+    `aspec/changes` (excluyendo `archive` por identidad) y valida cada
+    `<change>/specs/<capability>/spec.md` con el parser real del merge, `parseDeltaSpec`; tolera cero
+    deltas activos y no toca `src/`. El Requirement nuevo vive en `spec-sync` y el release es
+    test-only.
 
 ## Recorrido de una instalación con tier `minimo`
 

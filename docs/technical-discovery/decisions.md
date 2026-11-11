@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-10T21:34:06Z
-pluginVersion: 0.26.3
+generatedAt: 2026-11-11T03:08:32Z
+pluginVersion: 0.26.4
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.26.3)
+## Modelos y tiers (estado 0.26.4)
 
 ### Tabla y cadenas
 
@@ -687,7 +687,9 @@ proposal, tasks y delta de `spec-sync`) y
 `aspec/changes/archive/2026-11-06-specs-merge-hardening/` (0.22.1, dos `MODIFIED` sobre la misma
 capability). La capability canónica resultante es `aspec/specs/spec-sync/spec.md`, con cinco
 Requirements: merge determinístico, idempotencia, fail-closed, dry-run y alcance acotado. 0.22.1 no
-agrega comandos ni flags; endurece el parser y el fail-closed.
+agrega comandos ni flags; endurece el parser y el fail-closed. En 0.26.4 la capability suma un
+Requirement que ancla la validación estructural de los deltas de changes activos a la suite
+declarada, reutilizando `parseDeltaSpec`.
 
 ### Módulo puro y separación de capas
 
@@ -993,10 +995,10 @@ sin `--tier` es `normal`.
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 856 fuentes, ~38.610 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 866 archivos (aspec 296, `.opencode` 66, docs 21,
-  test 27, src 19, etc.). 0.26.3 no cambia runtime: sólo alinea `cli-diagnostics` al
-  `recommendedAction` real y lo pinea en tests.
+- **Pack actual**: tier `minimo`, 860 fuentes, ~38.610 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 870 archivos (aspec 299, `.opencode` 66, docs 21,
+  test 28, src 19, etc.). 0.26.4 no cambia runtime: sólo agrega a la suite declarada el guard
+  estructural de los delta specs activos y documenta el Requirement en `spec-sync`.
 
 ### Contrato del detector de frescura (0.26.1)
 
@@ -1012,7 +1014,7 @@ reglas.
   `material` (si `materialReasons` no está vacío) > `minor` (si `changedAreas` o `notes` no están
   vacíos) > `none`; `recommendedAction` es `regenerate` para `material`, `continue` para `minor` o
   `none`, y `generate`/`complete` cuando el estado es `MISSING`/`PARTIAL` (excepción a la regla
-  anterior, documentada en 0.26.3).
+  anterior, documentada y pineada en `cli-diagnostics`).
 - **Archivos materiales (lista cerrada)**: `package.json` **sólo en la raíz**; `tsconfig.json`,
   `tsconfig.<sufijo>.json` y `jsconfig.json`; configs de
   `vite|webpack|rollup|next|nuxt|astro|svelte|tailwind`; `docker-compose.yml|yaml`; `Dockerfile`;
@@ -1032,7 +1034,7 @@ reglas.
 - Decisiones promovidas: `seed-freshness-detector-documented-in-cli-diagnostics` (documentar en
   `cli-diagnostics`, donde ya viven `seedMapPresent`/`affectedDocs`) y
   `seed-freshness-rule-change-requires-minor` (editar las reglas exige delta `MODIFIED`).
-- **Excepción de `recommendedAction` (0.26.3)**: el change archivado
+- **Excepción de `recommendedAction` (0.26.x)**: el change archivado
   `2026-11-10-align-freshness-recommended-action-spec` (delta `MODIFIED` de `cli-diagnostics`) fija
   en la spec lo que `checkDiscovery` ya emite: `generate` en `MISSING` y `complete` en `PARTIAL`,
   aun cuando su `impact` es `none`; los tests pinean ambos valores y `src/` no cambia.
@@ -1094,7 +1096,7 @@ reglas.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.26.3`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.26.4`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el significado de los `.discovery-state.json` ya persistidos. El contenido de `docs/technical-discovery/`

@@ -6967,6 +6967,33 @@ describe('CLI discovery --check impact (minor vs material)', () => {
     })
   })
 
+  // `hash` desincronizado pero `sources` y `fileHashes` coinciden con el arbol actual:
+  // el estado queda STALE por el hash, pero `computeImpact` no ve cambios y devuelve
+  // `none`, asi que el seed sigue util y la accion es `continue` (no `regenerate`).
+  it('pin: hash desincronizado con sources y fileHashes vigentes es STALE none con continue', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, BASE)
+      const statePath = join(docsDir, '.discovery-state.json')
+      const state = JSON.parse(readFileSync(statePath, 'utf8'))
+      state.hash = 'deadbeefdeadbeef'
+      writeFileSync(statePath, JSON.stringify(state, null, 2))
+      const tampered = JSON.parse(readFileSync(statePath, 'utf8'))
+      assert.equal(tampered.hash, 'deadbeefdeadbeef', 'el hash quedo desincronizado')
+      assert.ok(Array.isArray(tampered.sources) && tampered.sources.length, 'sources intacto')
+      assert.ok(tampered.fileHashes && Object.keys(tampered.fileHashes).length, 'fileHashes intacto')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
   it('pin: estado sin fileHashes y contenido cambiado es minor con la nota exacta', () => {
     withDir((dir) => {
       seedFixture(dir, BASE, { withHashes: false, hash: 'deadbeef' })

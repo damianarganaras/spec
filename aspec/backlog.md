@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-10 (release 0.26.2).
+> Última actualización: 2026-11-10 (release 0.26.3).
 
 ## Prioridad de ejecución
 
@@ -247,4 +247,21 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 **Pendiente nuevo en 0.26.2 (requiere cambio funcional):**
 
-- **Divergencia spec↔código en `recommendedAction` para MISSING/PARTIAL:** el código devuelve `generate`/`complete` (`src/cli/index.js:2347-2356`) mientras `spec.md:574-575` manda `continue` cuando `impact` es `none`. NO se pineó (sería oráculo no canónico). Resolverlo requiere un change FUNCIONAL con delta MODIFIED + bump minor. No se agregó regla de memoria de cierre para no duplicar este ítem.
+- **Divergencia spec↔código en `recommendedAction` para MISSING/PARTIAL:** el código devuelve `generate`/`complete` (`src/cli/index.js:2347-2356`) mientras `spec.md:574-575` manda `continue` cuando `impact` es `none`. NO se pineó (sería oráculo no canónico). Resolverlo requiere un change FUNCIONAL con delta MODIFIED + bump minor. No se agregó regla de memoria de cierre para no duplicar este ítem. → **RESUELTO en 0.26.3** (`align-freshness-recommended-action-spec`).
+
+## Relación con 0.26.3
+
+0.26.3 contiene un change archivado. Release patch (spec+test): alinea la spec canónica con el comportamiento ya vigente; sin cambio de runtime, comandos ni flags.
+
+- **`align-freshness-recommended-action-spec` (funcional, delta MODIFIED en `cli-diagnostics`):** la canónica `aspec/specs/cli-diagnostics/spec.md` quedó alineada al código: `MISSING`→`recommendedAction: generate`, `PARTIAL`→`complete`, documentado como excepción a la regla `impact:none`→`continue`; nuevo scenario `MISSING y PARTIAL recomiendan generar o completar`; párrafo de estructura precisado (`changedAreas`/`materialReasons`/`notes`/`affectedDocs` vacíos + `missingDocs`). Tests pinean `generate`/`complete`. Archivado en `aspec/changes/archive/2026-11-10-align-freshness-recommended-action-spec/`. **Resuelve el pendiente de 0.26.2** (divergencia `recommendedAction`).
+- **Release:** tag anotado `v0.26.3` @ merge `ce6fad4`; npm `0.26.3` (latest), tarball servido, `gitHead == ce6fad4`.
+- **Seed:** regenerado a 0.26.3 (856 fuentes/866 archivos/aspec 296); `discovery --check` `READY`/`impact none`; `seedMapPresent:true`.
+- **Memoria:** 2 decisiones promovidas: `freshness-recommended-action-spec-alignment`, `pin-recommended-action-missing-partial`.
+
+**Notas / pendiente en 0.26.3 (no hecho):**
+
+- **Memoria — nodo incompleto:** `discovery-freshness-pins-conformity-no-delta` (promovido en 0.26.2) quedó **incompleto/contradicho** por la evidencia nueva (afirmaba que la conducta de `cli-diagnostics` ya era canónica; el mapeo `recommendedAction` no lo era). NO se supersedió: requiere OK explícito del usuario. → **RESUELTO**: nodo superseded en limpieza posterior con la evidencia de 0.26.3 (el mapeo `recommendedAction` no era canónico).
+- **Gap de validación de deltas:** la estructura de un delta NO está cubierta por los comandos declarados (lint = `eslint src/ test/ scripts/`; los tests no leen `aspec/changes/**`); sólo `specs merge`/`specs check` lo validan en el archive. El review debe leer el delta; un delta malformado pasaría el ledger del tester. → **sigue**: no es defecto de código (el archive corre `specs check`); mitigación: el review lee el delta. Candidato para el próximo debate de scope.
+- **`STALE`+`impact:none` → `continue`:** alcanzable pero sin pin (gap conocido, fuera de alcance). → **RESUELTO**: pin agregado (`hash` desincronizado con `sources`/`fileHashes` vigentes ⇒ STALE/none/continue).
+- **A2c #18 / A3 #4 / A4 MEM-05 / A5 CH-06b / A6 / A7 memoria / D deuda MEM-05c–e + CH-09e–g:** siguen diferidos (sin evidencia nueva / sin OK literal).
+- **Residual 0.26.3:** el pin `STALE`+`impact:none` está **commiteado pero no liberado**; queda pendiente en la próxima sesión (patch mínimo 0.26.4).

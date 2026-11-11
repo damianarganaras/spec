@@ -2,6 +2,14 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.26.4] - 2026-11-11
+
+### Tests
+- **Guard de validación estructural de deltas activos**: `test/delta-spec-structure.test.js` valida la estructura de los delta specs de los changes activos con el parser real del merge, excluye `archive/` por identidad y tolera cero changes activos.
+
+### Notas
+- Incluye el pin residual de frescura de seed ya commiteado en `0f6ed0a` (`STALE` con `impact: none` → `continue`), liberado en esta versión.
+
 ## [0.26.3] - 2026-11-10
 
 ### Docs

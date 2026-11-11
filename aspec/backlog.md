@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-10 (release 0.26.3).
+> Última actualización: 2026-11-11 (release 0.26.4).
 
 ## Prioridad de ejecución
 
@@ -261,7 +261,20 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 **Notas / pendiente en 0.26.3 (no hecho):**
 
 - **Memoria — nodo incompleto:** `discovery-freshness-pins-conformity-no-delta` (promovido en 0.26.2) quedó **incompleto/contradicho** por la evidencia nueva (afirmaba que la conducta de `cli-diagnostics` ya era canónica; el mapeo `recommendedAction` no lo era). NO se supersedió: requiere OK explícito del usuario. → **RESUELTO**: nodo superseded en limpieza posterior con la evidencia de 0.26.3 (el mapeo `recommendedAction` no era canónico).
-- **Gap de validación de deltas:** la estructura de un delta NO está cubierta por los comandos declarados (lint = `eslint src/ test/ scripts/`; los tests no leen `aspec/changes/**`); sólo `specs merge`/`specs check` lo validan en el archive. El review debe leer el delta; un delta malformado pasaría el ledger del tester. → **sigue**: no es defecto de código (el archive corre `specs check`); mitigación: el review lee el delta. Candidato para el próximo debate de scope.
+- **Gap de validación de deltas:** la estructura de un delta NO está cubierta por los comandos declarados (lint = `eslint src/ test/ scripts/`; los tests no leen `aspec/changes/**`); sólo `specs merge`/`specs check` lo validan en el archive. El review debe leer el delta; un delta malformado pasaría el ledger del tester. → **CERRADO en 0.26.4**: cubierto por `test/delta-spec-structure.test.js`, que barre `aspec/changes/*/specs/*/spec.md` y valida con `parseDeltaSpec`.
 - **`STALE`+`impact:none` → `continue`:** alcanzable pero sin pin (gap conocido, fuera de alcance). → **RESUELTO**: pin agregado (`hash` desincronizado con `sources`/`fileHashes` vigentes ⇒ STALE/none/continue).
 - **A2c #18 / A3 #4 / A4 MEM-05 / A5 CH-06b / A6 / A7 memoria / D deuda MEM-05c–e + CH-09e–g:** siguen diferidos (sin evidencia nueva / sin OK literal).
-- **Residual 0.26.3:** el pin `STALE`+`impact:none` está **commiteado pero no liberado**; queda pendiente en la próxima sesión (patch mínimo 0.26.4).
+- **Residual 0.26.3:** el pin `STALE`+`impact:none` está **commiteado pero no liberado**; queda pendiente en la próxima sesión (patch mínimo 0.26.4). → **RESUELTO en 0.26.4**: el pin residual quedó incluido en la release.
+
+## Relación con 0.26.4
+
+0.26.4 contiene un change archivado. Release patch (test+spec): agrega un guard estructural de deltas de changes activos en la suite declarada y libera el pin residual de frescura; sin cambio de runtime, comandos ni flags.
+
+- **`active-delta-structure-guard` (funcional con delta ADDED en `spec-sync`):** `test/delta-spec-structure.test.js` (10 tests) barre `aspec/changes/*/specs/*/spec.md`, excluye `archive` por identidad y valida con `parseDeltaSpec`; tolera 0 changes activos y falla cerrado sólo ante árbol ilegible o spec no legible. Delta `Validación estructural de delta specs de changes activos` mergeado con `specs merge --change` y change archivado en `aspec/changes/archive/2026-11-11-active-delta-structure-guard/`. Decisión `active-delta-structure-guard` promovida a memoria.
+- **Pin residual de frescura:** el pin `STALE` con `impact: none` → `continue` (ya commiteado en `0f6ed0a`) queda **liberado** en esta release.
+- **Seed:** regenerado `READY` / `impact: none` / `seedMapPresent: true`; `pluginVersion 0.26.4`; 860 fuentes / ~38.6k tokens.
+
+**Descartado / diferido en 0.26.4 (sigue pendiente, no hecho):**
+
+- **Extender `specsCheckCommand`:** descartado — violaría la compatibilidad pineada de `specs check` y el alcance acotado de `specs merge`, y tocar `src/cli/index.js` lo volvería minor.
+- **A2c / A3 `#4` / A4 `MEM-05` / A5 `CH-06b` / A6 / A7 / D / `#6` / `#18` / `T27` / `CH-00` / `CH-07` / `CH-08`-`MEM-06` / `CH-09a–g` / `CH-10`:** el debate de esta sesión no encontró evidencia nueva, por eso siguen diferidos; `ancleto-vscode-extension` sigue diferido, el conflicto `tier-minimo-*` y el propuesto `projects-guarded-registry-write` siguen sin OK literal.

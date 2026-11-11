@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T15:26:58.224Z",
+  "generatedAt": "2026-11-11T15:55:54.807Z",
   "sources": [
     ".ancleto/machine-env.md",
     ".ancleto/memory.db",
@@ -869,13 +869,13 @@
   "fileHashes": {
     ".ancleto/machine-env.md": "ad8bb6eca2c653e0",
     ".ancleto/memory.db": "761351ab2473d16a",
-    ".ancleto/memory.db-shm": "9e94aee370ab7a15",
-    ".ancleto/memory.db-wal": "b4d4c538e60fe0c3",
+    ".ancleto/memory.db-shm": "dda67d9f84e98a27",
+    ".ancleto/memory.db-wal": "ed4d38ebbb3a4b34",
     ".ancleto/model-catalog.candidate.json": "b9a899ae6758c716",
     ".ancleto/next-session-prompt.md": "5f62001d37f41bf7",
-    ".ancleto/working-context.md": "ce88b0aa2e0e10b0",
+    ".ancleto/working-context.md": "b113180dbd602b57",
     ".ancletorc": "707d395a1904bc1c",
-    ".discovery-map.json": "6668d566dbef1ee7",
+    ".discovery-map.json": "ae589a14696efd43",
     ".gitattributes": "d60f352d0db1404c",
     ".github/workflows/publish.yml": "afdbac4220001818",
     ".gitignore": "851805d264f984c2",
@@ -961,7 +961,7 @@
     "agents/technical-discovery.md": "ec2f9093746a06f8",
     "agents/technical-seed-writer.md": "380d8a62c93dc006",
     "agents/tester.md": "cd2a0ece6b48144a",
-    "aspec/backlog.md": "508db41ea05ad39b",
+    "aspec/backlog.md": "a3504353fcf1b7e4",
     "aspec/changes/ancleto-vscode-extension/design.md": "7c9463bc7f436e1b",
     "aspec/changes/ancleto-vscode-extension/proposal.md": "2c1a5b4f34084482",
     "aspec/changes/ancleto-vscode-extension/specs/vscode-distribution/spec.md": "fb2c7bb3ed161e75",
@@ -1288,7 +1288,7 @@
     "commands/cleto-transplant.md": "c51193685b9b3738",
     "commands/cleto-update.md": "30f69eb975f13984",
     "commands/cleto-verify.md": "2d43e995236be79c",
-    "docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md": "c56d4e159f895985",
+    "docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md": "5921be66da618217",
     "docs/PLAN_REINGENIERIA_FRAMEWORK_V2_MEMORIA_FIRST.md": "7a57c7ef25400990",
     "docs/ancleto-cli-framework.md": "7de5f995eb53a956",
     "docs/guia-configuracion.md": "a583546a2a1b982e",
@@ -1731,10 +1731,10 @@
     "test/tier-models.test.js": "aaa0771329d1b604",
     "test/working-context.test.js": "700174f8bc8e94e2"
   },
-  "hash": "fa50f3c0483d00654e8ca5d2c7dc33c3646e8f2a5451eff7304a335b7c02e475",
+  "hash": "8fa726fc93620bb3aedc63c110f88fb22ac5a0d4d65fb44b05a2bc73aad209a4",
   "ruleVersion": 2,
   "semantic": {
-    "hash": "ebb5d53389a8188051a9d3e3279fcea476fdfe829608499977ed3d1b06f7370d",
+    "hash": "0a8718dfc0ddd2d146386d39f125ac663b4f1564ffadad533ab41ca2b519ab75",
     "fileHashes": {
       "package.json": "1b4df396b665de56"
     }

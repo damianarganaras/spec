@@ -68,6 +68,7 @@ Out of scope:
   **Descartado:** Reemplazar `hash`/`fileHashes` por los normalizados con `version: 2` (un CLI anterior compararía crudo contra normalizado y reportaría `material` — rompe rollback); reinterpretar `version` (mismo problema); migrar estados en `--check` (el comando es read-only por contrato).
   **Justificación:** Garantía exigida: la nueva regla sólo puede reducir materialidad, nunca aumentarla; ningún repo sano con estado persistido debe pasar a `STALE`/`material` por el cambio de regla.
   **Refs:**
+- change:seed-freshness-version-bump-not-material
 - path:src/cli/index.js
 - path:test/cli.test.js
   **Estado:** aprobado
@@ -97,6 +98,7 @@ Out of scope:
   **Descartado:** Incluirlo acá (fuera de la aprobación literal, que cubre sólo el bump de `version`).
   **Justificación:** La aprobación de producto es explícita y acotada; ampliarla sin nueva aprobación sería una distorsión de scope.
   **Refs:**
+- change:seed-freshness-version-bump-not-material
 - path:src/cli/index.js
 - path:aspec/backlog.md
   **Estado:** aprobado

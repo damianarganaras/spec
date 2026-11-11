@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-10T21:34:06Z
-pluginVersion: 0.26.3
+generatedAt: 2026-11-11T03:08:32Z
+pluginVersion: 0.26.4
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (856 fuentes, ~38.610 tokens), `package.json` (`0.26.3`), `src/core/model-catalog.json` y
+`minimo` (860 fuentes, ~38.610 tokens), `package.json` (`0.26.4`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones elididos). Por eso las áreas
@@ -28,8 +28,8 @@ paths citados (ver `unknowns.md`).
 | Reglas, contratos, riesgos, deuda, acoplamiento e impacto de cambios | `decisions.md` |
 | Sistemas externos y dependencias observables (npm, GitHub, Repomix, git, MCP, opencode) | `integrations.md` |
 | Catálogo de unidades (módulos, agents, skills, commands) con propósito y entry point | `units/_map.md` |
-| **Frescura del seed (0.26.0–0.26.1; `recommendedAction` 0.26.3)**: contrato de `discovery --check` (`schemaVersion:2`, read-only, `impact` `none|minor|material`, lista de archivos materiales, `areaOf`, formas exactas de `materialReasons`/`notes`, estado `READY/STALE/PARTIAL/MISSING`), `seedMapPresent` state-independent y `recommendedAction` (`generate` en `MISSING`, `complete` en `PARTIAL`, excepción a `impact:none` → `continue`) | `decisions.md`, `units/discovery-engine.md` |
-| **Merge de specs (0.22.0–0.22.1; guard 0.24.0)**: `ancleto specs merge --change <slug> [--dry-run] [--json]`, `src/core/specs-merge.js`, capability `spec-sync`; preámbulo H1 estructural, contenedor `archive` fail-closed, `ADDED` con una línea en blanco, atomicidad acotada al plan y, desde 0.24.0, heading de sección de delta en la canónica fail-closed para los cuatro tipos | `decisions.md`, `units/cli-install.md`, `units/_map.md` |
+| **Frescura del seed (0.26.0–0.26.1; `recommendedAction` 0.26.x)**: contrato de `discovery --check` (`schemaVersion:2`, read-only, `impact` `none|minor|material`, lista de archivos materiales, `areaOf`, formas exactas de `materialReasons`/`notes`, estado `READY/STALE/PARTIAL/MISSING`), `seedMapPresent` state-independent y `recommendedAction` (`generate` en `MISSING`, `complete` en `PARTIAL`, excepción a `impact:none` → `continue`) | `decisions.md`, `units/discovery-engine.md` |
+| **Merge de specs (0.22.0–0.22.1; guard 0.24.0)**: `ancleto specs merge --change <slug> [--dry-run] [--json]`, `src/core/specs-merge.js`, capability `spec-sync`; preámbulo H1 estructural, contenedor `archive` fail-closed, `ADDED` con una línea en blanco, atomicidad acotada al plan y, desde 0.24.0, heading de sección de delta en la canónica fail-closed para los cuatro tipos; desde 0.26.4 la suite declarada valida la estructura de los deltas de changes activos con `parseDeltaSpec` | `decisions.md`, `units/cli-install.md`, `units/_map.md` |
 | **Orden del archive (0.22.1)**: merge/sync → preflight read-only → promoción de `## Decisiones` → move → commit; literales de fallo y superficies canónicas | `decisions.md`, `units/memory-engine.md`, `units/_map.md` |
 | **Conformidad vs cambio funcional (0.21.0)**: predicado de cita resoluble + ausencia de bloques delta, `spec-required`, ruteo único | `decisions.md`, `overview.md`, `units/_map.md` |
 | **Archive de conformidad sin delta (0.21.0)**: reporte "sin delta", cita fail-closed, garantía acotada, reuso del ledger cerrado | `decisions.md`, `units/cli-install.md` |
@@ -70,11 +70,14 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.26.3` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.26.4` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
-  `aspec/changes/archive/2026-11-10-align-freshness-recommended-action-spec/` (0.26.3: alinea el
+  `aspec/changes/archive/2026-11-11-active-delta-structure-guard/` (0.26.4: agrega a la suite
+  declarada un guard estructural de los delta specs de changes activos que reutiliza `parseDeltaSpec`
+  y documenta el Requirement en `spec-sync`; sin cambio de runtime),
+  `aspec/changes/archive/2026-11-10-align-freshness-recommended-action-spec/` (0.26.x: alinea el
   Requirement de frescura de `cli-diagnostics` al `recommendedAction` real —`generate` en `MISSING`,
   `complete` en `PARTIAL`, excepción a `impact:none` → `continue`— y lo pinea en tests; sin cambio
   de runtime),
@@ -116,17 +119,18 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-   archivos) mantienen el conteo; en 0.22.1-0.26.2 no cambió su cantidad.
-- **Pack actual**: 856 fuentes y ~38.610 tokens (comprimido, tier `minimo`), con 29 entradas de
+   archivos) mantienen el conteo; en 0.22.1-0.26.4 no cambió su cantidad.
+- **Pack actual**: 860 fuentes y ~38.610 tokens (comprimido, tier `minimo`), con 29 entradas de
    archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos. El
-   `.discovery-map.json` de la corrida reporta 866 archivos (aspec 296, `.opencode` 66, docs 21,
-   test 27, src 19).
+   `.discovery-map.json` de la corrida reporta 870 archivos (aspec 299, `.opencode` 66, docs 21,
+   test 28, src 19).
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
-   citadas para reflejar 0.26.3, preservando la estructura del seed. En 0.26.0 `discovery --check`
+   citadas para reflejar 0.26.4, preservando la estructura del seed. En 0.26.0 `discovery --check`
    pasó a calcular `seedMapPresent` antes de clasificar el estado (vale en
    `READY`/`STALE`/`PARTIAL`/`MISSING`) y en 0.26.1 el detector de frescura quedó documentado y
-   pineado en `cli-diagnostics` sin cambio de runtime. 0.26.3 no cambia runtime ni contrato: sólo
-   alinea el Requirement de frescura al `recommendedAction` real (`generate` en `MISSING`, `complete`
-   en `PARTIAL`) y lo pinea en tests; `affectedDocs` sigue poblándose sólo en `STALE`. El
+   pineado en `cli-diagnostics` sin cambio de runtime. 0.26.4 tampoco cambia runtime ni contrato:
+   agrega a la suite declarada el guard estructural de los delta specs activos
+   (`test/delta-spec-structure.test.js`) y documenta el Requirement en `spec-sync`; `affectedDocs`
+   sigue poblándose sólo en `STALE`. El
    `ancleto discovery --check` de validación reportó `READY`/`impact: none` con `changedAreas: []`,
    `seedMapPresent: true` y `affectedDocs: []`; no se ejecutó un segundo pack.

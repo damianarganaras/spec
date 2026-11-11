@@ -69,6 +69,47 @@ function collectActiveDeltas(root) {
   return deltas.sort()
 }
 
+// Un `spec.md` bajo un change activo solo es un delta mal ubicado si su contenido
+// pretende ser un delta: el parser real lo acepta sin errores, o al menos declara un
+// heading de delta (asi un delta real con errores estructurales tambien falla). Un
+// archivo incidental (notas, fixture) no produce falso positivo. El oraculo es
+// `parseDeltaSpec`, el mismo del merge; no se inventa otro.
+const DELTA_HEADING_RE = /^##\s+(ADDED|MODIFIED|REMOVED|RENAMED) Requirements\b/m
+
+function looksLikeDeltaSpec(text) {
+  // Un archivo vacío (o sólo whitespace) nunca pretende ser un delta: `parseDeltaSpec('')`
+  // devuelve `errors: []`, así que sin esta guarda un `spec.md` vacío se marcaría como mal ubicado.
+  return text.trim() !== '' && (parseDeltaSpec(text).errors.length === 0 || DELTA_HEADING_RE.test(text))
+}
+
+// Guard fail-closed: cualquier `spec.md` bajo un change activo que no sea
+// `specs/<capability>/spec.md` es invisible para el merge y para
+// `collectActiveDeltas`, y se perdería en el archive sin aviso. Recorre cada
+// entrada directa de `aspec/changes` (excluyendo `archive` por identidad del
+// nombre) y devuelve las rutas no canónicas que pretenden ser un delta.
+// Propaga errores de lectura (fail-closed).
+function collectMisplacedActiveSpecs(root) {
+  const changesDir = join(root, 'aspec', 'changes')
+  const misplaced = []
+  const walk = (dir, relParts) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        walk(join(dir, entry.name), [...relParts, entry.name])
+      } else if (entry.isFile() && entry.name === 'spec.md') {
+        const canonical = relParts.length === 3 && relParts[1] === 'specs'
+        if (canonical) continue
+        const specPath = join(dir, entry.name)
+        if (looksLikeDeltaSpec(readFileSync(specPath, 'utf8'))) misplaced.push(specPath)
+      }
+    }
+  }
+  for (const entry of readdirSync(changesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === 'archive') continue
+    walk(join(changesDir, entry.name), [entry.name])
+  }
+  return misplaced.sort()
+}
+
 const VALID_ADDED = [
   '## ADDED Requirements',
   '',
@@ -234,4 +275,92 @@ test('ningún delta activo del repositorio es rechazado por el parser', () => {
     assert.ok(existsSync(deltaPath), `delta inexistente: ${deltaPath}`)
     assertDeltaValid(readFileSync(deltaPath, 'utf8'), deltaPath)
   }
+})
+
+// El guard es falla-cerrada: un `spec.md` válido fuera de la ruta canónica es un
+// artefacto que el merge nunca leería. Se verifica con el mismo oráculo que el
+// contenido es un delta real (no un archivo incidental).
+test('collectMisplacedActiveSpecs detecta spec.md no canónicos bajo un change activo', (t) => {
+  const root = withRoot(t)
+  const canonical = writeDelta(root, join('aspec', 'changes', 'ok-change', 'specs', 'cap', 'spec.md'))
+  const atSpecs = writeDelta(root, join('aspec', 'changes', 'ok-change', 'specs', 'spec.md'))
+  const nested = writeDelta(root, join('aspec', 'changes', 'ok-change', 'specs', 'a', 'b', 'spec.md'))
+  const atChangeRoot = writeDelta(root, join('aspec', 'changes', 'ok-change', 'spec.md'))
+
+  assert.deepEqual(collectMisplacedActiveSpecs(root), [atSpecs, nested, atChangeRoot].sort())
+  assert.ok(!collectMisplacedActiveSpecs(root).includes(canonical))
+  for (const specPath of [atSpecs, nested, atChangeRoot]) {
+    assertDeltaValid(readFileSync(specPath, 'utf8'), specPath)
+  }
+})
+
+test('collectMisplacedActiveSpecs acepta la ruta canónica y la ausencia de spec.md', (t) => {
+  const root = withRoot(t)
+  writeDelta(root, join('aspec', 'changes', 'canonical-change', 'specs', 'cap', 'spec.md'))
+  mkdirSync(join(root, 'aspec', 'changes', 'empty-change'), { recursive: true })
+  assert.deepEqual(collectMisplacedActiveSpecs(root), [])
+
+  mkdirSync(join(root, 'aspec', 'changes'), { recursive: true })
+  assert.deepEqual(collectMisplacedActiveSpecs(root), [])
+})
+
+test('collectMisplacedActiveSpecs excluye archive por identidad y no por prefijo', (t) => {
+  const root = withRoot(t)
+  // `archive-legacy` no es el contenedor: un spec.md no canónico ahí sí se reporta.
+  const legacy = writeDelta(root, join('aspec', 'changes', 'archive-legacy', 'specs', 'spec.md'))
+  const archived = writeDelta(root, join('aspec', 'changes', 'archive', '2026-01-01-old', 'specs', 'cap', 'spec.md'))
+  const archivedFlat = writeDelta(root, join('aspec', 'changes', 'archive', 'specs', 'cap', 'spec.md'))
+
+  const misplaced = collectMisplacedActiveSpecs(root)
+  assert.deepEqual(misplaced, [legacy])
+  assert.ok(!misplaced.includes(archived))
+  assert.ok(!misplaced.includes(archivedFlat))
+})
+
+test('collectMisplacedActiveSpecs ignora un spec.md incidental que no parece delta', (t) => {
+  const root = withRoot(t)
+  writeDelta(
+    root,
+    join('aspec', 'changes', 'notes-change', 'specs', 'notes', 'spec.md'),
+    '# Notas\n\nTexto suelto que no es un delta spec.\n'
+  )
+  writeDelta(root, join('aspec', 'changes', 'notes-change', 'specs', 'spec.md'), 'fixture sin headings\n')
+  assert.deepEqual(collectMisplacedActiveSpecs(root), [])
+})
+
+test('collectMisplacedActiveSpecs ignora un spec.md vacío fuera de la ruta canónica', (t) => {
+  const root = withRoot(t)
+  // `parseDeltaSpec('')` no devuelve errores, pero un archivo vacío no pretende ser un delta.
+  const empty = writeDelta(root, join('aspec', 'changes', 'empty-spec-change', 'specs', 'spec.md'), '')
+  const blank = writeDelta(root, join('aspec', 'changes', 'blank-spec-change', 'spec.md'), '   \n\t\n')
+  assert.deepEqual(collectMisplacedActiveSpecs(root), [])
+  assert.ok(!collectMisplacedActiveSpecs(root).includes(empty))
+  assert.ok(!collectMisplacedActiveSpecs(root).includes(blank))
+})
+
+test('collectMisplacedActiveSpecs marca deltas reales mal ubicados', (t) => {
+  const root = withRoot(t)
+  // (b) delta valido fuera de la ruta canonica.
+  const atSpecs = writeDelta(root, join('aspec', 'changes', 'ok-change', 'specs', 'spec.md'), VALID_ADDED)
+  // (c) heading de delta con errores estructurales: el parser lo rechaza, pero
+  // pretende ser un delta y debe fallar igual.
+  const broken = INVALID_DELTAS[0][1]
+  assertDeltaInvalid(broken)
+  assert.match(broken, /^##\s+ADDED Requirements$/m)
+  const withErrors = writeDelta(root, join('aspec', 'changes', 'broken-change', 'specs', 'a', 'b', 'spec.md'), broken)
+
+  assert.deepEqual(collectMisplacedActiveSpecs(root), [atSpecs, withErrors].sort())
+})
+
+test('collectMisplacedActiveSpecs no marca la ruta canonica ni lo archivado', (t) => {
+  const root = withRoot(t)
+  writeDelta(root, join('aspec', 'changes', 'canonical-change', 'specs', 'cap', 'spec.md'))
+  writeDelta(root, join('aspec', 'changes', 'archive', '2026-01-01-old', 'specs', 'cap', 'spec.md'))
+  writeDelta(root, join('aspec', 'changes', 'archive', 'specs', 'spec.md'))
+  assert.deepEqual(collectMisplacedActiveSpecs(root), [])
+})
+
+test('ningún spec.md activo del repositorio vive fuera de specs/<capability>/spec.md', () => {
+  // Estado real de hoy: verde. Un spec.md mal ubicado rompe la suite antes del archive.
+  assert.deepEqual(collectMisplacedActiveSpecs(REPO_ROOT), [])
 })

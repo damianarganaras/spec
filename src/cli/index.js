@@ -2215,22 +2215,132 @@ async function computeSources() {
   return sources.sort()
 }
 
+// El valor de `version` de primer nivel del package.json de la raiz es metadata de
+// release: se reemplaza por un centinela para que su bump no cuente como cambio de
+// contenido. Byte-preserving: solo cambia el span del string de `version` de primer
+// nivel; indentacion, orden de claves y `version` anidadas quedan intactas. Ante
+// cualquier duda (JSON invalido, version no-string, span no localizado) devuelve
+// null = contenido crudo.
+const PACKAGE_VERSION_SENTINEL = '__ancleto_package_version__'
+
+function skipJsonWs(text, i) {
+  while (i < text.length && /\s/.test(text[i])) i++
+  return i
+}
+
+// `i` apunta a la comilla de apertura; devuelve el indice posterior a la de cierre.
+function skipJsonString(text, i) {
+  let j = i + 1
+  while (j < text.length) {
+    if (text[j] === '\\') { j += 2; continue }
+    if (text[j] === '"') return j + 1
+    j++
+  }
+  return text.length
+}
+
+function skipJsonValue(text, i) {
+  const ch = text[i]
+  if (ch === '"') return skipJsonString(text, i)
+  if (ch === '{' || ch === '[') {
+    const close = ch === '{' ? '}' : ']'
+    let depth = 0
+    let j = i
+    while (j < text.length) {
+      const c = text[j]
+      if (c === '"') { j = skipJsonString(text, j); continue }
+      if (c === ch) depth++
+      else if (c === close) { depth--; if (depth === 0) return j + 1 }
+      j++
+    }
+    return text.length
+  }
+  let j = i
+  while (j < text.length && !/[\s,}\]]/.test(text[j])) j++
+  return j
+}
+
+function normalizeRootPackageJson(text) {
+  let parsed
+  try { parsed = JSON.parse(text) } catch { return null }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  if (typeof parsed.version !== 'string') return null
+
+  let i = skipJsonWs(text, 0)
+  if (text[i] !== '{') return null
+  i++
+  let versionSpan = null
+  while (i < text.length) {
+    i = skipJsonWs(text, i)
+    if (text[i] === '}') break
+    if (text[i] !== '"') return null
+    const keyEnd = skipJsonString(text, i)
+    let key
+    try { key = JSON.parse(text.slice(i, keyEnd)) } catch { return null }
+    i = skipJsonWs(text, keyEnd)
+    if (text[i] !== ':') return null
+    i = skipJsonWs(text, i + 1)
+    const valueStart = i
+    const valueEnd = skipJsonValue(text, i)
+    if (key === 'version') {
+      if (versionSpan !== null) return null // clave duplicada: direccion segura
+      if (text[valueStart] !== '"') return null
+      versionSpan = { start: valueStart, end: valueEnd }
+    }
+    i = skipJsonWs(text, valueEnd)
+    if (text[i] === ',') { i++; continue }
+    if (text[i] === '}') break
+    return null
+  }
+  if (versionSpan === null) return null
+  return text.slice(0, versionSpan.start) + '"' + PACKAGE_VERSION_SENTINEL + '"' + text.slice(versionSpan.end)
+}
+
 async function hashSources(sources) {
   const h = createHash('sha256')
+  const semanticH = createHash('sha256')
   const fileHashes = {}
+  const semanticFileHashes = {}
   for (const rel of sources) {
     try {
       const content = await readFile(join(process.cwd(), rel))
-      fileHashes[rel] = createHash('sha256').update(content).digest('hex').slice(0, 16)
+      const fileHash = createHash('sha256').update(content).digest('hex').slice(0, 16)
+      fileHashes[rel] = fileHash
       h.update(rel)
       h.update('\0')
       h.update(String(content.length))
       h.update('\0')
       h.update(content)
       h.update('\n')
+
+      let semanticContent = content
+      if (rel === 'package.json') {
+        const text = content.toString('utf8')
+        // El round-trip utf8 debe reproducir los bytes exactos: si el buffer tiene
+        // secuencias invalidas, re-encodear altera el contenido y puede enmascarar
+        // un cambio real. Ante cualquier diferencia se hashea crudo (null = crudo).
+        const normalized = Buffer.from(text, 'utf8').equals(content)
+          ? normalizeRootPackageJson(text)
+          : null
+        if (normalized !== null) semanticContent = Buffer.from(normalized, 'utf8')
+      }
+      semanticH.update(rel)
+      semanticH.update('\0')
+      semanticH.update(String(semanticContent.length))
+      semanticH.update('\0')
+      semanticH.update(semanticContent)
+      semanticH.update('\n')
+      if (semanticContent !== content) {
+        const semanticFileHash = createHash('sha256').update(semanticContent).digest('hex').slice(0, 16)
+        if (semanticFileHash !== fileHash) semanticFileHashes[rel] = semanticFileHash
+      }
     } catch {}
   }
-  return { hash: h.digest('hex'), fileHashes }
+  return {
+    hash: h.digest('hex'),
+    fileHashes,
+    semantic: { hash: semanticH.digest('hex'), fileHashes: semanticFileHashes }
+  }
 }
 
 // Archivos cuyo cambio altera la arquitectura (configs de runtime, entry points).
@@ -2356,7 +2466,7 @@ async function checkDiscovery() {
     message = `Faltan ${missingDocs.length} documentos del seed.`
   } else {
     const sources = await computeSources()
-    const { hash, fileHashes } = await hashSources(sources)
+    const { hash, fileHashes, semantic } = await hashSources(sources)
     let stored = null
     const sp = statePath(outputDir)
     if (await exists(sp)) {
@@ -2364,17 +2474,40 @@ async function checkDiscovery() {
         stored = JSON.parse((await readFile(sp, 'utf8')).replace(/^\uFEFF/, ''))
       } catch {}
     }
+    // Vista efectiva: un estado `ruleVersion: 2` declara la regla normalizada; se
+    // compara y se atribuye con `semantic`. La forma del bloque se valida completa
+    // (hash string, fileHashes objeto): un `semantic` incompleto o malformado no es
+    // producible por el writer, y usarlo perderia la semantica legacy de `notes`.
+    // Cualquier otro estado (incluido legacy sin `ruleVersion`) usa los hashes
+    // crudos, identico al comportamiento previo.
+    const semanticState = Boolean(
+      stored &&
+      stored.ruleVersion === 2 &&
+      stored.semantic &&
+      typeof stored.semantic === 'object' &&
+      !Array.isArray(stored.semantic) &&
+      typeof stored.semantic.hash === 'string' &&
+      stored.semantic.fileHashes &&
+      typeof stored.semantic.fileHashes === 'object' &&
+      !Array.isArray(stored.semantic.fileHashes)
+    )
+    const storedHash = semanticState ? stored.semantic.hash : stored?.hash
+    const currentHash = semanticState ? semantic.hash : hash
+    const storedFileHashes = semanticState
+      ? { ...stored.fileHashes, ...stored.semantic.fileHashes }
+      : stored?.fileHashes
+    const currentFileHashes = semanticState ? { ...fileHashes, ...semantic.fileHashes } : fileHashes
     if (!stored?.hash) {
       state = 'STALE'
       impact = 'material'
       action = 'regenerate'
       message = 'Seed completo pero sin estado registrado — frescura desconocida.'
-    } else if (stored.hash === hash) {
+    } else if (storedHash === currentHash) {
       state = 'READY'
       action = 'continue'
       message = 'El seed esta al dia.'
     } else {
-      const diff = computeImpact(stored, sources, fileHashes)
+      const diff = computeImpact({ ...stored, fileHashes: storedFileHashes }, sources, currentFileHashes)
       impact = diff.impact
       changedAreas = diff.changedAreas
       materialReasons = diff.materialReasons
@@ -2447,7 +2580,7 @@ async function packDiscovery(flags) {
     process.exit(1)
   }
   const sources = await computeSources()
-  const { hash, fileHashes } = await hashSources(sources)
+  const { hash, fileHashes, semantic } = await hashSources(sources)
   await mkdir(outputDir, { recursive: true })
   await writeFile(statePath(outputDir), JSON.stringify({
     version: 1,
@@ -2455,6 +2588,8 @@ async function packDiscovery(flags) {
     sources,
     fileHashes,
     hash,
+    ruleVersion: 2,
+    semantic,
     packTokens: tokens
   }, null, 2) + '\n')
   console.log(`ancleto: pack generado (${sources.length} archivos, ~${tokens} tokens)`)

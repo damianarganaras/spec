@@ -2,6 +2,14 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.27.0] - 2026-11-11
+
+### Changed
+- **El bump del `version` del `package.json` raíz ya no es un cambio material en `ancleto discovery --check`**: el estado `.discovery-state.json` declara la regla de hash (`ruleVersion: 2` + bloque `semantic`) normalizando el `version` de primer nivel a un hash semántico aditivo; los hashes crudos se conservan para no romper el rollback.
+
+### Tests
+- **Guard fail-closed de `spec.md` no canónicos**: `test/delta-spec-structure.test.js` detecta un `spec.md` bajo un change activo fuera de `specs/<capability>/spec.md`, invisible para el merge y para el archive, con `parseDeltaSpec` como oráculo y sin falsos positivos sobre archivos incidentales.
+
 ## [0.26.4] - 2026-11-11
 
 ### Tests

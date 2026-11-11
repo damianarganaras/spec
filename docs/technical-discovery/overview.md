@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-11T03:08:32Z
-pluginVersion: 0.26.4
+generatedAt: 2026-11-11T15:29:20Z
+pluginVersion: 0.27.0
 skillVersion: '2.3'
 ---
 
@@ -232,6 +232,13 @@ test/                   suite node --test (content guards incluidos)
     `<change>/specs/<capability>/spec.md` con el parser real del merge, `parseDeltaSpec`; tolera cero
     deltas activos y no toca `src/`. El Requirement nuevo vive en `spec-sync` y el release es
     test-only.
+26. **Frescura y estado versionado (0.27.0)**: `discovery --check` deja de tratar el valor de
+    `version` de primer nivel del `package.json` raíz como cambio material ni de contenido (el resto
+    del archivo sigue siendo material), y `.discovery-state.json` agrega `ruleVersion: 2` +
+    `semantic: { hash, fileHashes }` conservando los hashes crudos; los estados legacy se comparan
+    crudos. El guard de `test/delta-spec-structure.test.js` suma la detección de un `spec.md` de
+    change activo fuera de `specs/<capability>/spec.md`. Release minor del change
+    `seed-freshness-version-bump-not-material`.
 
 ## Recorrido de una instalación con tier `minimo`
 

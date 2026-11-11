@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-generatedAt: 2026-11-11T03:08:32Z
-pluginVersion: 0.26.4
+generatedAt: 2026-11-11T15:29:20Z
+pluginVersion: 0.27.0
 skillVersion: '2.3'
 ---
 
@@ -31,7 +31,10 @@ empaquetado y el affected-set siguen igual. **0.25.0** tampoco los toca: el rute
 runtime: documenta y pinea el detector de frescura vigente en `cli-diagnostics`; **0.26.2**
 tampoco cambia runtime: consolida walkers de snapshot read-only y pines de frescura en tests; y
 **0.26.4** agrega a la suite declarada un guard estructural de los delta specs activos y documenta
-el Requirement en `spec-sync`, también sin tocar `src/`.
+el Requirement en `spec-sync`, también sin tocar `src/`. **0.27.0** sí toca `src/cli/index.js`:
+normaliza el valor de `version` de primer nivel del `package.json` raíz para el hash semántico y
+persiste `ruleVersion: 2` + `semantic` en el estado; además amplía el guard de la suite para detectar
+`spec.md` mal ubicados bajo changes activos.
 
 ## Recorrido relevante
 
@@ -41,12 +44,17 @@ el Requirement en `spec-sync`, también sin tocar `src/`.
    `node_modules`, `.git`, `.ancleto`, `dist`, `build` y `coverage`, y escribe
    `.discovery-map.json` con `tree_summary`, `root_files` y `total_files`.
 2. `ancleto discovery --compress` (`src/cli/index.js` → `packDiscovery`) escribe el mapa, genera el
-   pack y guarda `.discovery-state.json` con la lista de fuentes, el hash por archivo y el hash
-   global.
+   pack y guarda `.discovery-state.json` con la lista de fuentes, el hash crudo por archivo y el hash
+   global; desde 0.27.0 agrega `ruleVersion: 2` y `semantic: { hash, fileHashes }`, donde el hash
+   normalizado reemplaza sólo el valor de `version` de primer nivel del `package.json` raíz por un
+   centinela byte-preserving.
 3. `discovery --check` calcula primero `seedMapPresent` (independiente del estado): un
    `seed-map.json` con `docs` objeto plano da `true` en `READY`, `STALE`, `PARTIAL` y `MISSING`; un
    `docs` que no es objeto plano (arreglo o `null`) se rechaza (`readSeedMap`). Después compara el
-   hash actual con el guardado:
+   hash actual con el guardado. Si el estado declara `ruleVersion: 2` con un bloque `semantic` de
+   forma válida (`hash` string y `fileHashes` objeto no-array), compara `semantic.hash` y atribuye
+   con la vista efectiva `{ ...fileHashes, ...semantic.fileHashes }`; cualquier otro estado —incluido
+   un legacy sin `ruleVersion`— usa los hashes crudos, byte-idéntico al comportamiento previo:
    - `READY` si coincide.
    - `STALE` + `impact: material` si cambió un archivo material o apareció/desapareció un área raíz.
    - `STALE` + `impact: minor` si solo cambiaron contenidos no materiales.
@@ -55,7 +63,8 @@ el Requirement en `spec-sync`, también sin tocar `src/`.
    con `changedAreas` y sólo se puebla en `STALE`.
 
 El contrato del detector quedó fijado en 0.26.1 (delta `ADDED` de `cli-diagnostics`) sin tocar
-`src/`:
+`src/`; en 0.27.0 se extendió con la regla de hash normalizada (delta `MODIFIED`), esta vez con
+cambio de runtime en `src/cli/index.js`:
 
 - La salida es `schemaVersion: 2`, JSON, exit 0 y **read-only**: no escribe el seed, el estado ni
   el `seed-map.json`.
@@ -63,9 +72,13 @@ El contrato del detector quedó fijado en 0.26.1 (delta `ADDED` de `cli-diagnost
   `tsconfig.<sufijo>.json` y `jsconfig.json`; configs de
   `vite|webpack|rollup|next|nuxt|astro|svelte|tailwind`; `docker-compose.yml|yaml`; `Dockerfile`;
   `index.html`; `src/(main|index).[cm]?[jt]sx?` en esa profundidad. Un `package.json` anidado y
-  `package-lock.json` no son materiales.
+  `package-lock.json` no son materiales. El valor de `version` de primer nivel del `package.json`
+  raíz no cuenta como cambio de contenido ni material; cualquier otro cambio en ese archivo
+  (`dependencies`, `scripts`, `engines`, indentación, orden de claves o una `version` anidada) sigue
+  siendo material y reporta `archivo material modificado: package.json`.
 - **Área** = primer segmento del path; un archivo raíz es su propia área (`areaOf`).
-- `computeImpact` compara `sources`/`fileHashes` persistidos con el árbol actual y emite en
+- `computeImpact` compara `sources` y la vista efectiva de `fileHashes` persistidos con el árbol
+  actual y emite en
   `materialReasons` sólo las formas `archivo material nuevo|eliminado|modificado: <rel>`,
   `area raiz nueva: <área>` y `area raiz eliminada: <área>`; el orden y la cardinalidad no son
   contrato. Sin `fileHashes` previos y sin `changedAreas`, `notes` agrega el texto
@@ -77,7 +90,8 @@ El contrato del detector quedó fijado en 0.26.1 (delta `ADDED` de `cli-diagnost
   `STALE`/`material` con arreglos vacíos.
 - Un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`, `areaOf` o
   `computeImpact` es comportamiento y exige delta `MODIFIED` (release minor), no un patch
-  documental.
+  documental. La normalización de `version` vive fuera de esas funciones: `computeImpact` recibe la
+  vista efectiva de hashes ya construida y no cambia su contrato.
 
 ### Empaquetado por tier
 
@@ -211,10 +225,14 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Área** = primer segmento del path; los archivos raíz son su propia área. Es la misma convención
   en `computeImpact` y en `seed-map.json`.
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
-  `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material.
+  `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material. Excepción: el
+  valor de `version` de primer nivel del `package.json` raíz no es material ni cambio de contenido.
+- **Estado versionado (0.27.0)**: el writer conserva `hash`/`fileHashes` crudos para permitir
+  rollback y agrega `ruleVersion: 2` + `semantic`; el lector elige la vista semántica sólo con la
+  forma completa y válida, y cae a la cruda en cualquier otro caso.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 860 fuentes y ~38.610 tokens, tier `minimo` (comprimido), con 29 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 870 archivos (aspec 299,
+- **Pack actual**: 863 fuentes y ~38.974 tokens, tier `minimo` (comprimido), con 29 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 873 archivos (aspec 302,
   `.opencode` 66, src 19, test 28, docs 21). El estado quedó en
   `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
@@ -240,8 +258,9 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 | `src/core/model-catalog.js` | Helpers puros, IDs del catálogo e integridad |
 | `src/core/model-catalog.json` | Snapshot verificado de modelos (5 proveedores / 211 IDs) |
 | `scripts/refresh-model-catalog.mjs` | Descubrimiento dev-only, gate de IDs y escritura atómica |
-| `src/cli/index.js` (`packDiscovery`, `checkDiscovery`, `checkAgentsFrontmatter`, `declaredAgentModels`) | Empaquetado, estado del seed y avisos de `check` |
+| `src/cli/index.js` (`packDiscovery`, `checkDiscovery`, `normalizeRootPackageJson`, `hashSources`, `checkAgentsFrontmatter`, `declaredAgentModels`) | Empaquetado, estado del seed, hash semántico y avisos de `check` |
 | `docs/technical-discovery/.discovery-state.json` | Último hash/pack del seed |
 | `docs/technical-discovery/seed-map.json` | Documento → áreas de evidencia |
 | `aspec/specs/cli-diagnostics/spec.md` | Contrato del detector de frescura (0.26.1) y de `seedMapPresent` (0.26.0) |
 | `aspec/changes/archive/2026-11-10-spec-seed-freshness-detector/` | Change archivado que documenta y pinea el detector (sin cambio de runtime) |
+| `aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/` | Change archivado de 0.27.0: bump de `version` no material y estado persistido con `ruleVersion: 2` + `semantic` (delta `MODIFIED` de `cli-diagnostics`) |

@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-11T03:08:32Z
-pluginVersion: 0.26.4
+generatedAt: 2026-11-11T15:29:20Z
+pluginVersion: 0.27.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.26.4)
+## Modelos y tiers (estado 0.27.0)
 
 ### Tabla y cadenas
 
@@ -991,23 +991,27 @@ sin `--tier` es `normal`.
   dependiendo de `changedAreas` y sólo se puebla en `STALE`.
 - **Materialidad**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`, `index.html`,
   `src/(main|index).*` y la aparición/desaparición de áreas raíz fuerzan `impact: material`.
+  Excepción 0.27.0: el valor de `version` de primer nivel del `package.json` raíz no cuenta como
+  cambio material ni de contenido; `dependencies`, `scripts`, `engines`, indentación, orden de claves
+  o una `version` anidada siguen siendo materiales.
 - **Exclusiones**: `node_modules`, `.git`, `dist` siempre; el `outputDir` del seed se excluye del
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 860 fuentes, ~38.610 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 870 archivos (aspec 299, `.opencode` 66, docs 21,
-  test 28, src 19, etc.). 0.26.4 no cambia runtime: sólo agrega a la suite declarada el guard
-  estructural de los delta specs activos y documenta el Requirement en `spec-sync`.
+- **Pack actual**: tier `minimo`, 863 fuentes, ~38.974 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 873 archivos (aspec 302, `.opencode` 66, docs 21,
+  test 28, src 19, etc.). 0.27.0 toca `src/cli/index.js`: normaliza el bump de versión para el hash
+  semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados bajo
+  changes activos.
 
-### Contrato del detector de frescura (0.26.1)
+### Contrato del detector de frescura (0.26.1, regla 0.27.0)
 
-Change archivado: `aspec/changes/archive/2026-11-10-spec-seed-freshness-detector/` (delta `ADDED`
-de `cli-diagnostics`). **No cambia runtime**: documenta y pinea el comportamiento vigente con tests
-de regresión. Un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`,
-`areaOf` o `computeImpact` es comportamiento: exige un delta `MODIFIED` y un release minor, no un
-patch documental, porque los `.discovery-state.json` persistidos guardan hashes sin versión de
-reglas.
+Change archivado base: `aspec/changes/archive/2026-11-10-spec-seed-freshness-detector/` (delta
+`ADDED` de `cli-diagnostics`). Un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`,
+`isMaterialFile`, `areaOf` o `computeImpact` es comportamiento: exige un delta `MODIFIED` y un
+release minor, no un patch documental. Desde 0.27.0 el estado declara la regla de hash con
+`ruleVersion: 2` + `semantic`, de modo que un cambio de regla no reinterpreta los estados ya
+persistidos: los estados sin `ruleVersion` conservan la comparación cruda.
 
 - **Salida**: `schemaVersion: 2`, JSON, exit 0 al completar y **read-only** (no escribe seed,
   estado ni `seed-map.json`). `impact` ∈ {`none`, `minor`, `material`} con precedencia
@@ -1019,9 +1023,17 @@ reglas.
   `tsconfig.<sufijo>.json` y `jsconfig.json`; configs de
   `vite|webpack|rollup|next|nuxt|astro|svelte|tailwind`; `docker-compose.yml|yaml`; `Dockerfile`;
   `index.html`; `src/(main|index).[cm]?[jt]sx?` en esa profundidad. `package-lock.json` y los
-  `package.json` anidados **no** son materiales.
+  `package.json` anidados **no** son materiales. El valor de `version` de primer nivel del
+  `package.json` raíz es la única excepción: no cuenta como cambio de contenido ni material;
+  cualquier otro campo del archivo sigue siendo material.
 - **Área**: primer segmento del path; un archivo raíz es su propia área.
-- **`computeImpact`**: compara `stored.sources`/`fileHashes` con el árbol actual. Las formas
+- **Estado persistido (0.27.0)**: conserva `hash` y `fileHashes` crudos para rollback y agrega
+  `ruleVersion: 2` + `semantic: { hash, fileHashes }`; `semantic.fileHashes` contiene sólo las
+  entradas cuyo hash normalizado difiere del crudo. El lector usa la vista semántica sólo con
+  `ruleVersion: 2` y forma válida (`hash` string, `fileHashes` objeto no-array); si el bloque falta
+  o está malformado, compara crudo como un estado legacy.
+- **`computeImpact`**: compara `stored.sources` y la vista efectiva de `fileHashes` con el árbol
+  actual. Las formas
   exactas de `materialReasons` son `archivo material nuevo|eliminado|modificado: <rel>`,
   `area raiz nueva: <área>` y `area raiz eliminada: <área>`; el orden y la cardinalidad no son
   contrato. `notes` sólo contiene, sin `fileHashes` previos y sin `changedAreas`, el texto
@@ -1034,6 +1046,8 @@ reglas.
 - Decisiones promovidas: `seed-freshness-detector-documented-in-cli-diagnostics` (documentar en
   `cli-diagnostics`, donde ya viven `seedMapPresent`/`affectedDocs`) y
   `seed-freshness-rule-change-requires-minor` (editar las reglas exige delta `MODIFIED`).
+- Decisiones promovidas (0.27.0): `seed-freshness-version-bump-not-material`,
+  `discovery-state-hash-rule-additive` y `seed-freshness-version-normalization-byte-preserving`.
 - **Excepción de `recommendedAction` (0.26.x)**: el change archivado
   `2026-11-10-align-freshness-recommended-action-spec` (delta `MODIFIED` de `cli-diagnostics`) fija
   en la spec lo que `checkDiscovery` ya emite: `generate` en `MISSING` y `complete` en `PARTIAL`,
@@ -1096,11 +1110,13 @@ reglas.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.26.4`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.27.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
-  el significado de los `.discovery-state.json` ya persistidos. El contenido de `docs/technical-discovery/`
-  no cuenta como cambio material (el `outputDir` se excluye del hash).
+  el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +
+  `semantic`) y los estados legacy se comparan crudos, así que un cambio de regla no reescribe ni
+  reinterpreta estados previos. El contenido de `docs/technical-discovery/` no cuenta como cambio
+  material (el `outputDir` se excluye del hash).
 - **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
   `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue
   reemplazándose porque no se agregó parseo tolerante.

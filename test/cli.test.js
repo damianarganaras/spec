@@ -6501,7 +6501,79 @@ describe('CLI idioma de artifacts (--lang)', () => {
 describe('CLI discovery --check impact (minor vs material)', () => {
   const DOCS = ['index.md', 'overview.md', 'setup.md', 'inventory.md', 'integrations.md', 'decisions.md', 'unknowns.md', 'units/_map.md']
 
-  function seedFixture(dir, files, { withHashes = true, hash = null, seedMap = null } = {}) {
+  // Espejo exacto del normalizador de `src/cli/index.js`: el fixture construye el
+  // estado `ruleVersion: 2` como lo haria el CLI. Importar el CLI ejecutaria el
+  // proceso, asi que se duplica el algoritmo; si divergen, los pines lo detectan.
+  const PACKAGE_VERSION_SENTINEL = '__ancleto_package_version__'
+  function fixtureSkipJsonWs(text, i) {
+    while (i < text.length && /\s/.test(text[i])) i++
+    return i
+  }
+  function fixtureSkipJsonString(text, i) {
+    let j = i + 1
+    while (j < text.length) {
+      if (text[j] === '\\') { j += 2; continue }
+      if (text[j] === '"') return j + 1
+      j++
+    }
+    return text.length
+  }
+  function fixtureSkipJsonValue(text, i) {
+    const ch = text[i]
+    if (ch === '"') return fixtureSkipJsonString(text, i)
+    if (ch === '{' || ch === '[') {
+      const close = ch === '{' ? '}' : ']'
+      let depth = 0
+      let j = i
+      while (j < text.length) {
+        const c = text[j]
+        if (c === '"') { j = fixtureSkipJsonString(text, j); continue }
+        if (c === ch) depth++
+        else if (c === close) { depth--; if (depth === 0) return j + 1 }
+        j++
+      }
+      return text.length
+    }
+    let j = i
+    while (j < text.length && !/[\s,}\]]/.test(text[j])) j++
+    return j
+  }
+  function normalizeRootPackageJsonFixture(text) {
+    let parsed
+    try { parsed = JSON.parse(text) } catch { return null }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    if (typeof parsed.version !== 'string') return null
+    let i = fixtureSkipJsonWs(text, 0)
+    if (text[i] !== '{') return null
+    i++
+    let versionSpan = null
+    while (i < text.length) {
+      i = fixtureSkipJsonWs(text, i)
+      if (text[i] === '}') break
+      if (text[i] !== '"') return null
+      const keyEnd = fixtureSkipJsonString(text, i)
+      let key
+      try { key = JSON.parse(text.slice(i, keyEnd)) } catch { return null }
+      i = fixtureSkipJsonWs(text, keyEnd)
+      if (text[i] !== ':') return null
+      i = fixtureSkipJsonWs(text, i + 1)
+      const valueStart = i
+      const valueEnd = fixtureSkipJsonValue(text, i)
+      if (key === 'version') {
+        if (versionSpan !== null) return null
+        if (text[valueStart] !== '"') return null
+        versionSpan = { start: valueStart, end: valueEnd }
+      }
+      i = fixtureSkipJsonWs(text, valueEnd)
+      if (text[i] === ',') { i++; continue }
+      if (text[i] === '}') break
+      return null
+    }
+    if (versionSpan === null) return null
+    return text.slice(0, versionSpan.start) + '"' + PACKAGE_VERSION_SENTINEL + '"' + text.slice(versionSpan.end)
+  }
+
+  function seedFixture(dir, files, { withHashes = true, hash = null, seedMap = null, ruleVersion = null } = {}) {
     const docsDir = join(dir, 'docs', 'technical-discovery')
     mkdirSync(join(docsDir, 'units'), { recursive: true })
     for (const d of DOCS) writeFileSync(join(docsDir, d), '# doc\n')
@@ -6532,9 +6604,45 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       packTokens: 1
     }
     if (withHashes) state.fileHashes = fileHashes
+    if (ruleVersion === 2) {
+      const semanticH = createHash('sha256')
+      const semanticFileHashes = {}
+      for (const rel of sources) {
+        const raw = readFileSync(join(dir, rel))
+        let content = raw
+        if (rel === 'package.json') {
+          const text = raw.toString('utf8')
+          const normalized = Buffer.from(text, 'utf8').equals(raw)
+            ? normalizeRootPackageJsonFixture(text)
+            : null
+          if (normalized !== null) content = Buffer.from(normalized, 'utf8')
+        }
+        semanticH.update(rel)
+        semanticH.update('\0')
+        semanticH.update(String(content.length))
+        semanticH.update('\0')
+        semanticH.update(content)
+        semanticH.update('\n')
+        if (content !== raw) {
+          const semanticFileHash = createHash('sha256').update(content).digest('hex').slice(0, 16)
+          if (semanticFileHash !== fileHashes[rel]) semanticFileHashes[rel] = semanticFileHash
+        }
+      }
+      state.ruleVersion = 2
+      state.semantic = { hash: semanticH.digest('hex'), fileHashes: semanticFileHashes }
+    }
     writeFileSync(join(docsDir, '.discovery-state.json'), JSON.stringify(state, null, 2))
     if (seedMap) writeFileSync(join(docsDir, 'seed-map.json'), typeof seedMap === 'string' ? seedMap : JSON.stringify(seedMap, null, 2))
     return docsDir
+  }
+
+  // Reescribe el estado persistido sin pasar por el writer, para simular estados
+  // que el CLI nunca produce y verificar el fallback a crudo.
+  function editState(docsDir, mutate) {
+    const p = join(docsDir, '.discovery-state.json')
+    const state = JSON.parse(readFileSync(p, 'utf8'))
+    mutate(state)
+    writeFileSync(p, JSON.stringify(state, null, 2))
   }
 
   // Snapshot de bytes + mtime por archivo para afirmar que `discovery --check`
@@ -7062,6 +7170,257 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       assert.equal(r.status, 0)
       const j = JSON.parse(r.stdout)
       assert.equal(j.schemaVersion, 2)
+      assert.deepEqual(snapshotWithMtime(dir), before)
+    })
+  })
+
+  // Pines discriminantes de la regla normalizada (`ruleVersion: 2`): el estado se
+  // construye como lo escribiria el pack (hash crudo + semantic), y el CLI decide.
+  const PKG_WITH_VERSION = JSON.stringify({ name: 'x', version: '1.0.0' }, null, 2) + '\n'
+
+  it('pin rv2: bump de version con lock y CHANGELOG es minor sin materialidad', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'package.json': PKG_WITH_VERSION,
+        'package-lock.json': JSON.stringify({ name: 'x', version: '1.0.0', lockfileVersion: 3 }, null, 2) + '\n',
+        'CHANGELOG.md': '# 1.0.0\n'
+      }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.1' }, null, 2) + '\n')
+      writeFileSync(join(dir, 'package-lock.json'), JSON.stringify({ name: 'x', version: '1.0.1', lockfileVersion: 3 }, null, 2) + '\n')
+      writeFileSync(join(dir, 'CHANGELOG.md'), '# 1.0.1\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.changedAreas, ['CHANGELOG.md', 'package-lock.json'])
+    })
+  })
+
+  it('pin rv2: bump de version como unico cambio deja READY', () => {
+    withDir((dir) => {
+      seedFixture(dir, { 'src/app.js': 'console.log(1)\n', 'package.json': PKG_WITH_VERSION }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.1' }, null, 2) + '\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+    })
+  })
+
+  it('pin rv2: cambio real en dependencies es material con la razon exacta', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'package.json': JSON.stringify({ name: 'x', version: '1.0.0', dependencies: { a: '1.0.0' } }, null, 2) + '\n'
+      }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', dependencies: { a: '2.0.0' } }, null, 2) + '\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material modificado: package.json'))
+      assert.deepEqual(j.changedAreas, ['package.json'])
+    })
+  })
+
+  it('pin rv2: bump de version junto con un cambio real sigue siendo material', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'package.json': JSON.stringify({ name: 'x', version: '1.0.0', scripts: { test: 'node test' } }, null, 2) + '\n'
+      }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.1', scripts: { test: 'node test2' } }, null, 2) + '\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material modificado: package.json'))
+    })
+  })
+
+  it('pin rv2: reformateo de 2 a 4 espacios sin cambiar version es material', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'package.json': JSON.stringify({ name: 'x', version: '1.0.0' }, null, 2) + '\n'
+      }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0' }, null, 4) + '\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material modificado: package.json'))
+    })
+  })
+
+  it('pin rv2: cambio en una version anidada es material', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'package.json': JSON.stringify({ name: 'x', version: '1.0.0', config: { version: 'a' } }, null, 2) + '\n'
+      }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', config: { version: 'b' } }, null, 2) + '\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material modificado: package.json'))
+    })
+  })
+
+  it('pin rv2: un valor string "version" en otra clave no confunde al normalizador', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'package.json': JSON.stringify({ name: 'version', version: '1.0.0' }, null, 2) + '\n'
+      }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'version', version: '1.0.1' }, null, 2) + '\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.deepEqual(j.materialReasons, [])
+    })
+  })
+
+  it('pin rv2: version no-string se hashea crudo y un cambio es material', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'package.json': JSON.stringify({ name: 'x', version: 1 }, null, 2) + '\n'
+      }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: 2 }, null, 2) + '\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material modificado: package.json'))
+    })
+  })
+
+  it('pin rv2: JSON invalido se hashea crudo y un cambio es material', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'package.json': '{ no es json'
+      }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), '{ tampoco es json')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material modificado: package.json'))
+    })
+  })
+
+  it('pin rv2: bytes UTF-8 invalidos se hashean crudos y un cambio real sigue material', () => {
+    withDir((dir) => {
+      // 0x80 suelto dentro de un string JSON: decodifica a U+FFFD, asi que un
+      // round-trip utf8 lo reencodea distinto y colapsaria 0x80 y 0x81 al mismo
+      // contenido: sin el guard, ese cambio real quedaria enmascarado (READY).
+      const pkg = (byte, dep) => Buffer.concat([
+        Buffer.from('{"name":"x'),
+        Buffer.from([byte]),
+        Buffer.from(`","version":"1.0.0","dependencies":{"a":"${dep}"}}\n`)
+      ])
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'package.json': pkg(0x80, '1.0.0')
+      }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), pkg(0x81, '1.0.0'))
+      let r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      let j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material modificado: package.json'))
+      // Un cambio visible adicional tampoco se enmascara.
+      writeFileSync(join(dir, 'package.json'), pkg(0x81, '2.0.0'))
+      r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+    })
+  })
+
+  // `ruleVersion: 2` con `semantic` incompleto o malformado no es producible por el
+  // writer: se cae a los hashes crudos, igual que el comportamiento legacy (incluida
+  // la nota de "sin hashes por archivo", que un `storedFiles` vacio perderia).
+  for (const [label, semantic] of [
+    ['semantic vacio', {}],
+    ['hash no-string', { hash: 42, fileHashes: {} }],
+    ['fileHashes array', { hash: 'abc', fileHashes: [] }],
+    ['semantic array', []]
+  ]) {
+    it(`pin semantic invalido (${label}): cae a crudo como legacy`, () => {
+      withDir((dir) => {
+        const docsDir = seedFixture(dir, {
+          'src/app.js': 'console.log(1)\n',
+          'package.json': PKG_WITH_VERSION
+        }, { withHashes: false, ruleVersion: 2 })
+        editState(docsDir, (state) => { state.semantic = semantic })
+        writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+        const r = run(['discovery', '--check'], dir)
+        assert.equal(r.status, 0)
+        const j = JSON.parse(r.stdout)
+        assert.equal(j.state, 'STALE')
+        assert.equal(j.impact, 'minor')
+        assert.equal(j.recommendedAction, 'continue')
+        assert.deepEqual(j.changedAreas, [])
+        assert.equal(j.notes.length, 1)
+      })
+    })
+  }
+
+  it('pin legacy: estado sin ruleVersion con bump de version sigue siendo material', () => {
+    withDir((dir) => {
+      seedFixture(dir, { 'src/app.js': 'console.log(1)\n', 'package.json': PKG_WITH_VERSION })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.1' }, null, 2) + '\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material modificado: package.json'))
+      assert.deepEqual(j.changedAreas, ['package.json'])
+    })
+  })
+
+  it('pin rv2: discovery --check es read-only con bump (bytes + mtime)', () => {
+    withDir((dir) => {
+      seedFixture(dir, { 'src/app.js': 'console.log(1)\n', 'package.json': PKG_WITH_VERSION }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.1' }, null, 2) + '\n')
+      const before = snapshotWithMtime(dir)
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
       assert.deepEqual(snapshotWithMtime(dir), before)
     })
   })

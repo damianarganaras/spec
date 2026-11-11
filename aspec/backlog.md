@@ -260,7 +260,8 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 **Notas / pendiente en 0.26.3 (no hecho):**
 
-- **Memoria — nodo incompleto:** `discovery-freshness-pins-conformity-no-delta` (promovido en 0.26.2) quedó **incompleto/contradicho** por la evidencia nueva (afirmaba que la conducta de `cli-diagnostics` ya era canónica; el mapeo `recommendedAction` no lo era). NO se supersedió: requiere OK explícito del usuario.
-- **Gap de validación de deltas:** la estructura de un delta NO está cubierta por los comandos declarados (lint = `eslint src/ test/ scripts/`; los tests no leen `aspec/changes/**`); sólo `specs merge`/`specs check` lo validan en el archive. El review debe leer el delta; un delta malformado pasaría el ledger del tester.
-- **`STALE`+`impact:none` → `continue`:** alcanzable pero sin pin (gap conocido, fuera de alcance).
+- **Memoria — nodo incompleto:** `discovery-freshness-pins-conformity-no-delta` (promovido en 0.26.2) quedó **incompleto/contradicho** por la evidencia nueva (afirmaba que la conducta de `cli-diagnostics` ya era canónica; el mapeo `recommendedAction` no lo era). NO se supersedió: requiere OK explícito del usuario. → **RESUELTO**: nodo superseded en limpieza posterior con la evidencia de 0.26.3 (el mapeo `recommendedAction` no era canónico).
+- **Gap de validación de deltas:** la estructura de un delta NO está cubierta por los comandos declarados (lint = `eslint src/ test/ scripts/`; los tests no leen `aspec/changes/**`); sólo `specs merge`/`specs check` lo validan en el archive. El review debe leer el delta; un delta malformado pasaría el ledger del tester. → **sigue**: no es defecto de código (el archive corre `specs check`); mitigación: el review lee el delta. Candidato para el próximo debate de scope.
+- **`STALE`+`impact:none` → `continue`:** alcanzable pero sin pin (gap conocido, fuera de alcance). → **RESUELTO**: pin agregado (`hash` desincronizado con `sources`/`fileHashes` vigentes ⇒ STALE/none/continue).
 - **A2c #18 / A3 #4 / A4 MEM-05 / A5 CH-06b / A6 / A7 memoria / D deuda MEM-05c–e + CH-09e–g:** siguen diferidos (sin evidencia nueva / sin OK literal).
+- **Residual 0.26.3:** el pin `STALE`+`impact:none` está **commiteado pero no liberado**; queda pendiente en la próxima sesión (patch mínimo 0.26.4).

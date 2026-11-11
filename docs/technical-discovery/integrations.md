@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-11T03:08:32Z
-pluginVersion: 0.26.4
+generatedAt: 2026-11-11T15:29:20Z
+pluginVersion: 0.27.0
 skillVersion: '2.3'
 ---
 
@@ -47,7 +47,7 @@ skillVersion: '2.3'
 - `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
-  esta generación se produjo con el fallback `npx` y quedó comprimido (860 fuentes, ~38.610
+  esta generación se produjo con el fallback `npx` y quedó comprimido (863 fuentes, ~38.974
    tokens); los cuerpos de funciones se eliden y Repomix aplica además sus ignores por defecto
   (incluye `**/*.md`), por eso el pack no contiene Markdown (ver `unknowns.md`).
 
@@ -142,11 +142,12 @@ skillVersion: '2.3'
   secuencia de contratos de prompt (`skills/ancleto-archive`, `skills/ancleto-bulk-archive`,
   `agents/documenter.md`) sobre archivos locales, y el guard de `--help`/`-h` es un `console.log`
   del uso antes del dispatch, sin escritura de archivos. Sin red, procesos externos ni servicios.
-- **0.26.0–0.26.4 no agregan integraciones**: `discovery --check` ya era una lectura local de
+- **0.26.0–0.27.0 no agregan integraciones**: `discovery --check` ya era una lectura local de
   `.config`/estado/hashes, el detector de frescura de 0.26.1 sólo se documenta y pinea en tests,
-  0.26.2 sólo consolida walkers de snapshot read-only y pines de frescura en tests, y 0.26.4 sólo
-  agrega un guard estructural de delta specs a la suite y documenta el Requirement en `spec-sync`.
-  No hay llamadas a red, procesos externos, MCP ni Repomix involucradas en el chequeo.
+  0.26.2 sólo consolida walkers de snapshot read-only y pines de frescura en tests, 0.26.4 agrega un
+  guard estructural de delta specs a la suite y documenta el Requirement en `spec-sync`, y 0.27.0
+  normaliza el hash del `package.json` raíz en memoria y amplía el guard de deltas mal ubicados, sin
+  sumar red, procesos ni servicios. No hay llamadas externas involucradas en el chequeo.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee

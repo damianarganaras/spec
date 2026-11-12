@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { createHash } from 'node:crypto'
 import { createMemoryEngine } from '../src/core/memory/engine.js'
 import { validateCatalogSnapshot } from '../src/core/model-catalog.js'
+import { buildDiscoveryState, renderDiscoveryState } from '../src/core/discovery-state.js'
 import { TIER_CHAINS } from '../src/core/tier-models.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
@@ -7636,6 +7637,166 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       assert.deepEqual(j.changedAreas, [])
     })
   })
+
+  // Areas gitignored sin archivos versionados (`documentation/**`, `audit logs/**`):
+  // no existen en un clon fresco, asi que su churn y su ausencia no deben atribuir
+  // areas ni materialidad. El anclaje es a la raiz: los lookalikes siguen contando.
+  const IGNORED_AREAS = {
+    ...BASE,
+    'documentation/guide.md': '# guia v1\n',
+    'audit logs/run.log': 'log v1\n'
+  }
+
+  it('pin ignoradas: cambio de contenido bajo documentation es READY', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, {
+        ruleVersion: 2,
+        seedMap: { version: 1, generatedAt: 'x', docs: { 'overview.md': ['documentation', 'audit logs'] } }
+      })
+      writeFileSync(join(dir, 'documentation', 'guide.md'), '# guia v2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('pin ignoradas: ausencia completa de documentation no es area raiz eliminada', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      rmSync(join(dir, 'documentation'), { recursive: true, force: true })
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.ok(!j.materialReasons.includes('area raiz eliminada: documentation'))
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('pin ignoradas: cambio de contenido bajo audit logs es READY', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'audit logs', 'run.log'), 'log v2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('pin ignoradas: ausencia completa de audit logs no es area raiz eliminada', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      rmSync(join(dir, 'audit logs'), { recursive: true, force: true })
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.ok(!j.materialReasons.includes('area raiz eliminada: audit logs'))
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  for (const [rel, area] of [
+    ['docs/documentation/x.md', 'docs'],
+    ['documentation-extra/x.md', 'documentation-extra'],
+    ['src/documentation/x.js', 'src'],
+    ['docs/audit logs/x.log', 'docs'],
+    ['audit logs-extra/x.log', 'audit logs-extra']
+  ]) {
+    it(`pin anclaje ignoradas: ${rel} no es efimera (area ${area})`, () => {
+      withDir((dir) => {
+        seedFixture(dir, { ...BASE, [rel]: 'v1\n' }, { ruleVersion: 2 })
+        writeFileSync(join(dir, rel), 'v2\n')
+        const r = run(['discovery', '--check'], dir)
+        assert.equal(r.status, 0)
+        const j = JSON.parse(r.stdout)
+        assert.equal(j.state, 'STALE')
+        assert.equal(j.impact, 'minor')
+        assert.equal(j.recommendedAction, 'continue')
+        assert.deepEqual(j.changedAreas, [area])
+        assert.deepEqual(j.materialReasons, [])
+      })
+    })
+  }
+
+  it('pin ignoradas: cambio real en src con churn de documentation y audit logs es minor con area src', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+      writeFileSync(join(dir, 'documentation', 'guide.md'), '# guia v2\n')
+      writeFileSync(join(dir, 'audit logs', 'run.log'), 'log v2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, ['src'])
+      assert.deepEqual(j.materialReasons, [])
+    })
+  })
+
+  for (const [rel, area] of [['docs/guide.md', 'docs'], ['aspec/change.md', 'aspec']]) {
+    it(`pin ignoradas: cambio de contenido en ${area} sigue contando`, () => {
+      withDir((dir) => {
+        seedFixture(dir, { ...BASE, [rel]: 'v1\n' }, { ruleVersion: 2 })
+        writeFileSync(join(dir, rel), 'v2\n')
+        const r = run(['discovery', '--check'], dir)
+        assert.equal(r.status, 0)
+        const j = JSON.parse(r.stdout)
+        assert.equal(j.state, 'STALE')
+        assert.equal(j.impact, 'minor')
+        assert.equal(j.recommendedAction, 'continue')
+        assert.deepEqual(j.changedAreas, [area])
+        assert.deepEqual(j.materialReasons, [])
+      })
+    })
+  }
+
+  it('pin ignoradas: el estado conserva documentation y audit logs y --check no lo reescribe', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      const statePath = join(docsDir, '.discovery-state.json')
+      writeFileSync(join(dir, 'documentation', 'guide.md'), '# guia v2\n')
+      const before = snapshotWithMtime(dir)
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      const state = JSON.parse(readFileSync(statePath, 'utf8'))
+      assert.ok(state.sources.includes('documentation/guide.md'))
+      assert.ok(state.sources.includes('audit logs/run.log'))
+      assert.ok(Object.hasOwn(state.fileHashes, 'documentation/guide.md'))
+      assert.ok(Object.hasOwn(state.fileHashes, 'audit logs/run.log'))
+      assert.equal(state.ruleVersion, 2)
+      assert.deepEqual(snapshotWithMtime(dir), before, 'discovery --check no reescribe el estado')
+    })
+  })
 })
 
 describe('CLI exclusiones del discovery (--exclude)', () => {
@@ -9093,5 +9254,52 @@ describe('CLI subcommand --help guards', () => {
       assert.equal(imprt.status, 1)
       assert.match(imprt.stderr, /uso: ancleto import <bundle>/)
     })
+  })
+})
+
+// Pinea offline la forma y los bytes que `packDiscovery` debe persistir a través de los
+// helpers. El call-site (fs y orden map→state) queda fuera de este test y está declarado
+// fuera de contrato en el proposal.
+describe('pin offline del estado de discovery', () => {
+  it('forma y bytes', () => {
+    const state = buildDiscoveryState({
+      generatedAt: '2026-11-12T00:00:00.000Z',
+      sources: ['src/a.js', 'src/b.js'],
+      fileHashes: { 'src/a.js': 'aaa', 'src/b.js': 'bbb' },
+      hash: 'deadbeef',
+      semantic: { hash: 'cafe', fileHashes: { 'src/a.js': '111' } },
+      packTokens: 42
+    })
+    assert.deepEqual(Object.keys(state), ['version', 'generatedAt', 'sources', 'fileHashes', 'hash', 'ruleVersion', 'semantic', 'packTokens'])
+    assert.deepEqual(Object.keys(state.semantic), ['hash', 'fileHashes'])
+    assert.equal(state.version, 1)
+    assert.equal(state.ruleVersion, 2)
+    const golden = `{
+  "version": 1,
+  "generatedAt": "2026-11-12T00:00:00.000Z",
+  "sources": [
+    "src/a.js",
+    "src/b.js"
+  ],
+  "fileHashes": {
+    "src/a.js": "aaa",
+    "src/b.js": "bbb"
+  },
+  "hash": "deadbeef",
+  "ruleVersion": 2,
+  "semantic": {
+    "hash": "cafe",
+    "fileHashes": {
+      "src/a.js": "111"
+    }
+  },
+  "packTokens": 42
+}
+`
+    const rendered = renderDiscoveryState(state)
+    assert.equal(rendered, golden)
+    assert.equal(rendered.endsWith('\n'), true)
+    assert.equal(rendered.endsWith('\n\n'), false)
+    assert.equal(rendered.startsWith('\uFEFF'), false)
   })
 })

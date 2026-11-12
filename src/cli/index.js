@@ -17,6 +17,7 @@ import { memoryDoctor } from '../core/memory/doctor.js'
 import { curateMemory } from '../core/memory/curation.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
+import { buildDiscoveryState, renderDiscoveryState } from '../core/discovery-state.js'
 import { computeAffectedSet } from '../core/affected-set.js'
 import { mergeSpecText } from '../core/specs-merge.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
@@ -2366,10 +2367,21 @@ function areaOf(rel) {
 }
 
 // Rutas efimeras: el estado de memoria y el mapa de descubrimiento mutan con
-// cualquier operacion, no son arquitectura. Anclado a la ruta completa: `.ancletorc`,
-// `.ancleto-notes.md` y `src/ancleto/x.js` NO son efimeros.
+// cualquier operacion, no son arquitectura. `documentation` y `audit logs` estan
+// gitignored y sin archivos versionados, asi que no existen en un clon fresco y no
+// deben participar de la frescura. Anclado a la ruta completa contra el literal de
+// raiz o el prefijo `documentation/` / `audit logs/`: `docs/documentation/x.md`,
+// `documentation-extra/x.md` y `src/documentation/x.js` NO son efimeros.
 function isEphemeralSource(rel) {
-  return rel === '.discovery-map.json' || rel === '.ancleto' || rel.startsWith('.ancleto/')
+  return (
+    rel === '.discovery-map.json' ||
+    rel === '.ancleto' ||
+    rel.startsWith('.ancleto/') ||
+    rel === 'documentation' ||
+    rel.startsWith('documentation/') ||
+    rel === 'audit logs' ||
+    rel.startsWith('audit logs/')
+  )
 }
 
 function isPlainObject(v) {
@@ -2615,16 +2627,15 @@ async function packDiscovery(flags) {
   const sources = await computeSources()
   const { hash, fileHashes, semantic } = await hashSources(sources)
   await mkdir(outputDir, { recursive: true })
-  await writeFile(statePath(outputDir), JSON.stringify({
-    version: 1,
+  const state = buildDiscoveryState({
     generatedAt: new Date().toISOString(),
     sources,
     fileHashes,
     hash,
-    ruleVersion: 2,
     semantic,
     packTokens: tokens
-  }, null, 2) + '\n')
+  })
+  await writeFile(statePath(outputDir), renderDiscoveryState(state))
   console.log(`ancleto: pack generado (${sources.length} archivos, ~${tokens} tokens)`)
   console.log(`ancleto: estado guardado en ${statePath(outputDir)}`)
   console.log(`ancleto: el seed lo genera la skill ancleto-technical-discovery a partir del pack`)

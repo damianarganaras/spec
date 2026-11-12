@@ -9444,6 +9444,7 @@ describe('pin offline del estado de discovery', () => {
     assert.deepEqual(Object.keys(state.semantic), ['hash', 'fileHashes'])
     assert.equal(state.version, 1)
     assert.equal(state.ruleVersion, 2)
+    assert.ok(!('schemaVersion' in state), 'el estado persistido no lleva schemaVersion: ese es el schema de salida de discovery --check')
     const golden = `{
   "version": 1,
   "generatedAt": "2026-11-12T00:00:00.000Z",

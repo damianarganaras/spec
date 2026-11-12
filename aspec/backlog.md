@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-11 (release 0.26.4).
+> Última actualización: 2026-11-12 (release 0.28.0).
 
 ## Prioridad de ejecución
 
@@ -297,10 +297,31 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 **Pendiente nuevo en 0.27.0 (requiere aprobación explícita):**
 
-- **`.ancleto/**` en `sources`/`fileHashes`:** figura en el estado (`memory.db`, `-wal`, `-shm`, `working-context.md`, `machine-env.md`) y muta con cada operación de memoria → cualquier operación deja el seed en `STALE`/`minor`. `.discovery-map.json` (raíz) tiene el mismo churn. Diferido en este change (decisión `seed-freshness-ancleto-area-deferred`), **no implementado**; requiere aprobación explícita por exceder la aprobación de producto acotada.
-- **Deuda conocida:** la escritura del estado nuevo en `packDiscovery` no tiene pin offline (la suite no ejerce el pack; depende de Repomix) — `tasks.md` 4.3 quedó abierto. Verificado end-to-end en el release.
+- **`.ancleto/**` en `sources`/`fileHashes`:** figura en el estado (`memory.db`, `-wal`, `-shm`, `working-context.md`, `machine-env.md`) y muta con cada operación de memoria → cualquier operación deja el seed en `STALE`/`minor`. `.discovery-map.json` (raíz) tiene el mismo churn. Diferido en este change (decisión `seed-freshness-ancleto-area-deferred`), **no implementado**; requiere aprobación explícita por exceder la aprobación de producto acotada. → **RESUELTO en 0.28.0** (`seed-freshness-ephemeral-paths`): un único predicado reader-side excluye `.ancleto/**` y `.discovery-map.json` de la frescura; ver `## Relación con 0.28.0`.
+- **Deuda conocida:** la escritura del estado nuevo en `packDiscovery` no tiene pin offline (la suite no ejerce el pack; depende de Repomix) — `tasks.md` 4.3 quedó abierto. Verificado end-to-end en el release. **Sigue PENDIENTE en 0.28.0.**
 
 **Diferido sin cambios en 0.27.0 (sigue pendiente, no hecho):**
 
 - **A3/#4, A4/MEM-05, A5/CH-06b, A6, A7, D, #6, CH-00, CH-07, CH-08/MEM-06, CH-09a–g, CH-10:** sin evidencia nueva en esta sesión → siguen diferidos.
 - **T27/CH-01 queda FUERA** de esta sesión (memoria reconstruible/versionable): pendiente, sin cambios.
+
+## Relación con 0.28.0
+
+0.28.0 contiene un change archivado. Release minor (runtime + spec + test): las rutas efímeras (`.ancleto/**` y `.discovery-map.json` de la raíz) dejan de contar como cambio de frescura del seed; sin cambio de comandos, flags ni forma del estado persistido.
+
+**Hecho:**
+
+- **`seed-freshness-ephemeral-paths` (funcional, delta MODIFIED en `cli-diagnostics`):** change implementado, testeado y archivado en `aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/`; delta `MODIFIED` mergeado en `aspec/specs/cli-diagnostics/spec.md` (Requirement `Clasificación determinista de frescura del seed en discovery --check`, 17 escenarios reenunciados + 9 nuevos = 26 scenarios).
+- **Regla:** `.ancleto` y todo lo que está debajo de `.ancleto/`, más `.discovery-map.json` en la raíz, ya no cuentan como cambio de frescura. Un único predicado anclado (`isEphemeralSource`) se aplica simétricamente a los `sources` persistidos y a los vigentes; el mismatch de hash se excusa como `READY` sólo cuando cambió >=1 path y todos los paths cambiados son efímeros; cero paths cambiados sigue `STALE`; un estado legacy sin `fileHashes` sigue `STALE`/`minor` y nunca `material`.
+- **Compatibilidad / rollback:** la forma del estado persistido y `ruleVersion: 2` no cambian → un rollback a 0.27.0 lee el estado igual que antes.
+- **Evidencia end-to-end en este repo:** crear `.ancleto/probe-ephemeral.txt`, editar `.discovery-map.json` y correr `memory doctor` → `READY`/`none` en cada caso; crear `src/index.ts` → `STALE`/`material` (`archivo material nuevo: src/index.ts`); revertir → `READY`. La regla distingue el churn efímero del cambio arquitectónico real.
+- **Release:** `0.28.0` (minor), tag ANOTADO `v0.28.0` @ merge `f734e83` (merge `--no-ff` de development; incluye `c7a2301`, `242b27d`, `db775ca`, `e521869`), run de publish `43196621815` success; npm `latest` `0.28.0`.
+- **Seed regenerado:** `READY`/`none`, `seedMapPresent: true`, 866 fuentes / ~39.190 tokens, `pluginVersion 0.28.0` en 11/11 docs.
+- **Memoria:** 350 → 351 nodos (activos 237 → 238), 757 refs, 0 sin resolver; 4 decisiones promovidas (`seed-freshness-ephemeral-paths-reader-side-filter`, `seed-freshness-ephemeral-diff-attribution`, `seed-freshness-no-ruleversion-bump`, `seed-freshness-ancleto-area-deferred` supersede el diferimiento previo).
+- **A8 CERRADO:** el churn `.ancleto/**`/`.discovery-map.json` se resuelve con el change `seed-freshness-ephemeral-paths`; la garantía queda en el Requirement canónico `Clasificación determinista de frescura del seed en discovery --check` (`aspec/specs/cli-diagnostics/spec.md`).
+
+**Pendiente nuevo en 0.28.0 (requiere aprobación explícita):**
+
+- **Pin offline de `packDiscovery`:** la escritura del estado nuevo sigue sin pin offline (la suite no ejerce el pack; depende de Repomix) — `tasks.md` 4.3 del change 0.27.0 sigue abierto.
+- **Exclusiones adicionales (NO aprobadas):** `docs/**`, `aspec/**`, `documentation/**` y los audit logs fueron propuestos pero NO aprobados; la ignore list de Repomix tampoco se tocó.
+- **T27/CH-01 sigue FUERA** de esta sesión (memoria reconstruible/versionable): pendiente, sin cambios.

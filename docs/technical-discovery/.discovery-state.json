@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-12T16:32:54.809Z",
+  "generatedAt": "2026-11-12T17:38:42.475Z",
   "sources": [
     ".ancleto/machine-env.md",
     ".ancleto/memory.db",
@@ -866,7 +866,7 @@
     ".ancleto/next-session-prompt.md": "5f62001d37f41bf7",
     ".ancleto/working-context.md": "0c00849fda9e7c15",
     ".ancletorc": "13ac5d37477f61a2",
-    ".discovery-map.json": "a467497d5a5650db",
+    ".discovery-map.json": "343635c4c3e9fff9",
     ".gitattributes": "d60f352d0db1404c",
     ".github/workflows/publish.yml": "afdbac4220001818",
     ".gitignore": "851805d264f984c2",
@@ -952,7 +952,7 @@
     "agents/technical-discovery.md": "ec2f9093746a06f8",
     "agents/technical-seed-writer.md": "380d8a62c93dc006",
     "agents/tester.md": "cd2a0ece6b48144a",
-    "aspec/backlog.md": "ec28ede6e400d555",
+    "aspec/backlog.md": "e07fd8aeae02b146",
     "aspec/changes/ancleto-vscode-extension/design.md": "7c9463bc7f436e1b",
     "aspec/changes/ancleto-vscode-extension/proposal.md": "2c1a5b4f34084482",
     "aspec/changes/ancleto-vscode-extension/specs/vscode-distribution/spec.md": "fb2c7bb3ed161e75",
@@ -1234,7 +1234,7 @@
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/proposal.md": "906ec4fc5dbd5d31",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/specs/cli-diagnostics/spec.md": "a0622db2b95a7397",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/tasks.md": "0914dc98eeda9115",
-    "aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/proposal.md": "5e4e5dfe801474d7",
+    "aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/proposal.md": "c0edd2c6ce091850",
     "aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/specs/cli-diagnostics/spec.md": "75b5134a68c1438f",
     "aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/tasks.md": "8999eba4e676883d",
     "aspec/changes/archive/2026-11-12-pin-offline-discovery-state/proposal.md": "637f3d45b0be38db",
@@ -1713,10 +1713,10 @@
     "test/fixtures/memory/refs-root/aspec/specs/prompt-contracts/spec.md": "828fe5dfb0628de9",
     "test/fixtures/memory/seed.json": "ef04fc809da4e5ae"
   },
-  "hash": "020a0f82e97f24bb65f59843acfea24a79948819a956274e267cfd67d1741c83",
+  "hash": "23958685dec57f7c0e335440030b9478253b01ba1a79dc0578e4b23a9fd910fe",
   "ruleVersion": 2,
   "semantic": {
-    "hash": "23a2b7e5c6894c861e1b4ddcd8fe54b04ba60dc0bbe26ffe4df72fcfb8cccc9d",
+    "hash": "316a3daa99544ec58a9106584a1e8e7b45f9c920310bc68ac89cf3644077a777",
     "fileHashes": {
       "package.json": "1b4df396b665de56"
     }

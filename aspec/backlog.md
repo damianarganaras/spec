@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-12 (exclusiones de frescura de áreas gitignored cerradas en 0.29.0; release 0.29.0).
+> Última actualización: 2026-11-12 (matcher de config.exclude de discovery corregido; release 0.30.0).
 
 ## Prioridad de ejecución
 
@@ -355,3 +355,21 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Qué se hizo:** el armado y la serialización del estado salieron de `packDiscovery` a `src/core/discovery-state.js` (`buildDiscoveryState` + `renderDiscoveryState`); `packDiscovery` conserva el fs y el orden `writeDiscoveryMap` → estado. El test `pin offline del estado de discovery` fija con un golden literal el orden de claves, `version: 1`, `ruleVersion: 2`, `semantic`, exactamente un `\n` final y ausencia de BOM, sin depender de Repomix.
 - **Evidencia:** `discovery --check` post-archive dio `STALE`/`minor` (sin `materialReasons`, `changedAreas` sin `.ancleto`); tras re-correr el pack, `READY`/`none`. Ledger: `node --test test/cli.test.js` y `npm test` passed; lint passed; format `not-configured`; typecheck `n/a`.
 - **Residual (no contrato):** el orden `writeDiscoveryMap` → estado no se pinea, y el lector sigue con `ruleVersion === 2` literal; un bump futuro debe actualizar ambos lados.
+
+## Relación con 0.30.0
+
+0.30.0 contiene un change archivado. Release minor (runtime + spec + test): corrige la semántica de los patrones de `discovery.exclude` para que el `*` simple y el `?` funcionen dentro de patrones con `**`; sin cambio de comandos ni flags.
+
+**Hecho:**
+
+- **`discovery-exclude-glob-match` (funcional, delta ADDED en `cli-diagnostics`):** change implementado, testeado y archivado en `aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/`; requirement nuevo `Semántica por segmentos de los patrones de exclusión del discovery` mergeado en `aspec/specs/cli-diagnostics/spec.md:988` (9→10 requirements, 34 escenarios de frescura intactos).
+- **Defecto y corrección:** `escapeRe` no escapaba `*`/`?` y la rama `**` de `matchesGlob` (`src/cli/index.js`) no traducía el `*` simple: `**/*.test.*` compilaba a `^.*/*\.test\.*$` y matcheaba 0 de 466 archivos trackeados. Ahora tokeniza `**/`→`(?:.*/)?`, `/**`→`(?:/.*)?`, `**`→`.*`, `*`→`[^/]*`, `?`→`[^/]` con anclaje conservado; `public`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml` y archivos raíz sin cambio.
+- **Evidencia:** e2e en fixture fuera del repo antes/después; `.discovery-state.json` tenía 872 sources y 21 rutas `test/*.test.js`; post-fix el primer `--check` da `STALE`/`minor` (no `material`: `test/fixtures/memory/**` mantiene viva el área `test`); 9 pins nuevos en `test/cli.test.js` (vía `discovery --check` READY, sin duplicar el regex); suite 1283 (1278 pass, 5 skip), lint passed, format not-configured, typecheck not-configured.
+- **Intactos:** `DEFAULT_IGNORES`, `outputDir`, writer, forma del estado (`schemaVersion 2`), `ruleVersion 2`, `isEphemeralSource` (la exclusión reader-side de `documentation/` y `audit logs/` no se reabrió), sin config nueva.
+- **Release:** 0.30.0 (minor), merge `--no-ff` `305d388`, tag ANOTADO `v0.30.0`; run de publish `43258286738` (estado en verificación al momento de escribir).
+- **Compatibilidad/rollback:** un estado previo queda `STALE` una vez hasta regenerar; sin migración ni bump de `ruleVersion`; un reader 0.29.x lee el estado igual.
+
+**Pendiente:**
+
+- **T27/CH-01 sigue FUERA** de esta sesión (memoria reconstruible/versionable): pendiente, sin cambios.
+- Nada nuevo abierto por este change; residual no bloqueante: ReDoS teórico con globs patológicos `**/` repetidos (config autor-controlada) y precisión de una cita de líneas en el proposal archivado.

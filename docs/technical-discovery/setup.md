@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-12T16:36:00Z
-pluginVersion: 0.30.0
+generatedAt: 2026-11-12T19:52:28Z
+pluginVersion: 0.30.1
 skillVersion: '2.3'
 ---
 
@@ -170,7 +170,7 @@ del paquete instalado.
    el archive sin preflight, promoción ni move. Desde 0.26.4, la suite declarada valida además la
    estructura de los delta specs de changes activos con el parser del merge, sin cambiar el comando;
    desde 0.27.0 detecta también un `spec.md` de change activo fuera de `specs/<capability>/spec.md`.
-- **Discovery y frescura (0.26.0–0.30.0)**: `ancleto discovery --check` es read-only, emite
+- **Discovery y frescura (0.26.0–0.30.1)**: `ancleto discovery --check` es read-only, emite
   `schemaVersion: 2` y clasifica `READY`/`STALE`/`PARTIAL`/`MISSING`; `impact` sólo es `material`
   por archivos materiales o áreas raíz nuevas/eliminadas. No escribe el seed, el estado ni el
   `seed-map.json`, así que es seguro correrlo como validación antes de cerrar un change. Desde
@@ -189,7 +189,11 @@ del paquete instalado.
   configuración nueva. En 0.30.0 los globs de `discovery.exclude` se evalúan por segmentos:
   `**/`→`(?:.*/)?`, `/**`→`(?:/.*)?`, `**`→`.*`, `*`→`[^/]*`, `?`→`[^/]`, con anclaje `^…$` si el
   patrón contiene `**` y `^(…)(?:/|$)` si no; `**/*.test.*`/`**/*.spec.*` excluyen tests de
-  `sources` y `DEFAULT_IGNORES`/`outputDir`/writer/`ruleVersion: 2` siguen intactos.
+  `sources` y `DEFAULT_IGNORES`/`outputDir`/writer/`ruleVersion: 2` siguen intactos. En 0.30.1 el
+  matcher vive en `src/core/discovery-glob.js` (`escapeRe`/`compileGlob`/`matchesGlob`) y cachea el
+  `RegExp` por string exacto de glob (15,04 ms → 1,63 ms, 9,2× sobre 9.669 evaluaciones), sin
+  cambio de semántica; el ReDoS con `**` repetidos sigue aceptado y el DP por segmentos se descartó
+  por no ser equivalente.
 - **Ayuda sin ejecución (0.25.0)**: en `install`, `update`, `upgrade`, `init`, `memory`, `import`,
   `export`, `mcp`, `specs`, `specs merge`, `projects` y `list --projects`, `--help`/`-h` imprime el
   uso en stdout y sale con exit 0 sin escribir nada. `discovery --help`, la ayuda global y los
@@ -217,9 +221,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.30.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.30.1)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.30.0`.
+  la fija `package.json` = `0.30.1`.
 
 ## Entorno de máquina
 

@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-12T16:36:00Z
-pluginVersion: 0.30.0
+generatedAt: 2026-11-12T19:52:28Z
+pluginVersion: 0.30.1
 skillVersion: '2.3'
 ---
 
@@ -261,6 +261,15 @@ test/                   suite node --test (content guards incluidos)
     se aplican: `sources` baja de 872 a 854 y deja de incluir las 21 rutas `test/*.test.js`, sin
     cambios en `DEFAULT_IGNORES`, `outputDir`, el writer, la forma del estado ni `ruleVersion: 2`.
     Release minor del change `discovery-exclude-glob-match` (delta `MODIFIED` de `cli-diagnostics`).
+30. **Caché del matcher de exclusiones (0.30.1)**: `escapeRe`, `compileGlob` y `matchesGlob` se
+    extraen de `src/cli/index.js` a `src/core/discovery-glob.js`, un módulo puro sin imports. El
+    `RegExp` compilado se cachea en un `Map` por string exacto de glob, con la misma tokenización y
+    anclaje de 0.30.0. Sobre 9.669 evaluaciones (11 globs × 879 rutas) el costo baja de 15,04 ms a
+    1,63 ms (9,2×). No cambia la semántica ni `DEFAULT_IGNORES`, `outputDir`, el writer, el estado
+    (`version:1` + `ruleVersion:2`) ni `buildRepomixArgs`/`--ignore` de Repomix. El ReDoS con `**`
+    repetidos sigue siendo una limitación aceptada (input `.ancletorc` local); el reemplazo por un
+    DP por segmentos se descartó por no ser equivalente. Release patch del change
+    `discovery-exclude-regexp-cache` (sin delta de spec).
 
 ## Recorrido de una instalación con tier `minimo`
 

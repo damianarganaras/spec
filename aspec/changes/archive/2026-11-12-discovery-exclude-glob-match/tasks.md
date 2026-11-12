@@ -64,6 +64,7 @@
 - [ ] 5.1 Archivar el change y mergear el delta a `aspec/specs/cli-diagnostics/spec.md`.
 - [ ] 5.2 Release **MINOR 0.30.0**: `package.json`, `package-lock.json`, `CHANGELOG.md`.
 - [ ] 5.3 Actualizar `aspec/backlog.md` y los documentos del seed tras la implementación; regenerar
-      el estado del discovery para absorber el primer `--check` tras el cambio (`material` por
-      `area raiz eliminada: test` en este repo; `minor` si el área conserva rutas incluidas).
+      el estado del discovery para absorber el primer `--check` tras el cambio (el primer `--check`
+      es `minor` porque `test/fixtures/memory/**` mantiene viva el área `test`; `material` por
+      `area raiz eliminada` sólo si un área pierde todas sus rutas incluidas).
 - [ ] 5.4 No tocar ni archivar `ancleto-vscode-extension`.

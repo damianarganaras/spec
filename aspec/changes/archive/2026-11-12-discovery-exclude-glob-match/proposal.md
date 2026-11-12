@@ -103,12 +103,11 @@ Out of scope (explícito):
   la traducción es exactamente la semántica minimatch para los casos usados, `*`/`?` nunca cruzan
   `/`, hay pins de lookalikes (`public-x`, `__tests__-extra/x`) y la rama sin `**` queda idéntica.
 - **Estados legacy quedan `STALE` una vez**: `sources` encoge y las rutas que el estado
-  persistido conserva se leen como bajas. Mitigación: no se migra ni se reescribe el estado; el
-  primer `--check` reporta `impact: minor` sólo si cada área afectada conserva al menos una ruta
-  incluida; si un área pierde todas sus rutas incluidas (como `test/` aquí, cuyas 21 rutas son
-  `*.test.js`), `computeImpact` reporta `area raiz eliminada` → `impact: material`; tras la primera
-  regeneración el estado queda `READY`/`none`, y los commits test-only ya no producen área.
-  `ruleVersion` no se bumpea.
+  persistido conserva se leen como bajas. Mitigación: no se migra ni se reescribe el estado; en
+  este repo el primer `--check` es `minor`: `test/fixtures/memory/**` no matchea `**/*.test.*` y
+  mantiene viva el área `test`; `material` por `area raiz eliminada` sólo aplica si un área pierde
+  todas sus rutas incluidas. Tras la primera regeneración el estado queda `READY`/`none`, y los
+  commits que sólo tocan `*.test.*` ya no producen área. `ruleVersion` no se bumpea.
 - **`**/*.png` en raíz no debe romperse**: la traducción `**/` → `(?:.*/)?` mantiene el match en
   raíz y en anidado; hay pin explícito de ambas formas.
 - **`?` hoy puede lanzar**: sin escapar, un `?` sin cuantificador previo produce un `new RegExp`

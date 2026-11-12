@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-12T14:25:00Z
-pluginVersion: 0.29.0
+generatedAt: 2026-11-12T16:36:00Z
+pluginVersion: 0.30.0
 skillVersion: '2.3'
 ---
 
@@ -254,6 +254,13 @@ test/                   suite node --test (content guards incluidos)
     materialidad y de la excusa de desvío de hash. `docs/**` y `aspec/**` siguen contando. El writer,
     la forma del estado y `ruleVersion: 2` no cambian; no hay configuración nueva. Release minor del
     change `seed-freshness-ignored-areas` (delta `MODIFIED` de `cli-diagnostics`).
+29. **Exclusiones del discovery por segmentos (0.30.0)**: `escapeRe` pasa a escapar `*` y `?`, y
+    `matchesGlob` traduce los patrones de `discovery.exclude` por tokens (`**/`→`(?:.*/)?`,
+    `/**`→`(?:/.*)?`, `**`→`.*`, `*`→`[^/]*`, `?`→`[^/]`), con anclaje `^…$` cuando el patrón
+    contiene `**` y `^(…)(?:/|$)` cuando no. Las exclusiones declaradas `**/*.test.*` y `**/*.spec.*`
+    se aplican: `sources` baja de 872 a 854 y deja de incluir las 21 rutas `test/*.test.js`, sin
+    cambios en `DEFAULT_IGNORES`, `outputDir`, el writer, la forma del estado ni `ruleVersion: 2`.
+    Release minor del change `discovery-exclude-glob-match` (delta `MODIFIED` de `cli-diagnostics`).
 
 ## Recorrido de una instalación con tier `minimo`
 

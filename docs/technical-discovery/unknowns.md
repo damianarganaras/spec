@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-12T14:25:00Z
-pluginVersion: 0.29.0
+generatedAt: 2026-11-12T16:36:00Z
+pluginVersion: 0.30.0
 skillVersion: '2.3'
 ---
 
@@ -20,8 +20,8 @@ skillVersion: '2.3'
   `reconcileLegacyBlocks`, `specsMergeCommand`, `resolveChangeDir`, `specsCommand`,
   `isEphemeralSource`, `isEphemeralOnlyChange`,
   `src/core/memory/engine.js` → `recordNode`; `src/core/specs-merge.js`;
-   `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 872 fuentes
-   (~39.384 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
+   `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 854 fuentes
+   (~39.428 tokens) y su cuerpo contiene 30 entradas de archivo, porque `**/*.md`, `test/**`,
    `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
    excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
@@ -132,6 +132,14 @@ skillVersion: '2.3'
   `documentation-extra/x.md`, `src/documentation/x.js`), el pin de que `docs/**`/`aspec/**` siguen
   contando y la no-reescritura del estado están pineados en `test/cli.test.js`, y la suite y el
   lint pasaron; `format` no está configurado y `typecheck` no aplica.
+- **Exclusiones por segmentos 0.30.0**: se leyó `src/cli/index.js` (`escapeRe`, `matchesGlob`,
+  `isIgnored`, `computeSources`), el Requirement «Semántica por segmentos de los patrones de
+  exclusión del discovery» de `aspec/specs/cli-diagnostics/spec.md`, el change archivado
+  `discovery-exclude-glob-match` y `CHANGELOG.md`. La baja de 21 rutas `test/*.test.js` y la alta
+  de 3 archivos del change archivado se observaron comparando el estado actual contra `HEAD`; no
+  se ejecutaron los scenarios de `?`, anclaje `p` vs. `p-<sufijo>` ni `/**`, que quedan pineados en
+  la suite. El pack comprimido elide los cuerpos, así que la semántica se confirmó por los
+  comentarios del pack y la lectura directa.
 - **Orden del archive 0.22.1**: no se archivó un change real. La secuencia merge/sync → preflight →
   promoción → move → commit y los literales de fallo se verificaron leyendo
   `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`,
@@ -170,10 +178,12 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **882 archivos** (aspec 310,
+- **`.discovery-map.json` observado**: el generador reporta **885 archivos** (aspec 313,
   `.opencode` 66, docs 21, test 28, src 20, documentation 340, audit logs 9, etc.). El pack registra
-  **872 fuentes** (~39.384 tokens) y 29 entradas de archivo porque los globs de `discovery.exclude`
+  **854 fuentes** (~39.428 tokens) y 30 entradas de archivo porque los globs de `discovery.exclude`
   omiten tests, lockfiles, imágenes y `public`; además Repomix filtra por sus propios ignores.
+  Desde 0.30.0 `**/*.test.*`/`**/*.spec.*` vuelven a aplicar y las 21 rutas `test/*.test.js` dejan
+  de figurar en `sources`; los 7 fixtures bajo `test/fixtures/memory/` siguen incluidos.
   `.ancleto/**` y `.discovery-map.json` raíz siguen en `sources`/`fileHashes` del estado, pero desde
   0.28.0 no cuentan para la frescura. Desde 0.29.0 tampoco cuentan `documentation/**` ni
   `audit logs/**`: el estado conserva 674 entradas `documentation/` + 18 `audit logs/` entre
@@ -183,7 +193,7 @@ skillVersion: '2.3'
   discovery registra **337** porque su `config.exclude` omite 3 archivos bajo `__tests__/`. No es
   una inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.29.0`). No se usan como fuente de contenido.
+  gitignored; deben alinearse con `package.json` (`0.30.0`). No se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
   versión local es una verificación puntual, no una fuente de reglas. El propio `check` compara ese
@@ -250,10 +260,18 @@ skillVersion: '2.3'
   `checkDiscovery`), el delta archivado de `seed-freshness-ignored-areas` y
   `aspec/specs/cli-diagnostics/spec.md`; la suite y el lint pasaron (ver `Áreas ignoradas 0.29.0`)
   y no se mutaron hashes reales.
+- **Estado inicial del chequeo (0.30.0)**: el pack y `.discovery-state.json` se regeneraron antes
+  de esta materialización; el `discovery --check` inicial devolvió `READY`/`impact: none`,
+  `seedMapPresent: true` y `affectedDocs: []`, mientras los documentos todavía declaraban 0.29.0
+  (el oráculo no compara la versión del frontmatter). Para reflejar 0.30.0 se actualizaron los once
+  documentos del seed desde el pack y las fuentes citadas. El comportamiento nuevo se verificó
+  leyendo `src/cli/index.js` (`escapeRe`, `matchesGlob`, `computeSources`), el Requirement de
+  `aspec/specs/cli-diagnostics/spec.md`, el delta archivado de `discovery-exclude-glob-match` y
+  `CHANGELOG.md`; no se ejecutó la suite ni se mutaron hashes reales.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.29.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.30.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -281,7 +299,9 @@ skillVersion: '2.3'
   0.26.4 el guard estructural de los deltas activos en `test/delta-spec-structure.test.js` y desde
   0.27.0 su detección de `spec.md` mal ubicados bajo changes activos; el filtro de rutas efímeras
   `isEphemeralSource`/`isEphemeralOnlyChange` y su aplicación simétrica en `checkDiscovery`
-  (0.28.0), extendido en 0.29.0 a `documentation/**` y `audit logs/**` anclados a la raíz;
+  (0.28.0), extendido en 0.29.0 a `documentation/**` y `audit logs/**` anclados a la raíz; el
+  matcher de `discovery.exclude` (`escapeRe`/`matchesGlob`) corregido en 0.30.0, con `sources`
+  872→854 por 21 `test/*.test.js` excluidos;
   los comentarios de `specs-merge.js` sobre H1 estructural y la identidad de path del contenedor
   `archive`; y la secuencia de archive y los literales de fallo en `agents/orchestrator.md`,
   `agents/documenter.md`, `skills/ancleto-archive`, `skills/ancleto-bulk-archive`,

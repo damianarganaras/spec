@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-12T14:25:00Z
-pluginVersion: 0.29.0
+generatedAt: 2026-11-12T16:36:00Z
+pluginVersion: 0.30.0
 skillVersion: '2.3'
 ---
 
@@ -47,7 +47,7 @@ skillVersion: '2.3'
 - `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
-  esta generación se produjo con el fallback `npx` y quedó comprimido (872 fuentes, ~39.384
+  esta generación se produjo con el fallback `npx` y quedó comprimido (854 fuentes, ~39.428
    tokens); los cuerpos de funciones se eliden y Repomix aplica además sus ignores por defecto
    (incluye `**/*.md`), por eso el pack no contiene Markdown (ver `unknowns.md`).
 
@@ -142,15 +142,16 @@ skillVersion: '2.3'
   secuencia de contratos de prompt (`skills/ancleto-archive`, `skills/ancleto-bulk-archive`,
   `agents/documenter.md`) sobre archivos locales, y el guard de `--help`/`-h` es un `console.log`
   del uso antes del dispatch, sin escritura de archivos. Sin red, procesos externos ni servicios.
-- **0.26.0–0.29.0 no agregan integraciones**: `discovery --check` ya era una lectura local de
+- **0.26.0–0.30.0 no agregan integraciones**: `discovery --check` ya era una lectura local de
   `.config`/estado/hashes, el detector de frescura de 0.26.1 sólo se documenta y pinea en tests,
   0.26.2 sólo consolida walkers de snapshot read-only y pines de frescura en tests, 0.26.4 agrega un
   guard estructural de delta specs a la suite y documenta el Requirement en `spec-sync`, 0.27.0
   normaliza el hash del `package.json` raíz en memoria y amplía el guard de deltas mal ubicados,
   0.28.0 filtra en lectura las rutas efímeras (`.ancleto/**` y `.discovery-map.json` raíz) sin
-  tocar el writer ni el estado persistido, y 0.29.0 extiende ese mismo filtro de lectura a
-  `documentation/**` y `audit logs/**`, áreas gitignored y sin archivos versionados. Ninguno suma
-  red, procesos ni servicios; no hay llamadas externas involucradas en el chequeo.
+  tocar el writer ni el estado persistido, 0.29.0 extiende ese mismo filtro de lectura a
+  `documentation/**` y `audit logs/**`, áreas gitignored y sin archivos versionados, y 0.30.0
+  corrige el matcher local de `discovery.exclude` (`escapeRe`/`matchesGlob`) sin tocar el writer.
+  Ninguno suma red, procesos ni servicios; no hay llamadas externas involucradas en el chequeo.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee

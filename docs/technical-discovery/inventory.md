@@ -2,8 +2,8 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-12T14:25:00Z
-pluginVersion: 0.29.0
+generatedAt: 2026-11-12T16:36:00Z
+pluginVersion: 0.30.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 | Alcance | Documento | Motivo |
 |---|---|---|
-| `src/cli/**` | `units/cli-install.md`, `overview.md` | Entry point único, subcomandos, instalación, ruteo MCP por host, diagnósticos `check`/`doctor`, nota de compresión, `export`/`import` host-neutral y filtro de rutas efímeras en `checkDiscovery` (0.28.0), extendido a `documentation/**` y `audit logs/**` (0.29.0) |
+| `src/cli/**` | `units/cli-install.md`, `overview.md` | Entry point único, subcomandos, instalación, ruteo MCP por host, diagnósticos `check`/`doctor`, nota de compresión, `export`/`import` host-neutral, filtro de rutas efímeras en `checkDiscovery` (0.28.0), extendido a `documentation/**` y `audit logs/**` (0.29.0) y matcher de `discovery.exclude` por segmentos (`escapeRe`/`matchesGlob`, 0.30.0) |
 | `src/core/tier-models.js` | `decisions.md`, `units/discovery-engine.md` | Dueño de tiers/cadenas, resolver, `declaredModelIds` y `freeTierOnPrimary` |
 | `src/core/model-catalog.js`, `src/core/model-catalog.json` | `decisions.md`, `units/discovery-engine.md` | Helpers puros, extracción de IDs, integridad y snapshot |
 | `src/core/discovery.js`, `src/core/repomix-tier.js` | `units/discovery-engine.md` | Topología, impacto, args y presupuesto de pack |
@@ -27,7 +27,7 @@ skillVersion: '2.3'
 | `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
 | `profiles/**` | `units/cli-install.md`, `decisions.md` | Overlay del perfil `test` (agents/commands/templates) |
 | `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y changes archivados de diagnóstico, portabilidad, conformidad, merge, orden del archive, idempotencia de memoria, aviso de bundle legacy y EOL de templates (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory`, `template-legacy-eol-preservation`, `agent-model-minimo-migration`, `specs-merge-canonical-guard`, `archive-sync-via-specs-merge`, `cli-subcommand-help-guards`, `fix-discovery-seedmap-present`, `spec-seed-freshness-detector`, `align-freshness-recommended-action-spec`, `active-delta-structure-guard`, `seed-freshness-version-bump-not-material`, `seed-freshness-ephemeral-paths` y `seed-freshness-ignored-areas`) |
-| `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery, contenido, `specs-merge.test.js`, `delta-spec-structure.test.js` (incluye la detección de `spec.md` mal ubicados desde 0.27.0) y `memory-engine.test.js`; `cli.test.js` pinea las rutas efímeras, el anclaje de `documentation`/`audit logs` y el estado legacy (0.28.0–0.29.0) |
+| `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery, contenido, `specs-merge.test.js`, `delta-spec-structure.test.js` (incluye la detección de `spec.md` mal ubicados desde 0.27.0) y `memory-engine.test.js`; `cli.test.js` pinea las rutas efímeras, el anclaje de `documentation`/`audit logs` y el estado legacy (0.28.0–0.29.0); desde 0.30.0 los 21 `*.test.js` quedan fuera de `sources` por `discovery.exclude` (`**/*.test.*`), no por el tier ni por el predicado de frescura |
 | `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
 | `eslint.config.js`, `package.json` | `setup.md`, `decisions.md` | Lint sobre `src/`, `test/`, `scripts/` y contrato de publicación |
 | `docs/technical-discovery/**` | `index.md` | Este seed (excluido del hash de fuentes) |
@@ -39,9 +39,9 @@ skillVersion: '2.3'
 
 ## Áreas raíz observadas (`.discovery-map.json` al empacar)
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (310), `audit logs` (9), `commands` (16),
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (313), `audit logs` (9), `commands` (16),
 `docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (20),
-`templates` (2), `test` (28), más 15 archivos raíz. Total observado: **882 archivos**.
+`templates` (2), `test` (28), más 15 archivos raíz. Total observado: **885 archivos**.
 
 Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime.
 `documentation/` tiene 366 archivos en disco, pero el mapa cuenta 340 tras excluir
@@ -49,12 +49,14 @@ Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son ru
 `config.exclude` omite 3 archivos bajo `__tests__/`. `skills/` tiene 21 directorios de skill que
 suman 35 archivos; `test/` tiene 28 archivos: 21 `*.test.js` en la raíz (incluidos
 `specs-merge.test.js` y `delta-spec-structure.test.js`) y 7 fixtures bajo `test/fixtures/memory/`;
-el patrón declarado es `test/*.test.js`. El pack del tier `minimo` excluye `test/**`, `docs/**` y
-`**/*.md`, por lo que la evidencia de esas áreas se verificó por lectura directa. El pack de esta
-generación registra 872 fuentes y ~39.384 tokens, con 29 entradas de archivo en el cuerpo.
+el patrón declarado es `test/*.test.js`. Desde 0.30.0 los 21 `*.test.js` no entran en `sources`
+porque `discovery.exclude` (`**/*.test.*`) vuelve a aplicar; los 7 fixtures siguen incluidos. El
+tier `minimo` excluye además `test/**` del cuerpo del pack, por lo que la evidencia de esas áreas se
+verificó por lectura directa. El pack de esta generación registra 854 fuentes y ~39.428 tokens, con
+30 entradas de archivo en el cuerpo.
 
-El `.discovery-map.json` observado en esta corrida reporta 882 archivos (aspec 310, `.opencode` 66,
-src 20, test 28, documentation 340, audit logs 9). El estado `.discovery-state.json` lista 872
+El `.discovery-map.json` observado en esta corrida reporta 885 archivos (aspec 313, `.opencode` 66,
+src 20, test 28, documentation 340, audit logs 9). El estado `.discovery-state.json` lista 854
 fuentes e incluye 674 entradas `documentation/` + 18 `audit logs/` entre `sources` y `fileHashes`;
-desde 0.29.0 esas rutas no cuentan para la frescura, pero `docs/**` y `aspec/**` sí. Ver
-`unknowns.md`.
+desde 0.29.0 esas rutas no cuentan para la frescura, pero `docs/**` y `aspec/**` sí. Desde 0.30.0
+las 21 rutas `test/*.test.js` ya no figuran en `sources`. Ver `unknowns.md`.

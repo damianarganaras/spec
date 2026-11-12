@@ -17,7 +17,7 @@ sobre la capability `cli-diagnostics`. Release **MINOR 0.30.0**.
 ## Requisito citado
 
 - `spec:cli-diagnostics#Clasificación determinista de frescura del seed en discovery --check`
-  (`aspec/specs/cli-diagnostics/spec.md:568-719` para el requirement y `:720-980` para sus 34
+  (`aspec/specs/cli-diagnostics/spec.md:568-719` para el requirement y `:720-986` para sus 34
   escenarios), que gobierna los campos que se ven afectados (`changedAreas`, `impact`,
   `materialReasons`) pero **no promete** la semántica de `discovery.exclude`.
 
@@ -147,6 +147,22 @@ en el requirement, no en un `design.md` nuevo (retirado por
   merge a `aspec/specs/cli-diagnostics/spec.md` ocurre sólo en el archive.
 - Release posterior: `package.json`, `package-lock.json`, `CHANGELOG.md`, `aspec/backlog.md` y los
   documentos del seed.
+
+## Residuales y pendientes
+
+- ReDoS teórico con globs patológicos, medido: globs plausibles de hasta 3 ** y literales distintos
+  (por ejemplo src/**/node_modules/**/dist/**/*.js) contra rutas de 80 segmentos cuestan 0,14 ms. El
+  costo crece como O(N^k) con k igual a la cantidad de **: con 80 segmentos, 5 ** con literales
+  repetidos ≈281 ms; 6 ** con 40 segmentos ≈58 ms; 7 ** ≈288 ms; 8 ** supera 2 s (timeout). El
+  blowup ocurre tanto con ** adyacentes como separados por literales repetidos.
+- El input es .ancletorc local y autor-controlado (no hay frontera de confianza externa); matchesGlob
+  reevalúa ~14,7k por corrida (1.360 paths × 11 globs).
+- Decisión de cierre: se acepta como limitación conocida y acotada en vez de reescribir el matcher a
+  un DP por segmentos, porque (a) un matcher DP cambiaría el mecanismo que la spec canónica pinea
+  (aspec/specs/cli-diagnostics/spec.md:995-1001: traducción a regex) y exigiría delta MODIFIED +
+  release minor, (b) la semántica observable no cambia y (c) el riesgo es auto-infligido por una
+  config local con ≥5 ** y literales repetidos.
+- Follow-up opcional: DP por segmentos, con delta MODIFIED y release minor si se decide.
 
 ## Decisiones
 

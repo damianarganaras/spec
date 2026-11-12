@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-12T14:25:00Z
-pluginVersion: 0.29.0
+generatedAt: 2026-11-12T16:36:00Z
+pluginVersion: 0.30.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.29.0)
+## Modelos y tiers (estado 0.30.0)
 
 ### Tabla y cadenas
 
@@ -1000,17 +1000,20 @@ sin `--tier` es `normal`.
   `audit logs`/`audit logs/**`, anclados a la raíz, también son efímeras (gitignored, 0 tracked); el
   estado las conserva en `sources`/`fileHashes` (674+18 entradas) y no producen áreas ni
   materialidad. `docs/**` y `aspec/**` siguen contando. El writer y la forma del estado no cambian.
-- **Exclusiones**: `node_modules`, `.git`, `dist` siempre; el `outputDir` del seed se excluye del
-  hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
+- **Exclusiones**: `node_modules`, `.git`, `dist` siempre (`DEFAULT_IGNORES`); el `outputDir` del
+  seed se excluye del hash. Los globs de `discovery.exclude` se evalúan en `computeSources` con
+  `matchesGlob`; desde 0.30.0 lo hacen por segmentos. El tier `minimo` agrega `test/**`, `docs/**` y
+  `**/*.md` al cuerpo del pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 872 fuentes, ~39.384 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 882 archivos (aspec 310, `.opencode` 66, docs 21,
+- **Pack actual**: tier `minimo`, 854 fuentes, ~39.428 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 885 archivos (aspec 313, `.opencode` 66, docs 21,
   test 28, src 20, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
   el hash semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados
   bajo changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
   writer ni `ruleVersion`; 0.29.0 extiende ese filtro a `documentation/**` y `audit logs/**`
-  anclados a la raíz, también sin cambiar el writer ni `ruleVersion`.
+  anclados a la raíz; 0.30.0 corrige el matcher de `discovery.exclude`, también sin cambiar el
+  writer ni `ruleVersion`.
 
 ### Contrato del detector de frescura (0.26.1, reglas 0.27.0–0.29.0)
 
@@ -1081,6 +1084,20 @@ configuración.
   en la spec lo que `checkDiscovery` ya emite: `generate` en `MISSING` y `complete` en `PARTIAL`,
   aun cuando su `impact` es `none`; los tests pinean ambos valores y `src/` no cambia.
 
+### Semántica de exclusiones del discovery (0.30.0)
+
+`src/cli/index.js` es el único dueño del matcher: `escapeRe` escapa los metacaracteres regex y
+`matchesGlob` traduce `discovery.exclude` por tokens —`**/`→`(?:.*/)?`, `/**`→`(?:/.*)?`,
+`**`→`.*`, `*`→`[^/]*`, `?`→`[^/]`— con anclaje `^…$` si el patrón contiene `**` y
+`^(…)(?:/|$)` si no. La corrección se hizo en el matcher existente, sin un segundo oráculo ni una
+lista paralela de exclusiones: `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, el writer, la forma
+del estado (`schemaVersion: 2`) y `ruleVersion: 2` no cambian. Efecto observable: `**/*.test.*` y
+`**/*.spec.*` vuelven a aplicar y los 21 `test/*.test.js` salen de `sources` (872→854); los 7
+fixtures de `test/fixtures/**` siguen incluidos. La exclusión de tests es de `discovery.exclude`, no
+de `DEFAULT_IGNORES` ni del predicado reader-side `isEphemeralSource`. Requisito canónico:
+«Semántica por segmentos de los patrones de exclusión del discovery» en
+`aspec/specs/cli-diagnostics/spec.md`.
+
 ## Lint y publicación
 
 - `npm run lint` ejecuta `eslint src/ test/ scripts/` con flat config y cuatro reglas
@@ -1138,7 +1155,7 @@ configuración.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.29.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.30.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +
@@ -1147,8 +1164,11 @@ configuración.
   cambia la forma del estado ni `ruleVersion`, y un estado legacy sin `fileHashes` no puede
   atribuir, por lo que sigue `STALE`/`minor`. Desde 0.29.0 el mismo filtro cubre
   `documentation/**` y `audit logs/**` anclados a la raíz; `docs/**` y `aspec/**` siguen contando.
-  El contenido de `docs/technical-discovery/` no cuenta como cambio material (el `outputDir` se
-  excluye del hash).
+  Desde 0.30.0 el matcher de `discovery.exclude` se corrige por segmentos en `src/cli/index.js`
+  (`escapeRe`/`matchesGlob`), de modo que las exclusiones declaradas vuelven a aplicarse; es una
+  decisión de lectura de `computeSources`, no del writer, y no altera `DEFAULT_IGNORES` ni
+  `outputDir`. El contenido de `docs/technical-discovery/` no cuenta como cambio material (el
+  `outputDir` se excluye del hash).
 - **Churn ignorado en `documentation/` y `audit logs/` (0.29.0)**: tocar esas áreas ya no deja el
   seed `STALE`; es el objetivo del cambio, pero oculta churn local que antes alertaba. La mitigación
   es el anclaje exacto a la raíz y los escenarios que mantienen `docs/**` y `aspec/**` como señal

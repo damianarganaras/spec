@@ -18,6 +18,7 @@ import { curateMemory } from '../core/memory/curation.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
 import { buildDiscoveryState, renderDiscoveryState } from '../core/discovery-state.js'
+import { escapeRe, matchesGlob } from '../core/discovery-glob.js'
 import { computeAffectedSet } from '../core/affected-set.js'
 import { mergeSpecText } from '../core/specs-merge.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
@@ -2176,39 +2177,6 @@ async function loadDiscoveryConfig() {
   } catch {
     return defaults
   }
-}
-
-function escapeRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-// Traduce un glob a regex por tokens, con precedencia `**/`, `/**`, `**`, `*`, `?`.
-// `*` y `?` nunca cruzan `/`: las rutas relativas del discovery usan `/` aun en Windows.
-function matchesGlob(rel, glob) {
-  let re = ''
-  for (let i = 0; i < glob.length;) {
-    if (glob.startsWith('**/', i)) {
-      re += '(?:.*/)?'
-      i += 3
-    } else if (glob.startsWith('/**', i)) {
-      re += '(?:/.*)?'
-      i += 3
-    } else if (glob.startsWith('**', i)) {
-      re += '.*'
-      i += 2
-    } else if (glob[i] === '*') {
-      re += '[^/]*'
-      i += 1
-    } else if (glob[i] === '?') {
-      re += '[^/]'
-      i += 1
-    } else {
-      re += escapeRe(glob[i])
-      i += 1
-    }
-  }
-  if (glob.includes('**')) return new RegExp(`^${re}$`).test(rel)
-  return new RegExp(`^${re}(/|$)`).test(rel)
 }
 
 function isIgnored(rel, exclude) {

@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-12T14:25:00Z
-pluginVersion: 0.29.0
+generatedAt: 2026-11-12T16:36:00Z
+pluginVersion: 0.30.0
 skillVersion: '2.3'
 ---
 
@@ -11,10 +11,11 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (872 fuentes, ~39.384 tokens), `package.json` (`0.29.0`), `src/core/model-catalog.json` y
+`minimo` (854 fuentes, ~39.428 tokens), `package.json` (`0.30.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
-`docs/**` y `**/*.md`, y el pack llega comprimido (cuerpos de funciones elididos). Por eso las áreas
+`docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
+La lista `sources` que mide el seed la calcula `computeSources` con `discovery.exclude`, no el tier. Por eso las áreas
 Markdown —`aspec/specs/**`, `aspec/changes/**`, `agents/**`, `skills/**`, `README.md`,
 `CHANGELOG.md`— y los detalles finos de comportamiento se verificaron por lectura directa de los
 paths citados (ver `unknowns.md`).
@@ -28,7 +29,7 @@ paths citados (ver `unknowns.md`).
 | Reglas, contratos, riesgos, deuda, acoplamiento e impacto de cambios | `decisions.md` |
 | Sistemas externos y dependencias observables (npm, GitHub, Repomix, git, MCP, opencode) | `integrations.md` |
 | Catálogo de unidades (módulos, agents, skills, commands) con propósito y entry point | `units/_map.md` |
-| **Frescura del seed (0.26.0–0.29.0)**: contrato de `discovery --check` (`schemaVersion:2`, read-only, `impact` `none|minor|material`, lista de archivos materiales, `areaOf`, formas exactas de `materialReasons`/`notes`, estado `READY/STALE/PARTIAL/MISSING`), `seedMapPresent` state-independent, `recommendedAction` (`generate` en `MISSING`, `complete` en `PARTIAL`, excepción a `impact:none` → `continue`) y, desde 0.27.0, el bump de `version` de primer nivel del `package.json` raíz no cuenta como cambio material ni de contenido y el estado persistido declara `ruleVersion: 2` + `semantic: { hash, fileHashes }`; desde 0.28.0, `.ancleto`, cualquier ruta bajo `.ancleto/` y el `.discovery-map.json` raíz son efímeras y un filtro simétrico de lectura en `checkDiscovery` las excluye de áreas y materialidad, conservando la forma del estado; desde 0.29.0, `documentation`/`documentation/**` y `audit logs`/`audit logs/**` anclados a la raíz también son efímeros (gitignored, 0 tracked; 674+18 entradas en el estado), mientras `docs/**` y `aspec/**` siguen contando y el writer, la forma del estado y `ruleVersion: 2` no cambian | `decisions.md`, `units/discovery-engine.md` |
+| **Frescura del seed (0.26.0–0.30.0)**: contrato de `discovery --check` (`schemaVersion:2`, read-only, `impact` `none|minor|material`, lista de archivos materiales, `areaOf`, formas exactas de `materialReasons`/`notes`, estado `READY/STALE/PARTIAL/MISSING`), `seedMapPresent` state-independent, `recommendedAction` (`generate` en `MISSING`, `complete` en `PARTIAL`, excepción a `impact:none` → `continue`) y, desde 0.27.0, el bump de `version` de primer nivel del `package.json` raíz no cuenta como cambio material ni de contenido y el estado persistido declara `ruleVersion: 2` + `semantic: { hash, fileHashes }`; desde 0.28.0, `.ancleto`, cualquier ruta bajo `.ancleto/` y el `.discovery-map.json` raíz son efímeras y un filtro simétrico de lectura en `checkDiscovery` las excluye de áreas y materialidad, conservando la forma del estado; desde 0.29.0, `documentation`/`documentation/**` y `audit logs`/`audit logs/**` anclados a la raíz también son efímeros (gitignored, 0 tracked; 674+18 entradas en el estado), mientras `docs/**` y `aspec/**` siguen contando y el writer, la forma del estado y `ruleVersion: 2` no cambian; desde 0.30.0 los patrones de `discovery.exclude` se traducen por segmentos (`**/`, `/**`, `**`, `*`, `?`) con anclaje `^…$` o `^(…)(?:/|$)`, por lo que `**/*.test.*` y `**/*.spec.*` excluyen 21 rutas `test/*.test.js` de `sources` (872→854) | `decisions.md`, `units/discovery-engine.md` |
 | **Merge de specs (0.22.0–0.27.0)**: `ancleto specs merge --change <slug> [--dry-run] [--json]`, `src/core/specs-merge.js`, capability `spec-sync`; preámbulo H1 estructural, contenedor `archive` fail-closed, `ADDED` con una línea en blanco, atomicidad acotada al plan y, desde 0.24.0, heading de sección de delta en la canónica fail-closed para los cuatro tipos; desde 0.26.4 la suite declarada valida la estructura de los deltas de changes activos con `parseDeltaSpec` y, desde 0.27.0, un guard detecta un `spec.md` de change activo fuera de `specs/<capability>/spec.md` | `decisions.md`, `units/cli-install.md`, `units/_map.md` |
 | **Orden del archive (0.22.1)**: merge/sync → preflight read-only → promoción de `## Decisiones` → move → commit; literales de fallo y superficies canónicas | `decisions.md`, `units/memory-engine.md`, `units/_map.md` |
 | **Conformidad vs cambio funcional (0.21.0)**: predicado de cita resoluble + ausencia de bloques delta, `spec-required`, ruteo único | `decisions.md`, `overview.md`, `units/_map.md` |
@@ -70,10 +71,15 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.29.0` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.30.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/` (0.30.0: corrige `escapeRe` y
+  `matchesGlob` en `src/cli/index.js` para traducir `**/`, `/**`, `**`, `*` y `?` por segmentos con
+  anclaje; las exclusiones `**/*.test.*`/`**/*.spec.*` se aplican, `sources` baja de 872 a 854 y
+  deja de incluir 21 `test/*.test.js`; `DEFAULT_IGNORES`, `outputDir`, writer, forma del estado y
+  `ruleVersion: 2` no cambian; delta `MODIFIED` de `cli-diagnostics`),
   `aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas/` (0.29.0: extiende el predicado
   de lectura `isEphemeralSource` para excluir `documentation`/`documentation/**` y
   `audit logs`/`audit logs/**` anclados a la raíz; ambas áreas son gitignored y 0 tracked, el estado
@@ -134,13 +140,15 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-   archivos) mantienen el conteo; en 0.22.1-0.29.0 no cambió su cantidad.
-- **Pack actual**: 872 fuentes y ~39.384 tokens (comprimido, tier `minimo`), con 29 entradas de
-   archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos. El
-   `.discovery-map.json` de la corrida reporta 882 archivos (aspec 310, `.opencode` 66, docs 21,
-   test 28, src 20, documentation 340, audit logs 9).
+   archivos) mantienen el conteo; en 0.22.1-0.30.0 no cambió su cantidad.
+- **Pack actual**: 854 fuentes y ~39.428 tokens (comprimido, tier `minimo`), con 30 entradas de
+   archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del pack. El
+   `.discovery-map.json` de la corrida reporta 885 archivos (aspec 313, `.opencode` 66, docs 21,
+   test 28, src 20, documentation 340, audit logs 9). La lista `sources` excluye 21
+   `test/*.test.js` por `discovery.exclude` desde 0.30.0; los 7 fixtures de `test/fixtures/**`
+   siguen incluidos.
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
-   citadas para reflejar 0.29.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
+   citadas para reflejar 0.30.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
    pasó a calcular `seedMapPresent` antes de clasificar el estado (vale en
    `READY`/`STALE`/`PARTIAL`/`MISSING`); en 0.26.1 el detector de frescura quedó documentado y
    pineado en `cli-diagnostics`; en 0.26.4 la suite declarada sumó el guard estructural de los delta
@@ -155,7 +163,10 @@ paths citados (ver `unknowns.md`).
    se extiende a `documentation`/`documentation/**` y `audit logs`/`audit logs/**` anclados a la
    raíz: ambas áreas son gitignored y 0 tracked, el estado las conserva (674+18 entradas) y no
    producen áreas, materialidad ni excusa de hash; `docs/**` y `aspec/**` siguen contando, y el
-   writer, la forma del estado y `ruleVersion: 2` no cambian. `affectedDocs` sigue
-   poblándose sólo en `STALE`. El `ancleto discovery --check` de validación reportó
-   `READY`/`impact: none` con `changedAreas: []`, `seedMapPresent: true` y `affectedDocs: []`; no se
-   ejecutó un segundo pack.
+   writer, la forma del estado y `ruleVersion: 2` no cambian. En 0.30.0 `escapeRe` escapa `*` y `?`
+   y `matchesGlob` traduce `**/`→`(?:.*/)?`, `/**`→`(?:/.*)?`, `**`→`.*`, `*`→`[^/]*` y
+   `?`→`[^/]`, con anclaje `^…$` si el patrón contiene `**` y `^(…)(?:/|$)` si no; así
+   `**/*.test.*` y `**/*.spec.*` vuelven a excluir tests de `sources` (21 rutas menos, 872→854).
+   `affectedDocs` sigue poblándose sólo en `STALE`. El `ancleto discovery --check` de validación
+   reportó `READY`/`impact: none` con `changedAreas: []`, `seedMapPresent: true` y
+   `affectedDocs: []`; no se ejecutó un segundo pack.

@@ -139,7 +139,7 @@ describe('specs merge â€” ADDED, MODIFIED, REMOVED y RENAMED', () => {
     })
   })
 
-  it('MODIFIED reescribe el cuerpo y los escenarios y preserva los no mencionados', () => {
+  it('MODIFIED reescribe el cuerpo y los escenarios y preserva los demas requirements', () => {
     withDir((dir) => {
       const oldA = `### Requirement: A\n\nOld A body.\n\n#### Scenario: Old A\n\n- **WHEN** old\n- **THEN** old`
       const base = canon('beta', oldA, requirement('B', 'B stays.'))

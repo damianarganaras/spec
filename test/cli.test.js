@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { createHash } from 'node:crypto'
 import { createMemoryEngine } from '../src/core/memory/engine.js'
 import { validateCatalogSnapshot } from '../src/core/model-catalog.js'
+import { buildDiscoveryState, renderDiscoveryState } from '../src/core/discovery-state.js'
 import { TIER_CHAINS } from '../src/core/tier-models.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
@@ -9093,5 +9094,52 @@ describe('CLI subcommand --help guards', () => {
       assert.equal(imprt.status, 1)
       assert.match(imprt.stderr, /uso: ancleto import <bundle>/)
     })
+  })
+})
+
+// Pinea offline la forma y los bytes que `packDiscovery` debe persistir a través de los
+// helpers. El call-site (fs y orden map→state) queda fuera de este test y está declarado
+// fuera de contrato en el proposal.
+describe('pin offline del estado de discovery', () => {
+  it('forma y bytes', () => {
+    const state = buildDiscoveryState({
+      generatedAt: '2026-11-12T00:00:00.000Z',
+      sources: ['src/a.js', 'src/b.js'],
+      fileHashes: { 'src/a.js': 'aaa', 'src/b.js': 'bbb' },
+      hash: 'deadbeef',
+      semantic: { hash: 'cafe', fileHashes: { 'src/a.js': '111' } },
+      packTokens: 42
+    })
+    assert.deepEqual(Object.keys(state), ['version', 'generatedAt', 'sources', 'fileHashes', 'hash', 'ruleVersion', 'semantic', 'packTokens'])
+    assert.deepEqual(Object.keys(state.semantic), ['hash', 'fileHashes'])
+    assert.equal(state.version, 1)
+    assert.equal(state.ruleVersion, 2)
+    const golden = `{
+  "version": 1,
+  "generatedAt": "2026-11-12T00:00:00.000Z",
+  "sources": [
+    "src/a.js",
+    "src/b.js"
+  ],
+  "fileHashes": {
+    "src/a.js": "aaa",
+    "src/b.js": "bbb"
+  },
+  "hash": "deadbeef",
+  "ruleVersion": 2,
+  "semantic": {
+    "hash": "cafe",
+    "fileHashes": {
+      "src/a.js": "111"
+    }
+  },
+  "packTokens": 42
+}
+`
+    const rendered = renderDiscoveryState(state)
+    assert.equal(rendered, golden)
+    assert.equal(rendered.endsWith('\n'), true)
+    assert.equal(rendered.endsWith('\n\n'), false)
+    assert.equal(rendered.startsWith('\uFEFF'), false)
   })
 })

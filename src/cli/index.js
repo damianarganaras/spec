@@ -17,6 +17,7 @@ import { memoryDoctor } from '../core/memory/doctor.js'
 import { curateMemory } from '../core/memory/curation.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
+import { buildDiscoveryState, renderDiscoveryState } from '../core/discovery-state.js'
 import { computeAffectedSet } from '../core/affected-set.js'
 import { mergeSpecText } from '../core/specs-merge.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
@@ -2615,16 +2616,15 @@ async function packDiscovery(flags) {
   const sources = await computeSources()
   const { hash, fileHashes, semantic } = await hashSources(sources)
   await mkdir(outputDir, { recursive: true })
-  await writeFile(statePath(outputDir), JSON.stringify({
-    version: 1,
+  const state = buildDiscoveryState({
     generatedAt: new Date().toISOString(),
     sources,
     fileHashes,
     hash,
-    ruleVersion: 2,
     semantic,
     packTokens: tokens
-  }, null, 2) + '\n')
+  })
+  await writeFile(statePath(outputDir), renderDiscoveryState(state))
   console.log(`ancleto: pack generado (${sources.length} archivos, ~${tokens} tokens)`)
   console.log(`ancleto: estado guardado en ${statePath(outputDir)}`)
   console.log(`ancleto: el seed lo genera la skill ancleto-technical-discovery a partir del pack`)

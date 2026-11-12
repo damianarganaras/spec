@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-12 (deuda del pin offline de packDiscovery cerrada; release 0.28.0).
+> Última actualización: 2026-11-12 (exclusiones de frescura de áreas gitignored cerradas en 0.29.0; release 0.29.0).
 
 ## Prioridad de ejecución
 
@@ -323,8 +323,31 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 **Pendiente nuevo en 0.28.0 (requiere aprobación explícita):**
 
 - **Pin offline de `packDiscovery` (CERRADO 2026-11-12):** resuelto por `pin-offline-discovery-state` (conformidad, sin delta, sin bump). Ver "## Cierre de deuda — pin offline de packDiscovery".
-- **Exclusiones adicionales (NO aprobadas):** `docs/**`, `aspec/**`, `documentation/**` y los audit logs fueron propuestos pero NO aprobados; la ignore list de Repomix tampoco se tocó.
+- **Exclusiones adicionales (RESUELTO en 0.29.0):** `documentation`/`documentation/` y `audit logs`/`audit logs/` (raíz, gitignored) quedan excluidas de la frescura; `docs/**` y `aspec/**` siguen contando (21 y 307 archivos trackeados: señal real); la ignore list de Repomix no se tocó. Ver `## Relación con 0.29.0`.
 - **T27/CH-01 sigue FUERA** de esta sesión (memoria reconstruible/versionable): pendiente, sin cambios.
+
+## Relación con 0.29.0
+
+0.29.0 contiene un change archivado. Release minor (runtime + spec + test): las áreas raíz gitignored `documentation/` y `audit logs/` dejan de contar como cambio de frescura del seed; `docs/**` y `aspec/**` siguen contando; sin cambio de comandos, flags ni forma del estado persistido.
+
+**Hecho:**
+
+- **`seed-freshness-ignored-areas` (funcional, delta MODIFIED en `cli-diagnostics`):** change implementado, testeado y archivado en `aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas/`; delta `MODIFIED` mergeado en `aspec/specs/cli-diagnostics/spec.md` (Requirement `Clasificación determinista de frescura del seed en discovery --check`, 34 scenarios).
+- **Regla:** el predicado reader-side `isEphemeralSource` se extendió a las áreas ancladas a la raíz `documentation` / `documentation/` y `audit logs` / `audit logs/`; `docs/**` y `aspec/**` siguen contando. La ignore list de Repomix no se tocó.
+- **Compatibilidad / rollback:** la forma del estado persistido, `ruleVersion: 2` y el writer no cambian → un reader viejo (0.28.0) ignora las exclusiones nuevas y lee el estado igual que antes. Sin configuración nueva.
+- **Release:** `0.29.0` (minor), tag ANOTADO `v0.29.0` @ merge `--no-ff` `e99eea0` (incluye `6d3d53e` implementación, `78168bb` archive, `b3e0e3b` bump), run de publish `43233010534` success; npm `version 0.29.0` / `latest 0.29.0`, `gitHead == e99eea0`, tarball HTTP 200.
+- **Seed:** regenerado con `pluginVersion 0.29.0`; `discovery --check` final `READY`/`none` (parte del mismo cierre, previo al commit).
+- **Memoria:** 3 decisiones promovidas (`seed-freshness-ignored-areas-reader-side-filter`, `seed-freshness-tracked-areas-stay-counted`, `seed-freshness-ignored-areas-writer-unchanged`) + 1 regla de cierre (`discovery-sources-forward-slash-paths`, scope `project`).
+
+**Evidencia:**
+
+- `documentation` y `audit logs` están gitignored (`.gitignore:7` `/documentation`, `:8` `audit logs/`) y tienen 0 archivos trackeados, pero `docs/technical-discovery/.discovery-state.json` guarda 674 entradas `"documentation/` + 18 `"audit logs/`; un cambio de contenido ahí daba `STALE`/`minor` y la ausencia total (clone fresco) daba `STALE`/**material** vía `area raiz eliminada`.
+- `docs` tiene 21 archivos trackeados y `aspec` 307: excluirlos ocultaría señal real. `docs/technical-discovery/**` ya estaba excluido por `outputDir` (NO-OP).
+
+**Pendiente:**
+
+- **T27/CH-01 sigue FUERA** de esta sesión (memoria reconstruible/versionable): pendiente, sin cambios.
+- Sin otro pendiente abierto de este change.
 
 ## Cierre de deuda — pin offline de packDiscovery (2026-11-12, sin release)
 

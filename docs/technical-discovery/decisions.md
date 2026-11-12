@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-12T09:44:05Z
-pluginVersion: 0.28.0
+generatedAt: 2026-11-12T14:25:00Z
+pluginVersion: 0.29.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.28.0)
+## Modelos y tiers (estado 0.29.0)
 
 ### Tabla y cadenas
 
@@ -996,19 +996,23 @@ sin `--tier` es `normal`.
   o una `version` anidada siguen siendo materiales. Excepción 0.28.0: `.ancleto`, cualquier ruta
   bajo `.ancleto/` y el `.discovery-map.json` raíz son efímeras; un filtro simétrico de lectura las
   excluye de `changedAreas` y `materialReasons` y sólo excusa un desvío de hash si hay al menos una
-  ruta cambiada y todas son efímeras. El writer y la forma del estado no cambian.
+  ruta cambiada y todas son efímeras. Excepción 0.29.0: `documentation`/`documentation/**` y
+  `audit logs`/`audit logs/**`, anclados a la raíz, también son efímeras (gitignored, 0 tracked); el
+  estado las conserva en `sources`/`fileHashes` (674+18 entradas) y no producen áreas ni
+  materialidad. `docs/**` y `aspec/**` siguen contando. El writer y la forma del estado no cambian.
 - **Exclusiones**: `node_modules`, `.git`, `dist` siempre; el `outputDir` del seed se excluye del
   hash. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 866 fuentes, ~39.190 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 876 archivos (aspec 305, `.opencode` 66, docs 21,
-  test 28, src 19, documentation 340, etc.). 0.27.0 normaliza el bump de versión para el hash
-  semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados bajo
-  changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
-  writer ni `ruleVersion`.
+- **Pack actual**: tier `minimo`, 872 fuentes, ~39.384 tokens (comprimido). El
+  `.discovery-map.json` regenerado reporta 882 archivos (aspec 310, `.opencode` 66, docs 21,
+  test 28, src 20, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
+  el hash semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados
+  bajo changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
+  writer ni `ruleVersion`; 0.29.0 extiende ese filtro a `documentation/**` y `audit logs/**`
+  anclados a la raíz, también sin cambiar el writer ni `ruleVersion`.
 
-### Contrato del detector de frescura (0.26.1, reglas 0.27.0–0.28.0)
+### Contrato del detector de frescura (0.26.1, reglas 0.27.0–0.29.0)
 
 Change archivado base: `aspec/changes/archive/2026-11-10-spec-seed-freshness-detector/` (delta
 `ADDED` de `cli-diagnostics`). Un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`,
@@ -1017,7 +1021,9 @@ exige un delta `MODIFIED` y un release minor, no un patch documental. Desde 0.27
 la regla de hash con `ruleVersion: 2` + `semantic`, de modo que un cambio de regla no reinterpreta
 los estados ya persistidos: los estados sin `ruleVersion` conservan la comparación cruda. Desde
 0.28.0 la pertenencia de rutas efímeras es una decisión de lectura aplicada a ambas vistas de
-`sources`, sin cambiar el writer ni `ruleVersion`.
+`sources`, sin cambiar el writer ni `ruleVersion`. Desde 0.29.0 la misma decisión de lectura cubre
+`documentation/**` y `audit logs/**` anclados a la raíz, sin cambios de writer, forma del estado ni
+configuración.
 
 - **Salida**: `schemaVersion: 2`, JSON, exit 0 al completar y **read-only** (no escribe seed,
   estado ni `seed-map.json`). `impact` ∈ {`none`, `minor`, `material`} con precedencia
@@ -1032,14 +1038,17 @@ los estados ya persistidos: los estados sin `ruleVersion` conservan la comparaci
   `package.json` anidados **no** son materiales. El valor de `version` de primer nivel del
   `package.json` raíz es la única excepción: no cuenta como cambio de contenido ni material;
   cualquier otro campo del archivo sigue siendo material.
-- **Rutas efímeras (0.28.0)**: `.discovery-map.json` sólo en la raíz y `.ancleto` /
-  `.ancleto/**` se excluyen de la frescura mediante un predicado anclado (`isEphemeralSource`); no
-  coinciden `.ancletorc`, `.ancleto-notes.md` ni `src/ancleto/x.js`. El filtro es simétrico sobre
-  las dos vistas de `sources` antes de `computeImpact`, y `fileHashes` permanece completo. Si el
-  hash difiere, `isEphemeralOnlyChange` concede `READY` sólo si hay al menos una ruta cambiada y
-  todas son efímeras; cero rutas cambiadas sigue `STALE`, y sin `fileHashes` el estado sigue
-  `STALE`/`minor` con la nota exacta. Las rutas efímeras siguen en `sources`/`fileHashes` y
-  `ruleVersion` no cambia.
+- **Rutas efímeras (0.28.0–0.29.0)**: `.discovery-map.json` sólo en la raíz, `.ancleto` /
+  `.ancleto/**`, `documentation` / `documentation/**` y `audit logs` / `audit logs/**` (estos dos
+  últimos anclados a la raíz) se excluyen de la frescura mediante un predicado único
+  (`isEphemeralSource`); no coinciden `.ancletorc`, `.ancleto-notes.md`, `src/ancleto/x.js`,
+  `docs/documentation/x.md`, `documentation-extra/x.md`, `src/documentation/x.js` ni
+  `audit logs-extra/x.log`. `documentation` y `audit logs` están gitignored y no tienen archivos
+  versionados. El filtro es simétrico sobre las dos vistas de `sources` antes de `computeImpact`, y
+  `fileHashes` permanece completo. Si el hash difiere, `isEphemeralOnlyChange` concede `READY` sólo
+  si hay al menos una ruta cambiada y todas son efímeras; cero rutas cambiadas sigue `STALE`, y sin
+  `fileHashes` el estado sigue `STALE`/`minor` con la nota exacta. Las rutas efímeras siguen en
+  `sources`/`fileHashes` (674+18 entradas para las dos áreas ignoradas) y `ruleVersion` no cambia.
 - **Área**: primer segmento del path; un archivo raíz es su propia área.
 - **Estado persistido (0.27.0)**: conserva `hash` y `fileHashes` crudos para rollback y agrega
   `ruleVersion: 2` + `semantic: { hash, fileHashes }`; `semantic.fileHashes` contiene sólo las
@@ -1065,6 +1074,8 @@ los estados ya persistidos: los estados sin `ruleVersion` conservan la comparaci
 - Decisiones promovidas (0.28.0): `seed-freshness-ephemeral-paths-reader-side-filter`,
   `seed-freshness-ephemeral-diff-attribution`, `seed-freshness-no-ruleversion-bump` y
   `seed-freshness-ancleto-area-deferred`.
+- Decisiones promovidas (0.29.0): `seed-freshness-ignored-areas-reader-side-filter`,
+  `seed-freshness-tracked-areas-stay-counted` y `seed-freshness-ignored-areas-writer-unchanged`.
 - **Excepción de `recommendedAction` (0.26.x)**: el change archivado
   `2026-11-10-align-freshness-recommended-action-spec` (delta `MODIFIED` de `cli-diagnostics`) fija
   en la spec lo que `checkDiscovery` ya emite: `generate` en `MISSING` y `complete` en `PARTIAL`,
@@ -1127,15 +1138,21 @@ los estados ya persistidos: los estados sin `ruleVersion` conservan la comparaci
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.28.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.29.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +
   `semantic`) y los estados legacy se comparan crudos, así que un cambio de regla no reescribe ni
   reinterpreta estados previos. Desde 0.28.0 el filtro de rutas efímeras vive en el lector: no
   cambia la forma del estado ni `ruleVersion`, y un estado legacy sin `fileHashes` no puede
-  atribuir, por lo que sigue `STALE`/`minor`. El contenido de `docs/technical-discovery/` no cuenta
-  como cambio material (el `outputDir` se excluye del hash).
+  atribuir, por lo que sigue `STALE`/`minor`. Desde 0.29.0 el mismo filtro cubre
+  `documentation/**` y `audit logs/**` anclados a la raíz; `docs/**` y `aspec/**` siguen contando.
+  El contenido de `docs/technical-discovery/` no cuenta como cambio material (el `outputDir` se
+  excluye del hash).
+- **Churn ignorado en `documentation/` y `audit logs/` (0.29.0)**: tocar esas áreas ya no deja el
+  seed `STALE`; es el objetivo del cambio, pero oculta churn local que antes alertaba. La mitigación
+  es el anclaje exacto a la raíz y los escenarios que mantienen `docs/**` y `aspec/**` como señal
+  real de frescura.
 - **Reparación MCP acotada (0.20.1)**: la no-escritura rige sólo en `import`/`import --repair`;
   `install`/`init` y `upgrade` siguen reescribiendo el destino. Un `.jsonc` con comentarios sigue
   reemplazándose porque no se agregó parseo tolerante.
@@ -1153,8 +1170,9 @@ los estados ya persistidos: los estados sin `ruleVersion` conservan la comparaci
   `src/`; la aceptación se apoya en `test/content-guards.test.js`, que no se ejecutó en esta
   generación. Editar sólo `agents/`/`skills/` y regenerar con `ancleto upgrade`; no tocar
   `.opencode/**` a mano.
-- **Docs legados**: `documentation/` es material lnx-cli gitignored, no runtime; `docs/` contiene
-  documentación del framework y el seed.
+- **Docs legados**: `documentation/` es material lnx-cli gitignored y `audit logs/` son logs
+  locales; ambos sin archivos versionados y efímeros para `discovery --check` desde 0.29.0. `docs/`
+  contiene documentación del framework y el seed; sigue contando para la frescura.
 
 ## Reglas de proceso
 

@@ -6574,17 +6574,21 @@ describe('CLI discovery --check impact (minor vs material)', () => {
     return text.slice(0, versionSpan.start) + '"' + PACKAGE_VERSION_SENTINEL + '"' + text.slice(versionSpan.end)
   }
 
-  function seedFixture(dir, files, { withHashes = true, hash = null, seedMap = null, ruleVersion = null } = {}) {
+  // `exclude` fija los globs de `.ancletorc` antes de hashear (el archivo es una
+  // fuente mas). `stateSources` declara el `sources` que el writer habria persistido:
+  // permite representar un estado generado con los globs ya aplicados sin duplicar el
+  // matcher en el fixture.
+  function seedFixture(dir, files, { withHashes = true, hash = null, seedMap = null, ruleVersion = null, exclude = [], stateSources = null } = {}) {
     const docsDir = join(dir, 'docs', 'technical-discovery')
     mkdirSync(join(docsDir, 'units'), { recursive: true })
     for (const d of DOCS) writeFileSync(join(docsDir, d), '# doc\n')
-    writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, discovery: { outputDir: 'docs/technical-discovery', exclude: [] } }, null, 2))
+    writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ schemaVersion: 1, discovery: { outputDir: 'docs/technical-discovery', exclude } }, null, 2))
     for (const [rel, content] of Object.entries(files)) {
       const p = join(dir, rel)
       mkdirSync(dirname(p), { recursive: true })
       writeFileSync(p, content)
     }
-    const sources = ['.ancletorc', ...Object.keys(files)].sort()
+    const sources = stateSources ? [...stateSources].sort() : ['.ancletorc', ...Object.keys(files)].sort()
     const h = createHash('sha256')
     const fileHashes = {}
     for (const rel of sources) {
@@ -7795,6 +7799,172 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       assert.ok(Object.hasOwn(state.fileHashes, 'audit logs/run.log'))
       assert.equal(state.ruleVersion, 2)
       assert.deepEqual(snapshotWithMtime(dir), before, 'discovery --check no reescribe el estado')
+    })
+  })
+
+  // Los pins del matcher de `discovery.exclude` van por `discovery --check`: si el
+  // estado persistido coincide exactamente con lo que `computeSources` produce hoy, la
+  // salida es READY. Cualquier decision de match equivocada aparece como alta o baja de
+  // una ruta y rompe el READY. Ejercita el matcher real: no se duplica el regex.
+  function expectReady(dir) {
+    const r = run(['discovery', '--check'], dir)
+    assert.equal(r.status, 0, `exit inesperado: ${r.stderr}`)
+    const j = JSON.parse(r.stdout)
+    assert.equal(j.state, 'READY', `esperado READY, salida: ${r.stdout}${r.stderr}`)
+    assert.equal(j.impact, 'none')
+    assert.deepEqual(j.changedAreas, [])
+    assert.deepEqual(j.materialReasons, [])
+    return j
+  }
+
+  it('exclude glob: **/*.test.* y **/*.spec.* excluyen raiz y anidado', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'a.test.js': 'x\n',
+        'test/specs-merge.test.js': 'x\n',
+        'src/foo.test.js': 'x\n',
+        'src/foo.js': 'x\n',
+        'a.spec.js': 'x\n',
+        'src/nested/b.spec.ts': 'x\n',
+        'src/spec-utils.js': 'x\n',
+        'src/foo.tests.js': 'x\n',
+        'src/foo.testjs': 'x\n'
+      }, {
+        exclude: ['**/*.test.*', '**/*.spec.*'],
+        stateSources: ['.ancletorc', 'src/foo.js', 'src/spec-utils.js', 'src/foo.tests.js', 'src/foo.testjs']
+      })
+      expectReady(dir)
+    })
+  })
+
+  it('exclude glob: **/__tests__/** excluye raiz y anidado sin tocar el lookalike', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        '__tests__/x.js': 'x\n',
+        'src/__tests__/b.js': 'x\n',
+        'src/__tests__-extra/c.js': 'x\n',
+        'src/app.js': 'x\n'
+      }, {
+        exclude: ['**/__tests__/**'],
+        stateSources: ['.ancletorc', 'src/__tests__-extra/c.js', 'src/app.js']
+      })
+      expectReady(dir)
+    })
+  })
+
+  it('exclude glob: **/*.png sigue excluyendo raiz y anidado', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'logo.png': 'x\n',
+        'assets/icon.png': 'x\n',
+        'src/a/b/deep.png': 'x\n',
+        'assets/icon.png.bak': 'x\n',
+        'src/app.js': 'x\n'
+      }, {
+        exclude: ['**/*.png'],
+        stateSources: ['.ancletorc', 'assets/icon.png.bak', 'src/app.js']
+      })
+      expectReady(dir)
+    })
+  })
+
+  it('exclude glob: los patrones sin ** anclan a raiz y los lookalikes no matchean', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'public/index.html': 'x\n',
+        'public-x/index.html': 'x\n',
+        'package-lock.json': 'x\n',
+        'src/package-lock.json': 'x\n',
+        'documentation-extra/x.md': 'x\n',
+        'src/documentation/x.js': 'x\n',
+        '__tests__-extra/y.js': 'x\n',
+        'src/app.js': 'x\n'
+      }, {
+        exclude: ['public', 'package-lock.json', 'documentation', '**/__tests__/**'],
+        stateSources: ['.ancletorc', 'public-x/index.html', 'src/package-lock.json', 'documentation-extra/x.md', 'src/documentation/x.js', '__tests__-extra/y.js', 'src/app.js']
+      })
+      expectReady(dir)
+    })
+  })
+
+  it('exclude glob: * no cruza /, lockfiles de raiz y metacaracteres literales', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/a.js': 'x\n',
+        'src/nested/a.js': 'x\n',
+        'yarn.lock': 'x\n',
+        'src/yarn.lock': 'x\n',
+        'pnpm-lock.yaml': 'x\n',
+        'assets/(v1)+x.bin': 'x\n',
+        'assets/v1x.bin': 'x\n'
+      }, {
+        exclude: ['src/*.js', 'yarn.lock', 'pnpm-lock.yaml', 'assets/(v1)+x.bin'],
+        stateSources: ['.ancletorc', 'src/nested/a.js', 'src/yarn.lock', 'assets/v1x.bin']
+      })
+      expectReady(dir)
+    })
+  })
+
+  it('exclude glob: ? matchea un solo caracter, no cruza / y no lanza', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/a.js': 'x\n',
+        'src/ab.js': 'x\n',
+        'src/nested/a.js': 'x\n'
+      }, {
+        exclude: ['src/?.js'],
+        stateSources: ['.ancletorc', 'src/ab.js', 'src/nested/a.js']
+      })
+      expectReady(dir)
+    })
+  })
+
+  it('exclude glob: ** intermedio cruza cero o mas segmentos', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'build/x.js': 'x\n',
+        'build/a/b/x.js': 'x\n',
+        'src/x.js': 'x\n'
+      }, {
+        exclude: ['build/**/x.js'],
+        stateSources: ['.ancletorc', 'src/x.js']
+      })
+      expectReady(dir)
+    })
+  })
+
+  it('exclude glob: un test-only no produce el area test con el estado regenerado', () => {
+    withDir((dir) => {
+      seedFixture(dir, {
+        'src/app.js': 'console.log(1)\n',
+        'test/new-case.test.js': 'x\n'
+      }, {
+        exclude: ['**/*.test.*'],
+        stateSources: ['.ancletorc', 'src/app.js']
+      })
+      const j = expectReady(dir)
+      assert.equal(j.recommendedAction, 'continue')
+      assert.equal(j.changedAreas.includes('test'), false)
+    })
+  })
+
+  it('exclude glob: un estado previo queda STALE/minor una vez y READY tras regenerar', () => {
+    withDir((dir) => {
+      const files = { 'src/app.js': 'console.log(1)\n', 'src/foo.test.js': 'x\n' }
+      const docsDir = seedFixture(dir, files, { exclude: ['**/*.test.*'] })
+      const statePath = join(docsDir, '.discovery-state.json')
+      const before = readFileSync(statePath, 'utf8')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const stale = JSON.parse(r.stdout)
+      assert.equal(stale.state, 'STALE')
+      assert.equal(stale.impact, 'minor')
+      assert.equal(stale.recommendedAction, 'continue')
+      assert.deepEqual(stale.changedAreas, ['src'])
+      assert.deepEqual(stale.materialReasons, [])
+      assert.equal(readFileSync(statePath, 'utf8'), before, 'el estado persistido no se reescribe')
+      seedFixture(dir, files, { exclude: ['**/*.test.*'], stateSources: ['.ancletorc', 'src/app.js'] })
+      expectReady(dir)
     })
   })
 })

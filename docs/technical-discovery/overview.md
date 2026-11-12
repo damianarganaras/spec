@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-12T09:44:05Z
-pluginVersion: 0.28.0
+generatedAt: 2026-11-12T14:25:00Z
+pluginVersion: 0.29.0
 skillVersion: '2.3'
 ---
 
@@ -246,6 +246,14 @@ test/                   suite node --test (content guards incluidos)
     de hash si existe al menos una ruta cambiada y todas son efímeras. El writer, la forma del estado
     persistido y `ruleVersion: 2` no cambian; un estado legacy sin `fileHashes` sigue `STALE`/`minor`.
     Release minor del change `seed-freshness-ephemeral-paths` (delta `MODIFIED` de `cli-diagnostics`).
+28. **Áreas ignoradas fuera de la frescura (0.29.0)**: el mismo predicado de lectura extiende la
+    exclusión a `documentation` / `documentation/**` y `audit logs` / `audit logs/**`, anclados a la
+    raíz del repositorio. Ambas áreas están gitignored (`.gitignore`) y no tienen archivos
+    versionados; el estado persistido las conserva en `sources`/`fileHashes` (674 entradas
+    `documentation/` + 18 `audit logs/`) y `checkDiscovery` las excluye simétricamente de áreas,
+    materialidad y de la excusa de desvío de hash. `docs/**` y `aspec/**` siguen contando. El writer,
+    la forma del estado y `ruleVersion: 2` no cambian; no hay configuración nueva. Release minor del
+    change `seed-freshness-ignored-areas` (delta `MODIFIED` de `cli-diagnostics`).
 
 ## Recorrido de una instalación con tier `minimo`
 

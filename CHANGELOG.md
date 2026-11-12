@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.30.0] - 2026-11-12
+
+### Fixed
+- **Los globs de `config.exclude` vuelven a aplicarse en `ancleto discovery`**: el matcher interpretaba el `*` simple dentro de un glob `**` como cuantificador regex sin escapar, así que `**/*.test.*` compilaba a `^.*/*\.test\.*$` y no matcheaba `test/*.test.js`. Ahora `**/`, `/**`, `**`, `*` y `?` se tokenizan por segmentos con el anclaje conservado y los metacaracteres restantes se escapan.
+
+### Changed
+- **Las exclusiones `**/*.test.*` y `**/*.spec.*` se aplican**: antes 0 de 466 archivos matcheaban; el `sources` del seed deja de incluir las 21 rutas `test/*.test.js`.
+- **Primer `ancleto discovery --check` tras actualizar**: reporta `STALE` con `impact: minor` hasta la próxima regeneración del seed, o `material` sólo si un área pierde todas sus rutas incluidas.
+
+### Notas
+- Sin cambios en `DEFAULT_IGNORES`, `outputDir`, el writer, la forma del estado persistido ni `ruleVersion`; sin configuración nueva.
+
 ## [0.29.0] - 2026-11-12
 
 ### Changed

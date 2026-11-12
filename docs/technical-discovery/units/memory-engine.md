@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
 covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
 sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-12T16:36:00Z
-pluginVersion: 0.30.0
+generatedAt: 2026-11-12T19:52:28Z
+pluginVersion: 0.30.1
 skillVersion: '2.3'
 ---
 
@@ -32,12 +32,13 @@ tampoco: sólo cambia el contrato de prompt del archive (el sync invoca `specs m
 de `seedMapPresent` y el detector de frescura viven en `checkDiscovery`; **0.26.2** sólo agrega
 tests (walkers de snapshot y pines de frescura); **0.26.x** es documental/test (`cli-diagnostics` y
 el guard estructural de deltas de `spec-sync`), fuera de `src/core/memory/**`, y el motor, el
-esquema, el recall y las ops siguen sin cambios. **0.27.0–0.30.0** tampoco lo tocan: la
+esquema, el recall y las ops siguen sin cambios. **0.27.0–0.30.1** tampoco lo tocan: la
 normalización del `version` del `package.json` raíz, el filtro de rutas efímeras y el matcher de
 `discovery.exclude` viven en
-`checkDiscovery`/`computeSources` (`src/cli/index.js`), fuera de `src/core/memory/**`; 0.29.0 sólo
-extiende ese filtro de lectura a `documentation/**` y `audit logs/**`, y 0.30.0 sólo corrige
-`escapeRe`/`matchesGlob`.
+`checkDiscovery`/`computeSources` (`src/cli/index.js`) y, desde 0.30.1, en
+`src/core/discovery-glob.js`, fuera de `src/core/memory/**`; 0.29.0 sólo
+extiende ese filtro de lectura a `documentation/**` y `audit logs/**`, y 0.30.0/0.30.1 sólo
+corrigen y cachean `escapeRe`/`compileGlob`/`matchesGlob`.
 
 ## Recorrido relevante
 

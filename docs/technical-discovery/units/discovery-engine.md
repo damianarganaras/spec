@@ -3,9 +3,9 @@ node: units/discovery-engine
 kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
-sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas"]
-generatedAt: 2026-11-12T16:36:00Z
-pluginVersion: 0.30.0
+sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/discovery-glob.js", "scripts/refresh-model-catalog.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache"]
+generatedAt: 2026-11-12T19:52:28Z
+pluginVersion: 0.30.1
 skillVersion: '2.3'
 ---
 
@@ -40,8 +40,11 @@ persiste `ruleVersion: 2` + `semantic` en el estado; además amplía el guard de
 `ruleVersion` no cambian. **0.29.0** extiende el mismo predicado de lectura a
 `documentation`/`documentation/**` y `audit logs`/`audit logs/**`, anclados a la raíz; el writer, la
 forma del estado y `ruleVersion: 2` siguen intactos. **0.30.0** corrige el matcher de
-`discovery.exclude` en `src/cli/index.js`: `escapeRe` escapa `*` y `?` y `matchesGlob` traduce los
-patrones por segmentos; `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, el writer, la forma del
+`discovery.exclude`: `escapeRe` escapa `*` y `?` y `matchesGlob` traduce los patrones por segmentos.
+**0.30.1** extrae `escapeRe`, `compileGlob` y `matchesGlob` de `src/cli/index.js` a
+`src/core/discovery-glob.js` y cachea el `RegExp` compilado en un `Map` por string exacto de glob;
+sobre 9.669 evaluaciones el costo baja de 15,04 ms a 1,63 ms (9,2×), sin cambio de tokenización,
+anclaje ni semántica. `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, el writer, la forma del
 estado y `ruleVersion: 2` siguen intactos.
 
 ## Recorrido relevante
@@ -129,12 +132,14 @@ también sin tocar el writer ni `ruleVersion`:
   funciones: `computeImpact` recibe la vista efectiva de hashes ya construida y no cambia su
   contrato.
 
-### Exclusiones por segmentos (0.30.0)
+### Exclusiones por segmentos y caché (0.30.0–0.30.1)
 
 `computeSources` (`src/cli/index.js`) construye `sources` recorriendo el árbol con `isIgnored`:
 primero aplica `DEFAULT_IGNORES` (`node_modules`, `.git`, `dist`) y luego evalúa cada glob de
 `discovery.exclude` con `matchesGlob`. Desde 0.30.0 `escapeRe` escapa `*` y `?` además del resto de
-metacaracteres, y `matchesGlob` consume el patrón por tokens:
+metacaracteres, y `matchesGlob` consume el patrón por tokens. Desde 0.30.1 esas funciones viven en
+`src/core/discovery-glob.js` (`escapeRe`, `compileGlob`, `matchesGlob`) y `src/cli/index.js` las
+importa; no hay una segunda implementación:
 
 | Token | Traducción |
 |---|---|
@@ -146,14 +151,21 @@ metacaracteres, y `matchesGlob` consume el patrón por tokens:
 
 Las secuencias `**/` y `/**` se consumen antes que un `**` suelto. Si el patrón contiene `**`, el
 regex se ancla como `^…$`; si no, como `^(…)(?:/|$)` —el patrón `p` coincide con `p` y `p/<resto>`,
-no con `p-<sufijo>`—. Efecto: `**/*.test.*` y `**/*.spec.*` dejan de ser no-ops y los 21
-`test/*.test.js` salen de `sources` (872→854); los 7 fixtures de `test/fixtures/**` no matchean
-`.test.`/`.spec.` y siguen incluidos. La exclusión es de `discovery.exclude`, **no** de
-`DEFAULT_IGNORES` ni del predicado reader-side `isEphemeralSource` de `checkDiscovery`: los tests no
-son efímeros ni están en los ignores por defecto. El tier `minimo` sigue excluyendo `test/**` del
-cuerpo del pack, pero eso es independiente de la lista `sources` que mide el seed. Requisito
-canónico: «Semántica por segmentos de los patrones de exclusión del discovery»
-(`aspec/specs/cli-diagnostics/spec.md`).
+no con `p-<sufijo>`—. `compileGlob` cachea el `RegExp` en un `Map` de módulo por string exacto de
+glob: los patrones son fijos durante la corrida y antes cada ruta recompilaba el mismo glob
+(globs × rutas). Sobre 9.669 evaluaciones (11 globs × 879 rutas) el costo baja de 15,04 ms a 1,63 ms
+(9,2×) sin cambio de semántica. Efecto de 0.30.0: `**/*.test.*` y `**/*.spec.*` dejan de ser no-ops
+y los 21 `test/*.test.js` de entonces salen de `sources` (872→854); en 0.30.1 hay 22 y `sources`
+suma 857 por los archivos nuevos. Los 7 fixtures de `test/fixtures/**` no matchean `.test.`/`.spec.`
+y siguen incluidos. La exclusión es de `discovery.exclude`, **no** de `DEFAULT_IGNORES` ni del
+predicado reader-side `isEphemeralSource` de `checkDiscovery`: los tests no son efímeros ni están en
+los ignores por defecto. El tier `minimo` sigue excluyendo `test/**` del cuerpo del pack, pero eso es
+independiente de la lista `sources` que mide el seed. `buildRepomixArgs` y el `--ignore` de Repomix
+no cambian. El ReDoS con `**` repetidos sigue siendo una limitación aceptada (el input es el
+`.ancletorc` local); el DP por segmentos se descartó por no ser equivalente (9 divergencias en `**`
+embebido y 1 en `.` vs. `[^/]` frente a newline). Requisito canónico: «Semántica por segmentos de los
+patrones de exclusión del discovery» (`aspec/specs/cli-diagnostics/spec.md`); 0.30.1 es una
+optimización sin cambio de contrato y no lo modifica.
 
 ### Empaquetado por tier
 
@@ -296,12 +308,12 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
   filtro a `documentation/**` y `audit logs/**`; un estado legacy sin `fileHashes` sigue
   `STALE`/`minor`.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 854 fuentes y ~39.428 tokens, tier `minimo` (comprimido), con 30 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 885 archivos (aspec 313,
-  `.opencode` 66, src 20, test 28, docs 21, documentation 340, audit logs 9); el estado
-  `.discovery-state.json` lista 854 fuentes e incluye 674 entradas `documentation/` + 18
-  `audit logs/` entre `sources` y `fileHashes`, efímeras desde 0.29.0. Las 21 rutas
-  `test/*.test.js` ya no figuran en `sources` por `discovery.exclude` (0.30.0); los 7 fixtures de
+- **Pack actual**: 857 fuentes y ~39.502 tokens, tier `minimo` (comprimido), con 31 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 889 archivos (aspec 315,
+  `.opencode` 66, src 21, test 29, docs 21, documentation 340, audit logs 9); el estado
+  `.discovery-state.json` lista 857 fuentes e incluye 674 entradas `documentation/` + 18
+  `audit logs/` entre `sources` y `fileHashes`, efímeras desde 0.29.0. Las 22 rutas
+  `test/*.test.js` ya no figuran en `sources` por `discovery.exclude` (0.30.1); los 7 fixtures de
   `test/fixtures/**` siguen incluidos.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
   runtime/CI" y la separación `model-catalog.js` (puro) / `scripts/` (procesos).
@@ -326,7 +338,8 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 | `src/core/model-catalog.js` | Helpers puros, IDs del catálogo e integridad |
 | `src/core/model-catalog.json` | Snapshot verificado de modelos (5 proveedores / 211 IDs) |
 | `scripts/refresh-model-catalog.mjs` | Descubrimiento dev-only, gate de IDs y escritura atómica |
-| `src/cli/index.js` (`packDiscovery`, `checkDiscovery`, `normalizeRootPackageJson`, `hashSources`, `isEphemeralSource`, `isEphemeralOnlyChange`, `escapeRe`, `matchesGlob`, `computeSources`, `checkAgentsFrontmatter`, `declaredAgentModels`) | Empaquetado, estado del seed, hash semántico, filtro de rutas efímeras, matcher de exclusiones por segmentos y avisos de `check` |
+| `src/core/discovery-glob.js` | `escapeRe`, `compileGlob` y `matchesGlob`; traducción glob→regex por tokens y caché `Map` por string exacto de glob |
+| `src/cli/index.js` (`packDiscovery`, `checkDiscovery`, `normalizeRootPackageJson`, `hashSources`, `isEphemeralSource`, `isEphemeralOnlyChange`, `computeSources`, `checkAgentsFrontmatter`, `declaredAgentModels`) | Empaquetado, estado del seed, hash semántico, filtro de rutas efímeras, uso del matcher de exclusiones y avisos de `check` |
 | `docs/technical-discovery/.discovery-state.json` | Último hash/pack del seed |
 | `docs/technical-discovery/seed-map.json` | Documento → áreas de evidencia |
 | `aspec/specs/cli-diagnostics/spec.md` | Contrato del detector de frescura (0.26.1), de `seedMapPresent` (0.26.0), del filtro de rutas efímeras (0.28.0–0.29.0) y de la semántica por segmentos de `discovery.exclude` (0.30.0) |
@@ -335,3 +348,4 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 | `aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/` | Change archivado de 0.28.0: filtro simétrico de rutas efímeras en lectura, excusa acotada del desvío de hash y writer/`ruleVersion` intactos (delta `MODIFIED` de `cli-diagnostics`) |
 | `aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas/` | Change archivado de 0.29.0: extensión del predicado de lectura a `documentation/**` y `audit logs/**` anclados a la raíz, con `docs/**`/`aspec/**` aún contando y writer/`ruleVersion` intactos (delta `MODIFIED` de `cli-diagnostics`) |
 | `aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/` | Change archivado de 0.30.0: matcher de `discovery.exclude` por segmentos (`escapeRe`/`matchesGlob`), exclusión efectiva de `**/*.test.*`/`**/*.spec.*` y `sources` 872→854, con `DEFAULT_IGNORES`/`outputDir`/writer/`ruleVersion` intactos (delta `MODIFIED` de `cli-diagnostics`) |
+| `aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache/` | Change archivado de 0.30.1: extracción del matcher a `src/core/discovery-glob.js` y caché `Map` del `RegExp` por glob exacto, 15,04 ms → 1,63 ms (9,2×) sobre 9.669 evaluaciones, sin cambio de semántica; ReDoS con `**` repetidos aceptado y DP por segmentos descartado |

@@ -1008,13 +1008,14 @@ comportamiento existente: cada `*` se traduce a `[^/]*` y el patrón se ancla co
 al compilarse.
 
 `DEFAULT_IGNORES` y el `outputDir` del discovery NO SHALL cambiar su comportamiento. El estado
-persistido SHALL conservar `schemaVersion: 2` y `ruleVersion: 2`, y el writer y la forma del estado
-no cambian. La semántica de los patrones SHALL aplicarse sólo a la lectura: un estado persistido que
-ya contiene rutas que ahora coinciden SHALL quedar `STALE` con `impact: minor` una vez, sin
-migración ni reescritura del estado, siempre que el área de esas rutas siga teniendo al menos una
-ruta incluida en el árbol actual; si un área pierde todas sus rutas incluidas, SHALL regir la
-clasificación `material` por `area raiz eliminada` que ya define la canónica. Tras la próxima
-regeneración las mismas rutas NO SHALL volver a producir `changedAreas`.
+persistido SHALL conservar `version: 1` y `ruleVersion: 2` y NO SHALL incluir `schemaVersion`;
+`schemaVersion: 2` es el schema de la salida JSON de `discovery --check` y no un campo del estado.
+El writer y la forma del estado no cambian. La semántica de los patrones SHALL aplicarse sólo a la
+lectura: un estado persistido que ya contiene rutas que ahora coinciden SHALL quedar `STALE` con
+`impact: minor` una vez, sin migración ni reescritura del estado, siempre que el área de esas rutas
+siga teniendo al menos una ruta incluida en el árbol actual; si un área pierde todas sus rutas
+incluidas, SHALL regir la clasificación `material` por `area raiz eliminada` que ya define la
+canónica. Tras la próxima regeneración las mismas rutas NO SHALL volver a producir `changedAreas`.
 
 #### Scenario: `**/*.test.*` excluye archivos de test en la raíz y anidados
 
@@ -1074,8 +1075,8 @@ regeneración las mismas rutas NO SHALL volver a producir `changedAreas`.
 
 #### Scenario: Un commit test-only no produce el área `test` con un estado regenerado
 
-- **WHEN** el estado persistido se generó después de este cambio y el único cambio del repositorio
-  es agregar `test/new-case.test.js`
+- **WHEN** el estado persistido, con `version: 1` y `ruleVersion: 2`, se generó después de este
+  cambio y el único cambio del repositorio es agregar `test/new-case.test.js`
 - **THEN** `discovery --check` reporta `state: READY`, `impact: none` y `recommendedAction:
   continue`
 - **AND** `changedAreas` y `materialReasons` están vacíos
@@ -1088,5 +1089,5 @@ regeneración las mismas rutas NO SHALL volver a producir `changedAreas`.
   `discovery --check` una vez
 - **THEN** la salida reporta `state: STALE` e `impact: minor`
 - **AND** `materialReasons` está vacío
-- **AND** el estado persistido no se reescribe ni se migra, y tras regenerar el seed una corrida
-  posterior reporta `state: READY`
+- **AND** el estado persistido no se reescribe ni se migra, conserva `version: 1` y `ruleVersion: 2`,
+  y tras regenerar el seed una corrida posterior reporta `state: READY`

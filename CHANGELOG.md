@@ -2,6 +2,11 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.30.2] - 2026-11-12
+
+### Docs
+- **cli-diagnostics separa el estado persistido del JSON de discovery --check**: se corrige la redaccion canonica para documentar que el estado persistido declara version: 1 y ruleVersion: 2, mientras que schemaVersion: 2 es la salida JSON de discovery --check; incluye un pin de test no conductual.
+
 ## [0.30.1] - 2026-11-12
 
 ### Changed

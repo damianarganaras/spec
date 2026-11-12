@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-12T16:36:00Z
-pluginVersion: 0.30.0
+generatedAt: 2026-11-12T19:52:28Z
+pluginVersion: 0.30.1
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.30.0)
+## Modelos y tiers (estado 0.30.1)
 
 ### Tabla y cadenas
 
@@ -1002,18 +1002,20 @@ sin `--tier` es `normal`.
   materialidad. `docs/**` y `aspec/**` siguen contando. El writer y la forma del estado no cambian.
 - **Exclusiones**: `node_modules`, `.git`, `dist` siempre (`DEFAULT_IGNORES`); el `outputDir` del
   seed se excluye del hash. Los globs de `discovery.exclude` se evalúan en `computeSources` con
-  `matchesGlob`; desde 0.30.0 lo hacen por segmentos. El tier `minimo` agrega `test/**`, `docs/**` y
-  `**/*.md` al cuerpo del pack.
+  `matchesGlob`; desde 0.30.0 lo hacen por segmentos y desde 0.30.1 el matcher vive en
+  `src/core/discovery-glob.js` (`escapeRe`/`compileGlob`/`matchesGlob`) con caché `Map` por string
+  exacto de glob. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al cuerpo del pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 854 fuentes, ~39.428 tokens (comprimido). El
-  `.discovery-map.json` regenerado reporta 885 archivos (aspec 313, `.opencode` 66, docs 21,
-  test 28, src 20, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
+- **Pack actual**: tier `minimo`, 857 fuentes, ~39.502 tokens (comprimido, 31 entradas de archivo).
+  El `.discovery-map.json` regenerado reporta 889 archivos (aspec 315, `.opencode` 66, docs 21,
+  test 29, src 21, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
   el hash semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados
   bajo changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
   writer ni `ruleVersion`; 0.29.0 extiende ese filtro a `documentation/**` y `audit logs/**`
   anclados a la raíz; 0.30.0 corrige el matcher de `discovery.exclude`, también sin cambiar el
-  writer ni `ruleVersion`.
+  writer ni `ruleVersion`; 0.30.1 lo extrae a `src/core/discovery-glob.js` y cachea el `RegExp`
+  compilado por glob exacto.
 
 ### Contrato del detector de frescura (0.26.1, reglas 0.27.0–0.29.0)
 
@@ -1084,19 +1086,27 @@ configuración.
   en la spec lo que `checkDiscovery` ya emite: `generate` en `MISSING` y `complete` en `PARTIAL`,
   aun cuando su `impact` es `none`; los tests pinean ambos valores y `src/` no cambia.
 
-### Semántica de exclusiones del discovery (0.30.0)
+### Semántica de exclusiones del discovery (0.30.0–0.30.1)
 
-`src/cli/index.js` es el único dueño del matcher: `escapeRe` escapa los metacaracteres regex y
-`matchesGlob` traduce `discovery.exclude` por tokens —`**/`→`(?:.*/)?`, `/**`→`(?:/.*)?`,
-`**`→`.*`, `*`→`[^/]*`, `?`→`[^/]`— con anclaje `^…$` si el patrón contiene `**` y
-`^(…)(?:/|$)` si no. La corrección se hizo en el matcher existente, sin un segundo oráculo ni una
-lista paralela de exclusiones: `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, el writer, la forma
-del estado (`schemaVersion: 2`) y `ruleVersion: 2` no cambian. Efecto observable: `**/*.test.*` y
-`**/*.spec.*` vuelven a aplicar y los 21 `test/*.test.js` salen de `sources` (872→854); los 7
-fixtures de `test/fixtures/**` siguen incluidos. La exclusión de tests es de `discovery.exclude`, no
-de `DEFAULT_IGNORES` ni del predicado reader-side `isEphemeralSource`. Requisito canónico:
-«Semántica por segmentos de los patrones de exclusión del discovery» en
-`aspec/specs/cli-diagnostics/spec.md`.
+`src/core/discovery-glob.js` es el único dueño del matcher desde 0.30.1: `escapeRe` escapa los
+metacaracteres regex, `compileGlob` traduce `discovery.exclude` por tokens —`**/`→`(?:.*/)?`,
+`/**`→`(?:/.*)?`, `**`→`.*`, `*`→`[^/]*`, `?`→`[^/]`— con anclaje `^…$` si el patrón contiene `**` y
+`^(…)(?:/|$)` si no, y `matchesGlob` aplica el `RegExp`. `compileGlob` cachea el `RegExp` en un
+`Map` de módulo por string exacto de glob: los patrones son fijos durante la corrida y antes cada
+ruta recompilaba el mismo glob (globs × rutas). `src/cli/index.js` sólo importa `escapeRe` y
+`matchesGlob`; no queda una segunda implementación. La corrección de 0.30.0 se hizo sobre el matcher
+existente, sin un segundo oráculo ni una lista paralela de exclusiones. Efecto observable de 0.30.0:
+`**/*.test.*` y `**/*.spec.*` vuelven a aplicar y los 21 `test/*.test.js` de entonces salen de
+`sources` (872→854); los 7 fixtures de `test/fixtures/**` siguen incluidos. En 0.30.1 hay 22
+`test/*.test.js` y `sources` suma 857 por los archivos nuevos. La caché baja 9.669 evaluaciones de
+15,04 ms a 1,63 ms (9,2×), sin cambio de semántica. `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`,
+`buildRepomixArgs`/`--ignore` de Repomix, el writer, la forma del estado (`schemaVersion: 2`,
+`version: 1`) y `ruleVersion: 2` no cambian. La exclusión de tests es de `discovery.exclude`, no de
+`DEFAULT_IGNORES` ni del predicado reader-side `isEphemeralSource`. El ReDoS con `**` repetidos
+sigue siendo una limitación aceptada porque el input es el `.ancletorc` local; el reemplazo por un
+DP por segmentos se descartó por no ser equivalente (9 divergencias en `**` embebido y 1 en `.` vs.
+`[^/]` frente a newline). Requisito canónico: «Semántica por segmentos de los patrones de exclusión
+del discovery» en `aspec/specs/cli-diagnostics/spec.md`; 0.30.1 no lo modifica.
 
 ## Lint y publicación
 
@@ -1155,7 +1165,7 @@ de `DEFAULT_IGNORES` ni del predicado reader-side `isEphemeralSource`. Requisito
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.30.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.30.1`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +
@@ -1164,9 +1174,10 @@ de `DEFAULT_IGNORES` ni del predicado reader-side `isEphemeralSource`. Requisito
   cambia la forma del estado ni `ruleVersion`, y un estado legacy sin `fileHashes` no puede
   atribuir, por lo que sigue `STALE`/`minor`. Desde 0.29.0 el mismo filtro cubre
   `documentation/**` y `audit logs/**` anclados a la raíz; `docs/**` y `aspec/**` siguen contando.
-  Desde 0.30.0 el matcher de `discovery.exclude` se corrige por segmentos en `src/cli/index.js`
-  (`escapeRe`/`matchesGlob`), de modo que las exclusiones declaradas vuelven a aplicarse; es una
-  decisión de lectura de `computeSources`, no del writer, y no altera `DEFAULT_IGNORES` ni
+  Desde 0.30.0 el matcher de `discovery.exclude` se corrige por segmentos; desde 0.30.1 vive en
+  `src/core/discovery-glob.js` (`escapeRe`/`compileGlob`/`matchesGlob`) y cachea el `RegExp` por
+  string exacto de glob, de modo que las exclusiones declaradas se aplican sin recompilar por ruta;
+  es una decisión de lectura de `computeSources`, no del writer, y no altera `DEFAULT_IGNORES` ni
   `outputDir`. El contenido de `docs/technical-discovery/` no cuenta como cambio material (el
   `outputDir` se excluye del hash).
 - **Churn ignorado en `documentation/` y `audit logs/` (0.29.0)**: tocar esas áreas ya no deja el

@@ -1,11 +1,11 @@
 {
-  "last_updated": "2026-11-12T17:38:40.496Z",
-  "total_files": 885,
+  "last_updated": "2026-11-12T19:49:56.642Z",
+  "total_files": 889,
   "tree_summary": {
     ".github": 1,
     ".opencode": 66,
     "agents": 10,
-    "aspec": 313,
+    "aspec": 315,
     "audit logs": 9,
     "commands": 16,
     "docs": 21,
@@ -13,9 +13,9 @@
     "profiles": 8,
     "scripts": 1,
     "skills": 35,
-    "src": 20,
+    "src": 21,
     "templates": 2,
-    "test": 28
+    "test": 29
   },
   "root_files": [
     ".ancletorc",

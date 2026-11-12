@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-12 (matcher de config.exclude de discovery corregido; release 0.30.0).
+> Última actualización: 2026-11-12 (release 0.30.1: caché del RegExp del matcher de config.exclude; residual de ReDoS cerrado como decisión documentada).
 
 ## Prioridad de ejecución
 
@@ -372,5 +372,18 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 **Pendiente:**
 
 - **T27/CH-01 sigue FUERA** de esta sesión (memoria reconstruible/versionable): pendiente, sin cambios.
-- **Residual cerrado — ReDoS del matcher (limitación conocida y acotada):** medido; globs plausibles de hasta 3 `**` con literales distintos (`src/**/node_modules/**/dist/**/*.js`) cuestan 0.14 ms sobre rutas de 80 segmentos; el costo crece como O(N^k) con k = cantidad de `**` (80 segmentos: 5 `**` ≈281 ms, 7 `**` ≈288 ms, 8 `**` >2 s). El blowup ocurre con `**` adyacentes y separados por literales repetidos; `matchesGlob` se reevalúa ~14.7k veces por corrida. Se acepta como limitación (input local autor-controlado; no hay frontera de confianza externa) en vez de reescribir a DP por segmentos, porque eso cambia el mecanismo que pinea `aspec/specs/cli-diagnostics/spec.md:995-1001` y exigiría delta MODIFIED + release minor. Follow-up opcional: DP por segmentos con su delta.
+- **Residual cerrado — ReDoS del matcher (limitación conocida y acotada):** medido; globs plausibles de hasta 3 `**` con literales distintos (`src/**/node_modules/**/dist/**/*.js`) cuestan 0.14 ms sobre rutas de 80 segmentos; el costo crece como O(N^k) con k = cantidad de `**` (80 segmentos: 5 `**` ≈281 ms, 7 `**` ≈288 ms, 8 `**` >2 s). El blowup ocurre con `**` adyacentes y separados por literales repetidos; `matchesGlob` se reevalúa ~14.7k veces por corrida. Se acepta como limitación (input local autor-controlado; no hay frontera de confianza externa) en vez de reescribir a DP por segmentos, porque eso cambia el mecanismo que pinea `aspec/specs/cli-diagnostics/spec.md:995-1001` y exigiría delta MODIFIED + release minor. Follow-up opcional: DP por segmentos con su delta. **Anotación (0.30.1):** cerrado por 0.30.1 con caché del `RegExp` por glob; el follow-up "DP por segmentos" quedó descartado — ver `## Relación con 0.30.1`.
 - **Precisión de cita:** cerrada; el proposal archivado cita `:720-986` para los 34 escenarios.
+
+## Relación con 0.30.1
+
+0.30.1 contiene un change archivado. Release patch (runtime + decisión documentada): cachea el `RegExp` compilado del matcher de `discovery.exclude`; sin cambio de comandos, flags ni semántica.
+
+**Hecho:**
+
+- **Release patch 0.30.1:** cachea el `RegExp` compilado por string exacto de glob en `src/core/discovery-glob.js` (`compileGlob`/`matchesGlob`); 15,04 ms → 1,63 ms (9,2×) sobre 9.669 evaluaciones reales (11 globs × 879 paths). Sin cambio de semántica ni delta: conformidad con `spec:cli-diagnostics#Semántica por segmentos de los patrones de exclusión del discovery`; `DEFAULT_IGNORES`, `outputDir`, `isEphemeralSource`, writer/estado y `ruleVersion` intactos.
+- **Residual de ReDoS cerrado como decisión documentada:** se retiene la limitación (input `.ancletorc` local, autor-controlado). El follow-up "DP por segmentos" queda descartado con evidencia: un split por segmentos NO es equivalente (9 divergencias en `**` embebido `a**b`/`***`/`x**` y 1 en `.` vs `[^/]` frente a newline); el NFA equivalente es más complejo y no más rápido que la caché. Decisión promovida a memoria con `memory_key` `discovery-exclude-matcher-cache-over-dp`.
+
+**Pendiente:**
+
+- **Imprecisión de redacción en `aspec/specs/cli-diagnostics/spec.md:1011`** (fuera de alcance, requiere delta propio): dice que el estado persistido conserva `schemaVersion: 2`, pero el writer emite `version: 1` + `ruleVersion: 2` (`src/core/discovery-state.js:4-11`); `schemaVersion: 2` es el campo de la salida JSON de `discovery --check` (`src/cli/index.js:2563`). No se corrigió en 0.30.1.

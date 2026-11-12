@@ -98,7 +98,7 @@ real; corregir el texto evita romper el contrato de bytes pineado y no exige mig
 - spec:cli-diagnostics#Semántica por segmentos de los patrones de exclusión del discovery
 - change:discovery-state-schema-wording
 
-**Estado:** propuesto
+**Estado:** aprobado
 
 **memory_key:** discovery-state-schema-release-patch
 **Elección:** release PATCH `0.30.2` (docs-only, sin cambio de comportamiento).
@@ -109,7 +109,7 @@ inexistente.
 **Refs:**
 - change:discovery-state-schema-wording
 
-**Estado:** propuesto
+**Estado:** aprobado
 
 ## Riesgos y supuestos
 

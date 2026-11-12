@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-11T15:55:54.807Z",
+  "generatedAt": "2026-11-12T09:44:05.749Z",
   "sources": [
     ".ancleto/machine-env.md",
     ".ancleto/memory.db",
@@ -372,6 +372,9 @@
     "aspec/changes/archive/2026-11-11-active-delta-structure-guard/proposal.md",
     "aspec/changes/archive/2026-11-11-active-delta-structure-guard/specs/spec-sync/spec.md",
     "aspec/changes/archive/2026-11-11-active-delta-structure-guard/tasks.md",
+    "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/proposal.md",
+    "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/specs/cli-diagnostics/spec.md",
+    "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/tasks.md",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/proposal.md",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/specs/cli-diagnostics/spec.md",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/tasks.md",
@@ -867,15 +870,15 @@
     "test/working-context.test.js"
   ],
   "fileHashes": {
-    ".ancleto/machine-env.md": "ad8bb6eca2c653e0",
+    ".ancleto/machine-env.md": "ad2d1da1ffa30156",
     ".ancleto/memory.db": "761351ab2473d16a",
-    ".ancleto/memory.db-shm": "dda67d9f84e98a27",
-    ".ancleto/memory.db-wal": "ed4d38ebbb3a4b34",
+    ".ancleto/memory.db-shm": "905629489f1c5a39",
+    ".ancleto/memory.db-wal": "459ad3280f5eb22f",
     ".ancleto/model-catalog.candidate.json": "b9a899ae6758c716",
     ".ancleto/next-session-prompt.md": "5f62001d37f41bf7",
     ".ancleto/working-context.md": "b113180dbd602b57",
-    ".ancletorc": "707d395a1904bc1c",
-    ".discovery-map.json": "ae589a14696efd43",
+    ".ancletorc": "13ac5d37477f61a2",
+    ".discovery-map.json": "6b65a0d33d13a4df",
     ".gitattributes": "d60f352d0db1404c",
     ".github/workflows/publish.yml": "afdbac4220001818",
     ".gitignore": "851805d264f984c2",
@@ -946,7 +949,7 @@
     ".opencode/skills/ancleto-workflow/SKILL.md": "8d7efb19ddc62e1f",
     ".opencode/skills/triage-clarifier/SKILL.md": "6ae5fdd2d1db35f4",
     "AGENTS.md": "d9032ad0c6fb4072",
-    "CHANGELOG.md": "cdfdff91a7611f2d",
+    "CHANGELOG.md": "9f026a408c64189b",
     "DESIGN-memory-engine-v0.2.0.md": "21b54d02afa8ab62",
     "LICENSE": "e220b0c2013be5c6",
     "PRODUCT.md": "53099af9977a36b6",
@@ -1237,6 +1240,9 @@
     "aspec/changes/archive/2026-11-11-active-delta-structure-guard/proposal.md": "f4202fabf08fa29c",
     "aspec/changes/archive/2026-11-11-active-delta-structure-guard/specs/spec-sync/spec.md": "2c0308e918eba16a",
     "aspec/changes/archive/2026-11-11-active-delta-structure-guard/tasks.md": "a8b2525220a0a0d4",
+    "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/proposal.md": "ddf483c786db866a",
+    "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/specs/cli-diagnostics/spec.md": "8419170e6aecc2f8",
+    "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/tasks.md": "17745c8faf2b02cc",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/proposal.md": "906ec4fc5dbd5d31",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/specs/cli-diagnostics/spec.md": "a0622db2b95a7397",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/tasks.md": "0914dc98eeda9115",
@@ -1247,7 +1253,7 @@
     "aspec/specs/artifact-update/spec.md": "2a97b7300ceb37ad",
     "aspec/specs/aspec-bootstrap/spec.md": "78762a35308ea5cc",
     "aspec/specs/claude-support/spec.md": "3e407c3cfa51fc2b",
-    "aspec/specs/cli-diagnostics/spec.md": "7e9b6cc4465f99f7",
+    "aspec/specs/cli-diagnostics/spec.md": "8117976f4f4da1eb",
     "aspec/specs/code-review/spec.md": "33865bf562aad03d",
     "aspec/specs/commandcode-support/spec.md": "4611458c2c58d04c",
     "aspec/specs/copilot-support/spec.md": "26fa2eb1befa3acd",
@@ -1636,7 +1642,7 @@
     "eslint.config.js": "7d78be10cad6930b",
     "opencode.json": "29f36fe1f3d04a49",
     "optimizacion-de-tokens.md": "f07c22fb8e7261c0",
-    "package.json": "45341efe9b2588ae",
+    "package.json": "68234e733354f7cb",
     "profiles/test/agents/reviewer.md": "2391dda0e569e2e0",
     "profiles/test/agents/tester.md": "7de936b2faf68939",
     "profiles/test/commands/cleto-test-apply.md": "ae12ed96e8690f54",
@@ -1681,7 +1687,7 @@
     "skills/ancleto-verify/SKILL.md": "c5256957580c8d27",
     "skills/ancleto-workflow/SKILL.md": "8d7efb19ddc62e1f",
     "skills/triage-clarifier/SKILL.md": "6ae5fdd2d1db35f4",
-    "src/cli/index.js": "16a3b9a0ca4948d0",
+    "src/cli/index.js": "1a99831e456c5e45",
     "src/cli/ui.js": "c1cc25527fc2bd2e",
     "src/core/adapters/frontmatter.js": "848261d40b092e8d",
     "src/core/affected-set.js": "ffdec865b020c3da",
@@ -1705,7 +1711,7 @@
     "test/adapters-frontmatter.test.js": "da3669f03b195c39",
     "test/affected-set.test.js": "efd368a4e309288b",
     "test/agent-model-coherence.test.js": "c0e515803fa11371",
-    "test/cli.test.js": "0ca42ed2fb90ca4b",
+    "test/cli.test.js": "aaa520e689a43e54",
     "test/content-guards.test.js": "b1fe9845737f2e8d",
     "test/curation.test.js": "cc7beafb70849f8e",
     "test/delta-spec-structure.test.js": "58af47976a4a08ed",
@@ -1731,13 +1737,13 @@
     "test/tier-models.test.js": "aaa0771329d1b604",
     "test/working-context.test.js": "700174f8bc8e94e2"
   },
-  "hash": "8fa726fc93620bb3aedc63c110f88fb22ac5a0d4d65fb44b05a2bc73aad209a4",
+  "hash": "5256043be744e0fa63c6dabf13e0fae608051c239cc9af59fca18941e3d7a84a",
   "ruleVersion": 2,
   "semantic": {
-    "hash": "0a8718dfc0ddd2d146386d39f125ac663b4f1564ffadad533ab41ca2b519ab75",
+    "hash": "67328d751b75f5209f8d57f87a096031af3091c804155150fd5f262be05e83b5",
     "fileHashes": {
       "package.json": "1b4df396b665de56"
     }
   },
-  "packTokens": 38974
+  "packTokens": 39190
 }

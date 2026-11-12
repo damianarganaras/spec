@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-11T15:29:20Z
-pluginVersion: 0.27.0
+generatedAt: 2026-11-12T09:44:05Z
+pluginVersion: 0.28.0
 skillVersion: '2.3'
 ---
 
@@ -18,9 +18,10 @@ skillVersion: '2.3'
   `readHostMcpIntent`, `importCmd`, `exportCmd`, `checkCommand`, `doctorCommand`,
   `mcpCommandBroken`, `findProjectMcpFile`, `readProjectMcp`, `repairProjectMcp`,
   `reconcileLegacyBlocks`, `specsMergeCommand`, `resolveChangeDir`, `specsCommand`,
+  `isEphemeralSource`, `isEphemeralOnlyChange`,
   `src/core/memory/engine.js` → `recordNode`; `src/core/specs-merge.js`;
-  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 863 fuentes
-  (~38.974 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
+  `src/core/tier-models.js`), no en el pack   solo. El estado del pack registra 866 fuentes
+  (~39.190 tokens) y su cuerpo contiene 29 entradas de archivo, porque `**/*.md`, `test/**`,
   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
   excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
@@ -31,8 +32,9 @@ skillVersion: '2.3'
   `2026-11-05-host-neutral-bundle`, `2026-11-05-mcp-host-write-routing`,
   `2026-11-05-mcp-oracle-residual-closure`, `2026-11-06-p0-pr5-archive-conformity`,
   `2026-11-06-ch-06a-specs-merge-deterministic`, `2026-11-06-specs-merge-hardening`,
-  `2026-11-06-archive-order-correctness`, `2026-11-08-fix-discovery-seedmap-present` y
-  `2026-11-10-spec-seed-freshness-detector`, y sobre los conteos de
+  `2026-11-06-archive-order-correctness`, `2026-11-08-fix-discovery-seedmap-present`,
+  `2026-11-10-spec-seed-freshness-detector`, `2026-11-11-seed-freshness-version-bump-not-material` y
+  `2026-11-11-seed-freshness-ephemeral-paths`, y sobre los conteos de
   `agents/`/`commands/`/`skills/` se verificaron leyendo esos paths directamente. No se auditó el
   resto de `aspec/specs/**`.
 - **Contrato de conformidad 0.21.0**: se describió desde `aspec/specs/prompt-contracts/spec.md`
@@ -114,6 +116,13 @@ skillVersion: '2.3'
   `test/delta-spec-structure.test.js`; no se ejecutaron los scenarios del bump de versión, la forma
   inválida de `semantic`, el estado legacy ni la inmutabilidad de `--check`, que quedan cubiertos
   por `test/cli.test.js`.
+- **Rutas efímeras 0.28.0**: se leyó `src/cli/index.js` (`isEphemeralSource`,
+  `isEphemeralOnlyChange`, `computeImpact`, `checkDiscovery`), el delta archivado de
+  `seed-freshness-ephemeral-paths` y el Requirement de `aspec/specs/cli-diagnostics/spec.md`; no se
+  ejecutaron los scenarios de churn efímero, anclaje de `.ancletorc`/`.ancleto-notes.md`/
+  `src/ancleto/x.js`, estado legacy sin `fileHashes` ni inmutabilidad de bytes/mtime, que quedan
+  cubiertos por `test/cli.test.js`. El pack comprimido elide los cuerpos, así que la semántica se
+  confirmó por los comentarios del pack y la lectura directa de esos paths.
 - **Orden del archive 0.22.1**: no se archivó un change real. La secuencia merge/sync → preflight →
   promoción → move → commit y los literales de fallo se verificaron leyendo
   `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`,
@@ -152,16 +161,17 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **873 archivos** (aspec 302,
-  `.opencode` 66, docs 21, test 28, src 19, etc.). El pack registra **863 fuentes** (~38.974 tokens)
+- **`.discovery-map.json` observado**: el generador reporta **876 archivos** (aspec 305,
+  `.opencode` 66, docs 21, test 28, src 19, etc.). El pack registra **866 fuentes** (~39.190 tokens)
   y 29 entradas de archivo
   porque los globs de `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además
-  Repomix filtra por sus propios ignores.
+  Repomix filtra por sus propios ignores. `.ancleto/**` y `.discovery-map.json` raíz siguen en
+  `sources`/`fileHashes` del estado, pero desde 0.28.0 no cuentan para la frescura.
 - **`documentation/`**: el mapa cuenta **340** archivos tras excluir `node_modules`/`.git`/`dist`/
   `build`/`coverage`; en disco hay 366, incluidos esos directorios ignorados. No es una
   inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.27.0`). No se usan como fuente de contenido.
+  gitignored; deben alinearse con `package.json` (`0.28.0`). No se usan como fuente de contenido.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
   versión local es una verificación puntual, no una fuente de reglas. El propio `check` compara ese
@@ -211,10 +221,18 @@ skillVersion: '2.3'
   leyendo `src/cli/index.js` (`normalizeRootPackageJson`, `hashSources`, `packDiscovery`,
   `checkDiscovery`), `aspec/specs/cli-diagnostics/spec.md` y
   `test/delta-spec-structure.test.js`; no se ejecutó la suite ni se mutaron hashes reales.
+- **Estado inicial del chequeo (0.28.0)**: el pack y `.discovery-state.json` se regeneraron antes
+  de esta materialización; el `discovery --check` inicial devolvió `READY`/`impact: none`,
+  `seedMapPresent: true` y `affectedDocs: []`, mientras los documentos todavía declaraban 0.27.0
+  (el oráculo no compara la versión del frontmatter). Para reflejar 0.28.0 se actualizaron los once
+  documentos del seed desde el pack y las fuentes citadas. El comportamiento nuevo se verificó
+  leyendo `src/cli/index.js` (`isEphemeralSource`, `isEphemeralOnlyChange`, `computeImpact`,
+  `checkDiscovery`), el delta archivado de `seed-freshness-ephemeral-paths` y
+  `aspec/specs/cli-diagnostics/spec.md`; no se ejecutó la suite ni se mutaron hashes reales.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.27.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.28.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -240,8 +258,9 @@ skillVersion: '2.3'
   (predicado, archive no-op acotado, ruteo y cuatro decisiones promovidas), y el contrato de
   `spec-sync` con `parseCanonicalSpec`/`parseDeltaSpec`/`mergeSpecText` y `specsMergeCommand`; desde
   0.26.4 el guard estructural de los deltas activos en `test/delta-spec-structure.test.js` y desde
-  0.27.0 su detección de `spec.md` mal ubicados bajo changes activos; los
-  comentarios de `specs-merge.js` sobre H1 estructural y la identidad de path del contenedor
+  0.27.0 su detección de `spec.md` mal ubicados bajo changes activos; el filtro de rutas efímeras
+  `isEphemeralSource`/`isEphemeralOnlyChange` y su aplicación simétrica en `checkDiscovery` (0.28.0);
+  los comentarios de `specs-merge.js` sobre H1 estructural y la identidad de path del contenedor
   `archive`; y la secuencia de archive y los literales de fallo en `agents/orchestrator.md`,
   `agents/documenter.md`, `skills/ancleto-archive`, `skills/ancleto-bulk-archive`,
   `skills/ancleto-onboard` y `aspec/specs/memory-ops/spec.md`.

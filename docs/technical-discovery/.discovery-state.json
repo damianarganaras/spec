@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-12T10:14:51.488Z",
+  "generatedAt": "2026-11-12T12:29:06.091Z",
   "sources": [
     ".ancleto/machine-env.md",
     ".ancleto/memory.db",
@@ -378,6 +378,8 @@
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/proposal.md",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/specs/cli-diagnostics/spec.md",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/tasks.md",
+    "aspec/changes/archive/2026-11-12-pin-offline-discovery-state/proposal.md",
+    "aspec/changes/archive/2026-11-12-pin-offline-discovery-state/tasks.md",
     "aspec/config.yaml",
     "aspec/specs/agent-install-routing/spec.md",
     "aspec/specs/agent-model-tiers/spec.md",
@@ -823,6 +825,7 @@
     "src/cli/ui.js",
     "src/core/adapters/frontmatter.js",
     "src/core/affected-set.js",
+    "src/core/discovery-state.js",
     "src/core/discovery.js",
     "src/core/machine-env.js",
     "src/core/memory/curation.js",
@@ -872,13 +875,13 @@
   "fileHashes": {
     ".ancleto/machine-env.md": "ad2d1da1ffa30156",
     ".ancleto/memory.db": "761351ab2473d16a",
-    ".ancleto/memory.db-shm": "de300dfea8c96944",
-    ".ancleto/memory.db-wal": "4752388d92253d7c",
+    ".ancleto/memory.db-shm": "9ff4ae16fcb3a05e",
+    ".ancleto/memory.db-wal": "7015957d2db1c6b3",
     ".ancleto/model-catalog.candidate.json": "b9a899ae6758c716",
     ".ancleto/next-session-prompt.md": "5f62001d37f41bf7",
     ".ancleto/working-context.md": "4c0cfae54bcbe4a9",
     ".ancletorc": "13ac5d37477f61a2",
-    ".discovery-map.json": "a79617be5d4889ed",
+    ".discovery-map.json": "7aa2b9dcde6e155e",
     ".gitattributes": "d60f352d0db1404c",
     ".github/workflows/publish.yml": "afdbac4220001818",
     ".gitignore": "851805d264f984c2",
@@ -964,7 +967,7 @@
     "agents/technical-discovery.md": "ec2f9093746a06f8",
     "agents/technical-seed-writer.md": "380d8a62c93dc006",
     "agents/tester.md": "cd2a0ece6b48144a",
-    "aspec/backlog.md": "9aaf0abe72881c2a",
+    "aspec/backlog.md": "42e7e5a8dd824135",
     "aspec/changes/ancleto-vscode-extension/design.md": "7c9463bc7f436e1b",
     "aspec/changes/ancleto-vscode-extension/proposal.md": "2c1a5b4f34084482",
     "aspec/changes/ancleto-vscode-extension/specs/vscode-distribution/spec.md": "fb2c7bb3ed161e75",
@@ -1246,6 +1249,8 @@
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/proposal.md": "906ec4fc5dbd5d31",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/specs/cli-diagnostics/spec.md": "a0622db2b95a7397",
     "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/tasks.md": "0914dc98eeda9115",
+    "aspec/changes/archive/2026-11-12-pin-offline-discovery-state/proposal.md": "637f3d45b0be38db",
+    "aspec/changes/archive/2026-11-12-pin-offline-discovery-state/tasks.md": "fcb334e599a74856",
     "aspec/config.yaml": "0a2e0c55070caeaa",
     "aspec/specs/agent-install-routing/spec.md": "2686cfa840f18cff",
     "aspec/specs/agent-model-tiers/spec.md": "808c842d4c8de36c",
@@ -1687,10 +1692,11 @@
     "skills/ancleto-verify/SKILL.md": "c5256957580c8d27",
     "skills/ancleto-workflow/SKILL.md": "8d7efb19ddc62e1f",
     "skills/triage-clarifier/SKILL.md": "6ae5fdd2d1db35f4",
-    "src/cli/index.js": "1a99831e456c5e45",
+    "src/cli/index.js": "25ecd36e3ada9345",
     "src/cli/ui.js": "c1cc25527fc2bd2e",
     "src/core/adapters/frontmatter.js": "848261d40b092e8d",
     "src/core/affected-set.js": "ffdec865b020c3da",
+    "src/core/discovery-state.js": "e003b61947e0d823",
     "src/core/discovery.js": "72c12ee7165bb1f3",
     "src/core/machine-env.js": "88014dfd7f47984d",
     "src/core/memory/curation.js": "187f8e559b49c0ef",
@@ -1711,7 +1717,7 @@
     "test/adapters-frontmatter.test.js": "da3669f03b195c39",
     "test/affected-set.test.js": "efd368a4e309288b",
     "test/agent-model-coherence.test.js": "c0e515803fa11371",
-    "test/cli.test.js": "aaa520e689a43e54",
+    "test/cli.test.js": "0de9134b51280494",
     "test/content-guards.test.js": "b1fe9845737f2e8d",
     "test/curation.test.js": "cc7beafb70849f8e",
     "test/delta-spec-structure.test.js": "58af47976a4a08ed",
@@ -1737,13 +1743,13 @@
     "test/tier-models.test.js": "aaa0771329d1b604",
     "test/working-context.test.js": "700174f8bc8e94e2"
   },
-  "hash": "5db878a7e396696737eb0525b422d0173015c8dbfc2fb115ff0251421dfaec8f",
+  "hash": "f1ab4f7953d836f7913f6ac7ecd6a003d1e72e92c178a61bb459bddd5c6b6259",
   "ruleVersion": 2,
   "semantic": {
-    "hash": "d121490cc8d96e453d1e74e25ff5ebb0f764a07c8c640e187af65bef80679f68",
+    "hash": "5bb1653a74a61bedba53a788d1f08829060128923320324b633b478052742af8",
     "fileHashes": {
       "package.json": "1b4df396b665de56"
     }
   },
-  "packTokens": 39190
+  "packTokens": 39320
 }

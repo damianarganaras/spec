@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-12 (release 0.28.0).
+> Última actualización: 2026-11-12 (deuda del pin offline de packDiscovery cerrada; release 0.28.0).
 
 ## Prioridad de ejecución
 
@@ -298,7 +298,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 **Pendiente nuevo en 0.27.0 (requiere aprobación explícita):**
 
 - **`.ancleto/**` en `sources`/`fileHashes`:** figura en el estado (`memory.db`, `-wal`, `-shm`, `working-context.md`, `machine-env.md`) y muta con cada operación de memoria → cualquier operación deja el seed en `STALE`/`minor`. `.discovery-map.json` (raíz) tiene el mismo churn. Diferido en este change (decisión `seed-freshness-ancleto-area-deferred`), **no implementado**; requiere aprobación explícita por exceder la aprobación de producto acotada. → **RESUELTO en 0.28.0** (`seed-freshness-ephemeral-paths`): un único predicado reader-side excluye `.ancleto/**` y `.discovery-map.json` de la frescura; ver `## Relación con 0.28.0`.
-- **Deuda conocida:** la escritura del estado nuevo en `packDiscovery` no tiene pin offline (la suite no ejerce el pack; depende de Repomix) — `tasks.md` 4.3 quedó abierto. Verificado end-to-end en el release. **Sigue PENDIENTE en 0.28.0.**
+- **Deuda conocida (CERRADA 2026-11-12):** la escritura del estado nuevo en `packDiscovery` no tenía pin offline (la suite no ejercía el pack; depende de Repomix) — `tasks.md` 4.3 quedaba abierto. RESUELTA por el change de conformidad `pin-offline-discovery-state` (archivo: `aspec/changes/archive/2026-11-12-pin-offline-discovery-state/`): `buildDiscoveryState`/`renderDiscoveryState` puros en `src/core/discovery-state.js`, usados por `packDiscovery`, con golden byte-idéntico en `test/cli.test.js`. Sin delta, sin bump. Ver "## Cierre de deuda — pin offline de packDiscovery".
 
 **Diferido sin cambios en 0.27.0 (sigue pendiente, no hecho):**
 
@@ -322,6 +322,13 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 **Pendiente nuevo en 0.28.0 (requiere aprobación explícita):**
 
-- **Pin offline de `packDiscovery`:** la escritura del estado nuevo sigue sin pin offline (la suite no ejerce el pack; depende de Repomix) — `tasks.md` 4.3 del change 0.27.0 sigue abierto.
+- **Pin offline de `packDiscovery` (CERRADO 2026-11-12):** resuelto por `pin-offline-discovery-state` (conformidad, sin delta, sin bump). Ver "## Cierre de deuda — pin offline de packDiscovery".
 - **Exclusiones adicionales (NO aprobadas):** `docs/**`, `aspec/**`, `documentation/**` y los audit logs fueron propuestos pero NO aprobados; la ignore list de Repomix tampoco se tocó.
 - **T27/CH-01 sigue FUERA** de esta sesión (memoria reconstruible/versionable): pendiente, sin cambios.
+
+## Cierre de deuda — pin offline de packDiscovery (2026-11-12, sin release)
+
+- **Change:** `pin-offline-discovery-state`, de conformidad (cita `spec:cli-diagnostics#Clasificación determinista de frescura del seed en discovery --check`), archivado en `aspec/changes/archive/2026-11-12-pin-offline-discovery-state/`. Sin delta y sin bump.
+- **Qué se hizo:** el armado y la serialización del estado salieron de `packDiscovery` a `src/core/discovery-state.js` (`buildDiscoveryState` + `renderDiscoveryState`); `packDiscovery` conserva el fs y el orden `writeDiscoveryMap` → estado. El test `pin offline del estado de discovery` fija con un golden literal el orden de claves, `version: 1`, `ruleVersion: 2`, `semantic`, exactamente un `\n` final y ausencia de BOM, sin depender de Repomix.
+- **Evidencia:** `discovery --check` post-archive dio `STALE`/`minor` (sin `materialReasons`, `changedAreas` sin `.ancleto`); tras re-correr el pack, `READY`/`none`. Ledger: `node --test test/cli.test.js` y `npm test` passed; lint passed; format `not-configured`; typecheck `n/a`.
+- **Residual (no contrato):** el orden `writeDiscoveryMap` → estado no se pinea, y el lector sigue con `ruleVersion === 2` literal; un bump futuro debe actualizar ambos lados.

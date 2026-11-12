@@ -2179,14 +2179,36 @@ async function loadDiscoveryConfig() {
 }
 
 function escapeRe(s) {
-  return s.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// Traduce un glob a regex por tokens, con precedencia `**/`, `/**`, `**`, `*`, `?`.
+// `*` y `?` nunca cruzan `/`: las rutas relativas del discovery usan `/` aun en Windows.
 function matchesGlob(rel, glob) {
-  if (glob.includes('**')) {
-    return new RegExp('^' + glob.split('**').map(escapeRe).join('.*') + '$').test(rel)
+  let re = ''
+  for (let i = 0; i < glob.length;) {
+    if (glob.startsWith('**/', i)) {
+      re += '(?:.*/)?'
+      i += 3
+    } else if (glob.startsWith('/**', i)) {
+      re += '(?:/.*)?'
+      i += 3
+    } else if (glob.startsWith('**', i)) {
+      re += '.*'
+      i += 2
+    } else if (glob[i] === '*') {
+      re += '[^/]*'
+      i += 1
+    } else if (glob[i] === '?') {
+      re += '[^/]'
+      i += 1
+    } else {
+      re += escapeRe(glob[i])
+      i += 1
+    }
   }
-  return new RegExp('^' + glob.split('*').map(escapeRe).join('[^/]*') + '(/|$)').test(rel)
+  if (glob.includes('**')) return new RegExp(`^${re}$`).test(rel)
+  return new RegExp(`^${re}(/|$)`).test(rel)
 }
 
 function isIgnored(rel, exclude) {

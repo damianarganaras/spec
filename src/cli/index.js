@@ -2365,6 +2365,35 @@ function areaOf(rel) {
   return i === -1 ? rel : rel.slice(0, i)
 }
 
+// Rutas efimeras: el estado de memoria y el mapa de descubrimiento mutan con
+// cualquier operacion, no son arquitectura. Anclado a la ruta completa: `.ancletorc`,
+// `.ancleto-notes.md` y `src/ancleto/x.js` NO son efimeros.
+function isEphemeralSource(rel) {
+  return rel === '.discovery-map.json' || rel === '.ancleto' || rel.startsWith('.ancleto/')
+}
+
+function isPlainObject(v) {
+  return Boolean(v) && typeof v === 'object' && !Array.isArray(v)
+}
+
+// Un desvio de hash solo se excusa si el diff sobre los mapas completos detecta al
+// menos una ruta cambiada y todas son efimeras. Cero rutas cambiadas nunca se excusa.
+// La tolerancia de forma es explicita: un `fileHashes` no-mapa (string, array, numero)
+// cae al camino legacy en vez de iterarse con `Object.entries`.
+function isEphemeralOnlyChange(storedFileHashes, currentFileHashes) {
+  if (!isPlainObject(storedFileHashes) || !isPlainObject(currentFileHashes)) return false
+  const changed = new Set()
+  for (const [rel, h] of Object.entries(storedFileHashes)) {
+    if (!Object.hasOwn(currentFileHashes, rel) || currentFileHashes[rel] !== h) changed.add(rel)
+  }
+  for (const rel of Object.keys(currentFileHashes)) {
+    if (!Object.hasOwn(storedFileHashes, rel)) changed.add(rel)
+  }
+  if (changed.size === 0) return false
+  for (const rel of changed) if (!isEphemeralSource(rel)) return false
+  return true
+}
+
 function computeImpact(stored, sources, fileHashes) {
   const storedList = new Set(stored.sources || [])
   const currentList = new Set(sources)
@@ -2497,17 +2526,21 @@ async function checkDiscovery() {
       ? { ...stored.fileHashes, ...stored.semantic.fileHashes }
       : stored?.fileHashes
     const currentFileHashes = semanticState ? { ...fileHashes, ...semantic.fileHashes } : fileHashes
+    // Filtro simetrico antes de atribuir: ni altas ni bajas efimeras producen areas
+    // ni razones. Los mapas de hashes quedan completos para poder excusar el desvio.
+    const currentSources = sources.filter((rel) => !isEphemeralSource(rel))
+    const storedSources = (Array.isArray(stored?.sources) ? stored.sources : []).filter((rel) => !isEphemeralSource(rel))
     if (!stored?.hash) {
       state = 'STALE'
       impact = 'material'
       action = 'regenerate'
       message = 'Seed completo pero sin estado registrado — frescura desconocida.'
-    } else if (storedHash === currentHash) {
+    } else if (storedHash === currentHash || isEphemeralOnlyChange(storedFileHashes, currentFileHashes)) {
       state = 'READY'
       action = 'continue'
       message = 'El seed esta al dia.'
     } else {
-      const diff = computeImpact({ ...stored, fileHashes: storedFileHashes }, sources, currentFileHashes)
+      const diff = computeImpact({ ...stored, sources: storedSources, fileHashes: storedFileHashes }, currentSources, currentFileHashes)
       impact = diff.impact
       changedAreas = diff.changedAreas
       materialReasons = diff.materialReasons

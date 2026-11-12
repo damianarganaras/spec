@@ -7424,6 +7424,218 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       assert.deepEqual(snapshotWithMtime(dir), before)
     })
   })
+
+  // Rutas efimeras (`.ancleto/**` y `.discovery-map.json` raiz): mutan con cualquier
+  // operacion de memoria y no deben excusar ni atribuir frescura. El lector las filtra
+  // simetricamente y solo concede READY cuando TODO cambio del diff es efimero.
+
+  const EPHEMERAL_HEALTHY = {
+    ...BASE,
+    '.ancleto/memory.db': 'db-1\n',
+    '.ancleto/memory.db-wal': 'wal-1\n',
+    '.discovery-map.json': '{"areas":[]}\n'
+  }
+
+  it('pin efimeras rv2: churn solo en .ancleto es READY sin escrituras', () => {
+    withDir((dir) => {
+      seedFixture(dir, EPHEMERAL_HEALTHY, { ruleVersion: 2 })
+      writeFileSync(join(dir, '.ancleto', 'memory.db'), 'db-2\n')
+      const before = snapshotWithMtime(dir)
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+      assert.deepEqual(snapshotWithMtime(dir), before, 'discovery --check no escribe')
+    })
+  })
+
+  it('pin efimeras rv2: churn efimero + cambio real en src es minor con area src', () => {
+    withDir((dir) => {
+      seedFixture(dir, EPHEMERAL_HEALTHY, { ruleVersion: 2 })
+      writeFileSync(join(dir, '.ancleto', 'memory.db'), 'db-2\n')
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, ['src'])
+      assert.deepEqual(j.materialReasons, [])
+    })
+  })
+
+  it('pin efimeras: archivo efimero nuevo .ancleto/memory.db-wal deja READY', () => {
+    withDir((dir) => {
+      seedFixture(dir, { ...BASE, '.ancleto/memory.db': 'db-1\n' }, { ruleVersion: 2 })
+      writeFileSync(join(dir, '.ancleto', 'memory.db-wal'), 'wal-1\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('pin efimeras: eliminar el area .ancleto completa deja READY sin areas eliminadas', () => {
+    withDir((dir) => {
+      seedFixture(dir, EPHEMERAL_HEALTHY, { ruleVersion: 2 })
+      rmSync(join(dir, '.ancleto'), { recursive: true, force: true })
+      rmSync(join(dir, '.discovery-map.json'))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+    })
+  })
+
+  it('pin efimeras legacy: sin fileHashes y churn solo efimero sigue minor con la nota exacta', () => {
+    withDir((dir) => {
+      seedFixture(dir, { ...BASE, '.ancleto/memory.db': 'db-1\n' }, { withHashes: false, hash: 'deadbeef' })
+      writeFileSync(join(dir, '.ancleto', 'memory.db'), 'db-2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, ['estado previo sin hashes por archivo: el cambio de contenido no se puede atribuir a un area'])
+    })
+  })
+
+  it('pin forma: fileHashes no-mapa con hash desviado no lanza y cae al camino legacy', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE, { hash: 'deadbeef' })
+      const sp = join(dir, 'docs', 'technical-discovery', '.discovery-state.json')
+      const state = JSON.parse(readFileSync(sp, 'utf8'))
+      state.fileHashes = 'not-an-object'
+      writeFileSync(sp, JSON.stringify(state, null, 2))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+    })
+  })
+
+  it('pin anclaje: .ancleto-notes.md no es efimera', () => {
+    withDir((dir) => {
+      seedFixture(dir, { ...BASE, '.ancleto-notes.md': 'notas\n' })
+      writeFileSync(join(dir, '.ancleto-notes.md'), 'notas 2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.ok(j.changedAreas.includes('.ancleto-notes.md'))
+    })
+  })
+
+  it('pin anclaje: src/ancleto/x.js no es efimera y reporta el area src', () => {
+    withDir((dir) => {
+      seedFixture(dir, { ...BASE, 'src/ancleto/x.js': 'x\n' })
+      writeFileSync(join(dir, 'src', 'ancleto', 'x.js'), 'x 2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, ['src'])
+    })
+  })
+
+  it('pin anclaje: .ancletorc no es efimera (cambio benigno)', () => {
+    withDir((dir) => {
+      seedFixture(dir, BASE)
+      const rc = JSON.parse(readFileSync(join(dir, '.ancletorc'), 'utf8'))
+      rc.note = 'x'
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify(rc, null, 2))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.ok(j.changedAreas.includes('.ancletorc'))
+    })
+  })
+
+  it('pin efimeras: Dockerfile eliminado con churn efimero sigue material', () => {
+    withDir((dir) => {
+      seedFixture(dir, { ...BASE, Dockerfile: 'FROM node:20\n', '.ancleto/memory.db': 'db-1\n' }, { ruleVersion: 2 })
+      writeFileSync(join(dir, '.ancleto', 'memory.db'), 'db-2\n')
+      rmSync(join(dir, 'Dockerfile'))
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'material')
+      assert.equal(j.recommendedAction, 'regenerate')
+      assert.ok(j.materialReasons.includes('archivo material eliminado: Dockerfile'))
+    })
+  })
+
+  // Escenario del delta: con rutas efimeras presentes, el bump de version normalizado
+  // sigue siendo READY (la presencia de efimeras no altera la comparacion semantica).
+  it('pin efimeras rv2: bump de version con rutas efimeras presentes sigue READY', () => {
+    withDir((dir) => {
+      seedFixture(dir, { ...EPHEMERAL_HEALTHY, 'package.json': PKG_WITH_VERSION }, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.1' }, null, 2) + '\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  // Escenario del delta: un seed-map cuyos documentos mapean a areas efimeras conserva
+  // `seedMapPresent` y deja `affectedDocs` vacio cuando el unico cambio es efimero.
+  it('pin efimeras: seed-map con areas efimeras conserva seedMapPresent y affectedDocs vacio', () => {
+    withDir((dir) => {
+      seedFixture(dir, EPHEMERAL_HEALTHY, {
+        ruleVersion: 2,
+        seedMap: { version: 1, generatedAt: 'x', docs: { 'overview.md': ['.ancleto', '.discovery-map.json'] } }
+      })
+      writeFileSync(join(dir, '.ancleto', 'memory.db'), 'db-2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.affectedDocs, [])
+      assert.deepEqual(j.changedAreas, [])
+    })
+  })
 })
 
 describe('CLI exclusiones del discovery (--exclude)', () => {

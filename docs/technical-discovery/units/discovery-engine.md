@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs"]
-generatedAt: 2026-11-11T15:29:20Z
-pluginVersion: 0.27.0
+generatedAt: 2026-11-12T09:44:05Z
+pluginVersion: 0.28.0
 skillVersion: '2.3'
 ---
 
@@ -34,7 +34,10 @@ tampoco cambia runtime: consolida walkers de snapshot read-only y pines de fresc
 el Requirement en `spec-sync`, también sin tocar `src/`. **0.27.0** sí toca `src/cli/index.js`:
 normaliza el valor de `version` de primer nivel del `package.json` raíz para el hash semántico y
 persiste `ruleVersion: 2` + `semantic` en el estado; además amplía el guard de la suite para detectar
-`spec.md` mal ubicados bajo changes activos.
+`spec.md` mal ubicados bajo changes activos. **0.28.0** vuelve a tocar `src/cli/index.js`: agrega
+`isEphemeralSource` e `isEphemeralOnlyChange` y aplica un filtro simétrico de rutas efímeras
+(`.ancleto`, `.ancleto/**` y `.discovery-map.json` raíz) antes de `computeImpact`; el writer y
+`ruleVersion` no cambian.
 
 ## Recorrido relevante
 
@@ -55,16 +58,27 @@ persiste `ruleVersion: 2` + `semantic` en el estado; además amplía el guard de
    forma válida (`hash` string y `fileHashes` objeto no-array), compara `semantic.hash` y atribuye
    con la vista efectiva `{ ...fileHashes, ...semantic.fileHashes }`; cualquier otro estado —incluido
    un legacy sin `ruleVersion`— usa los hashes crudos, byte-idéntico al comportamiento previo:
-   - `READY` si coincide.
+   - `READY` si coincide, o si el desvío de hash se excusa porque todas las rutas cambiadas son
+     efímeras (0.28.0).
    - `STALE` + `impact: material` si cambió un archivo material o apareció/desapareció un área raíz.
    - `STALE` + `impact: minor` si solo cambiaron contenidos no materiales.
    - `PARTIAL`/`MISSING` según documentos esperados ausentes.
+
+   Desde 0.28.0, antes de `computeImpact`, `checkDiscovery` filtra simétricamente las dos vistas de
+   `sources` con `isEphemeralSource` (`.discovery-map.json` sólo en la raíz; `.ancleto` y
+   `.ancleto/**`), de modo que ni altas ni bajas efímeras producen áreas o razones. Los mapas
+   `storedFileHashes`/`currentFileHashes` quedan completos; si el hash global difiere,
+   `isEphemeralOnlyChange` concede `READY` sólo cuando hay al menos una ruta cambiada y todas son
+   efímeras. Cero rutas cambiadas no se excusa, y un estado sin `fileHashes` sigue `STALE`/`minor`
+   con la nota exacta. El predicado está anclado: `.ancletorc`, `.ancleto-notes.md` y
+   `src/ancleto/x.js` no son efímeros.
 4. `seed-map.json` (lo escribe la skill) mapea documento → áreas; `affectedDocs` es la intersección
    con `changedAreas` y sólo se puebla en `STALE`.
 
 El contrato del detector quedó fijado en 0.26.1 (delta `ADDED` de `cli-diagnostics`) sin tocar
 `src/`; en 0.27.0 se extendió con la regla de hash normalizada (delta `MODIFIED`), esta vez con
-cambio de runtime en `src/cli/index.js`:
+cambio de runtime en `src/cli/index.js`; en 0.28.0 se extendió con el filtro de rutas efímeras
+(también `MODIFIED` de `cli-diagnostics`), sin cambiar el writer ni `ruleVersion`:
 
 - La salida es `schemaVersion: 2`, JSON, exit 0 y **read-only**: no escribe el seed, el estado ni
   el `seed-map.json`.
@@ -76,9 +90,17 @@ cambio de runtime en `src/cli/index.js`:
   raíz no cuenta como cambio de contenido ni material; cualquier otro cambio en ese archivo
   (`dependencies`, `scripts`, `engines`, indentación, orden de claves o una `version` anidada) sigue
   siendo material y reporta `archivo material modificado: package.json`.
+- **Rutas efímeras (0.28.0)**: `isEphemeralSource(rel)` reconoce exactamente `.discovery-map.json`
+  en la raíz y `.ancleto` / `.ancleto/**`; el anclaje evita falsos positivos con `.ancletorc`,
+  `.ancleto-notes.md` y `src/ancleto/x.js`. El filtro se aplica simétricamente a `stored.sources` y
+  a las rutas actuales antes de `computeImpact`; los mapas de hashes permanecen completos. Si el
+  hash difiere, `isEphemeralOnlyChange` concede `READY` sólo con ≥1 ruta cambiada y todas efímeras;
+  cero rutas cambiadas sigue `STALE` y un estado sin `fileHashes` sigue `STALE`/`minor` con
+  `materialReasons: []` y la nota exacta. Las rutas efímeras siguen en `sources`/`fileHashes` y
+  `ruleVersion` no cambia.
 - **Área** = primer segmento del path; un archivo raíz es su propia área (`areaOf`).
-- `computeImpact` compara `sources` y la vista efectiva de `fileHashes` persistidos con el árbol
-  actual y emite en
+- `computeImpact` compara `sources` (ambas vistas ya filtradas por rutas efímeras) y la vista
+  efectiva de `fileHashes` persistidos con el árbol actual y emite en
   `materialReasons` sólo las formas `archivo material nuevo|eliminado|modificado: <rel>`,
   `area raiz nueva: <área>` y `area raiz eliminada: <área>`; el orden y la cardinalidad no son
   contrato. Sin `fileHashes` previos y sin `changedAreas`, `notes` agrega el texto
@@ -88,10 +110,11 @@ cambio de runtime en `src/cli/index.js`:
   `regenerate` para `material`, `continue` para `minor` o `none`, y `generate`/`complete` cuando el
   estado es `MISSING`/`PARTIAL` (excepción documentada y pineada en `cli-diagnostics`). Sin estado o sin `hash`,
   `STALE`/`material` con arreglos vacíos.
-- Un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`, `areaOf` o
-  `computeImpact` es comportamiento y exige delta `MODIFIED` (release minor), no un patch
-  documental. La normalización de `version` vive fuera de esas funciones: `computeImpact` recibe la
-  vista efectiva de hashes ya construida y no cambia su contrato.
+- Un cambio futuro en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`, `areaOf`,
+  `computeImpact` o el predicado de rutas efímeras es comportamiento y exige delta `MODIFIED`
+  (release minor), no un patch documental. La normalización de `version` vive fuera de esas
+  funciones: `computeImpact` recibe la vista efectiva de hashes ya construida y no cambia su
+  contrato.
 
 ### Empaquetado por tier
 
@@ -227,12 +250,14 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 - **Archivos materiales**: `package.json`, `tsconfig*`, configs de bundlers, `Dockerfile`,
   `index.html`, `src/(main|index).*`. Un área nueva/eliminada también es material. Excepción: el
   valor de `version` de primer nivel del `package.json` raíz no es material ni cambio de contenido.
-- **Estado versionado (0.27.0)**: el writer conserva `hash`/`fileHashes` crudos para permitir
+- **Estado versionado (0.27.0–0.28.0)**: el writer conserva `hash`/`fileHashes` crudos para permitir
   rollback y agrega `ruleVersion: 2` + `semantic`; el lector elige la vista semántica sólo con la
-  forma completa y válida, y cae a la cruda en cualquier otro caso.
+  forma completa y válida, y cae a la cruda en cualquier otro caso. 0.28.0 agrega el filtro de
+  rutas efímeras en lectura sin cambiar la forma del estado ni `ruleVersion`; un estado legacy sin
+  `fileHashes` sigue `STALE`/`minor`.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 863 fuentes y ~38.974 tokens, tier `minimo` (comprimido), con 29 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 873 archivos (aspec 302,
+- **Pack actual**: 866 fuentes y ~39.190 tokens, tier `minimo` (comprimido), con 29 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 876 archivos (aspec 305,
   `.opencode` 66, src 19, test 28, docs 21). El estado quedó en
   `docs/technical-discovery/.discovery-state.json`.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
@@ -258,9 +283,10 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 | `src/core/model-catalog.js` | Helpers puros, IDs del catálogo e integridad |
 | `src/core/model-catalog.json` | Snapshot verificado de modelos (5 proveedores / 211 IDs) |
 | `scripts/refresh-model-catalog.mjs` | Descubrimiento dev-only, gate de IDs y escritura atómica |
-| `src/cli/index.js` (`packDiscovery`, `checkDiscovery`, `normalizeRootPackageJson`, `hashSources`, `checkAgentsFrontmatter`, `declaredAgentModels`) | Empaquetado, estado del seed, hash semántico y avisos de `check` |
+| `src/cli/index.js` (`packDiscovery`, `checkDiscovery`, `normalizeRootPackageJson`, `hashSources`, `isEphemeralSource`, `isEphemeralOnlyChange`, `checkAgentsFrontmatter`, `declaredAgentModels`) | Empaquetado, estado del seed, hash semántico, filtro de rutas efímeras y avisos de `check` |
 | `docs/technical-discovery/.discovery-state.json` | Último hash/pack del seed |
 | `docs/technical-discovery/seed-map.json` | Documento → áreas de evidencia |
-| `aspec/specs/cli-diagnostics/spec.md` | Contrato del detector de frescura (0.26.1) y de `seedMapPresent` (0.26.0) |
+| `aspec/specs/cli-diagnostics/spec.md` | Contrato del detector de frescura (0.26.1), de `seedMapPresent` (0.26.0) y del filtro de rutas efímeras (0.28.0) |
 | `aspec/changes/archive/2026-11-10-spec-seed-freshness-detector/` | Change archivado que documenta y pinea el detector (sin cambio de runtime) |
 | `aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/` | Change archivado de 0.27.0: bump de `version` no material y estado persistido con `ruleVersion: 2` + `semantic` (delta `MODIFIED` de `cli-diagnostics`) |
+| `aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/` | Change archivado de 0.28.0: filtro simétrico de rutas efímeras en lectura, excusa acotada del desvío de hash y writer/`ruleVersion` intactos (delta `MODIFIED` de `cli-diagnostics`) |

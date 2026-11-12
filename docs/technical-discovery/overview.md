@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-11T15:29:20Z
-pluginVersion: 0.27.0
+generatedAt: 2026-11-12T09:44:05Z
+pluginVersion: 0.28.0
 skillVersion: '2.3'
 ---
 
@@ -239,6 +239,13 @@ test/                   suite node --test (content guards incluidos)
     crudos. El guard de `test/delta-spec-structure.test.js` suma la detección de un `spec.md` de
     change activo fuera de `specs/<capability>/spec.md`. Release minor del change
     `seed-freshness-version-bump-not-material`.
+27. **Rutas efímeras fuera de la frescura (0.28.0)**: `discovery --check` deja de contar `.ancleto`,
+    cualquier ruta bajo `.ancleto/` y el `.discovery-map.json` raíz como cambio de frescura. Un único
+    predicado anclado (`isEphemeralSource`) filtra simétricamente las vistas persistida y actual de
+    `sources` antes de `computeImpact`, y `isEphemeralOnlyChange` sólo concede `READY` ante un desvío
+    de hash si existe al menos una ruta cambiada y todas son efímeras. El writer, la forma del estado
+    persistido y `ruleVersion: 2` no cambian; un estado legacy sin `fileHashes` sigue `STALE`/`minor`.
+    Release minor del change `seed-freshness-ephemeral-paths` (delta `MODIFIED` de `cli-diagnostics`).
 
 ## Recorrido de una instalación con tier `minimo`
 

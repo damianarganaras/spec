@@ -501,6 +501,8 @@ cobertura sea confiable, e intake read-only fresco.
 
 > **2026-11-10 (0.26.1):** #18 — la pieza documental quedó cerrada: el comportamiento vigente del detector de frescura (`MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `areaOf`, `computeImpact`, `materialReasons`, `notes`, `affectedDocs`) se fijó en `aspec/specs/cli-diagnostics/spec.md` y se pineó con 14 tests, sin tocar runtime. La pieza de producto (A2c: que el bump deje de contar) sigue diferida. Este documento no se reconcilia en esta sesión.
 
+> **2026-11-11 (0.27.0):** **#18 / A2c cerrado** — el bump de `version` deja de contar como material (hash semántico aditivo en `.discovery-state.json`), con evidencia end-to-end y delta MODIFIED en `cli-diagnostics`. Queda pendiente el churn del área `.ancleto`/`.discovery-map.json`.
+
 ### Derivados de CH-12 (2026-11-04)
 
 - **El remedio del aviso apunta a `scripts/`, que no se publica.** `scripts/refresh-model-catalog.mjs` queda fuera de `files` en `package.json`. **Disparador:** el primer consumidor del paquete instalado que siga el aviso `node scripts/refresh-model-catalog.mjs` y no encuentre el archivo; decidir si se shippea o se rewordea el mensaje.

@@ -278,3 +278,29 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 - **Extender `specsCheckCommand`:** descartado — violaría la compatibilidad pineada de `specs check` y el alcance acotado de `specs merge`, y tocar `src/cli/index.js` lo volvería minor.
 - **A2c / A3 `#4` / A4 `MEM-05` / A5 `CH-06b` / A6 / A7 / D / `#6` / `#18` / `T27` / `CH-00` / `CH-07` / `CH-08`-`MEM-06` / `CH-09a–g` / `CH-10`:** el debate de esta sesión no encontró evidencia nueva, por eso siguen diferidos; `ancleto-vscode-extension` sigue diferido, el conflicto `tier-minimo-*` y el propuesto `projects-guarded-registry-write` siguen sin OK literal.
+
+## Relación con 0.27.0
+
+0.27.0 contiene un change archivado. Release minor (runtime + spec + test): el VALOR de la clave `version` de primer nivel del `package.json` raíz deja de contar como cambio de contenido/material en la frescura del seed; sin cambio de comandos ni flags.
+
+**Hecho:**
+
+- **`seed-freshness-version-bump-not-material` (funcional, delta MODIFIED en `cli-diagnostics`):** change implementado, testeado y archivado en `aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/`; delta `MODIFIED` mergeado en `aspec/specs/cli-diagnostics/spec.md` (Requirement `Clasificación determinista de frescura del seed en discovery --check`, 17 scenarios).
+- **Regla:** el VALOR de la clave `version` de primer nivel del `package.json` raíz ya no cuenta como cambio de contenido ni material; `package.json` sigue material para cualquier otro campo (dependencias, scripts, engines, indentación, `version` anidada).
+- **Estado `.discovery-state.json`:** `ruleVersion: 2` + `semantic: { hash, fileHashes }` aditivos, conservando `hash`/`fileHashes` crudos (rollback intacto); estados sin `ruleVersion` se comparan crudos, byte-idénticos al comportamiento previo.
+- **Evidencia end-to-end en este repo** (no destructiva, reversiones verificadas): bump de `version` aislado → `READY`/`none`/`continue`; bump + reflejo en `package-lock.json` + `CHANGELOG.md` → `STALE`/`minor`/`continue` con `materialReasons []` (nota: `package-lock.json` está en `config.exclude` del discovery, así que sólo `CHANGELOG.md` aparece como área); cambio real de dependencia → `material` con `archivo material modificado: package.json`.
+- **Guard nuevo en `test/delta-spec-structure.test.js`:** detecta un `spec.md` bajo un change ACTIVO fuera de `specs/<capability>/spec.md` (invisible hoy para merge y guard), reutilizando `parseDeltaSpec`; ignora archivos incidentales/vacíos.
+- **Release:** `0.27.0` (minor), tag ANOTADO `v0.27.0` → `1e2136d08754c30cbe7691425d356d90a3b49670` (merge `--no-ff` de development), run de publish `43050543405` success (`+ @ancleto/spec@0.27.0`), npm `version 0.27.0` / `latest` / `gitHead == 1e2136d…` y tarball HTTP 200.
+- **Seed regenerado:** 863 fuentes / ~38.974 tokens, `pluginVersion 0.27.0` en 11/11 docs, `discovery --check` `READY`/`none`, `seedMapPresent: true`.
+- **Memoria:** 5 decisiones promovidas al archivar; 1 regla de cierre `delta-oracle-empty-text-accepted` (scope `feature`: `parseDeltaSpec('')` devuelve `errors: []`); curaduría mínima aplicada — `tier-minimo-fallback-chain-resolution` reescrito con la cadena de 2 (`opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free`, `src/core/tier-models.js:52-61`), supersede atómico; ambas claves `tier-minimo-*` afirman ahora lo mismo. Memoria: 346 nodos / 234 activos / 748 refs / 0 sin resolver.
+- **#18 / A2c CERRADO** con la evidencia de arriba (la decisión de producto aprobada: el bump de `version` deja de ser material).
+
+**Pendiente nuevo en 0.27.0 (requiere aprobación explícita):**
+
+- **`.ancleto/**` en `sources`/`fileHashes`:** figura en el estado (`memory.db`, `-wal`, `-shm`, `working-context.md`, `machine-env.md`) y muta con cada operación de memoria → cualquier operación deja el seed en `STALE`/`minor`. `.discovery-map.json` (raíz) tiene el mismo churn. Diferido en este change (decisión `seed-freshness-ancleto-area-deferred`), **no implementado**; requiere aprobación explícita por exceder la aprobación de producto acotada.
+- **Deuda conocida:** la escritura del estado nuevo en `packDiscovery` no tiene pin offline (la suite no ejerce el pack; depende de Repomix) — `tasks.md` 4.3 quedó abierto. Verificado end-to-end en el release.
+
+**Diferido sin cambios en 0.27.0 (sigue pendiente, no hecho):**
+
+- **A3/#4, A4/MEM-05, A5/CH-06b, A6, A7, D, #6, CH-00, CH-07, CH-08/MEM-06, CH-09a–g, CH-10:** sin evidencia nueva en esta sesión → siguen diferidos.
+- **T27/CH-01 queda FUERA** de esta sesión (memoria reconstruible/versionable): pendiente, sin cambios.

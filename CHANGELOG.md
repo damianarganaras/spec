@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.28.0] - 2026-11-11
+
+### Changed
+- **`ancleto discovery --check` deja de contar rutas efímeras/derivadas como cambio de frescura**: `.ancleto` y todo lo que está bajo `.ancleto/`, más el `.discovery-map.json` de la raíz, se excluyen del cálculo de frescura del seed. La regla se aplica de forma simétrica a la vista persistida y a la actual: un mismatch de hash se excusa como `READY` sólo cuando cambió al menos una ruta y todas las rutas cambiadas son efímeras; un mismatch con cero rutas cambiadas sigue siendo `STALE`.
+- **Las operaciones de memoria ya no dejan el seed sucio**: los cambios producidos bajo `.ancleto/` no marcan el seed como desactualizado.
+
+### Notas
+- **Compatibilidad de rollback**: los estados legacy sin `fileHashes` siguen en `STALE`/minor y nunca pasan a material; la forma del estado persistido y `ruleVersion` no cambian, por lo que volver a `0.27.0` lee el estado como antes.
+
 ## [0.27.0] - 2026-11-11
 
 ### Changed

@@ -599,9 +599,22 @@ claves o una `version` anidada— SHALL seguir siendo material y SHALL reportar 
 `areaOf` SHALL ser el primer segmento de la ruta. Un archivo en la raíz SHALL ser su propia área
 (por ejemplo, `Dockerfile` → área `Dockerfile` y `NOTES.md` → área `NOTES.md`).
 
-`computeImpact` SHALL comparar `stored.sources` y una vista efectiva de `stored.fileHashes` del
-estado persistido con los archivos actuales, y SHALL producir en `materialReasons` únicamente estas
-formas exactas:
+SHALL considerarse ruta efímera, mediante un único predicado anclado al repositorio, exactamente:
+
+- `.discovery-map.json`, sólo en la raíz del repositorio (un `.discovery-map.json` anidado NO SHALL
+  ser efímero);
+- `.ancleto` y cualquier ruta que empiece con `.ancleto/`.
+
+El predicado NO SHALL coincidir con `.ancletorc`, `.ancleto-notes.md` ni `src/ancleto/x.js`: la
+comparación SHALL ser por ruta completa contra los literales anteriores o contra el prefijo
+`.ancleto/`, nunca por prefijo del nombre de archivo ni por segmento arbitrario. Las rutas efímeras
+SHALL seguir presentes en `sources` y en `fileHashes` del estado persistido; sólo quedan excluidas
+del cálculo de frescura.
+
+`computeImpact` SHALL comparar `stored.sources` del estado persistido con las rutas actuales, con
+ambas vistas filtradas por el predicado de rutas efímeras, y SHALL atribuir el contenido con la vista
+efectiva de `stored.fileHashes` (mapas completos, sin filtrar), y SHALL producir en `materialReasons`
+únicamente estas formas exactas:
 
 - archivo material nuevo: `archivo material nuevo: <rel>`;
 - archivo material eliminado: `archivo material eliminado: <rel>`;
@@ -614,9 +627,16 @@ estado declara la regla normalizada, y el hash crudo persistido para el resto de
 vista se construye antes de invocar `computeImpact`; `computeImpact`, `areaOf`, `isMaterialFile`,
 `MATERIAL_FILE_RES` y `DEFAULT_IGNORES` NO SHALL cambiar su comportamiento.
 
+El filtro de rutas efímeras SHALL aplicarse simétricamente a `stored.sources` y a las rutas actuales
+antes de invocar `computeImpact`, de modo que ni las altas ni las bajas efímeras produzcan áreas ni
+razones de materialidad. `storedFileHashes` y `currentFileHashes` NO SHALL filtrarse y SHALL seguir
+siendo mapas completos: el bucle de comparación recorre sólo las rutas filtradas, así que las claves
+efímeras nunca se iteran.
+
 `changedAreas` SHALL contener las áreas de altas, bajas y modificaciones detectadas sobre la vista
-efectiva de hashes, ordenadas y deduplicadas. El orden y la cardinalidad de `materialReasons` y de
-`notes` NO SHALL considerarse parte del contrato.
+efectiva de hashes, ordenadas y deduplicadas, y NO SHALL incluir áreas cuyos únicos cambios sean rutas
+efímeras. El orden y la cardinalidad de `materialReasons` y de `notes` NO SHALL considerarse parte del
+contrato.
 
 `notes` SHALL contener, sólo cuando el estado previo no tiene `fileHashes` y no hay
 `changedAreas`, el texto exacto
@@ -639,10 +659,22 @@ La estructura de estado SHALL ser: si faltan documentos esperados, `MISSING` (co
 `recommendedAction: generate`) o `PARTIAL` (con `recommendedAction: complete`) con `impact: none` y
 con `changedAreas`, `materialReasons`, `notes` y `affectedDocs` vacíos (`missingDocs` lista los
 documentos faltantes); si están completos y el hash actual coincide con el hash persistido comparado
-según la regla de hash declarada por el estado, `READY` con `impact: none` y arreglos vacíos; si no
-existe `.discovery-state.json` o el estado no tiene `hash`, `STALE` con `impact: material`,
+según la regla de hash declarada por el estado, `READY` con `impact: none` y arreglos vacíos; si el
+hash no coincide pero, sobre los `sources` completos y los mapas completos de hashes por archivo,
+existe al menos una ruta cambiada (alta, baja o contenido distinto) y todas las rutas cambiadas son
+efímeras, `READY` con
+`impact: none`, `recommendedAction: continue` y arreglos vacíos; si no existe
+`.discovery-state.json` o el estado no tiene `hash`, `STALE` con `impact: material`,
 `recommendedAction: regenerate` y `changedAreas`, `materialReasons`, `notes` y `affectedDocs` vacíos,
-sin atribuir materialidad por archivo ni por área.
+sin atribuir materialidad por archivo ni por área; en cualquier otro caso, `STALE` con el `impact` y
+el `recommendedAction` que resulten de `computeImpact` sobre las vistas filtradas, según la
+precedencia declarada.
+
+Un desvío de hash sin ninguna ruta cambiada NO SHALL excusarse como `READY`: el estado SHALL seguir
+`STALE` con el `impact` que devuelva `computeImpact`. Un estado sin `fileHashes` NO SHALL permitir
+atribuir rutas, por lo que el desvío de hash SHALL permanecer `STALE` con `impact: minor`,
+`materialReasons: []` y la nota exacta de `notes`, aun cuando el árbol actual sólo difiera en rutas
+efímeras; esta regla NO SHALL convertirlo en `READY` ni en material.
 
 El estado persistido SHALL conservar `hash` y `fileHashes` con los bytes crudos y SHALL declarar
 `ruleVersion: 2` cuando fue generado con la regla normalizada, junto con
@@ -654,6 +686,15 @@ el hash global normalizado. El lector SHALL usar `semantic.hash` y las entradas 
 `semantic` no tenga esa forma SHALL compararse con la regla cruda, igual que cualquier otro
 estado, incluido un estado legacy sin `ruleVersion`, byte-idéntico al comportamiento previo.
 
+El writer del pack NO SHALL cambiar: SHALL seguir persistiendo
+`{ version: 1, generatedAt, sources, fileHashes, hash, ruleVersion: 2, semantic, packTokens }` con
+`sources` y `fileHashes` crudos y completos, incluidas las rutas efímeras, para que un lector previo
+lea los campos crudos y `semantic` exactamente como antes. La incorporación de rutas efímeras NO
+SHALL cambiar `ruleVersion`: la regla de `ruleVersion` gobierna la normalización de contenido y la
+pertenencia de rutas es un predicado de lectura aplicado a ambas vistas. NO SHALL agregarse
+configuración nueva, NO SHALL introducirse un segundo oráculo y NO SHALL persistirse ni compararse un
+hash global derivado o filtrado.
+
 El comando NO SHALL modificar ningún archivo del proyecto. En particular, `discovery --check` NO
 SHALL escribir ni regenerar el seed, el estado ni el `seed-map.json`, y NO SHALL migrar ni reescribir
 estados legacy.
@@ -661,8 +702,9 @@ estados legacy.
 Estas reglas son el contrato observable de `discovery --check`. El estado declara la regla de hash
 con la que fue generado y los estados sin declaración conservan el comportamiento previo, por lo que
 un cambio en la regla de hash NO SHALL alterar el significado de los `.discovery-state.json` ya
-persistidos. Un cambio en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`, `areaOf` o
-`computeImpact` sí cambia el comportamiento del comando y SHALL reflejarse en este Requirement.
+persistidos. Un cambio en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFile`, `areaOf`,
+`computeImpact` o en el predicado de rutas efímeras sí cambia el comportamiento del comando y SHALL
+reflejarse en este Requirement.
 
 #### Scenario: Un cambio no material en un área existente es minor
 
@@ -794,3 +836,77 @@ persistidos. Un cambio en `MATERIAL_FILE_RES`, `DEFAULT_IGNORES`, `isMaterialFil
 - **THEN** los bytes y el `mtime` de los archivos del proyecto, incluidos el seed, el estado y el
   `seed-map.json`, quedan idénticos antes y después
 - **AND** el exit code es 0 y la salida sigue siendo JSON con `schemaVersion: 2`
+
+#### Scenario: Un cambio efímero solamente en un estado ruleVersion:2 es READY sin escrituras
+
+- **WHEN** el estado persistido declara `ruleVersion: 2` y sus `sources` y `fileHashes` incluyen rutas
+  efímeras como `.ancleto/memory.db`, `.ancleto/memory.db-wal` y `.discovery-map.json`, y el árbol
+  actual cambia sólo en esas rutas
+- **THEN** la salida reporta `state:READY`, `impact:none` y `recommendedAction:continue`
+- **AND** `changedAreas`, `materialReasons` y `notes` son `[]`, y `affectedDocs` es `[]`
+- **AND** los bytes y el `mtime` del seed, del estado, del `seed-map.json` y del `.discovery-map.json`
+  quedan idénticos antes y después
+
+#### Scenario: Un cambio efímero junto con un cambio real en src es minor con el área src
+
+- **WHEN** el estado persistido incluye rutas efímeras y, respecto del estado, cambia una ruta
+  efímera y un archivo existente no material bajo `src`, por ejemplo `src/app.js`
+- **THEN** la salida reporta `state:STALE`, `impact:minor` y `recommendedAction:continue`
+- **AND** `changedAreas` es exactamente `['src']` y no incluye `.ancleto` ni `.discovery-map.json`
+- **AND** `materialReasons` es `[]`
+
+#### Scenario: Un archivo efímero nuevo deja el estado READY
+
+- **WHEN** aparece un archivo efímero nuevo, por ejemplo `.ancleto/memory.db-wal`, que no estaba en
+  `sources` del estado persistido
+- **THEN** la salida reporta `state:READY`, `impact:none` y `recommendedAction:continue`
+- **AND** `changedAreas`, `materialReasons`, `notes` y `affectedDocs` son `[]`
+
+#### Scenario: La eliminación del área .ancleto completa deja el estado READY
+
+- **WHEN** el estado persistido lista `.ancleto/memory.db` y `.ancleto/memory.db-wal` y ambos
+  desaparecen del árbol, de modo que el área `.ancleto` queda sin archivos
+- **THEN** la salida reporta `state:READY`, `impact:none` y `recommendedAction:continue`
+- **AND** `changedAreas` y `materialReasons` son `[]`
+- **AND** no aparecen `area raiz eliminada: .ancleto` ni
+  `area raiz eliminada: .discovery-map.json`
+
+#### Scenario: Un estado legacy sin fileHashes con churn efímero sigue minor con materialReasons vacío
+
+- **WHEN** el estado persistido es `version: 1` sin `fileHashes` y el único cambio del árbol es en
+  rutas efímeras como `.ancleto/memory.db`
+- **THEN** la salida reporta `state:STALE`, `impact:minor` y `recommendedAction:continue`
+- **AND** `materialReasons` es `[]` y `changedAreas` es `[]`
+- **AND** `notes` contiene el texto exacto
+  `estado previo sin hashes por archivo: el cambio de contenido no se puede atribuir a un area`
+- **AND** el estado no se reporta como `READY` ni como material
+
+#### Scenario: Las rutas con nombre parecido a .ancleto no son efímeras
+
+- **WHEN** el estado y el árbol incluyen `.ancletorc`, `.ancleto-notes.md` y `src/ancleto/x.js`,
+  ninguno cubierto por `DEFAULT_IGNORES`, y cambia el contenido de uno de ellos
+- **THEN** ninguna de esas rutas se considera efímera
+- **AND** la salida reporta `state:STALE`, `impact:minor` y `recommendedAction:continue`
+- **AND** `changedAreas` contiene el área de la ruta modificada (`.ancletorc`, `.ancleto-notes.md` o
+  `src`, según el caso)
+
+#### Scenario: Un cambio arquitectónico real sigue siendo material con rutas efímeras presentes
+
+- **WHEN** el estado incluye rutas efímeras y se elimina un archivo material como `Dockerfile`,
+  mientras alguna ruta efímera también cambia
+- **THEN** la salida reporta `impact:material` y `recommendedAction:regenerate`
+- **AND** `materialReasons` incluye `archivo material eliminado: Dockerfile`
+
+#### Scenario: Un bump de version bajo ruleVersion:2 con rutas efímeras presentes sigue READY
+
+- **WHEN** el estado persistido declara `ruleVersion: 2`, incluye rutas efímeras y el único cambio
+  real del árbol es el valor de la clave `version` de primer nivel del `package.json` de la raíz
+- **THEN** la salida reporta `state:READY`, `impact:none` y `recommendedAction:continue`
+- **AND** `changedAreas`, `materialReasons`, `notes` y `affectedDocs` quedan vacíos
+
+#### Scenario: El seed-map presente y affectedDocs conservan su contrato con rutas efímeras
+
+- **WHEN** el estado sólo cambió en rutas efímeras y existe un `seed-map.json` válido en el
+  directorio de salida cuyos documentos mapean a las áreas `.ancleto` o `.discovery-map.json`
+- **THEN** la salida reporta `seedMapPresent:true` y `affectedDocs:[]`
+- **AND** `changedAreas` es `[]`

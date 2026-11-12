@@ -603,13 +603,20 @@ SHALL considerarse ruta efímera, mediante un único predicado anclado al reposi
 
 - `.discovery-map.json`, sólo en la raíz del repositorio (un `.discovery-map.json` anidado NO SHALL
   ser efímero);
-- `.ancleto` y cualquier ruta que empiece con `.ancleto/`.
+- `.ancleto` y cualquier ruta que empiece con `.ancleto/`;
+- `documentation` y cualquier ruta que empiece con `documentation/`, sólo anclado a la raíz del
+  repositorio;
+- `audit logs` y cualquier ruta que empiece con `audit logs/` (el nombre literal contiene un
+  espacio), sólo anclado a la raíz del repositorio.
 
 El predicado NO SHALL coincidir con `.ancletorc`, `.ancleto-notes.md` ni `src/ancleto/x.js`: la
-comparación SHALL ser por ruta completa contra los literales anteriores o contra el prefijo
-`.ancleto/`, nunca por prefijo del nombre de archivo ni por segmento arbitrario. Las rutas efímeras
-SHALL seguir presentes en `sources` y en `fileHashes` del estado persistido; sólo quedan excluidas
-del cálculo de frescura.
+comparación SHALL ser por ruta completa contra los literales anteriores o contra los prefijos
+`.ancleto/`, `documentation/` y `audit logs/`, nunca por prefijo del nombre de archivo ni por segmento
+arbitrario. En particular, el anclaje a la raíz de `documentation` y `audit logs` SHALL impedir que
+`docs/documentation/x.md`, `documentation-extra/x.md`, `src/documentation/x.js`,
+`docs/audit logs/x.log` y `audit logs-extra/x.log` se consideren efímeros. Las rutas efímeras SHALL
+seguir presentes en `sources` y en `fileHashes` del estado persistido; sólo quedan excluidas del
+cálculo de frescura.
 
 `computeImpact` SHALL comparar `stored.sources` del estado persistido con las rutas actuales, con
 ambas vistas filtradas por el predicado de rutas efímeras, y SHALL atribuir el contenido con la vista
@@ -629,9 +636,10 @@ vista se construye antes de invocar `computeImpact`; `computeImpact`, `areaOf`, 
 
 El filtro de rutas efímeras SHALL aplicarse simétricamente a `stored.sources` y a las rutas actuales
 antes de invocar `computeImpact`, de modo que ni las altas ni las bajas efímeras produzcan áreas ni
-razones de materialidad. `storedFileHashes` y `currentFileHashes` NO SHALL filtrarse y SHALL seguir
-siendo mapas completos: el bucle de comparación recorre sólo las rutas filtradas, así que las claves
-efímeras nunca se iteran.
+razones de materialidad. En particular, la ausencia total de `documentation/` o de `audit logs/` en
+el árbol actual NO SHALL producir `area raiz eliminada`. `storedFileHashes` y `currentFileHashes` NO
+SHALL filtrarse y SHALL seguir siendo mapas completos: el bucle de comparación recorre sólo las rutas
+filtradas, así que las claves efímeras nunca se iteran.
 
 `changedAreas` SHALL contener las áreas de altas, bajas y modificaciones detectadas sobre la vista
 efectiva de hashes, ordenadas y deduplicadas, y NO SHALL incluir áreas cuyos únicos cambios sean rutas
@@ -688,8 +696,11 @@ estado, incluido un estado legacy sin `ruleVersion`, byte-idéntico al comportam
 
 El writer del pack NO SHALL cambiar: SHALL seguir persistiendo
 `{ version: 1, generatedAt, sources, fileHashes, hash, ruleVersion: 2, semantic, packTokens }` con
-`sources` y `fileHashes` crudos y completos, incluidas las rutas efímeras, para que un lector previo
-lea los campos crudos y `semantic` exactamente como antes. La incorporación de rutas efímeras NO
+`sources` y `fileHashes` crudos y completos, incluidas las rutas efímeras (entre ellas
+`documentation/**` y `audit logs/**`), para que un lector previo lea los campos crudos y `semantic`
+exactamente como antes. Cuando `documentation/` o `audit logs/` existen en el árbol, el writer SHALL
+listar sus rutas en `sources` y en `fileHashes` sin filtrarlas: persiste el resultado crudo del walk y
+nunca aplica el predicado de rutas efímeras al escribir. La incorporación de rutas efímeras NO
 SHALL cambiar `ruleVersion`: la regla de `ruleVersion` gobierna la normalización de contenido y la
 pertenencia de rutas es un predicado de lectura aplicado a ambas vistas. NO SHALL agregarse
 configuración nueva, NO SHALL introducirse un segundo oráculo y NO SHALL persistirse ni compararse un
@@ -910,3 +921,66 @@ reflejarse en este Requirement.
   directorio de salida cuyos documentos mapean a las áreas `.ancleto` o `.discovery-map.json`
 - **THEN** la salida reporta `seedMapPresent:true` y `affectedDocs:[]`
 - **AND** `changedAreas` es `[]`
+
+#### Scenario: Un cambio de contenido bajo documentation es READY
+
+- **WHEN** el estado persistido incluye rutas bajo `documentation/` y cambia sólo el contenido de una
+  de ellas
+- **THEN** la salida reporta `state:READY`, `impact:none` y `recommendedAction:continue`
+- **AND** `changedAreas`, `materialReasons`, `notes` y `affectedDocs` son `[]`
+
+#### Scenario: La ausencia completa de documentation en un clon fresco deja el estado READY
+
+- **WHEN** el estado persistido lista rutas bajo `documentation/` y esas rutas no existen en el árbol
+  actual, como en un clon fresco
+- **THEN** la salida reporta `state:READY`, `impact:none` y `recommendedAction:continue`
+- **AND** `materialReasons` no contiene `area raiz eliminada: documentation`
+- **AND** `changedAreas`, `materialReasons`, `notes` y `affectedDocs` son `[]`
+
+#### Scenario: Un cambio de contenido bajo audit logs es READY
+
+- **WHEN** el estado persistido incluye rutas bajo `audit logs/` y cambia sólo el contenido de una de
+  ellas
+- **THEN** la salida reporta `state:READY`, `impact:none` y `recommendedAction:continue`
+- **AND** `changedAreas`, `materialReasons`, `notes` y `affectedDocs` son `[]`
+
+#### Scenario: La ausencia completa de audit logs en un clon fresco deja el estado READY
+
+- **WHEN** el estado persistido lista rutas bajo `audit logs/` y esas rutas no existen en el árbol
+  actual, como en un clon fresco
+- **THEN** la salida reporta `state:READY`, `impact:none` y `recommendedAction:continue`
+- **AND** `materialReasons` no contiene `area raiz eliminada: audit logs`
+- **AND** `changedAreas`, `materialReasons`, `notes` y `affectedDocs` son `[]`
+
+#### Scenario: Las rutas con nombre parecido a documentation no son efímeras
+
+- **WHEN** cambia el contenido de `docs/documentation/x.md`, `documentation-extra/x.md` o
+  `src/documentation/x.js`, ninguna anclada a la raíz como directorio efímero
+- **THEN** ninguna de esas rutas se considera efímera
+- **AND** la salida reporta `state:STALE`, `impact:minor` y `recommendedAction:continue`
+- **AND** `changedAreas` contiene el área de la ruta modificada (`docs`, `documentation-extra` o
+  `src`, según el caso)
+
+#### Scenario: Un cambio real junto con churn de documentation y audit logs es minor con el área real
+
+- **WHEN** el estado persistido incluye rutas bajo `documentation/` y `audit logs/`, cambia contenido
+  en ambas áreas y además se modifica un archivo no material existente bajo `src`, por ejemplo
+  `src/app.js`
+- **THEN** la salida reporta `state:STALE`, `impact:minor` y `recommendedAction:continue`
+- **AND** `changedAreas` es exactamente `['src']`
+- **AND** `materialReasons` es `[]`
+
+#### Scenario: Los cambios de contenido en docs y aspec siguen contando como frescura
+
+- **WHEN** cambia el contenido de un archivo existente bajo `docs/` o bajo `aspec/`
+- **THEN** la salida reporta `state:STALE`, `impact:minor` y `recommendedAction:continue`
+- **AND** `changedAreas` contiene `docs` o `aspec`, según el caso
+- **AND** `materialReasons` es `[]`
+
+#### Scenario: El estado persistido sigue listando documentation y audit logs en sources
+
+- **WHEN** el estado persistido fue generado con el writer sin cambios e incluye rutas bajo
+  `documentation/` y `audit logs/` en `sources` y en `fileHashes`
+- **THEN** el estado conserva esas entradas crudas y completas
+- **AND** `discovery --check` las excluye del cálculo de frescura sin haberlas borrado del estado
+- **AND** el comando no reescribe ni migra el estado

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-12T19:49:58.763Z",
+  "generatedAt": "2026-11-12T22:43:00.363Z",
   "sources": [
     ".ancleto/machine-env.md",
     ".ancleto/memory.db",
@@ -383,6 +383,9 @@
     "aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/tasks.md",
     "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache/proposal.md",
     "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache/tasks.md",
+    "aspec/changes/archive/2026-11-12-discovery-state-schema-wording/proposal.md",
+    "aspec/changes/archive/2026-11-12-discovery-state-schema-wording/specs/cli-diagnostics/spec.md",
+    "aspec/changes/archive/2026-11-12-discovery-state-schema-wording/tasks.md",
     "aspec/changes/archive/2026-11-12-pin-offline-discovery-state/proposal.md",
     "aspec/changes/archive/2026-11-12-pin-offline-discovery-state/tasks.md",
     "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas/proposal.md",
@@ -863,13 +866,13 @@
   "fileHashes": {
     ".ancleto/machine-env.md": "ad2d1da1ffa30156",
     ".ancleto/memory.db": "761351ab2473d16a",
-    ".ancleto/memory.db-shm": "8986b3a1c45a4e79",
-    ".ancleto/memory.db-wal": "4e9027c9ae69a09a",
+    ".ancleto/memory.db-shm": "25f344a4a5c51df2",
+    ".ancleto/memory.db-wal": "c247c7e012bd869c",
     ".ancleto/model-catalog.candidate.json": "b9a899ae6758c716",
     ".ancleto/next-session-prompt.md": "5f62001d37f41bf7",
-    ".ancleto/working-context.md": "79be8128afe0b6f1",
+    ".ancleto/working-context.md": "6144eb354e7f8286",
     ".ancletorc": "13ac5d37477f61a2",
-    ".discovery-map.json": "343e3cbae47fbd61",
+    ".discovery-map.json": "1dc4e30bca137870",
     ".gitattributes": "d60f352d0db1404c",
     ".github/workflows/publish.yml": "afdbac4220001818",
     ".gitignore": "851805d264f984c2",
@@ -940,7 +943,7 @@
     ".opencode/skills/ancleto-workflow/SKILL.md": "8d7efb19ddc62e1f",
     ".opencode/skills/triage-clarifier/SKILL.md": "6ae5fdd2d1db35f4",
     "AGENTS.md": "d9032ad0c6fb4072",
-    "CHANGELOG.md": "3ac40619d8e9f7c0",
+    "CHANGELOG.md": "16ceb393f0489eaa",
     "DESIGN-memory-engine-v0.2.0.md": "21b54d02afa8ab62",
     "LICENSE": "e220b0c2013be5c6",
     "PRODUCT.md": "53099af9977a36b6",
@@ -955,7 +958,7 @@
     "agents/technical-discovery.md": "ec2f9093746a06f8",
     "agents/technical-seed-writer.md": "380d8a62c93dc006",
     "agents/tester.md": "cd2a0ece6b48144a",
-    "aspec/backlog.md": "57faf631387a9288",
+    "aspec/backlog.md": "e6225ea99f1dde15",
     "aspec/changes/ancleto-vscode-extension/design.md": "7c9463bc7f436e1b",
     "aspec/changes/ancleto-vscode-extension/proposal.md": "2c1a5b4f34084482",
     "aspec/changes/ancleto-vscode-extension/specs/vscode-distribution/spec.md": "fb2c7bb3ed161e75",
@@ -1242,6 +1245,9 @@
     "aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/tasks.md": "8999eba4e676883d",
     "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache/proposal.md": "bfd6878d3bc36aa2",
     "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache/tasks.md": "8d86f47367ed6512",
+    "aspec/changes/archive/2026-11-12-discovery-state-schema-wording/proposal.md": "64e3c489d081e9e7",
+    "aspec/changes/archive/2026-11-12-discovery-state-schema-wording/specs/cli-diagnostics/spec.md": "71db4b2c51e4c726",
+    "aspec/changes/archive/2026-11-12-discovery-state-schema-wording/tasks.md": "949f54d706250275",
     "aspec/changes/archive/2026-11-12-pin-offline-discovery-state/proposal.md": "637f3d45b0be38db",
     "aspec/changes/archive/2026-11-12-pin-offline-discovery-state/tasks.md": "fcb334e599a74856",
     "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas/proposal.md": "c6484142ff55eff4",
@@ -1254,7 +1260,7 @@
     "aspec/specs/artifact-update/spec.md": "2a97b7300ceb37ad",
     "aspec/specs/aspec-bootstrap/spec.md": "78762a35308ea5cc",
     "aspec/specs/claude-support/spec.md": "3e407c3cfa51fc2b",
-    "aspec/specs/cli-diagnostics/spec.md": "5b4027c5b4eaebe5",
+    "aspec/specs/cli-diagnostics/spec.md": "d7d7b30f038841df",
     "aspec/specs/code-review/spec.md": "33865bf562aad03d",
     "aspec/specs/commandcode-support/spec.md": "4611458c2c58d04c",
     "aspec/specs/copilot-support/spec.md": "26fa2eb1befa3acd",
@@ -1643,7 +1649,7 @@
     "eslint.config.js": "7d78be10cad6930b",
     "opencode.json": "29f36fe1f3d04a49",
     "optimizacion-de-tokens.md": "f07c22fb8e7261c0",
-    "package.json": "486176e50224f207",
+    "package.json": "8ae5f92f4df8f869",
     "profiles/test/agents/reviewer.md": "2391dda0e569e2e0",
     "profiles/test/agents/tester.md": "7de936b2faf68939",
     "profiles/test/commands/cleto-test-apply.md": "ae12ed96e8690f54",
@@ -1719,13 +1725,13 @@
     "test/fixtures/memory/refs-root/aspec/specs/prompt-contracts/spec.md": "828fe5dfb0628de9",
     "test/fixtures/memory/seed.json": "ef04fc809da4e5ae"
   },
-  "hash": "53bbdcab4116868447249b50823836fe19700433457da70546fda858f926693a",
+  "hash": "70487f94fd0322de0cd26b1ca830e512ccaefdd96be2858a5cd1be547e26b089",
   "ruleVersion": 2,
   "semantic": {
-    "hash": "385704f448ec7ce8c18b02c5ca3f0e311f1331f39edb5153ee302f19cde69ace",
+    "hash": "8642fa2286f2d4aa0478fea4ea5238b772762b764a136f976f2ffc512a6c065b",
     "fileHashes": {
       "package.json": "1b4df396b665de56"
     }
   },
-  "packTokens": 39502
+  "packTokens": 39536
 }

@@ -2,8 +2,8 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-12T19:52:28Z
-pluginVersion: 0.30.1
+generatedAt: 2026-11-12T22:43:00Z
+pluginVersion: 0.30.2
 skillVersion: '2.3'
 ---
 
@@ -27,7 +27,7 @@ skillVersion: '2.3'
 | `skills/**` | `units/_map.md` | 21 skills del ciclo SDD/discovery/review |
 | `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
 | `profiles/**` | `units/cli-install.md`, `decisions.md` | Overlay del perfil `test` (agents/commands/templates) |
-| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y changes archivados de diagnóstico, portabilidad, conformidad, merge, orden del archive, idempotencia de memoria, aviso de bundle legacy y EOL de templates (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory`, `template-legacy-eol-preservation`, `agent-model-minimo-migration`, `specs-merge-canonical-guard`, `archive-sync-via-specs-merge`, `cli-subcommand-help-guards`, `fix-discovery-seedmap-present`, `spec-seed-freshness-detector`, `align-freshness-recommended-action-spec`, `active-delta-structure-guard`, `seed-freshness-version-bump-not-material`, `seed-freshness-ephemeral-paths` y `seed-freshness-ignored-areas`, `discovery-exclude-glob-match` y `discovery-exclude-regexp-cache`) |
+| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y changes archivados de diagnóstico, portabilidad, conformidad, merge, orden del archive, idempotencia de memoria, aviso de bundle legacy y EOL de templates (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory`, `template-legacy-eol-preservation`, `agent-model-minimo-migration`, `specs-merge-canonical-guard`, `archive-sync-via-specs-merge`, `cli-subcommand-help-guards`, `fix-discovery-seedmap-present`, `spec-seed-freshness-detector`, `align-freshness-recommended-action-spec`, `active-delta-structure-guard`, `seed-freshness-version-bump-not-material`, `seed-freshness-ephemeral-paths` y `seed-freshness-ignored-areas`, `discovery-exclude-glob-match`, `discovery-exclude-regexp-cache`, `discovery-state-schema-wording` y `pin-offline-discovery-state`) |
 | `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery, contenido, `specs-merge.test.js`, `delta-spec-structure.test.js` (incluye la detección de `spec.md` mal ubicados desde 0.27.0) y `memory-engine.test.js`; `cli.test.js` pinea las rutas efímeras, el anclaje de `documentation`/`audit logs` y el estado legacy (0.28.0–0.29.0); `discovery-glob.test.js` cubre la equivalencia del matcher cacheado (0.30.1); desde 0.30.1 los 22 `*.test.js` quedan fuera de `sources` por `discovery.exclude` (`**/*.test.*`), no por el tier ni por el predicado de frescura |
 | `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
 | `eslint.config.js`, `package.json` | `setup.md`, `decisions.md` | Lint sobre `src/`, `test/`, `scripts/` y contrato de publicación |
@@ -40,24 +40,24 @@ skillVersion: '2.3'
 
 ## Áreas raíz observadas (`.discovery-map.json` al empacar)
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (315), `audit logs` (9), `commands` (16),
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (318), `audit logs` (9), `commands` (16),
 `docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (21),
-`templates` (2), `test` (29), más 15 archivos raíz. Total observado: **889 archivos**.
+`templates` (2), `test` (29), más 15 archivos raíz. Total observado: **892 archivos**.
 
 Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime.
 `documentation/` tiene 366 archivos en disco, pero el mapa cuenta 340 tras excluir
 `node_modules`/`.git`/`dist`/`build`/`coverage`; el estado del discovery registra 337 porque su
 `config.exclude` omite 3 archivos bajo `__tests__/`. `skills/` tiene 21 directorios de skill que
-suman 35 archivos; `test/` tiene 28 archivos: 21 `*.test.js` en la raíz (incluidos
+suman 35 archivos; `test/` tiene 29 archivos: 22 `*.test.js` en la raíz (incluidos
 `specs-merge.test.js` y `delta-spec-structure.test.js`) y 7 fixtures bajo `test/fixtures/memory/`;
 el patrón declarado es `test/*.test.js`. Desde 0.30.1 los 22 `*.test.js` no entran en `sources`
 porque `discovery.exclude` (`**/*.test.*`) aplica; los 7 fixtures siguen incluidos. El
 tier `minimo` excluye además `test/**` del cuerpo del pack, por lo que la evidencia de esas áreas se
-verificó por lectura directa. El pack de esta generación registra 857 fuentes y ~39.502 tokens, con
+verificó por lectura directa. El pack de esta generación registra 860 fuentes y ~39.536 tokens, con
 31 entradas de archivo en el cuerpo.
 
-El `.discovery-map.json` observado en esta corrida reporta 889 archivos (aspec 315, `.opencode` 66,
-src 21, test 29, documentation 340, audit logs 9). El estado `.discovery-state.json` lista 857
+El `.discovery-map.json` observado en esta corrida reporta 892 archivos (aspec 318, `.opencode` 66,
+src 21, test 29, documentation 340, audit logs 9). El estado `.discovery-state.json` lista 860
 fuentes e incluye 674 entradas `documentation/` + 18 `audit logs/` entre `sources` y `fileHashes`;
 desde 0.29.0 esas rutas no cuentan para la frescura, pero `docs/**` y `aspec/**` sí. Desde 0.30.1
 las 22 rutas `test/*.test.js` ya no figuran en `sources`. Ver `unknowns.md`.

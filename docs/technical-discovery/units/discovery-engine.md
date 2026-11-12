@@ -3,9 +3,9 @@ node: units/discovery-engine
 kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
-sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/discovery-glob.js", "scripts/refresh-model-catalog.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache"]
-generatedAt: 2026-11-12T19:52:28Z
-pluginVersion: 0.30.1
+sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/discovery-glob.js", "src/core/discovery-state.js", "scripts/refresh-model-catalog.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state"]
+generatedAt: 2026-11-12T22:43:00Z
+pluginVersion: 0.30.2
 skillVersion: '2.3'
 ---
 
@@ -44,8 +44,10 @@ forma del estado y `ruleVersion: 2` siguen intactos. **0.30.0** corrige el match
 **0.30.1** extrae `escapeRe`, `compileGlob` y `matchesGlob` de `src/cli/index.js` a
 `src/core/discovery-glob.js` y cachea el `RegExp` compilado en un `Map` por string exacto de glob;
 sobre 9.669 evaluaciones el costo baja de 15,04 ms a 1,63 ms (9,2×), sin cambio de tokenización,
-anclaje ni semántica. `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, el writer, la forma del
-estado y `ruleVersion: 2` siguen intactos.
+anclaje ni semántica. **0.30.2** tampoco cambia la frescura: es un patch documental que distingue el
+estado persistido (`version: 1` + `ruleVersion: 2`) del `schemaVersion: 2` de `--check` y pinea el
+armado offline en `src/core/discovery-state.js` sin alterar los bytes persistidos. `DEFAULT_IGNORES`,
+`outputDir`, `packDiscovery`, el writer, la forma del estado y `ruleVersion: 2` siguen intactos.
 
 ## Recorrido relevante
 
@@ -308,10 +310,10 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
   filtro a `documentation/**` y `audit logs/**`; un estado legacy sin `fileHashes` sigue
   `STALE`/`minor`.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 857 fuentes y ~39.502 tokens, tier `minimo` (comprimido), con 31 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 889 archivos (aspec 315,
+- **Pack actual**: 860 fuentes y ~39.536 tokens, tier `minimo` (comprimido), con 31 entradas de
+  archivo en el cuerpo. El `.discovery-map.json` observado reporta 892 archivos (aspec 318,
   `.opencode` 66, src 21, test 29, docs 21, documentation 340, audit logs 9); el estado
-  `.discovery-state.json` lista 857 fuentes e incluye 674 entradas `documentation/` + 18
+  `.discovery-state.json` lista 860 fuentes e incluye 674 entradas `documentation/` + 18
   `audit logs/` entre `sources` y `fileHashes`, efímeras desde 0.29.0. Las 22 rutas
   `test/*.test.js` ya no figuran en `sources` por `discovery.exclude` (0.30.1); los 7 fixtures de
   `test/fixtures/**` siguen incluidos.
@@ -339,13 +341,16 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 | `src/core/model-catalog.json` | Snapshot verificado de modelos (5 proveedores / 211 IDs) |
 | `scripts/refresh-model-catalog.mjs` | Descubrimiento dev-only, gate de IDs y escritura atómica |
 | `src/core/discovery-glob.js` | `escapeRe`, `compileGlob` y `matchesGlob`; traducción glob→regex por tokens y caché `Map` por string exacto de glob |
+| `src/core/discovery-state.js` | `buildDiscoveryState`/`renderDiscoveryState` puros; armado y serialización del estado persistido usados por `packDiscovery` (0.30.2, golden byte-idéntico) |
 | `src/cli/index.js` (`packDiscovery`, `checkDiscovery`, `normalizeRootPackageJson`, `hashSources`, `isEphemeralSource`, `isEphemeralOnlyChange`, `computeSources`, `checkAgentsFrontmatter`, `declaredAgentModels`) | Empaquetado, estado del seed, hash semántico, filtro de rutas efímeras, uso del matcher de exclusiones y avisos de `check` |
 | `docs/technical-discovery/.discovery-state.json` | Último hash/pack del seed |
 | `docs/technical-discovery/seed-map.json` | Documento → áreas de evidencia |
-| `aspec/specs/cli-diagnostics/spec.md` | Contrato del detector de frescura (0.26.1), de `seedMapPresent` (0.26.0), del filtro de rutas efímeras (0.28.0–0.29.0) y de la semántica por segmentos de `discovery.exclude` (0.30.0) |
+| `aspec/specs/cli-diagnostics/spec.md` | Contrato del detector de frescura (0.26.1), de `seedMapPresent` (0.26.0), del filtro de rutas efímeras (0.28.0–0.29.0), de la semántica por segmentos de `discovery.exclude` (0.30.0) y precisión del estado persistido `version: 1` + `ruleVersion: 2` frente a `schemaVersion: 2` (0.30.2) |
 | `aspec/changes/archive/2026-11-10-spec-seed-freshness-detector/` | Change archivado que documenta y pinea el detector (sin cambio de runtime) |
 | `aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material/` | Change archivado de 0.27.0: bump de `version` no material y estado persistido con `ruleVersion: 2` + `semantic` (delta `MODIFIED` de `cli-diagnostics`) |
 | `aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths/` | Change archivado de 0.28.0: filtro simétrico de rutas efímeras en lectura, excusa acotada del desvío de hash y writer/`ruleVersion` intactos (delta `MODIFIED` de `cli-diagnostics`) |
 | `aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas/` | Change archivado de 0.29.0: extensión del predicado de lectura a `documentation/**` y `audit logs/**` anclados a la raíz, con `docs/**`/`aspec/**` aún contando y writer/`ruleVersion` intactos (delta `MODIFIED` de `cli-diagnostics`) |
 | `aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/` | Change archivado de 0.30.0: matcher de `discovery.exclude` por segmentos (`escapeRe`/`matchesGlob`), exclusión efectiva de `**/*.test.*`/`**/*.spec.*` y `sources` 872→854, con `DEFAULT_IGNORES`/`outputDir`/writer/`ruleVersion` intactos (delta `MODIFIED` de `cli-diagnostics`) |
 | `aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache/` | Change archivado de 0.30.1: extracción del matcher a `src/core/discovery-glob.js` y caché `Map` del `RegExp` por glob exacto, 15,04 ms → 1,63 ms (9,2×) sobre 9.669 evaluaciones, sin cambio de semántica; ReDoS con `**` repetidos aceptado y DP por segmentos descartado |
+| `aspec/changes/archive/2026-11-12-discovery-state-schema-wording/` | Change archivado de 0.30.2: delta `MODIFIED` de `cli-diagnostics` que distingue el estado persistido `version: 1` + `ruleVersion: 2` del `schemaVersion: 2` de la salida de `--check`, con pin de test no conductual |
+| `aspec/changes/archive/2026-11-12-pin-offline-discovery-state/` | Change archivado de conformidad (sin delta ni bump): `buildDiscoveryState`/`renderDiscoveryState` puros en `src/core/discovery-state.js`, con golden byte-idéntico |

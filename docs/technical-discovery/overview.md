@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-12T19:52:28Z
-pluginVersion: 0.30.1
+generatedAt: 2026-11-12T22:43:00Z
+pluginVersion: 0.30.2
 skillVersion: '2.3'
 ---
 
@@ -270,6 +270,13 @@ test/                   suite node --test (content guards incluidos)
     repetidos sigue siendo una limitación aceptada (input `.ancletorc` local); el reemplazo por un
     DP por segmentos se descartó por no ser equivalente. Release patch del change
     `discovery-exclude-regexp-cache` (sin delta de spec).
+31. **Estado persistido vs. salida de `discovery --check` (0.30.2)**: patch documental del change
+    `discovery-state-schema-wording` (delta `MODIFIED` de `cli-diagnostics`) que alinea la canónica:
+    el estado persistido declara `version: 1` + `ruleVersion: 2`, mientras `schemaVersion: 2` es el
+    campo del JSON de `discovery --check`. Incluye un pin de test no conductual y el change de
+    conformidad `pin-offline-discovery-state` extrae `buildDiscoveryState`/`renderDiscoveryState` a
+    `src/core/discovery-state.js` con golden byte-idéntico. Sin cambio de runtime, estado ni
+    migración.
 
 ## Recorrido de una instalación con tier `minimo`
 

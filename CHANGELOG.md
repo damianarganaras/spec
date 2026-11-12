@@ -2,6 +2,14 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.29.0] - 2026-11-12
+
+### Changed
+- **Las rutas gitignored `documentation/**` y `audit logs/**` dejan de contar como cambio de frescura del seed**: `ancleto discovery --check` ya no las clasifica como cambio del seed. El writer de `.discovery-state.json`, la forma del estado persistido y `ruleVersion: 2` quedan intactos.
+
+### Notas
+- **Release minor**: incluye el delta `MODIFIED` de `cli-diagnostics`, que documenta que las rutas gitignored `documentation/**` y `audit logs/**` ya no cuentan como cambio de frescura.
+
 ## [0.28.0] - 2026-11-11
 
 ### Changed

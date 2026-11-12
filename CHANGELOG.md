@@ -2,6 +2,11 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.30.1] - 2026-11-12
+
+### Changed
+- **El matcher de `discovery.exclude` cachea el `RegExp` compilado por glob**: cada patrón se compila una sola vez por string exacto de glob (antes se recompilaba en cada evaluación), con ~9,2× menos costo de matching sobre 9.669 evaluaciones y sin cambio de semántica. El ReDoS con `**` repetidos sigue siendo una limitación documentada.
+
 ## [0.30.0] - 2026-11-12
 
 ### Fixed

@@ -372,4 +372,5 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 **Pendiente:**
 
 - **T27/CH-01 sigue FUERA** de esta sesión (memoria reconstruible/versionable): pendiente, sin cambios.
-- Nada nuevo abierto por este change; residual no bloqueante: ReDoS teórico con globs patológicos `**/` repetidos (config autor-controlada) y precisión de una cita de líneas en el proposal archivado.
+- **Residual cerrado — ReDoS del matcher (limitación conocida y acotada):** medido; globs plausibles de hasta 3 `**` con literales distintos (`src/**/node_modules/**/dist/**/*.js`) cuestan 0.14 ms sobre rutas de 80 segmentos; el costo crece como O(N^k) con k = cantidad de `**` (80 segmentos: 5 `**` ≈281 ms, 7 `**` ≈288 ms, 8 `**` >2 s). El blowup ocurre con `**` adyacentes y separados por literales repetidos; `matchesGlob` se reevalúa ~14.7k veces por corrida. Se acepta como limitación (input local autor-controlado; no hay frontera de confianza externa) en vez de reescribir a DP por segmentos, porque eso cambia el mecanismo que pinea `aspec/specs/cli-diagnostics/spec.md:995-1001` y exigiría delta MODIFIED + release minor. Follow-up opcional: DP por segmentos con su delta.
+- **Precisión de cita:** cerrada; el proposal archivado cita `:720-986` para los 34 escenarios.

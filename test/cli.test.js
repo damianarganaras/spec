@@ -7637,6 +7637,166 @@ describe('CLI discovery --check impact (minor vs material)', () => {
       assert.deepEqual(j.changedAreas, [])
     })
   })
+
+  // Areas gitignored sin archivos versionados (`documentation/**`, `audit logs/**`):
+  // no existen en un clon fresco, asi que su churn y su ausencia no deben atribuir
+  // areas ni materialidad. El anclaje es a la raiz: los lookalikes siguen contando.
+  const IGNORED_AREAS = {
+    ...BASE,
+    'documentation/guide.md': '# guia v1\n',
+    'audit logs/run.log': 'log v1\n'
+  }
+
+  it('pin ignoradas: cambio de contenido bajo documentation es READY', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, {
+        ruleVersion: 2,
+        seedMap: { version: 1, generatedAt: 'x', docs: { 'overview.md': ['documentation', 'audit logs'] } }
+      })
+      writeFileSync(join(dir, 'documentation', 'guide.md'), '# guia v2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.equal(j.seedMapPresent, true)
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('pin ignoradas: ausencia completa de documentation no es area raiz eliminada', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      rmSync(join(dir, 'documentation'), { recursive: true, force: true })
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.ok(!j.materialReasons.includes('area raiz eliminada: documentation'))
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('pin ignoradas: cambio de contenido bajo audit logs es READY', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'audit logs', 'run.log'), 'log v2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  it('pin ignoradas: ausencia completa de audit logs no es area raiz eliminada', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      rmSync(join(dir, 'audit logs'), { recursive: true, force: true })
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      assert.equal(j.impact, 'none')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, [])
+      assert.deepEqual(j.materialReasons, [])
+      assert.ok(!j.materialReasons.includes('area raiz eliminada: audit logs'))
+      assert.deepEqual(j.notes, [])
+      assert.deepEqual(j.affectedDocs, [])
+    })
+  })
+
+  for (const [rel, area] of [
+    ['docs/documentation/x.md', 'docs'],
+    ['documentation-extra/x.md', 'documentation-extra'],
+    ['src/documentation/x.js', 'src'],
+    ['docs/audit logs/x.log', 'docs'],
+    ['audit logs-extra/x.log', 'audit logs-extra']
+  ]) {
+    it(`pin anclaje ignoradas: ${rel} no es efimera (area ${area})`, () => {
+      withDir((dir) => {
+        seedFixture(dir, { ...BASE, [rel]: 'v1\n' }, { ruleVersion: 2 })
+        writeFileSync(join(dir, rel), 'v2\n')
+        const r = run(['discovery', '--check'], dir)
+        assert.equal(r.status, 0)
+        const j = JSON.parse(r.stdout)
+        assert.equal(j.state, 'STALE')
+        assert.equal(j.impact, 'minor')
+        assert.equal(j.recommendedAction, 'continue')
+        assert.deepEqual(j.changedAreas, [area])
+        assert.deepEqual(j.materialReasons, [])
+      })
+    })
+  }
+
+  it('pin ignoradas: cambio real en src con churn de documentation y audit logs es minor con area src', () => {
+    withDir((dir) => {
+      seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      writeFileSync(join(dir, 'src', 'app.js'), 'console.log(2)\n')
+      writeFileSync(join(dir, 'documentation', 'guide.md'), '# guia v2\n')
+      writeFileSync(join(dir, 'audit logs', 'run.log'), 'log v2\n')
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'STALE')
+      assert.equal(j.impact, 'minor')
+      assert.equal(j.recommendedAction, 'continue')
+      assert.deepEqual(j.changedAreas, ['src'])
+      assert.deepEqual(j.materialReasons, [])
+    })
+  })
+
+  for (const [rel, area] of [['docs/guide.md', 'docs'], ['aspec/change.md', 'aspec']]) {
+    it(`pin ignoradas: cambio de contenido en ${area} sigue contando`, () => {
+      withDir((dir) => {
+        seedFixture(dir, { ...BASE, [rel]: 'v1\n' }, { ruleVersion: 2 })
+        writeFileSync(join(dir, rel), 'v2\n')
+        const r = run(['discovery', '--check'], dir)
+        assert.equal(r.status, 0)
+        const j = JSON.parse(r.stdout)
+        assert.equal(j.state, 'STALE')
+        assert.equal(j.impact, 'minor')
+        assert.equal(j.recommendedAction, 'continue')
+        assert.deepEqual(j.changedAreas, [area])
+        assert.deepEqual(j.materialReasons, [])
+      })
+    })
+  }
+
+  it('pin ignoradas: el estado conserva documentation y audit logs y --check no lo reescribe', () => {
+    withDir((dir) => {
+      const docsDir = seedFixture(dir, IGNORED_AREAS, { ruleVersion: 2 })
+      const statePath = join(docsDir, '.discovery-state.json')
+      writeFileSync(join(dir, 'documentation', 'guide.md'), '# guia v2\n')
+      const before = snapshotWithMtime(dir)
+      const r = run(['discovery', '--check'], dir)
+      assert.equal(r.status, 0)
+      const j = JSON.parse(r.stdout)
+      assert.equal(j.state, 'READY')
+      const state = JSON.parse(readFileSync(statePath, 'utf8'))
+      assert.ok(state.sources.includes('documentation/guide.md'))
+      assert.ok(state.sources.includes('audit logs/run.log'))
+      assert.ok(Object.hasOwn(state.fileHashes, 'documentation/guide.md'))
+      assert.ok(Object.hasOwn(state.fileHashes, 'audit logs/run.log'))
+      assert.equal(state.ruleVersion, 2)
+      assert.deepEqual(snapshotWithMtime(dir), before, 'discovery --check no reescribe el estado')
+    })
+  })
 })
 
 describe('CLI exclusiones del discovery (--exclude)', () => {

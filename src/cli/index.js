@@ -2367,10 +2367,21 @@ function areaOf(rel) {
 }
 
 // Rutas efimeras: el estado de memoria y el mapa de descubrimiento mutan con
-// cualquier operacion, no son arquitectura. Anclado a la ruta completa: `.ancletorc`,
-// `.ancleto-notes.md` y `src/ancleto/x.js` NO son efimeros.
+// cualquier operacion, no son arquitectura. `documentation` y `audit logs` estan
+// gitignored y sin archivos versionados, asi que no existen en un clon fresco y no
+// deben participar de la frescura. Anclado a la ruta completa contra el literal de
+// raiz o el prefijo `documentation/` / `audit logs/`: `docs/documentation/x.md`,
+// `documentation-extra/x.md` y `src/documentation/x.js` NO son efimeros.
 function isEphemeralSource(rel) {
-  return rel === '.discovery-map.json' || rel === '.ancleto' || rel.startsWith('.ancleto/')
+  return (
+    rel === '.discovery-map.json' ||
+    rel === '.ancleto' ||
+    rel.startsWith('.ancleto/') ||
+    rel === 'documentation' ||
+    rel.startsWith('documentation/') ||
+    rel === 'audit logs' ||
+    rel.startsWith('audit logs/')
+  )
 }
 
 function isPlainObject(v) {

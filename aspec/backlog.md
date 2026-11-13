@@ -1,14 +1,14 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-12 (MEM-05 cerrado en 0.31.0: set crítico de working-context curado por `memory.criticalKeys`; release 0.30.1: caché del RegExp del matcher de config.exclude; residual de ReDoS cerrado como decisión documentada).
+> Última actualización: 2026-11-13 (CH-06b cerrado en 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
 
 ## Prioridad de ejecución
 
 1. **NO-OP en 0.24.0 — ya implementado y archivado (`2026-11-06-fix-repair-mcp-noop`); el predicate `error || normalized || fixed.length>0` está en `src/cli/index.js` y los tests cubren bytes/mtime.** ~~**0.20.1 — `fix(cli)`**: guard de escritura en `repairProjectMcp` (`fixed` vacío + sin error → no tocar bytes). Bug contra contrato vigente; test de bytes/mtime; sin delta de spec. Change propuesto: `fix-repair-mcp-noop`.~~ *(histórico)*
 2. **0.21.0 — `feat(cli)`**: **cerrado en 0.23.0** por `portability-legacy-bundle-advisory` (mitad bundle legacy sin intención MCP). La mitad `.opencode/*` histórico quedó **refutada**: `check` ya imprime `✔ .opencode/agents` en un install sano y el dir faltante ya falla con exit 1.
 3. **Reingeniería P0**: PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`. PR-4 ya está cumplido.
-4. **Reingeniería P1**: CH-00 baseline (runbook, prerrequisito) → CH-06a merge determinístico de delta specs **cerrado en 0.22.0** (`ch-06a-specs-merge-deterministic`) → CH-06b selección de tests por affected-set (diferido) → CH-07 A/B de prefijos/caché/modelos (bloqueado por CH-00).
+4. **Reingeniería P1**: CH-00 baseline (runbook, prerrequisito) → CH-06a merge determinístico de delta specs **cerrado en 0.22.0** (`ch-06a-specs-merge-deterministic`) → CH-06b selección de tests por affected-set **cerrado en 0.32.0** → CH-07 A/B de prefijos/caché/modelos (bloqueado por CH-00).
 5. **Reingeniería P2 colaboración**: CH-08/MEM-06 (pendiente) → T25 `formatVersion` (**refutado en 0.23.0**) → T27 (reindex, pendiente) → T20 (idempotencia) **cerrado en 0.23.0** → T30 (V1/V2, pendiente) → CH-10 (matriz de hosts, pendiente).
 6. **Reingeniería P2 motor/host restante**: #4 (exclusión mutua de escritores), #6 (tope de verificación / orden archive→merge), #18 (seed stale por diseño).
 7. **Deuda declarada**: MEM-05c–e pendientes, MEM-05f cerrado, MEM-05g diferido, CH-09a–g pendientes, CH-09h refutado.
@@ -53,7 +53,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 ### Qué falta (por prioridad)
 
 - **P0:** PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`.
-- **P1:** CH-00 baseline como runbook; CH-06a cerrado en 0.22.0 (`ch-06a-specs-merge-deterministic`, capability `spec-sync`); CH-06b (selección de tests por affected-set) diferido por **segunda vez** (0.22.2), ahora por razón estructural: `test/cli.test.js` spawnea el CLI (sin arista de import) y los content guards leen markdown no indexado, así que declararla "no contrato completo" no la vuelve segura; se reabre sólo con consumidor probado + contrato que nombre las suites excluidas. `computeAffectedSet`/`ancleto affected` ya existen y son determinísticos; CH-07 A/B bloqueado por CH-00.
+- **P1:** CH-00 baseline como runbook; CH-06a cerrado en 0.22.0 (`ch-06a-specs-merge-deterministic`, capability `spec-sync`); CH-06b (selección de tests por affected-set) **cerrado en 0.32.0** (`ch-06b-affected-test-selection`): `ancleto affected --tests` devuelve `tests.complete/reasons/selected/excluded` sobre el universo `test/*.test.js`, con manifiesto cerrado `test/affected-tests.json` (`always`+`couplings`) y consumidor `npm run test:affected` que cae a la suite completa declarada cuando `complete:false`; sin `--tests` el JSON de `affected` queda byte-idéntico. CH-07 A/B sigue bloqueado por CH-00.
 - **P1 · MEM-05 (resuelto en 0.31.0) — presupuesto del working-context:** `memory.criticalKeys` en
   `.ancletorc` cura un set crítico (7 claves), inyectado primero y nunca desplazado por una regla no
   crítica; se preserva el llenado determinístico existente (scope → anclaje → created_at →
@@ -389,3 +389,23 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 **Pendiente:**
 
 - **Imprecisión de redacción en `aspec/specs/cli-diagnostics/spec.md:1011` — RESUELTO:** corregida por el change `discovery-state-schema-wording` (archivado en `aspec/changes/archive/2026-11-12-discovery-state-schema-wording/`, commits `f626d15` + `053c032`); el spec canónico ahora documenta el estado persistido `version: 1` + `ruleVersion: 2` frente a la salida `schemaVersion: 2` de `--check`. Liberado como 0.30.2 (merge `ceeb65a`, tag `v0.30.2`, npm 0.30.2).
+
+## Relación con 0.32.0
+
+0.32.0 contiene un change archivado. Release minor (runtime + spec + test): `ancleto affected` gana el flag aditivo `--tests` con un plan de selección de tests seguro y determinista; sin el flag la salida no cambia.
+
+**Hecho:**
+
+- **`ch-06b-affected-test-selection` (funcional, delta ADDED en `prompt-contracts`):** change implementado, testeado y archivado en `aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/`; delta `ADDED` (`Selección determinística de tests por affected-set con manifiesto cerrado`, 14 escenarios) mergeado en `aspec/specs/prompt-contracts/spec.md:1378`.
+- **Contrato:** `ancleto affected --tests` agrega `tests: { complete, reasons[], selected[], excluded[{file, reason}] }`. `selected` = imports alcanzados ∪ `always` ∪ couplings disparados ∪ tests con imports irresolubles; `excluded` = complemento exacto de `test/*.test.js` con `reason:"not-affected"`. `complete:false` con `manifest-missing|manifest-invalid|manifest-gap|test-glob-missing|unresolved-in-closure` ⇒ el consumidor `npm run test:affected` corre la suite completa.
+- **Manifiesto:** `test/affected-tests.json` (`version:1`) cubre las clases de escape (spawn del CLI, guards de markdown/src-text, esquema de DB, fixtures, tests sin arista a `src/`), con pins por semilla real en `test/test-selection.test.js`.
+- **Invariante negativa:** `complete:true` no promete completitud semántica universal; un acoplamiento nuevo dentro de un test ya declarado queda cubierto sólo por declaración.
+- **Validaciones:** suite 1328 tests / 1323 pass / 5 skips preexistentes / 0 fail; `cli.test.js` 512 (510 pass, 2 skip); `npm run lint` passed; format `not-configured`; typecheck `n/a`. Review en dos rondas; R1 CHANGES REQUESTED con 2 MAJOR (manifiesto sub-cubierto) cerrados en `3c14185`; R2 APPROVED sin CRITICAL ni `GUARANTEE NOT SUSTAINED`.
+- **Garantía aguas abajo:** el consumidor cae a la suite completa cuando `complete:false`, cuando falta el objeto `tests` o cuando el JSON es inválido; nunca interpreta la ausencia del campo como selección vacía. Un binario viejo trata `--tests` como semilla, por eso el consumidor exige `tests.complete === true`.
+- **Archivos:** `src/core/test-selection.js`, `src/cli/index.js`, `test/affected-tests.json`, `scripts/test-affected.mjs`, `package.json` (`test:affected`), `test/test-selection.test.js`, `aspec/specs/prompt-contracts/spec.md`.
+- **Memoria:** 2 decisiones promovidas (`affected-test-selection-hybrid-closed-manifest`, `affected-test-selection-complete-gate-fail-closed`) + 1 regla de cierre (`affected-test-selection-nonindexed-couplings`).
+
+**Pendiente:**
+
+- **CH-07 A/B:** sigue bloqueado por CH-00.
+- **T27/CH-01, CH-08/MEM-06, MEM-01, CH-09a–g, CH-10, #4, #6, #18:** diferimientos previos sin cambios.

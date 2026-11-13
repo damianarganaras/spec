@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-13T19:05:43Z
-pluginVersion: 0.33.0
+generatedAt: 2026-11-13T20:53:42Z
+pluginVersion: 0.33.1
 skillVersion: '2.3'
 ---
 
@@ -198,7 +198,7 @@ skillVersion: '2.3'
   discovery registra **337** porque su `config.exclude` omite 3 archivos bajo `__tests__/`. No es
   una inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.33.0`). No se usan como fuente de contenido;
+  gitignored; deben alinearse con `package.json` (`0.33.1`). No se usan como fuente de contenido;
   `memory.criticalKeys` se describe como seam de configuración, no como evidencia de la DB.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
@@ -319,26 +319,26 @@ skillVersion: '2.3'
   `**/*.md`, así que `test/affected-tests.json`, `test/test-selection.test.js`, la spec canónica y
   los artifacts archivados se leyeron directamente fuera del pack; el cuerpo cubre `src/`, `scripts/`
   (incluido el nuevo `test-affected.mjs`) y configuración versionada.
-- **Estado inicial del chequeo (0.33.0)**: el `discovery --check` previo al comando de regeneración
-  reflejaba el churn del change `ch-04` y el bump 0.33.0 (`STALE/minor` esperado); tras
-  `node src/cli/index.js discovery`, el estado persistido se reescribió y el `--check` de validación
-  devolvió `READY`/`impact: none`, `seedMapPresent: true` y `affectedDocs: []`. Esta
-  materialización consumió el pack único de 873 fuentes, 166.322 B (~41.187 tokens).
-- **Evidencia de 0.33.0**: se verificó leyendo `src/core/memory/database.js`
+- **Estado del chequeo (0.33.1)**: `node src/cli/index.js discovery` regeneró el pack único de 873
+  fuentes (166.779 B, ~41k tokens) y reescribió `.discovery-state.json`; el `--check` posterior
+  devolvió `READY`/`impact: none`, `seedMapPresent: true`, `missingDocs: []` y `affectedDocs: []`.
+  El delta 0.33.0→0.33.1 es el fix de `memory doctor --rebuild`, sin cambio de estructura.
+- **Evidencia de 0.33.0–0.33.1**: se verificó leyendo `src/core/memory/database.js`
   (`MEMORY_WRITE_RETRY_POLICY`, `MemoryDatabaseBusyError`, `runImmediateTransaction`,
   `isLockContention`), las cinco llamadas de `src/core/memory/engine.js` (`recordNode`, `import`,
-  `gc`, `merge`, `consolidate`), `test/memory-writers.test.js` y
-  `test/fixtures/memory-writer-child.mjs` (fuera del pack por el tier),
-  `test/affected-tests.json`, el delta archivado de `ch-04-memory-writer-serialization` y
-  `CHANGELOG.md`. No se ejecutó la suite ni se abrió `.ancleto/memory.db`.
-- **Límite de evidencia del pack 0.33.0**: el tier `minimo` excluye `test/**`, `docs/**` y
+  `gc`, `merge`, `consolidate`), `src/core/memory/doctor.js` (0.33.1: `doctor-rebuild` dentro del
+  helper, `rebuilt` sólo tras `COMMIT`, `MEMORY_DB_BUSY` en el detalle), `test/memory-writers.test.js`
+  y `test/fixtures/memory-writer-child.mjs` (fuera del pack por el tier),
+  `test/affected-tests.json`, los deltas archivados y `CHANGELOG.md`. No se ejecutó la suite ni se
+  abrió `.ancleto/memory.db`.
+- **Límite de evidencia del pack 0.33.1**: el tier `minimo` excluye `test/**`, `docs/**` y
   `**/*.md`, así que el oráculo, el fixture, la spec canónica y los artifacts archivados se leyeron
-  directamente fuera del pack; el cuerpo cubre `src/` (incluido `database.js`), `scripts/` y
-  configuración versionada.
+  directamente fuera del pack; el cuerpo cubre `src/` (incluidos `database.js` y `doctor.js`),
+  `scripts/` y configuración versionada.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.33.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.33.1`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -369,12 +369,13 @@ skillVersion: '2.3'
   (0.28.0), extendido en 0.29.0 a `documentation/**` y `audit logs/**` anclados a la raíz; el
   matcher de `discovery.exclude` corregido en 0.30.0 y extraído a `src/core/discovery-glob.js` con
   caché `Map` por glob exacto en 0.30.1, con `sources` 872→854 en 0.30.0, 857/22 tests en 0.30.1,
-  863 fuentes en 0.31.0, 869 fuentes / 23 tests en 0.32.0 y 873 fuentes / 24 tests en 0.33.0;
+  863 fuentes en 0.31.0, 869 fuentes / 23 tests en 0.32.0 y 873 fuentes / 24 tests en 0.33.0–0.33.1;
   `planTestSelection`, el flag aditivo
   `--tests`, el manifiesto `test/affected-tests.json` y el consumidor `scripts/test-affected.mjs`
   (0.32.0); `MEMORY_WRITE_RETRY_POLICY`, `MemoryDatabaseBusyError`, `runImmediateTransaction` y
   `isLockContention` con errcode 5/6 en `src/core/memory/database.js`, reutilizados por los cinco
-  writers del engine, y el oráculo `test/memory-writers.test.js` (0.33.0);
+  writers del engine y, desde 0.33.1, por `memoryDoctor --rebuild` (`doctor-rebuild`) con
+  integrity-check en la misma transacción; el oráculo `test/memory-writers.test.js` (0.33.0–0.33.1);
   `readCriticalMemoryKeys` con lectura tolerante y la política de fallo por
   superficie (CLI explícita, lifecycle, on-write/MCP, `merge`/`consolidate --apply`);
   los comentarios de `specs-merge.js` sobre H1 estructural y la identidad de path del contenedor

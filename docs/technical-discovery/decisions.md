@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-13T19:05:43Z
-pluginVersion: 0.33.0
+generatedAt: 2026-11-13T20:53:42Z
+pluginVersion: 0.33.1
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.33.0)
+## Modelos y tiers (estado 0.33.1)
 
 ### Tabla y cadenas
 
@@ -1187,7 +1187,7 @@ el consumidor declarado es `npm run test:affected` → `scripts/test-affected.mj
   cubierto sólo si ese test está en `always` o en un `coupling`; el plan no lo infiere por análisis
   estático del cuerpo.
 
-## Serialización de escritores de memoria (0.33.0)
+## Serialización de escritores de memoria (0.33.0–0.33.1)
 
 Change archivado: `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/` (cierra
 `CH-04`). Requirement canónico: «Serialización de escritores concurrentes sobre la base de memoria»
@@ -1205,8 +1205,11 @@ en `aspec/specs/memory-engine/spec.md`. El helper único es `runImmediateTransac
   `code: 'MEMORY_DB_BUSY'`, `name`, operación e intentos; el mensaje no incluye contenido ni
   secretos. Los errores que no son de lock (refs fail-closed, secretos, grupo inválido) hacen
   rollback y se propagan sin retry.
-- **Alcance**: la garantía cubre los cinco caminos del engine; `memory doctor --rebuild` es un sexto
-  camino mutante preexistente y queda fuera como deuda registrada. Los caminos read-only (`doctor`,
+- **Alcance (0.33.1)**: la garantía cubre los cinco caminos del engine más `memory doctor --rebuild`,
+  que desde 0.33.1 ejecuta su rebuild de FTS5 y su integrity-check dentro de
+  `runImmediateTransaction(db, 'doctor-rebuild', ...)`; el `doctor` por defecto sigue read-only y un
+  índice inconsistente se reporta igual porque `runIntegrity` captura sus propios errores. Al agotar
+  la contención, el detalle del check incluye `MEMORY_DB_BUSY`. Los caminos read-only (`doctor`,
   `curate`, dry-runs de `merge`/`consolidate`, `snapshot`, `createReadonlyMemoryEngine`) no
   adquieren retry, no escriben ni migran schema.
 - **Invariantes**: no cambian schema, PRAGMAs persistidos, `ruleVersion`, comandos ni flags; un
@@ -1274,7 +1277,7 @@ en `aspec/specs/memory-engine/spec.md`. El helper único es `runImmediateTransac
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.33.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.33.1`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +

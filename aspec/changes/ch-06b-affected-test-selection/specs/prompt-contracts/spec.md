@@ -5,10 +5,11 @@
 ### Requirement: Selección determinística de tests por affected-set con manifiesto cerrado
 
 `ancleto affected` SHALL exponer, bajo el flag aditivo `--tests`, un plan de selección de tests
-derivado del `affected-set`. `--tests` SHALL implicar salida JSON y NO SHALL modificar la salida ni
-los códigos de salida de `ancleto affected` cuando el flag está ausente: sin `--tests` el objeto JSON
-SHALL conservar exactamente `seeds`, `affected`, `unresolved` y `externalCount`, con los mismos
-valores y el mismo orden.
+derivado del `affected-set`. `--tests` SHALL implicar salida JSON y NO SHALL modificar la salida JSON
+de stdout ni los códigos de salida de `ancleto affected` cuando el flag está ausente: sin `--tests` el
+objeto JSON SHALL conservar exactamente `seeds`, `affected`, `unresolved` y `externalCount`, con los
+mismos valores y el mismo orden. El texto de uso y ayuda de `ancleto affected` SÍ puede mencionar
+`--tests` y NO SHALL considerarse parte de esa salida JSON.
 
 **Universo y manifiesto.** El universo `U` SHALL ser el conjunto de archivos bajo `test/` que
 matchean `*.test.js`, equivalente al glob declarado `test/*.test.js`. El manifiesto `M` SHALL ser el
@@ -31,8 +32,12 @@ SHALL quedar fuera de `selected` y de `excluded` a la vez, y ninguno SHALL figur
 **Gate de completitud.** `tests.complete` SHALL ser `true` sólo cuando el manifiesto sea válido y
 esté cerrado, el glob resuelva al menos un archivo y ningún archivo de `affected` tenga imports no
 resueltos. En caso contrario SHALL ser `false` y `tests.reasons` SHALL contener los códigos
-aplicables, únicos y ordenados lexicográficamente: `manifest-missing` o `manifest-invalid` cuando el
-manifiesto falte, no sea parseable, su `version` no sea `1` o declare rutas fuera de `U`;
+aplicables, únicos y ordenados lexicográficamente: `manifest-missing` cuando el archivo falte;
+`manifest-invalid` cuando el manifiesto se desvíe del esquema cerrado —no parseable, raíz que no sea
+objeto, `version` distinta de `1`, `always` o `couplings` que no sean arreglos, entradas que no sean
+strings no vacíos, `reason` vacío o en blanco, `trigger` o `tests` vacíos, glob de `trigger` con
+backslash, o ruta no repo-relative posix o fuera de `U`—; el rechazo SHALL ser fail-closed, es decir,
+toda desviación de ese esquema SHALL producir `manifest-invalid`;
 `manifest-gap` cuando un test de `U` no pueda ser seleccionado nunca por imports —su cierre de
 dependencias no toca `src/`— y no esté declarado en `M`; `test-glob-missing` cuando el glob no
 resuelva ningún archivo; y `unresolved-in-closure` cuando algún archivo de `affected` tenga imports no
@@ -130,9 +135,10 @@ introducido dentro de un test ya declarado SHALL seguir cubierto sólo si ese te
 
 #### Scenario: Manifiesto ausente, inválido o fuera de `U` abre el gate
 
-- **WHEN** el manifiesto falta, no es parseable, su `version` no es `1` o declara rutas fuera de `U`
+- **WHEN** el manifiesto falta, no es parseable, su `version` no es `1`, `always` o `couplings` no son arreglos, alguna entrada no es un string no vacío, `reason` está vacío o en blanco, `trigger` o `tests` están vacíos, un glob de `trigger` contiene backslash, o alguna ruta no es repo-relative posix o queda fuera de `U`
 - **THEN** `tests.complete` SHALL ser `false`
 - **AND** `tests.reasons` SHALL incluir `manifest-missing` o `manifest-invalid` según corresponda
+- **AND** el rechazo SHALL ser fail-closed: cualquier desviación del esquema cerrado SHALL producir `manifest-invalid`
 
 #### Scenario: Un glob sin archivos abre el gate
 

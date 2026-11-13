@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-13T14:56:12Z
-pluginVersion: 0.32.0
+generatedAt: 2026-11-13T19:05:43Z
+pluginVersion: 0.33.0
 skillVersion: '2.3'
 ---
 
@@ -297,6 +297,13 @@ test/                   suite node --test (content guards incluidos)
     `tests.selected` cuando `complete === true` y, en cualquier otro caso, imprime `tests.reasons` y
     corre la suite declarada. Sin `--tests`, la salida de `affected --json` no cambia y cierra
     `CH-06b`.
+34. **Serialización de escritores de memoria (0.33.0)**: los cinco caminos de escritura del engine
+    (`recordNode`, `import`, `gc`, `merge`, `consolidate`) comparten `runImmediateTransaction`
+    (`src/core/memory/database.js`): `BEGIN IMMEDIATE` + `COMMIT`, retry acotado de 3 intentos con
+    backoff 200/600 ms sólo para adquirir el lock ante `SQLITE_BUSY`/`SQLITE_LOCKED` (errcode 5/6) y
+    error nombrado `MEMORY_DB_BUSY` al agotar el presupuesto. No cambian schema, PRAGMAs persistidos,
+    comandos, flags ni `ruleVersion`; `memory doctor --rebuild` queda fuera de la garantía. Release
+    patch del change `ch-04-memory-writer-serialization`.
 
 ## Recorrido de una instalación con tier `minimo`
 

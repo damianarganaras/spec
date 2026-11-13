@@ -2,6 +2,16 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.33.0] - 2026-11-13
+
+### Added
+- **Los writers de `.ancleto/memory.db` serializan la adquisición del lock con retry acotado**: 3 intentos con backoff de 200/600 ms por encima de `busy_timeout` y `BEGIN IMMEDIATE`, y fallan con el error nombrado `MEMORY_DB_BUSY` en lugar de un `SQLITE_BUSY` crudo.
+- **Nuevo oráculo offline (`test/memory-writers.test.js`)**: prueba con una base temporal y procesos hijos que los writers concurrentes no pierden escrituras confirmadas, mantienen un único nodo activo por `memory_key` y dejan FTS5 + `quick_check` consistentes.
+
+### Notas
+- **Change `ch-04-memory-writer-serialization`**: su delta `ADDED` se mergeó en `memory-engine` como nueva garantía observable.
+- **Sin cambios** en el schema persistido, los PRAGMAs, `ruleVersion`, comandos ni flags.
+
 ## [0.32.0] - 2026-11-13
 
 ### Added

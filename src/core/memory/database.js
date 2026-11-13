@@ -95,3 +95,81 @@ export function checkpointDatabase(db) {
     return false
   }
 }
+
+// Presupuesto de contencion para la adquisicion del lock de escritura. Tres
+// intentos en total; 200 ms antes del segundo y 600 ms antes del tercero. Sin
+// jitter: el presupuesto es deterministico y acotado. Es la unica fuente de la
+// politica que consume `runImmediateTransaction`.
+export const MEMORY_WRITE_RETRY_POLICY = Object.freeze({
+  attempts: 3,
+  backoffMs: Object.freeze([200, 600])
+})
+
+// Contencion agotada: el lock no se pudo adquirir dentro del presupuesto. No
+// incluye contenido de nodos ni secretos, solo la operacion y los intentos.
+export class MemoryDatabaseBusyError extends Error {
+  constructor(operation, attempts) {
+    super(`la base de memoria siguio bloqueada tras ${attempts} intentos en la operacion ${operation}`)
+    this.name = 'MemoryDatabaseBusyError'
+    this.code = 'MEMORY_DB_BUSY'
+    this.operation = operation
+    this.attempts = attempts
+  }
+}
+
+// Node 24 expone el busy como `err.errcode = 5` (SQLITE_BUSY) o `6`
+// (SQLITE_LOCKED) y `err.code = 'ERR_SQLITE_ERROR'`; el nombre de libreria sigue
+// como respaldo por compatibilidad entre versiones.
+function isLockContention(err) {
+  if (!err) return false
+  // Mask to the primary code so extended codes (e.g. SQLITE_BUSY_SNAPSHOT = 517) still match.
+  const primary = typeof err.errcode === 'number' ? (err.errcode & 0xff) : null
+  if (primary === 5 || primary === 6) return true
+  return err.code === 'SQLITE_BUSY' || err.code === 'SQLITE_LOCKED'
+}
+
+let sleepBuffer = null
+function sleepSynchronously(ms) {
+  if (!sleepBuffer) sleepBuffer = new Int32Array(new SharedArrayBuffer(4))
+  Atomics.wait(sleepBuffer, 0, 0, ms)
+}
+
+// Transaccion de escritura unica: `BEGIN IMMEDIATE`, cuerpo y `COMMIT`. Solo se
+// reintenta la adquisicion del lock; una vez abierta la transaccion el cuerpo
+// nunca se re-ejecuta. Cualquier fallo del cuerpo o del `COMMIT` hace rollback y
+// propaga el error original.
+export function runImmediateTransaction(db, operation, fn, policy = MEMORY_WRITE_RETRY_POLICY) {
+  if (!Number.isInteger(policy.attempts) || policy.attempts < 1) {
+    throw new RangeError(`runImmediateTransaction requiere attempts entero >= 1, recibio ${policy.attempts}`)
+  }
+  for (let attempt = 1; attempt <= policy.attempts; attempt++) {
+    try {
+      db.exec('BEGIN IMMEDIATE')
+    } catch (err) {
+      if (!isLockContention(err)) throw err
+      if (attempt < policy.attempts) {
+        const rawWait = policy.backoffMs?.[attempt - 1]
+        const waitMs = Number.isFinite(rawWait) && rawWait >= 0 ? rawWait : 0
+        sleepSynchronously(waitMs)
+        continue
+      }
+      // El BEGIN fallido no dejo transaccion abierta.
+      throw new MemoryDatabaseBusyError(operation, attempt)
+    }
+
+    try {
+      const result = fn()
+      db.exec('COMMIT')
+      return result
+    } catch (err) {
+      // Guard: SQLite puede haber revertido solo; no se hace ROLLBACK sin
+      // transaccion activa porque ese error taparia el original.
+      try {
+        if (db.isTransaction) db.exec('ROLLBACK')
+      } catch {
+        // Rollback best-effort: se propaga el error original de todos modos.
+      }
+      throw err
+    }
+  }
+}

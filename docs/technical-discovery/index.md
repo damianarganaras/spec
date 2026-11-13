@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-13T14:56:12Z
-pluginVersion: 0.32.0
+generatedAt: 2026-11-13T19:05:43Z
+pluginVersion: 0.33.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (869 fuentes, ~40k tokens), `package.json` (`0.32.0`), `src/core/model-catalog.json` y
+`minimo` (873 fuentes, ~41k tokens), `package.json` (`0.33.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
@@ -53,6 +53,7 @@ paths citados (ver `unknowns.md`).
 | Memoria persistente: SQLite+FTS5, tools MCP, recall, refs, working-context, ops, doctor, curate | `units/memory-engine.md` |
 | **Conjunto crítico del working-context (0.31.0)**: `memory.criticalKeys` en `.ancletorc` (seam de configuración), claves inyectadas primero en orden declarado, lectura tolerante (ausente/no-array/entradas no-string → `[]`), fallo duro en `ancleto memory context` con `--out` sin sobrescribir, `console.warn` best-effort en lifecycle/on-write/MCP y exit ≠ 0 en `memory merge`/`consolidate --apply`; `<ContextOverflowWarning>` intacto | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **Selección de tests afectados (0.32.0)**: `ancleto affected --tests` agrega el objeto `tests` (`complete`, `reasons`, `selected`, `excluded`) al JSON existente, con el manifiesto cerrado `test/affected-tests.json` y el consumidor `npm run test:affected` que cae fail-closed a la suite completa | `decisions.md`, `setup.md`, `units/discovery-engine.md`, `units/cli-install.md` |
+| **Serialización de escritores de memoria (0.33.0)**: `runImmediateTransaction` (`BEGIN IMMEDIATE` + retry 3/200-600 ms), `MEMORY_DB_BUSY` y oráculo `test/memory-writers.test.js`; sin cambio de schema, PRAGMAs ni `ruleVersion` | `decisions.md`, `units/memory-engine.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -73,10 +74,15 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.32.0` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.33.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/` (0.33.0: `ADDED` de
+  `Serialización de escritores concurrentes sobre la base de memoria` en `memory-engine`;
+  `runImmediateTransaction` con `BEGIN IMMEDIATE` + retry acotado 3/200-600 ms, error nombrado
+  `MEMORY_DB_BUSY`, oráculo offline `test/memory-writers.test.js`; sin cambio de schema, PRAGMAs,
+  comandos, flags ni `ruleVersion`; cierra `CH-04`),
   `aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/` (0.32.0: `ADDED` del
   Requirement `Selección determinística de tests por affected-set con manifiesto cerrado` en
   `prompt-contracts`; `ancleto affected --tests` agrega `tests.complete|reasons|selected|excluded`,
@@ -166,15 +172,15 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-   archivos) mantienen el conteo; en 0.22.1-0.32.0 no cambió su cantidad.
-- **Pack actual**: 869 fuentes y ~40k tokens (164.782 B, comprimido, tier `minimo`), con 33 entradas
+   archivos) mantienen el conteo; en 0.22.1-0.33.0 no cambió su cantidad.
+- **Pack actual**: 873 fuentes y ~41k tokens (166.322 B, comprimido, tier `minimo`), con 33 entradas
    de archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del pack. El
-   `.discovery-map.json` de la corrida reporta 902 archivos (aspec 324, `.opencode` 66, docs 21,
-   test 31, src 22, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye 23
-   `test/*.test.js` por `discovery.exclude` desde 0.30.1; los 7 fixtures de `test/fixtures/**`
+   `.discovery-map.json` de la corrida reporta 907 archivos (aspec 327, `.opencode` 66, docs 21,
+   test 33, src 22, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye 24
+   `test/*.test.js` por `discovery.exclude` desde 0.30.1; los 8 fixtures de `test/fixtures/**`
    siguen incluidos.
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
-   citadas para reflejar 0.32.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
+   citadas para reflejar 0.33.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
    pasó a calcular `seedMapPresent` antes de clasificar el estado (vale en
    `READY`/`STALE`/`PARTIAL`/`MISSING`); en 0.26.1 el detector de frescura quedó documentado y
    pineado en `cli-diagnostics`; en 0.26.4 la suite declarada sumó el guard estructural de los delta
@@ -207,6 +213,11 @@ paths citados (ver `unknowns.md`).
    y el módulo puro `src/core/test-selection.js`: el flag es aditivo, implica JSON y suma el objeto
    `tests` sin alterar los cuatro campos de `affected --json`; el plan es read-only y determinístico,
    y su gate `complete` es fail-closed (manifiesto ausente/inválido, `manifest-gap`,
-   `test-glob-missing` o `unresolved-in-closure`). `affectedDocs` sigue poblándose sólo en
-   `STALE`. El `ancleto discovery --check` de validación reportó `READY`/`impact: none` con
-   `changedAreas: []`, `seedMapPresent: true` y `affectedDocs: []`.
+    `test-glob-missing` o `unresolved-in-closure`). `affectedDocs` sigue poblándose sólo en
+    `STALE`. En 0.33.0 los cinco writers del engine comparten `runImmediateTransaction`
+    (`BEGIN IMMEDIATE` + retry de 3 intentos con backoff 200/600 ms) y fallan con `MEMORY_DB_BUSY`
+    al agotar el presupuesto; el oráculo offline es `test/memory-writers.test.js`. Schema, PRAGMAs
+    persistidos, comandos, flags y `ruleVersion` no cambian; `memory doctor --rebuild` queda fuera
+    de la garantía. El `ancleto discovery --check` de validación, tras regenerar el estado,
+    reportó `READY`/`impact: none` con `changedAreas: []`, `seedMapPresent: true` y
+    `affectedDocs: []`.

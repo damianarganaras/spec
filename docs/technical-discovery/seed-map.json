@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-13T14:56:12Z",
+  "generatedAt": "2026-11-13T19:05:43Z",
   "docs": {
     "index.md": ["package.json", "src", "agents", "skills", "commands", "aspec", "scripts", "test", "docs", "profiles", "README.md", "CHANGELOG.md", "AGENTS.md", "PRODUCT.md", ".ancletorc", ".opencode", ".discovery-map.json", "documentation", "audit logs"],
     "overview.md": ["package.json", "src", "agents", "skills", "commands", "templates", "profiles", "aspec", "scripts", "test", "docs", "README.md", "PRODUCT.md", "CHANGELOG.md", ".ancletorc", ".opencode", "documentation", "audit logs", ".gitignore"],

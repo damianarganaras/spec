@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
-covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
-sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-13T14:56:12Z
-pluginVersion: 0.32.0
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor, la promoción de decisiones al archivar y la serialización de escritores concurrentes (MEMORY_DB_BUSY)"
+covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode, serialización de escritores, MEMORY_DB_BUSY, retry acotado, runImmediateTransaction]
+sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization", "test/memory-writers.test.js", "test/fixtures/memory-writer-child.mjs", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
+generatedAt: 2026-11-13T19:05:43Z
+pluginVersion: 0.33.0
 skillVersion: '2.3'
 ---
 
@@ -41,6 +41,10 @@ normalización del `version` del `package.json` raíz, el filtro de rutas efíme
 sólo en el renderer**: `working-context.js` lee el conjunto crítico de `.ancletorc` y lo pasa como
 `required`; el engine, el esquema, el recall y las ops no cambian. **0.32.0 no toca esta unidad**:
 la selección de tests (`src/core/test-selection.js`) es read-only y no abre `.ancleto/memory.db`.
+**0.33.0 sí toca el camino de escritura**: los cinco writers del engine comparten
+`runImmediateTransaction` (`src/core/memory/database.js`) con retry acotado y error nombrado
+`MEMORY_DB_BUSY`; schema, PRAGMAs persistidos, recall y ops no cambian (ver "Escritura y
+supersesión").
 
 ## Recorrido relevante
 
@@ -59,6 +63,18 @@ la selección de tests (`src/core/test-selection.js`) es read-only y no abre `.a
   La validación de refs y secretos corre antes de la comprobación de identidad, así que un rechazo
   nunca se convierte en no-op. `importNodes` no cambia: conserva su semántica last-writer-wins por
   `createdAt`.
+- **Serialización de escritores (0.33.0)**: `runImmediateTransaction(db, operation, fn, policy)`
+  (`database.js`) es el único helper de transacción de escritura: abre con `BEGIN IMMEDIATE`, ejecuta
+  el cuerpo y hace `COMMIT`; ante cualquier error del cuerpo o del `COMMIT` hace `ROLLBACK` sólo si
+  `db.isTransaction` y propaga el error original. `MEMORY_WRITE_RETRY_POLICY` fija 3 intentos y
+  backoff de 200/600 ms sin jitter. Sólo se reintenta la **adquisición** del lock ante
+  `SQLITE_BUSY`/`SQLITE_LOCKED` (`errcode` 5/6, enmascarado a los 8 bits bajos para cubrir codes
+  extendidos como 517); una transacción ya abierta nunca se re-ejecuta. Al agotar el presupuesto se
+  lanza `MemoryDatabaseBusyError` (`code: 'MEMORY_DB_BUSY'`), que nombra la operación y los intentos
+  y no incluye contenido ni secretos. Los cinco caminos —`recordNode`, `import`, `gc`, `merge` y
+  `consolidate`— lo comparten; `doctor`, `curate`, los dry-runs, `snapshot` y el engine read-only no
+  adquieren retry. El oráculo offline es `test/memory-writers.test.js` con el fixture
+  `test/fixtures/memory-writer-child.mjs`, sobre una base temporal y procesos hijos.
 - La procedencia decide una sola cosa: si la escritura pasa por validación de refs. La excepción es
   el valor exacto `runtime`; el resto se valida fail-closed.
 
@@ -165,6 +181,10 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
   inactiva o fuera de presupuesto falla visiblemente según la superficie.
 - **Riesgo de consistencia**: `merge`/`consolidate` revalidan bajo lock y abortan si el target dejó
   de estar activo; `gc` usa un cutoff único para SELECT y DELETE.
+- **Riesgo de contención (0.33.0)**: el retry es acotado (3 intentos, 200/600 ms) para no ampliar la
+  latencia indefinidamente; bajo un lock retenido más allá del presupuesto la operación falla con
+  `MEMORY_DB_BUSY` y sin transacción abierta. `memory doctor --rebuild`, sexto camino mutante
+  preexistente, queda fuera de la garantía del helper y se registra como deuda.
 - **MCP**: `src/core/memory/mcp-server.js` expone `searchMemory`, `recordRule` y `recordDecision`
   por stdio; stdout es el canal JSON-RPC y los avisos van a stderr.
 - **Orden del archive (0.22.1)**: la promoción es una escritura de memoria disparada por el archive,
@@ -180,7 +200,7 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 | Path | Rol |
 |---|---|
 | `src/core/memory/engine.js` | Núcleo: recall, refs, supersesión, ops, consolidate |
-| `src/core/memory/database.js` | Apertura, migraciones aditivas, checkpoint WAL |
+| `src/core/memory/database.js` | Apertura, migraciones aditivas, checkpoint WAL, `runImmediateTransaction`, política de retry y `MemoryDatabaseBusyError` (0.33.0) |
 | `src/core/memory/tools.js` | Handlers de `searchMemory`/`recordRule`/`recordDecision` |
 | `src/core/memory/mcp-server.js` | Servidor MCP stdio |
 | `src/core/memory/working-context.js` | Render, refresh, frescura y lectura de `memory.criticalKeys` |
@@ -188,8 +208,10 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 | `src/core/memory/curation.js` | Curaduría read-only de refs y duplicados |
 | `src/core/memory/snapshot.js` | Copia consistente con historial |
 | `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move |
-| `aspec/specs/memory-engine/spec.md` | Requirement de idempotencia de reescritura idéntica en `recordNode` (0.23.0); `Orden determinístico de inyección de reglas` con 7 escenarios y `Conjunto crítico estable del working-context` (0.31.0) |
+| `aspec/specs/memory-engine/spec.md` | Requirement de idempotencia de reescritura idéntica en `recordNode` (0.23.0); `Orden determinístico de inyección de reglas` con 7 escenarios y `Conjunto crítico estable del working-context` (0.31.0); desde 0.33.0 `Serialización de escritores concurrentes sobre la base de memoria` |
 | `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` | Delta `ADDED` del conjunto crítico y `MODIFIED` del orden determinístico; `MEM-05` cerrado en 0.31.0 |
+| `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/` | Delta `ADDED` de serialización de escritores concurrentes; cierra `CH-04` en 0.33.0 |
+| `test/memory-writers.test.js`, `test/fixtures/memory-writer-child.mjs` | Oráculo offline de escritores concurrentes y fixture de proceso hijo (0.33.0) |
 | `aspec/specs/cli-diagnostics/spec.md` | Fuera de esta unidad: contrato de frescura del seed (0.26.1) que no toca el motor |
 | `agents/orchestrator.md` | Secuencia del archive y delegación de la promoción entre fase A y fase B |
 | `agents/documenter.md` | Fase A (merge, sin move) y fase B (move, sólo tras la promoción) |

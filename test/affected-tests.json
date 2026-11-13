@@ -13,7 +13,8 @@
         "test/memory-engine.test.js",
         "test/memory-pr1-contract.test.js",
         "test/specs-merge.test.js",
-        "test/stats-failures.test.js"
+        "test/stats-failures.test.js",
+        "test/test-selection.test.js"
       ],
       "reason": "suites spawn the CLI without importing it, so the import graph has no edge to src/cli"
     },
@@ -51,6 +52,21 @@
       ],
       "tests": ["test/cli.test.js"],
       "reason": "cli suite copies source/assets and reads package.json, README and agent frontmatter as text"
+    },
+    {
+      "trigger": ["aspec/changes/**"],
+      "tests": ["test/delta-spec-structure.test.js"],
+      "reason": "delta-spec-structure scans active aspec/changes deltas as text without importing them"
+    },
+    {
+      "trigger": ["test/fixtures/**"],
+      "tests": ["test/memory-fixtures.test.js"],
+      "reason": "memory-fixtures reads JSON fixtures and refs-root under test/fixtures without importing them"
+    },
+    {
+      "trigger": ["test/**", "scripts/test-affected.mjs"],
+      "tests": ["test/test-selection.test.js"],
+      "reason": "test-selection enumerates test/*.test.js, reads the real manifest and spawns the consumer script without importing them"
     },
     {
       "trigger": ["agents/**", "profiles/**", "src/**"],

@@ -64,6 +64,9 @@ function validateManifest(data, universe) {
     if (!coupling || typeof coupling !== 'object' || Array.isArray(coupling)) return { status: 'invalid' }
     const { trigger, tests, reason } = coupling
     if (!isStringArray(trigger) || !isStringArray(tests)) return { status: 'invalid' }
+    // Un coupling sin trigger o sin tests es un nodo muerto: no puede seleccionar
+    // nada. Se rechaza para que el manifiesto no valide declaraciones inertes.
+    if (trigger.length === 0 || tests.length === 0) return { status: 'invalid' }
     if (!isNonEmptyString(reason) || reason.trim() === '') return { status: 'invalid' }
     if (trigger.some((glob) => glob.includes('\\'))) return { status: 'invalid' }
     for (const path of tests) {

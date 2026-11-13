@@ -65,22 +65,22 @@ Fuera del file-set: `src/core/affected-set.js`, `test/affected-set.test.js` (su 
 
 ## Fase 6 — Tests
 
-- [ ] 6.1 Crear `test/test-selection.test.js` con unit tests del módulo puro: universo `U`, validación del manifiesto, unión de `selected` y complemento `excluded`.
-- [ ] 6.2 Pin: sin `--tests`, el JSON de `ancleto affected` conserva exactamente `seeds`, `affected`, `unresolved` y `externalCount`, sin `tests`.
-- [ ] 6.3 Pin: `--tests` selecciona por import, por coupling declarado y por `always`; `excluded` enumera el complemento exacto con `reason: "not-affected"`.
-- [ ] 6.4 Pin: un test de `U` sin import a `src/` y no declarado produce `complete:false` con `manifest-gap`.
-- [ ] 6.5 Pin: un archivo de `affected` con imports irresolubles produce `complete:false` con `unresolved-in-closure`.
-- [ ] 6.6 Pin: manifiesto ausente/inválido/versión distinta/rutas fuera de `U` produce `complete:false` con `manifest-missing` o `manifest-invalid`; glob sin archivos produce `test-glob-missing`.
-- [ ] 6.7 Pin: dos corridas con la misma semilla producen JSON byte-idéntico y orden estable en `selected`/`excluded`/`reasons`.
-- [ ] 6.8 Pin: el consumidor en `--plan-only`/`--json` no ejecuta tests, y con `complete:false` cae a la suite completa imprimiendo `reasons`.
-- [ ] 6.9 Pin de invariante negativa: `complete:true` no promete completitud semántica universal; un acoplamiento no-import dentro de un test declarado sólo se cubre si ese test está en `always`/`coupling`.
-- [ ] 6.10 Verificar que `test/affected-set.test.js:505-533` sigue verde sin debilitar su invariante negativa.
+- [x] 6.1 Crear `test/test-selection.test.js` con unit tests del módulo puro: universo `U`, validación del manifiesto, unión de `selected` y complemento `excluded`.
+- [x] 6.2 Pin: sin `--tests`, el JSON de `ancleto affected` conserva exactamente `seeds`, `affected`, `unresolved` y `externalCount`, sin `tests`.
+- [x] 6.3 Pin: `--tests` selecciona por import, por coupling declarado y por `always`; `excluded` enumera el complemento exacto con `reason: "not-affected"`.
+- [x] 6.4 Pin: un test de `U` sin import a `src/` y no declarado produce `complete:false` con `manifest-gap`.
+- [x] 6.5 Pin: un archivo de `affected` con imports irresolubles produce `complete:false` con `unresolved-in-closure`.
+- [x] 6.6 Pin: manifiesto ausente/inválido/versión distinta/rutas fuera de `U` produce `complete:false` con `manifest-missing` o `manifest-invalid`; glob sin archivos produce `test-glob-missing`.
+- [x] 6.7 Pin: dos corridas con la misma semilla producen JSON byte-idéntico y orden estable en `selected`/`excluded`/`reasons`.
+- [x] 6.8 Pin: el consumidor en `--plan-only`/`--json` no ejecuta tests, y con `complete:false` cae a la suite completa imprimiendo `reasons`.
+- [x] 6.9 Pin de invariante negativa: `complete:true` no promete completitud semántica universal; un acoplamiento no-import dentro de un test declarado sólo se cubre si ese test está en `always`/`coupling`.
+- [x] 6.10 Verificar que `test/affected-set.test.js:505-533` sigue verde sin debilitar su invariante negativa.
 
 ## Fase 7 — Validación
 
 - [x] 7.1 Ejecutar `npm run lint` (declarado en `PRODUCT.md` → `## Project Commands`).
-- [ ] 7.2 Ejecutar `node --test "test/test-selection.test.js" "test/affected-set.test.js"` con rutas explícitas durante la implementación.
-- [ ] 7.3 Ejecutar `npm test` (`node --test "test/*.test.js"`) y confirmar la suite completa en verde.
+- [x] 7.2 Ejecutar `node --test "test/test-selection.test.js" "test/affected-set.test.js"` con rutas explícitas durante la implementación.
+- [x] 7.3 Ejecutar `npm test` (`node --test "test/*.test.js"`) y confirmar la suite completa en verde.
 
 ## Fase 8 — Spec sync y release
 

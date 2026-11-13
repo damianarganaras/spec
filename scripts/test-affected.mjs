@@ -47,9 +47,10 @@ const { cwd, planOnly, seeds } = state
 
 if (planOnly) {
   if (seeds.length === 0) {
-    console.error('ancleto: test-affected: sin semillas; el consumidor ejecutaria la suite completa')
-    console.log(JSON.stringify({ complete: false, reasons: [], selected: [], excluded: [] }, null, 2))
-    process.exit(0)
+    // Sin semillas no hay plan: no se emite uno vacío con `reasons: []`, que
+    // violaría el invariante `reasons` vacío ⇔ `complete: true`.
+    console.error('ancleto: uso: test-affected [--cwd <dir>] [--plan-only|--json] <semillas...>')
+    process.exit(1)
   }
   try {
     console.log(JSON.stringify(planTestSelection({ rootDir: cwd, seeds }), null, 2))

@@ -3816,7 +3816,7 @@ async function affectedCommand(args) {
   const asJson = args.includes('--json') || asTests
   const ci = args.indexOf('--cwd')
   if (ci >= 0 && ci + 1 >= args.length) {
-    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] <archivo...>')
+    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] [--tests] <archivo...>')
     process.exit(1)
   }
   const cwd = ci >= 0 ? resolve(args[ci + 1]) : process.cwd()
@@ -3832,7 +3832,7 @@ async function affectedCommand(args) {
     seeds.push(a)
   }
   if (seeds.length === 0) {
-    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] <archivo...>')
+    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] [--tests] <archivo...>')
     process.exit(1)
   }
   const { seeds: normalizedSeeds, affected, unresolved, externalCount } = computeAffectedSet({

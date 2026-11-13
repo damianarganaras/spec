@@ -20,6 +20,7 @@ import { writeDiscoveryMap } from '../core/discovery.js'
 import { buildDiscoveryState, renderDiscoveryState } from '../core/discovery-state.js'
 import { escapeRe, matchesGlob } from '../core/discovery-glob.js'
 import { computeAffectedSet } from '../core/affected-set.js'
+import { planTestSelection } from '../core/test-selection.js'
 import { mergeSpecText } from '../core/specs-merge.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
@@ -74,7 +75,7 @@ Uso:
   ancleto specs merge --change <slug> [--dry-run] [--json]
                                     Aplica el delta del change sobre los specs canonicos existentes
                                     (ADDED/MODIFIED/REMOVED/RENAMED por titulo exacto; fail-closed)
-  ancleto affected [--cwd <dir>] [--json] <archivo...>
+  ancleto affected [--cwd <dir>] [--json] [--tests] <archivo...>
                                    Computa el affected-set (clausura de dependientes por el grafo
                                    de imports) sembrado por los archivos dados (read-only; reporta
                                    el conteo de specifiers externos no relativos como dato)
@@ -3809,10 +3810,13 @@ async function specsCommand(args) {
 
 // Read-only: computa el affected-set (dependientes incluidos) sin escribir nada.
 async function affectedCommand(args) {
-  const asJson = args.includes('--json')
+  const asTests = args.includes('--tests')
+  // `--tests` es aditivo e implica salida JSON: agrega el plan sin cambiar el
+  // objeto de cuatro campos que devuelve `--json` solo.
+  const asJson = args.includes('--json') || asTests
   const ci = args.indexOf('--cwd')
   if (ci >= 0 && ci + 1 >= args.length) {
-    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] <archivo...>')
+    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] [--tests] <archivo...>')
     process.exit(1)
   }
   const cwd = ci >= 0 ? resolve(args[ci + 1]) : process.cwd()
@@ -3820,6 +3824,7 @@ async function affectedCommand(args) {
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (a === '--json') continue
+    if (a === '--tests') continue
     if (a === '--cwd') {
       i += 1
       continue
@@ -3827,7 +3832,7 @@ async function affectedCommand(args) {
     seeds.push(a)
   }
   if (seeds.length === 0) {
-    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] <archivo...>')
+    console.error('ancleto: uso: ancleto affected [--cwd <dir>] [--json] [--tests] <archivo...>')
     process.exit(1)
   }
   const { seeds: normalizedSeeds, affected, unresolved, externalCount } = computeAffectedSet({
@@ -3835,7 +3840,11 @@ async function affectedCommand(args) {
     seeds
   })
   if (asJson) {
-    console.log(JSON.stringify({ seeds: normalizedSeeds, affected, unresolved, externalCount }, null, 2))
+    const payload = { seeds: normalizedSeeds, affected, unresolved, externalCount }
+    if (asTests) {
+      payload.tests = planTestSelection({ rootDir: cwd, seeds, affected, unresolved })
+    }
+    console.log(JSON.stringify(payload, null, 2))
     return
   }
   for (const f of affected) console.log(f)

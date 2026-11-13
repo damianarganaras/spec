@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-13T02:37:23Z
-pluginVersion: 0.31.0
+generatedAt: 2026-11-13T14:56:12Z
+pluginVersion: 0.32.0
 skillVersion: '2.3'
 ---
 
@@ -42,6 +42,7 @@ src/core/
   discovery.js          mapa topológico (.discovery-map.json)
   repomix-tier.js       configuración de pack por tier (ignores/compresión/presupuesto)
   affected-set.js       grafo de imports y clausura de dependientes
+  test-selection.js     plan de tests sobre el affected-set + manifiesto cerrado
   specs-merge.js        merge puro de delta specs sobre specs canónicos (0.22.0)
   machine-env.js        detección y render de .ancleto/machine-env.md
   adapters/frontmatter.js  adaptación pura de frontmatter por host (+ frontmatterValue)
@@ -82,6 +83,7 @@ test/                   suite node --test (content guards incluidos)
 | Catálogo de modelos | Snapshot versionado; helpers puros; integridad de IDs y refresco manual dev-only | `src/core/model-catalog.js`, `src/core/model-catalog.json`, `scripts/refresh-model-catalog.mjs` |
 | Discovery | Topología, fuentes, hashes, impacto y estado del seed | `src/core/discovery.js`, `src/cli/index.js` |
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
+| Selección de tests | Plan determinístico sobre el affected-set; manifiesto cerrado y gate fail-closed para `npm run test:affected` | `src/core/test-selection.js`, `test/affected-tests.json`, `scripts/test-affected.mjs` |
 | Memoria | Nodos, supersesión, refs, recall, working-context y conjunto crítico (`memory.criticalKeys`) | `src/core/memory/*` |
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
@@ -287,6 +289,14 @@ test/                   suite node --test (content guards incluidos)
     sobrescribir el archivo), advisory con `console.warn` en lifecycle/on-write del MCP y ≠ 0 en
     `memory merge`/`consolidate --apply`. `<ContextOverflowWarning>` no cambia; release minor del
     change `mem-05-working-context-critical-set`.
+33. **Selección de tests afectados (0.32.0)**: `ancleto affected --tests` agrega el objeto `tests` al
+    JSON y el módulo puro `src/core/test-selection.js` computa el plan reutilizando el affected-set,
+    sin duplicar el grafo ni escribir archivos. `test/affected-tests.json` (esquema `version: 1` con
+    `always` y `couplings`) declara los acoplamientos que el grafo de imports no puede ver —suites que
+    spawnean el CLI o leen Markdown como texto—; `scripts/test-affected.mjs` ejecuta sólo
+    `tests.selected` cuando `complete === true` y, en cualquier otro caso, imprime `tests.reasons` y
+    corre la suite declarada. Sin `--tests`, la salida de `affected --json` no cambia y cierra
+    `CH-06b`.
 
 ## Recorrido de una instalación con tier `minimo`
 

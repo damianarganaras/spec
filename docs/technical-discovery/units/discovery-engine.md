@@ -1,11 +1,11 @@
 ---
 node: units/discovery-engine
 kind: dossier
-read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
-covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
-sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/discovery-glob.js", "src/core/discovery-state.js", "scripts/refresh-model-catalog.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state"]
-generatedAt: 2026-11-13T02:37:23Z
-pluginVersion: 0.31.0
+read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la selección de tests afectados, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
+covers: [topologia, empaquetado, tiers, tokens, affected-set, seleccion-de-tests, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
+sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/discovery-glob.js", "src/core/discovery-state.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection"]
+generatedAt: 2026-11-13T14:56:12Z
+pluginVersion: 0.32.0
 skillVersion: '2.3'
 ---
 
@@ -48,6 +48,9 @@ anclaje ni semántica. **0.30.2** tampoco cambia la frescura: es un patch docume
 estado persistido (`version: 1` + `ruleVersion: 2`) del `schemaVersion: 2` de `--check` y pinea el
 armado offline en `src/core/discovery-state.js` sin alterar los bytes persistidos. **0.31.0** no toca
 el discovery ni la frescura: sólo cambia el renderer del working-context, fuera de este módulo.
+**0.32.0** sí suma un módulo a esta unidad —`src/core/test-selection.js`— y un consumidor
+(`scripts/test-affected.mjs`), pero no toca el discovery, la frescura, el writer ni el estado: el
+plan se computa en memoria sobre el affected-set.
 `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, el writer, la forma del estado y `ruleVersion: 2`
 siguen intactos.
 
@@ -298,6 +301,29 @@ no cambia este contrato.
 **dependientes**. Los specifiers no relativos se cuentan como externos (`externalCount`); los
 relativos que no resuelven se reportan como inconclusos. Es read-only y determinístico.
 
+### Selección de tests afectados (0.32.0)
+
+`ancleto affected --tests <archivos...>` implica JSON y agrega `tests` al objeto de
+`affectedCommand` (`seeds`, `affected`, `unresolved`, `externalCount`), sin cambiar la salida ni los
+exit codes cuando el flag falta. `planTestSelection({ rootDir, seeds, affected, unresolved })`
+(`src/core/test-selection.js`) es puro y read-only: toma `U` = `test/*.test.js` (hijos directos de
+`test/`) y el manifiesto `test/affected-tests.json`; valida el esquema cerrado `version: 1` con
+`always` y `couplings` (rutas repo-relative posix dentro de `U`), y computa:
+
+1. tests de `U` presentes en `affected`;
+2. tests de `always`;
+3. tests de cada `coupling` cuyo `trigger` interseca `affected` por `matchesGlob` —cubre suites que
+   spawnean el CLI o leen Markdown sin importarlo—;
+4. tests de `U` con imports irresolubles, por precaución.
+
+`excluded` es el complemento exacto con `reason: "not-affected"`. `complete` es `true` sólo si el
+manifiesto es válido y cerrado, el glob resuelve al menos un archivo y ningún archivo de `affected`
+tiene imports no resueltos; las razones son `manifest-missing`, `manifest-invalid`, `manifest-gap`,
+`test-glob-missing` y `unresolved-in-closure` (lista cerrada y ordenada). El consumidor
+`scripts/test-affected.mjs` sólo ejecuta `node --test <selected>` con `complete: true` y selección no
+vacía; en cualquier otro caso imprime las razones y corre la suite completa declarada
+`test/*.test.js`. `--plan-only`/`--json` emite el plan sin ejecutar.
+
 ## Reglas, contratos y riesgos
 
 - **Área** = primer segmento del path; los archivos raíz son su propia área. Es la misma convención
@@ -312,11 +338,11 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
   filtro a `documentation/**` y `audit logs/**`; un estado legacy sin `fileHashes` sigue
   `STALE`/`minor`.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 863 fuentes, 161.700 B y ~40k tokens, tier `minimo` (comprimido), con 31 entradas
-  de archivo en el cuerpo. El `.discovery-map.json` observado reporta 895 archivos (aspec 321,
-  `.opencode` 66, src 21, test 29, docs 21, documentation 340, audit logs 9); el estado
-  `.discovery-state.json` lista 863 fuentes e incluye 674 entradas `documentation/` + 18
-  `audit logs/` entre `sources` y `fileHashes`, efímeras desde 0.29.0. Las 22 rutas
+- **Pack actual**: 869 fuentes, 164.782 B y ~40k tokens, tier `minimo` (comprimido), con 33 entradas
+  de archivo en el cuerpo. El `.discovery-map.json` observado reporta 902 archivos (aspec 324,
+  `.opencode` 66, src 22, test 31, scripts 2, docs 21, documentation 340, audit logs 9); el estado
+  `.discovery-state.json` lista 869 fuentes e incluye 674 entradas `documentation/` + 18
+  `audit logs/` entre `sources` y `fileHashes`, efímeras desde 0.29.0. Las 23 rutas
   `test/*.test.js` ya no figuran en `sources` por `discovery.exclude` (0.30.1); los 7 fixtures de
   `test/fixtures/**` siguen incluidos.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en
@@ -329,7 +355,11 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
   host. Mitigación: refresco manual con `--refresh`, aviso a los 90 días, guard de integridad y gate
   de `--write`.
 - **Riesgo de alcance**: `affected-set` acota por diseño las formas dinámicas no literales; no es un
-  análisis semántico.
+  análisis semántico. Desde 0.32.0 el plan de tests hereda ese límite y lo mitiga con el manifiesto
+  cerrado: `complete: true` no promete completitud semántica, sólo manifiesto cerrado, universo
+  clasificado y cierre sin imports irresolubles. Un acoplamiento no-import nuevo dentro de un test ya
+  declarado se cubre sólo si el test está en `always` o en un `coupling`; `planTestSelection` no
+  analiza el cuerpo del test.
 
 ## Paths clave
 
@@ -338,6 +368,9 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
 | `src/core/discovery.js` | Mapa topológico y `readTopologySummary` |
 | `src/core/repomix-tier.js` | Args de Repomix, ignores y presupuesto por tier |
 | `src/core/affected-set.js` | Grafo de imports y clausura de dependientes |
+| `src/core/test-selection.js` | `planTestSelection`: plan determinístico de tests sobre el affected-set y gate `complete` fail-closed (0.32.0) |
+| `scripts/test-affected.mjs` | Consumidor `npm run test:affected`: ejecuta `selected` o cae a la suite completa (0.32.0) |
+| `test/affected-tests.json` | Manifiesto cerrado `version: 1` con `always` y `couplings` que declaran acoplamientos sin arista de import (0.32.0) |
 | `src/core/tier-models.js` | `TIERS`, `TIER_CHAINS`, resolver, `declaredModelIds` y `freeTierOnPrimary` |
 | `src/core/model-catalog.js` | Helpers puros, IDs del catálogo e integridad |
 | `src/core/model-catalog.json` | Snapshot verificado de modelos (5 proveedores / 211 IDs) |

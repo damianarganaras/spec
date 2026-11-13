@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.32.0] - 2026-11-13
+
+### Added
+- **`ancleto affected --tests` publica el plan de selección de tests**: la salida suma `tests.complete`, `tests.reasons`, `tests.selected` y `tests.excluded`, respaldada por el manifiesto cerrado `test/affected-tests.json`. El consumidor `npm run test:affected` usa ese plan y cae fail-closed a la suite completa cuando no puede seleccionar.
+
+### Notas
+- **Compatible**: sin `--tests`, el JSON de `ancleto affected` no cambia.
+- **Interno**: la selección vive en `src/core/test-selection.js` y los pins en `test/test-selection.test.js`.
+
 ## [0.31.0] - 2026-11-12
 
 ### Added

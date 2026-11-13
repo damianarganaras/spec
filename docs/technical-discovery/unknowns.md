@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-13T02:37:23Z
-pluginVersion: 0.31.0
+generatedAt: 2026-11-13T14:56:12Z
+pluginVersion: 0.32.0
 skillVersion: '2.3'
 ---
 
@@ -20,10 +20,10 @@ skillVersion: '2.3'
   `reconcileLegacyBlocks`, `specsMergeCommand`, `resolveChangeDir`, `specsCommand`,
   `isEphemeralSource`, `isEphemeralOnlyChange`,
   `src/core/memory/engine.js` → `recordNode`; `src/core/specs-merge.js`;
-   `src/core/tier-models.js`), no en el pack solo. El estado del pack registra 863 fuentes
-   (161.700 B, ~40k tokens) y su cuerpo contiene 31 entradas de archivo, porque `**/*.md`, `test/**`,
-   `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y los Markdown
-   excluidos se verificaron por lectura directa.
+   `src/core/tier-models.js`, `src/core/test-selection.js`), no en el pack solo. El estado del pack
+   registra 869 fuentes (164.782 B, ~40k tokens) y su cuerpo contiene 33 entradas de archivo, porque
+   `**/*.md`, `test/**`, `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y
+   los Markdown excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
   su ignore por defecto de Markdown. `README.md`, `CHANGELOG.md`, `AGENTS.md`, `PRODUCT.md`,
   `agents/**`, `skills/**`, `aspec/specs/**` y `aspec/changes/**` no están en el pack. Las
@@ -181,12 +181,12 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **895 archivos** (aspec 321,
-  `.opencode` 66, docs 21, test 29, src 21, documentation 340, audit logs 9, etc.). El pack registra
-  **863 fuentes** (161.700 B, ~40k tokens) y 31 entradas de archivo porque los globs de `discovery.exclude`
-  omiten tests, lockfiles, imágenes y `public`; además Repomix filtra por sus propios ignores.
-  Desde 0.30.0 `**/*.test.*`/`**/*.spec.*` vuelven a aplicar; desde 0.30.1 las 22 rutas
-  `test/*.test.js` dejan de figurar en `sources`; los 7 fixtures bajo `test/fixtures/memory/`
+- **`.discovery-map.json` observado**: el generador reporta **902 archivos** (aspec 324,
+  `.opencode` 66, docs 21, test 31, src 22, scripts 2, documentation 340, audit logs 9, etc.). El pack
+  registra **869 fuentes** (164.782 B, ~40k tokens) y 33 entradas de archivo porque los globs de
+  `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además Repomix filtra por sus
+  propios ignores. Desde 0.30.0 `**/*.test.*`/`**/*.spec.*` vuelven a aplicar; desde 0.30.1 las 23
+  rutas `test/*.test.js` dejan de figurar en `sources`; los 7 fixtures bajo `test/fixtures/memory/`
   siguen incluidos.
   `.ancleto/**` y `.discovery-map.json` raíz siguen en `sources`/`fileHashes` del estado, pero desde
   0.28.0 no cuentan para la frescura. Desde 0.29.0 tampoco cuentan `documentation/**` ni
@@ -197,7 +197,7 @@ skillVersion: '2.3'
   discovery registra **337** porque su `config.exclude` omite 3 archivos bajo `__tests__/`. No es
   una inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.31.0`). No se usan como fuente de contenido;
+  gitignored; deben alinearse con `package.json` (`0.32.0`). No se usan como fuente de contenido;
   `memory.criticalKeys` se describe como seam de configuración, no como evidencia de la DB.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
@@ -302,10 +302,26 @@ skillVersion: '2.3'
   `**/*.md`, por lo que la spec canónica, el backlog y los artifacts archivados se verificaron por
   lectura directa de los paths citados; el cuerpo del pack cubre `src/`, scripts, agentes y
   configuración versionada.
+- **Estado inicial del chequeo (0.32.0)**: el `discovery --check` previo devolvió
+  `STALE`/`impact: material` con `changedAreas: ["CHANGELOG.md", "aspec", "package.json", "scripts",
+  "src", "test"]` y `materialReasons: ["archivo material modificado: package.json"]`; es no-defecto
+  (el bump 0.32.0 y el change CH-06b ya estaban commiteados). Esta materialización consumió el pack
+  único de 869 fuentes, 164.782 B (~40.806 tokens), y actualizó los once documentos.
+- **Evidencia de 0.32.0**: se verificó leyendo `src/core/test-selection.js`, el tramo
+  `affectedCommand` de `src/cli/index.js`, `scripts/test-affected.mjs`, `test/affected-tests.json`
+  (excluido del pack por el tier), el Requirement canónico «Selección determinística de tests por
+  affected-set con manifiesto cerrado» de `aspec/specs/prompt-contracts/spec.md`, el
+  proposal/tasks/spec archivados de `ch-06b-affected-test-selection` y `CHANGELOG.md`. No se ejecutó
+  `npm run test:affected` ni la suite; el comportamiento del consumidor se describió desde el código
+  y el contrato, no desde una corrida real.
+- **Límite de evidencia del pack 0.32.0**: el tier `minimo` excluye `test/**`, `docs/**` y
+  `**/*.md`, así que `test/affected-tests.json`, `test/test-selection.test.js`, la spec canónica y
+  los artifacts archivados se leyeron directamente fuera del pack; el cuerpo cubre `src/`, `scripts/`
+  (incluido el nuevo `test-affected.mjs`) y configuración versionada.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.31.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.32.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -335,8 +351,10 @@ skillVersion: '2.3'
   `isEphemeralSource`/`isEphemeralOnlyChange` y su aplicación simétrica en `checkDiscovery`
   (0.28.0), extendido en 0.29.0 a `documentation/**` y `audit logs/**` anclados a la raíz; el
   matcher de `discovery.exclude` corregido en 0.30.0 y extraído a `src/core/discovery-glob.js` con
-  caché `Map` por glob exacto en 0.30.1, con `sources` 872→854 en 0.30.0, 857/22 tests en 0.30.1 y
-  863 fuentes en 0.31.0; `readCriticalMemoryKeys` con lectura tolerante y la política de fallo por
+  caché `Map` por glob exacto en 0.30.1, con `sources` 872→854 en 0.30.0, 857/22 tests en 0.30.1,
+  863 fuentes en 0.31.0 y 869 fuentes / 23 tests en 0.32.0; `planTestSelection`, el flag aditivo
+  `--tests`, el manifiesto `test/affected-tests.json` y el consumidor `scripts/test-affected.mjs`
+  (0.32.0); `readCriticalMemoryKeys` con lectura tolerante y la política de fallo por
   superficie (CLI explícita, lifecycle, on-write/MCP, `merge`/`consolidate --apply`);
   los comentarios de `specs-merge.js` sobre H1 estructural y la identidad de path del contenedor
   `archive`; y la secuencia de archive y los literales de fallo en `agents/orchestrator.md`,

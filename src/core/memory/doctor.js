@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import { openDatabase, checkpointDatabase } from './database.js'
+import { openDatabase, checkpointDatabase, runImmediateTransaction } from './database.js'
 import { inspectRefs, resolveProjectRoot } from './engine.js'
 
 const REFS_CHECK_NAME = 'Refs de nodos activos'
@@ -70,13 +70,27 @@ export function memoryDoctor(dbPath, { rebuild = false } = {}) {
       // esta rota; se reporta como falla (nunca `skipped`) y baja `healthy`.
       fts = { ok: false, detail: 'indice FTS5 ausente; la busqueda no funciona' }
     } else if (rebuild) {
+      // Rebuild + integrity-check en una unica transaccion `BEGIN IMMEDIATE`: el
+      // helper reintenta la adquisicion del lock con presupuesto acotado y
+      // traduce la contencion agotada a `MemoryDatabaseBusyError` (MEMORY_DB_BUSY).
+      // `runIntegrity` captura sus propios errores, asi que un indice inconsistente
+      // se reporta igual que antes y la transaccion puede commitear.
+      let after
       try {
-        db.exec(`INSERT INTO memory_fts(memory_fts) VALUES('rebuild')`)
+        after = runImmediateTransaction(db, 'doctor-rebuild', () => {
+          db.exec(`INSERT INTO memory_fts(memory_fts) VALUES('rebuild')`)
+          return runIntegrity()
+        })
+        // Solo se marca reconstruido si el COMMIT de la transaccion tuvo exito.
         rebuilt = true
-        const after = runIntegrity()
         fts = { ok: after.ok, detail: after.ok ? 'indice reconstruido y consistente' : `reconstruccion sin exito: ${after.detail}` }
       } catch (err) {
-        fts = { ok: false, detail: `reconstruccion fallo: ${err.message}` }
+        fts = {
+          ok: false,
+          detail: err.code === 'MEMORY_DB_BUSY'
+            ? `reconstruccion fallo (${err.code}): ${err.message}`
+            : `reconstruccion fallo: ${err.message}`
+        }
       }
     } else {
       // Chequeo no mutante de alineacion. `count(*)` sobre `memory_fts` (external

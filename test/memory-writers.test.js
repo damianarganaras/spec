@@ -597,6 +597,93 @@ describe('ch-04 — serializacion de escritores de memoria', () => {
     }
   })
 
+  // Se usa el harness de proceso hijo de este archivo (hold + LOCKED) para
+  // retener el write-lock; memory-fixtures no tiene ese harness y duplicarlo
+  // agregaria mas superficie que valor.
+  describe('doctor --rebuild bajo contencion', () => {
+    it('absorbe un lock retenido 7 s y deja el indice reconstruido', { timeout: 60000 }, async (t) => {
+      const dir = makeTempDir()
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      assertTemporaryDatabase(dbPath)
+      const seed = createMemoryEngine(dbPath)
+      seed.recordNode({ memory_key: 'rebuild-seed', type: 'rule', scope: 'project', content: 'semilla para rebuild' })
+      seed.close()
+
+      const holder = spawnFixture(['hold', dbPath, '7000'])
+      try {
+        await holder.waitForLine((line) => line === 'LOCKED', 20000)
+        const startedAt = Date.now()
+        const result = memoryDoctor(dbPath, { rebuild: true })
+        const elapsedMs = Date.now() - startedAt
+        const fts = result.checks.find((check) => check.name === 'Indice FTS5')
+        t.diagnostic(`elapsed doctor --rebuild: ${elapsedMs} ms`)
+        assert.equal(result.rebuilt, true)
+        assert.equal(result.healthy, true, JSON.stringify(result.checks))
+        assert.equal(fts.ok, true)
+        assert.equal(fts.detail, 'indice reconstruido y consistente')
+        assert.equal(result.checks.some((check) => /SQLITE_BUSY|MEMORY_DB_BUSY/.test(check.detail)), false)
+        assert.ok(elapsedMs >= 5000, `doctor --rebuild debio esperar al lock retenido (${elapsedMs} ms)`)
+        const holderResult = await holder.exit
+        assert.equal(holderResult.code, 0, holderResult.stderr)
+      } finally {
+        await stopFixture(holder, { release: true })
+      }
+
+      const db = new DatabaseSync(dbPath, { readOnly: true })
+      try {
+        const indexed = db.prepare('SELECT count(*) AS n FROM memory_fts_docsize').get().n
+        const total = db.prepare('SELECT count(*) AS n FROM memory_nodes').get().n
+        assert.equal(indexed, total, 'el indice FTS debe quedar alineado con memory_nodes')
+        assert.equal(db.prepare('PRAGMA quick_check').get().quick_check, 'ok')
+      } finally {
+        db.close()
+      }
+    })
+
+    it('agota el presupuesto con el lock retenido y deja la base utilizable', { timeout: 90000 }, async () => {
+      const dir = makeTempDir()
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      assertTemporaryDatabase(dbPath)
+      const seed = createMemoryEngine(dbPath)
+      seed.recordNode({ memory_key: 'rebuild-busy-seed', type: 'rule', scope: 'project', content: 'semilla para busy' })
+      seed.close()
+
+      // 18 s: supera el presupuesto maximo del helper (3 x busy_timeout + 200 + 600).
+      const holder = spawnFixture(['hold', dbPath, '18000'])
+      try {
+        await holder.waitForLine((line) => line === 'LOCKED', 20000)
+        const result = memoryDoctor(dbPath, { rebuild: true })
+        const fts = result.checks.find((check) => check.name === 'Indice FTS5')
+        assert.equal(result.rebuilt, false)
+        assert.equal(result.healthy, false)
+        assert.equal(fts.ok, false)
+        assert.match(fts.detail, /^reconstruccion fallo \(MEMORY_DB_BUSY\)/)
+        assert.equal(result.checks.some((check) => /SQLITE_BUSY/.test(check.detail)), false)
+        const holderResult = await holder.exit
+        assert.equal(holderResult.code, 0, holderResult.stderr)
+      } finally {
+        await stopFixture(holder, { release: true })
+      }
+
+      // Sin transaccion abierta: la base acepta una escritura nueva y doctor
+      // vuelve a reportar sano.
+      const engine = createMemoryEngine(dbPath)
+      try {
+        const written = engine.recordNode({
+          memory_key: 'rebuild-after-busy',
+          type: 'rule',
+          scope: 'project',
+          content: 'posterior al busy'
+        })
+        assert.equal(written.superseded, 0)
+      } finally {
+        engine.close()
+      }
+      const doctorAfter = memoryDoctor(dbPath)
+      assert.equal(doctorAfter.healthy, true, JSON.stringify(doctorAfter.checks))
+    })
+  })
+
   describe('helper runImmediateTransaction — hardening R1', () => {
     // `isLockContention` no se exporta: se pinea su comportamiento observable a
     // traves de runImmediateTransaction (contencion => MemoryDatabaseBusyError).
@@ -610,6 +697,51 @@ describe('ch-04 — serializacion de escritores de memoria', () => {
         }
       }
       return { db, state }
+    }
+
+    // Lock real retenido por otra conexion del mismo proceso: sin procesos hijos.
+    // Devuelve el tiempo medido y libera el lock al salir.
+    function expectBusyAgainstRetainedLock(policy, operation) {
+      const dir = makeTempDir()
+      const dbPath = seedEmptyDatabase(dir)
+      const holder = openDatabase(dbPath)
+      const contender = openDatabase(dbPath)
+      try {
+        contender.exec('PRAGMA busy_timeout = 100')
+        holder.exec('BEGIN IMMEDIATE')
+        holder.prepare(
+          `INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+           VALUES (?, 'held-lock', 'rule', 'project', 'active', 'lock retenido', '', 'runtime', 1, ?)`
+        ).run(randomUUID(), new Date().toISOString())
+
+        const startedAt = Date.now()
+        let caught = null
+        try {
+          runImmediateTransaction(
+            contender,
+            operation,
+            () => { throw new Error('el cuerpo no debe ejecutarse') },
+            policy
+          )
+        } catch (error) {
+          caught = error
+        }
+        const elapsedMs = Date.now() - startedAt
+
+        assert.ok(caught instanceof MemoryDatabaseBusyError, String(caught))
+        assert.equal(caught.code, 'MEMORY_DB_BUSY')
+        assert.ok(elapsedMs < 2000, `${operation}: debe agotar rapido (${elapsedMs} ms)`)
+        assert.equal(contender.isTransaction, false, `${operation}: no debe quedar transaccion abierta`)
+        return elapsedMs
+      } finally {
+        try {
+          if (holder.isTransaction) holder.exec('ROLLBACK')
+        } catch {
+          // best effort
+        }
+        holder.close()
+        contender.close()
+      }
     }
 
     it('clasifica errcode extendido 517/6 como contencion y 8/sin codigo como no-contencion', () => {
@@ -667,44 +799,17 @@ describe('ch-04 — serializacion de escritores de memoria', () => {
     })
 
     it('policy de 2 intentos con backoff vacio agota un lock retenido en menos de 2 s', { timeout: 30000 }, () => {
-      const dir = makeTempDir()
-      const dbPath = seedEmptyDatabase(dir)
-      const holder = openDatabase(dbPath)
-      const contender = openDatabase(dbPath)
-      try {
-        contender.exec('PRAGMA busy_timeout = 100')
-        holder.exec('BEGIN IMMEDIATE')
-        holder.prepare(
-          `INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
-           VALUES (?, 'held-lock', 'rule', 'project', 'active', 'lock retenido', '', 'runtime', 1, ?)`
-        ).run(randomUUID(), new Date().toISOString())
+      expectBusyAgainstRetainedLock({ attempts: 2, backoffMs: [] }, 'agotar-sin-backoff')
+    })
 
-        const startedAt = Date.now()
-        let caught = null
-        try {
-          runImmediateTransaction(
-            contender,
-            'agotar-sin-backoff',
-            () => { throw new Error('el cuerpo no debe ejecutarse') },
-            { attempts: 2, backoffMs: [] }
-          )
-        } catch (error) {
-          caught = error
-        }
-        const elapsedMs = Date.now() - startedAt
-
-        assert.ok(caught instanceof MemoryDatabaseBusyError, String(caught))
-        assert.equal(caught.code, 'MEMORY_DB_BUSY')
-        assert.ok(elapsedMs < 2000, `debe agotar rapido sin Atomics.wait(undefined): ${elapsedMs} ms`)
-        assert.equal(contender.isTransaction, false, 'no debe quedar transaccion abierta')
-      } finally {
-        try {
-          if (holder.isTransaction) holder.exec('ROLLBACK')
-        } catch {
-          // best effort
-        }
-        holder.close()
-        contender.close()
+    it('normaliza backoff no finito o ausente sin colgar', { timeout: 60000 }, () => {
+      for (const [label, policy] of [
+        ['NaN', { attempts: 2, backoffMs: [NaN] }],
+        ['Infinity', { attempts: 2, backoffMs: [Infinity] }],
+        ['negativo', { attempts: 2, backoffMs: [-5] }],
+        ['ausente', { attempts: 2 }]
+      ]) {
+        expectBusyAgainstRetainedLock(policy, `backoff-${label}`)
       }
     })
   })

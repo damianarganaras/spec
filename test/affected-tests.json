@@ -20,8 +20,8 @@
     },
     {
       "trigger": ["src/core/memory/**"],
-      "tests": ["test/stats-failures.test.js"],
-      "reason": "stats-failures uses DatabaseSync against the memory schema without importing src/core/memory/database.js"
+      "tests": ["test/stats-failures.test.js", "test/memory-writers.test.js"],
+      "reason": "stats-failures and memory-writers use DatabaseSync directly against the memory schema; memory-writers is also declared here per ch-04 task 5.1"
     },
     {
       "trigger": [
@@ -62,6 +62,11 @@
       "trigger": ["test/fixtures/**"],
       "tests": ["test/memory-fixtures.test.js"],
       "reason": "memory-fixtures reads JSON fixtures and refs-root under test/fixtures without importing them"
+    },
+    {
+      "trigger": ["test/fixtures/memory-writer-child.mjs"],
+      "tests": ["test/memory-writers.test.js"],
+      "reason": "memory-writers spawns the writer fixture by path, so a fixture change leaves no edge in the import graph"
     },
     {
       "trigger": ["test/**", "scripts/test-affected.mjs"],

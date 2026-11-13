@@ -122,7 +122,9 @@ export class MemoryDatabaseBusyError extends Error {
 // como respaldo por compatibilidad entre versiones.
 function isLockContention(err) {
   if (!err) return false
-  if (err.errcode === 5 || err.errcode === 6) return true
+  // Mask to the primary code so extended codes (e.g. SQLITE_BUSY_SNAPSHOT = 517) still match.
+  const primary = typeof err.errcode === 'number' ? (err.errcode & 0xff) : null
+  if (primary === 5 || primary === 6) return true
   return err.code === 'SQLITE_BUSY' || err.code === 'SQLITE_LOCKED'
 }
 
@@ -137,13 +139,18 @@ function sleepSynchronously(ms) {
 // nunca se re-ejecuta. Cualquier fallo del cuerpo o del `COMMIT` hace rollback y
 // propaga el error original.
 export function runImmediateTransaction(db, operation, fn, policy = MEMORY_WRITE_RETRY_POLICY) {
+  if (!Number.isInteger(policy.attempts) || policy.attempts < 1) {
+    throw new RangeError(`runImmediateTransaction requiere attempts entero >= 1, recibio ${policy.attempts}`)
+  }
   for (let attempt = 1; attempt <= policy.attempts; attempt++) {
     try {
       db.exec('BEGIN IMMEDIATE')
     } catch (err) {
       if (!isLockContention(err)) throw err
       if (attempt < policy.attempts) {
-        sleepSynchronously(policy.backoffMs[attempt - 1])
+        const rawWait = policy.backoffMs?.[attempt - 1]
+        const waitMs = Number.isFinite(rawWait) && rawWait >= 0 ? rawWait : 0
+        sleepSynchronously(waitMs)
         continue
       }
       // El BEGIN fallido no dejo transaccion abierta.

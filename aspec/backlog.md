@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-12 (release 0.30.1: caché del RegExp del matcher de config.exclude; residual de ReDoS cerrado como decisión documentada).
+> Última actualización: 2026-11-12 (MEM-05 cerrado en 0.31.0: set crítico de working-context curado por `memory.criticalKeys`; release 0.30.1: caché del RegExp del matcher de config.exclude; residual de ReDoS cerrado como decisión documentada).
 
 ## Prioridad de ejecución
 
@@ -54,13 +54,15 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 - **P0:** PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`.
 - **P1:** CH-00 baseline como runbook; CH-06a cerrado en 0.22.0 (`ch-06a-specs-merge-deterministic`, capability `spec-sync`); CH-06b (selección de tests por affected-set) diferido por **segunda vez** (0.22.2), ahora por razón estructural: `test/cli.test.js` spawnea el CLI (sin arista de import) y los content guards leen markdown no indexado, así que declararla "no contrato completo" no la vuelve segura; se reabre sólo con consumidor probado + contrato que nombre las suites excluidas. `computeAffectedSet`/`ancleto affected` ya existen y son determinísticos; CH-07 A/B bloqueado por CH-00.
-- **P1 · MEM-05 (pendiente) — presupuesto del working-context:** el bloque inyectado
-  `<ProjectMemoryRules>` no distingue importancia. Con 39 reglas `scope: project` renderiza 8 y omite
-  31; agregar una regla larga (2026-11-06) hizo caer las renderizadas de 9 a 8 y desplazó dos reglas
-  que antes entraban, incluida `node-test-scope-explicit-paths`. MEM-05 debe fijar un set universal
-  estable, recuperar el resto por tarea y fallar explícito (con `memory_key`) cuando una regla crítica
-  no entra. Detalle y criterio de aceptación: `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` §5.
-  Núcleo archivado el 2026-11-02; el "set universal estable" sigue pendiente y queda fuera de 0.22.0: requiere curaduría de memoria (MEM-01) y definición de criticality (CH-09a, diferido), y no es código offline-testeable.
+- **P1 · MEM-05 (resuelto en 0.31.0) — presupuesto del working-context:** `memory.criticalKeys` en
+  `.ancletorc` cura un set crítico (7 claves), inyectado primero y nunca desplazado por una regla no
+  crítica; se preserva el llenado determinístico existente (scope → anclaje → created_at →
+  memory_key). Fallo explícito con `memory_key`: `ancleto memory context` sale != 0 y no sobrescribe
+  el archivo; lifecycle (`init`/`install`/`upgrade`) y el caller MCP del on-write advierten sin
+  bloque degradado; `memory merge`/`consolidate --apply` salen != 0. `<ContextOverflowWarning>`
+  intacto (texto, conteo, tope +N, una Recall). Tests: 883 targeted / 1300 full, 0 fail; lint limpio;
+  DB real no mutada. Change archivado en
+  `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/`.
   **MEM-05f cerrado en 0.23.0** (`template-legacy-eol-preservation`): `reconcileLegacyBlocks` preserva el EOL por línea y el estado de newline final. **MEM-05g diferido**: inalcanzable — 0 code fences dentro de todo bloque `LOCKED` de `templates/`, `profiles/test/templates/` y `AGENTS.md`/`PRODUCT.md` raíz; sólo input artesanal dispara el cierre temprano.
 - **P2 colaboración:** `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10). **T25 (`formatVersion`) refutado en 0.23.0**: los exports viejos ya importan sin pérdida, `importNodes` ignora claves extra y exige `Array.isArray`, y ningún consumidor lee una versión; se reabre cuando CH-08 defina el lector.
 - **P2 motor/host:** T20 idempotencia **cerrado en 0.23.0** (`memory-record-idempotency`); T30 V1/V2, CH-10 matriz de hosts, #4, #6, #18 pendientes.

@@ -3841,6 +3841,28 @@ describe('CLI memory context día-cero (token-budget)', () => {
   })
 })
 
+describe('CLI memory context — conjunto critico (mem-05-critical-set)', () => {
+  it('T10: falla con codigo no-cero, nombra la memory_key y no sobrescribe el --out previo', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.ancleto'), { recursive: true })
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'ctx-real', type: 'rule', scope: 'project', content: 'regla activa' })
+      } finally {
+        engine.close()
+      }
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ memory: { criticalKeys: ['ctx-fantasma'] } }) + '\n')
+      writeFileSync(join(dir, 'ctx.md'), 'BLOQUE PREVIO\n')
+
+      const r = run(['memory', 'context', '--scope', 'project', '--out', 'ctx.md'], dir)
+      assert.notEqual(r.status, 0, 'la superficie explicita falla')
+      assert.match(r.stderr, /ctx-fantasma/, 'el error nombra la memory_key')
+      assert.equal(readFileSync(join(dir, 'ctx.md'), 'utf8'), 'BLOQUE PREVIO\n', 'el archivo previo no se sobrescribe')
+      assert.doesNotMatch(r.stdout, /<ProjectMemoryRules>/, 'no emite un bloque parcial')
+    })
+  })
+})
+
 describe('CLI memory import refresca el working-context', () => {
   const entry = (over = {}) => ({
     memory_key: 'imp-rule',

@@ -1322,9 +1322,11 @@ iguales.
 El engine de memoria SHALL serializar las escrituras concurrentes sobre `.ancleto/memory.db`
 mediante el lock de escritura de SQLite: las transacciones de escritura de sus cinco caminos
 —`recordNode`, `import`, `gc`, `merge` y `consolidate`— SHALL abrirse con `BEGIN IMMEDIATE`,
-conservando `journal_mode = WAL`, `busy_timeout = 5000` y `foreign_keys = ON`. Los escritores que no
-pertenecen al engine, como la reparación explícita de `memory doctor --rebuild`, quedan fuera de esta
-garantía.
+conservando `journal_mode = WAL`, `busy_timeout = 5000` y `foreign_keys = ON`. La reparación explícita
+de `memory doctor --rebuild` reutiliza el mismo helper para sus dos escrituras FTS (`rebuild` e
+`integrity-check`), de modo que respeta la espera acotada y el error `MEMORY_DB_BUSY`; NO forma parte de
+los cinco caminos de escritura de nodos y NO extiende a ella las garantías de este requirement sobre
+pérdida de escrituras confirmadas ni unicidad por `memory_key`.
 
 La espera SHALL ser acotada. Además del `busy_timeout`, la adquisición del lock SHALL reintentarse
 ante `SQLITE_BUSY` o `SQLITE_LOCKED` (errcode 5/6) hasta un máximo de 3 intentos, con backoff
@@ -1343,7 +1345,7 @@ Bajo contención concurrente, ninguna escritura confirmada SHALL perderse y SHAL
 un nodo activo por `memory_key`. El índice FTS5 SHALL permanecer consistente con `memory_nodes` y
 `PRAGMA quick_check` SHALL devolver `ok` al terminar las escrituras.
 
-Los caminos read-only —`doctor`, `curate`, los dry-run de `merge` y `consolidate`, `snapshot` y el
+Los caminos read-only —`doctor` (modo default), `curate`, los dry-run de `merge` y `consolidate`, `snapshot` y el
 engine read-only (`createReadonlyMemoryEngine`)— NO SHALL adquirir el retry ni escribir nodos ni migrar schema.
 Los lectores concurrentes NO SHALL bloquearse ni fallar por una escritura en curso.
 
@@ -1377,7 +1379,7 @@ ni serializar superficies disjuntas. La paralelización del orquestador entre
 #### Scenario: Lectores y caminos read-only no se alteran
 
 - **WHEN** un escritor mantiene una transacción abierta sobre la base
-- **AND** se ejecutan `doctor`, `curate`, un dry-run de `merge` o `consolidate`, `snapshot` o el engine read-only (`createReadonlyMemoryEngine`)
+- **AND** se ejecutan `doctor` (modo default), `curate`, un dry-run de `merge` o `consolidate`, `snapshot` o el engine read-only (`createReadonlyMemoryEngine`)
 - **THEN** ninguno de esos caminos adquiere el retry, ni escribe nodos, ni migra schema
 - **AND** los lectores concurrentes no se bloquean ni fallan por la escritura en curso
 

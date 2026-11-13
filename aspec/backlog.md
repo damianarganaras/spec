@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-13 (CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
+> Última actualización: 2026-11-13 (0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
 
 ## Prioridad de ejecución
 
@@ -154,7 +154,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 **Descartado / diferido en 0.24.0 (sigue pendiente, no hecho):**
 
-- **#4 exclusión mutua de escritores:** **cerrado en 0.33.0** (`ch-04-memory-writer-serialization`), archivado el 2026-11-13 en `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/`. La premisa "prosa-only, sin mutex ejecutable" era parcialmente falsa: `journal_mode=WAL`, `foreign_keys=ON`, `busy_timeout=5000` (`src/core/memory/database.js:49-51`) y `BEGIN IMMEDIATE` en los cinco caminos de escritura (`src/core/memory/engine.js`, `recordNode`/`import`/`gc`/`merge`/`consolidate`) ya existían. Se agregó retry acotado sólo de la adquisición del lock (`runImmediateTransaction`: máx. 3 intentos, backoff 200/600 ms, sin jitter) y el error nombrado `MEMORY_DB_BUSY`, más un oráculo offline (`test/memory-writers.test.js` + `test/fixtures/memory-writer-child.mjs`; 10 tests). Evidencia medida: 8 procesos × 25 escrituras sobre copia temporal → 0 errores, exactamente 1 activo por `memory_key`, conteo de superseded exacto, FTS == `memory_nodes`, `quick_check ok`; con un lock retenido 7 s, sin retry fallaba a los 5053 ms con `SQLITE_BUSY` crudo y con retry confirma a ~7,0-7,1 s; suite completa 1338 tests, 0 fallos. Deuda residual: `memory doctor --rebuild` sigue siendo un sexto escritor preexistente fuera del helper (reparación FTS en transacción implícita); el delta acota la garantía a los cinco caminos del engine.
+- **#4 exclusión mutua de escritores:** **cerrado en 0.33.0** (`ch-04-memory-writer-serialization`), archivado el 2026-11-13 en `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/`. La premisa "prosa-only, sin mutex ejecutable" era parcialmente falsa: `journal_mode=WAL`, `foreign_keys=ON`, `busy_timeout=5000` (`src/core/memory/database.js:49-51`) y `BEGIN IMMEDIATE` en los cinco caminos de escritura (`src/core/memory/engine.js`, `recordNode`/`import`/`gc`/`merge`/`consolidate`) ya existían. Se agregó retry acotado sólo de la adquisición del lock (`runImmediateTransaction`: máx. 3 intentos, backoff 200/600 ms, sin jitter) y el error nombrado `MEMORY_DB_BUSY`, más un oráculo offline (`test/memory-writers.test.js` + `test/fixtures/memory-writer-child.mjs`; 10 tests). Evidencia medida: 8 procesos × 25 escrituras sobre copia temporal → 0 errores, exactamente 1 activo por `memory_key`, conteo de superseded exacto, FTS == `memory_nodes`, `quick_check ok`; con un lock retenido 7 s, sin retry fallaba a los 5053 ms con `SQLITE_BUSY` crudo y con retry confirma a ~7,0-7,1 s; suite completa 1338 tests, 0 fallos. Deuda residual **cerrada en 0.33.1**: `memory doctor --rebuild` era un sexto escritor preexistente fuera del helper; ahora reutiliza el helper de transacción compartido (`runImmediateTransaction` con retry acotado), el modo default sigue estrictamente read-only, y se actualizaron la spec y los tests.
 - **#18 seed stale por diseño:** diferido — el release ya regenera el seed post-bump; cambiar `MATERIAL_FILE_RES`/`DEFAULT_IGNORES` invalidaría todos los estados persistidos y no hay spec canónica del detector.
 - **T27 reindex desde proposals:** diferido — sin consumidor ni prueba e2e offline; requiere MEM-01.
 - **CH-06b `--tests`:** sigue diferido por razón estructural (tercera vez); sin consumidor probado.
@@ -421,7 +421,25 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Solución:** helper único `runImmediateTransaction` con `BEGIN IMMEDIATE` y reintento sólo de la adquisición del lock (máx. 3 intentos, backoff 200/600 ms, sin jitter) y error nombrado `MEMORY_DB_BUSY`; sin cambios de PRAGMAs persistentes, schema ni `ruleVersion`.
 - **Evidencia medida:** 8 procesos × 25 escrituras sobre copia temporal → 0 errores, exactamente 1 activo por `memory_key`, conteo de superseded exacto, FTS == `memory_nodes`, `quick_check ok`; con un lock retenido 7 s, sin retry fallaba a los 5053 ms con `SQLITE_BUSY` crudo y con retry confirma a ~7,0-7,1 s. Oráculo `test/memory-writers.test.js` + `test/fixtures/memory-writer-child.mjs` (DB temporal y procesos hijos, nunca `.ancleto/memory.db`; 10 tests); suite completa 1338 tests, 0 fallos.
 - **Descartados con evidencia:** lockfile PID/stale (PID reuse en win32, huérfanos), broker single-writer, y `DEFERRED` + retry (pierde escrituras por `SQLITE_BUSY_SNAPSHOT`, errcode 517).
-- **Deuda residual:** `memory doctor --rebuild` sigue siendo un sexto escritor preexistente fuera del helper (reparación FTS en transacción implícita); el delta acota la garantía a los cinco caminos del engine.
+- **Deuda residual (cerrada en 0.33.1):** `memory doctor --rebuild` era un sexto escritor preexistente fuera del helper (reparación FTS en transacción implícita); quedó cerrada en 0.33.1 al envolver sus dos escrituras FTS en `runImmediateTransaction` con el mismo retry acotado y `MEMORY_DB_BUSY`, con modo default read-only y spec/tests actualizados.
+
+**Pendiente:**
+
+- **T27/CH-01, CH-08/MEM-06, MEM-01, CH-09a–g, CH-10, #6, #18:** diferimientos previos sin cambios.
+
+## Relación con 0.33.1
+
+0.33.1 es un release patch (implementación directa): cierra la deuda residual de 0.33.0 envolviendo las dos escrituras FTS de `memory doctor --rebuild` en el helper de transacción compartido; sin cambio de schema, PRAGMAs persistentes, `ruleVersion`, comandos ni flags.
+
+**Hecho:**
+
+- **`memory doctor --rebuild`:** las dos escrituras FTS (`INSERT INTO memory_fts('rebuild')` e `INSERT INTO memory_fts('integrity-check', 1)`) quedan en una única `runImmediateTransaction` (`src/core/memory/doctor.js:72-94`), con el mismo retry acotado (3 intentos, backoff 200/600 ms) y el error nombrado `MEMORY_DB_BUSY`.
+- **Modo default read-only:** `memory doctor` sin `--rebuild` sigue estrictamente read-only (sin helper, sin escritura, sin checkpoint); `checkpointDatabase` sigue fuera de la transacción y reporta `ok:false` si no puede checkpointear.
+- **Evidencia medida:** con un lock retenido 7 s el rebuild completa en ~7,1 s (`rebuilt:true`, `healthy:true`); con un lock sostenido más allá del presupuesto reporta `reconstruccion fallo (MEMORY_DB_BUSY)` con `rebuilt:false`, `healthy:false`, sin transacción abierta.
+- **Spec:** actualizada en el lugar `aspec/specs/memory-engine/spec.md:1325-1329` (el tramo deja de afirmar la exclusión y aclara que `--rebuild` reutiliza el helper pero no participa de las garantías de atomicidad de nodos) y se calificó «`doctor` (modo default)» en `:1348` y en el escenario correspondiente.
+- **Tests:** casos nuevos en `test/memory-writers.test.js` (`--rebuild` bajo lock de 7 s con `elapsed >= 5000`, presupuesto agotado con `MEMORY_DB_BUSY`, backoff `NaN`/`Infinity`/negativo/ausente normalizado). Suite completa 1341 tests / 1336 pass / 5 skips preexistentes / 0 fail.
+- **Qué NO cambia:** schema, PRAGMAs persistentes, `ruleVersion`, comandos y flags.
+- **Archivos:** `src/core/memory/doctor.js`, `test/memory-writers.test.js`, `aspec/specs/memory-engine/spec.md`.
 
 **Pendiente:**
 

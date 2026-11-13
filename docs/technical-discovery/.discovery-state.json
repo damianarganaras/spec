@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-13T19:05:43.813Z",
+  "generatedAt": "2026-11-13T20:52:01.205Z",
   "sources": [
     ".ancleto/machine-env.md",
     ".ancleto/memory.db",
@@ -883,9 +883,9 @@
     ".ancleto/memory.db-wal": "818c1824b06016be",
     ".ancleto/model-catalog.candidate.json": "b9a899ae6758c716",
     ".ancleto/next-session-prompt.md": "5f62001d37f41bf7",
-    ".ancleto/working-context.md": "722e3873cb06e809",
+    ".ancleto/working-context.md": "e6494069e2011a11",
     ".ancletorc": "8016489fc993d508",
-    ".discovery-map.json": "fb26379410854e0b",
+    ".discovery-map.json": "ab169560f1127a43",
     ".gitattributes": "d60f352d0db1404c",
     ".github/workflows/publish.yml": "afdbac4220001818",
     ".gitignore": "851805d264f984c2",
@@ -956,7 +956,7 @@
     ".opencode/skills/ancleto-workflow/SKILL.md": "8d7efb19ddc62e1f",
     ".opencode/skills/triage-clarifier/SKILL.md": "6ae5fdd2d1db35f4",
     "AGENTS.md": "d9032ad0c6fb4072",
-    "CHANGELOG.md": "bbbf09b57e20a41f",
+    "CHANGELOG.md": "315272340f47c5eb",
     "DESIGN-memory-engine-v0.2.0.md": "21b54d02afa8ab62",
     "LICENSE": "e220b0c2013be5c6",
     "PRODUCT.md": "53099af9977a36b6",
@@ -971,7 +971,7 @@
     "agents/technical-discovery.md": "ec2f9093746a06f8",
     "agents/technical-seed-writer.md": "380d8a62c93dc006",
     "agents/tester.md": "cd2a0ece6b48144a",
-    "aspec/backlog.md": "f13e52c80c607177",
+    "aspec/backlog.md": "88f1d969f616c80f",
     "aspec/changes/ancleto-vscode-extension/design.md": "7c9463bc7f436e1b",
     "aspec/changes/ancleto-vscode-extension/proposal.md": "2c1a5b4f34084482",
     "aspec/changes/ancleto-vscode-extension/specs/vscode-distribution/spec.md": "fb2c7bb3ed161e75",
@@ -1289,7 +1289,7 @@
     "aspec/specs/legacy-import/spec.md": "5013521ebb9b2d9c",
     "aspec/specs/linter-standard/spec.md": "64440e8c36435016",
     "aspec/specs/machine-environment/spec.md": "f6ab990eed5d9a2b",
-    "aspec/specs/memory-engine/spec.md": "631e532052e3e79e",
+    "aspec/specs/memory-engine/spec.md": "c59a2a7675d2e265",
     "aspec/specs/memory-ops/spec.md": "6f36990a79011b42",
     "aspec/specs/project-portability/spec.md": "48115d2dc0404e05",
     "aspec/specs/prompt-contracts/spec.md": "9044c8b3864de841",
@@ -1671,7 +1671,7 @@
     "eslint.config.js": "7d78be10cad6930b",
     "opencode.json": "29f36fe1f3d04a49",
     "optimizacion-de-tokens.md": "f07c22fb8e7261c0",
-    "package.json": "9b9f155143f8bc74",
+    "package.json": "4c87d6e329902ecd",
     "profiles/test/agents/reviewer.md": "2391dda0e569e2e0",
     "profiles/test/agents/tester.md": "7de936b2faf68939",
     "profiles/test/commands/cleto-test-apply.md": "ae12ed96e8690f54",
@@ -1727,7 +1727,7 @@
     "src/core/machine-env.js": "88014dfd7f47984d",
     "src/core/memory/curation.js": "187f8e559b49c0ef",
     "src/core/memory/database.js": "d8ef209d55dea129",
-    "src/core/memory/doctor.js": "ff038dfb97e74c73",
+    "src/core/memory/doctor.js": "9bea8725ee78373b",
     "src/core/memory/engine.js": "11fde04fa8d8da69",
     "src/core/memory/mcp-server.js": "449579aa330e8453",
     "src/core/memory/snapshot.js": "9b6da0ed4f13ccf2",
@@ -1751,13 +1751,13 @@
     "test/fixtures/memory/refs-root/aspec/specs/prompt-contracts/spec.md": "828fe5dfb0628de9",
     "test/fixtures/memory/seed.json": "ef04fc809da4e5ae"
   },
-  "hash": "e42f149fba6bd0627f12aa65f707089dfdf9e4d53c8540bf8f10a832191c6a83",
+  "hash": "b12eb7539f2880c90ef72a8746dade786698fbe7bac1e79268a56647bb6a933a",
   "ruleVersion": 2,
   "semantic": {
-    "hash": "51b42ec53be31626c2952f14003248a55af6759e9588dbc6743e49b208f0b944",
+    "hash": "9f6a2a2b66a6bd83da7d7a27eea6098db682e59ed796cf1d2d4816d840c962fa",
     "fileHashes": {
       "package.json": "b1792842dce4e963"
     }
   },
-  "packTokens": 41187
+  "packTokens": 41300
 }

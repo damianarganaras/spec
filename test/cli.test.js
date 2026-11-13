@@ -3861,6 +3861,14 @@ describe('CLI memory context — conjunto critico (mem-05-critical-set)', () => 
       assert.doesNotMatch(r.stdout, /<ProjectMemoryRules>/, 'no emite un bloque parcial')
     })
   })
+  it('un --scope sin valor falla como error de uso y no emite un bloque', () => {
+    withDir((dir) => {
+      const r = run(['memory', 'context', '--scope'], dir)
+      assert.notEqual(r.status, 0, 'el --scope sin valor es un error de uso')
+      assert.match(r.stderr, /--scope requiere un valor/)
+      assert.doesNotMatch(r.stdout, /<ProjectMemoryRules>/, 'no emite un bloque')
+    })
+  })
   it('un --scope invalido falla como error de uso antes de renderizar', () => {
     withDir((dir) => {
       const r = run(['memory', 'context', '--scope', 'nope'], dir)

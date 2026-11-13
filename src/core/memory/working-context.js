@@ -131,7 +131,9 @@ export function checkWorkingContextFreshness(engine, projectRoot, scope = 'proje
 // difiere del contenido en disco. Evita reescrituras (y la creacion de un archivo vacio)
 // cuando la escritura no altero el bloque. Devuelve el path escrito o null si no cambio.
 // El fallo de render (p. ej. una memory_key critica invalida) PROPAGA: cada caller decide
-// si es best-effort (`import`, MCP) o si debe fallar la superficie (merge/consolidate).
+// si es best-effort (`ancleto memory import`) o si debe fallar la superficie
+// (merge/consolidate). El call path MCP no usa esta funcion: llama a
+// `writeWorkingContext` y absorbe ahi el fallo, sin propagarlo.
 // Como el render precede a toda escritura, nunca se persiste un bloque degradado.
 export function refreshWorkingContextOnWrite(engine, projectRoot, scope = 'project') {
   if (!projectRoot) return null

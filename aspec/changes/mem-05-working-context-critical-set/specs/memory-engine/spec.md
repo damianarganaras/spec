@@ -15,9 +15,14 @@ vigente.
 Si una `memory_key` declarada no existe como `rule` activa del scope inyectado, o no entra en el
 presupuesto, la generación SHALL fallar con un error que nombre la `memory_key`. En la superficie
 explícita `ancleto memory context` (incluido `--out`) el proceso SHALL salir con código distinto de
-cero y NO SHALL sobrescribir el archivo de working-context previo. En los refreshes de lifecycle
-(`init`, `install`, `upgrade`) y en el refresh on-write del MCP, el fallo SHALL registrarse con
-`console.warn` nombrando la `memory_key` y NO SHALL escribirse un bloque degradado.
+cero y NO SHALL sobrescribir el archivo de working-context previo. El refresh de lifecycle (`init`,
+`install`, `upgrade`) y la superficie on-write del MCP SHALL mantener el fallo visible con
+`console.warn` nombrando la `memory_key` y NO SHALL escribir un bloque degradado; el refresh on-write
+SHALL propagar el error de render a su llamador, y el llamador del MCP SHALL registrarlo con
+`console.warn` y continuar best-effort. Las superficies que aplican una escritura y refrescan el
+working-context como efecto derivado, `memory merge` y `memory consolidate --apply`, SHALL salir con
+código distinto de cero cuando ese refresh falla por una clave crítica, y NO SHALL reportar éxito con
+el bloque derivado desactualizado.
 
 Este requirement NO SHALL alterar el contrato de `Aviso de overflow accionable para el orquestador`:
 el texto, el conteo, el tope de claves y los consumidores de `<ContextOverflowWarning>` permanecen
@@ -45,7 +50,7 @@ iguales.
 #### Scenario: El lifecycle y el on-write advierten sin escribir un bloque degradado
 
 - **WHEN** un refresh de lifecycle (`init`, `install`, `upgrade`) o el refresh on-write del MCP encuentra el error de una clave crítica
-- **THEN** se emite `console.warn` nombrando la `memory_key`
+- **THEN** el refresh de lifecycle o el llamador del on-write emite `console.warn` nombrando la `memory_key`
 - **AND** no se escribe un bloque degradado en el archivo de working-context
 
 #### Scenario: Sin la clave de configuración el comportamiento no cambia

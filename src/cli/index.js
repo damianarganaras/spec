@@ -2701,7 +2701,15 @@ async function refreshMachineEnv(projectDir) {
 }
 
 async function memoryContext(flags) {
-  const scope = flagValue(flags, '--scope') || 'project'
+  // `--scope` es opcional, pero si aparece sin valor es error de uso: `flagValue`
+  // devolveria null y caeria en el default `project` en silencio.
+  const scopeRaw = requiredMemoryFlag(flags, '--scope')
+  if (flags.includes('--scope') && !scopeRaw) {
+    console.error('ancleto: --scope requiere un valor (project|feature|task)')
+    process.exitCode = 1
+    return
+  }
+  const scope = scopeRaw || 'project'
   // Misma validacion que `memory list`: un scope invalido es un error de uso, no un
   // fallo del engine ("la memory_key ... no existe como rule activa del scope X").
   if (!['project', 'feature', 'task'].includes(scope)) {

@@ -27,10 +27,12 @@ ya existente `{ required }` a `buildWorkingContext`. El llenado conserva el comp
 vigente: las requeridas primero, luego scope, anclaje, recencia y `memory_key`.
 
 Fallo explícito sólo en la superficie explícita: `ancleto memory context` (incluido `--out`) sale
-con código distinto de cero, nombra la `memory_key` y NO sobrescribe el archivo previo. Los refreshes
-de lifecycle (`init`/`install`/`upgrade`) y el refresh on-write del MCP capturan el error, emiten
-`console.warn` nombrando la `memory_key` y no escriben un bloque degradado. El formato de
-`<ContextOverflowWarning>` y sus consumidores no cambian.
+con código distinto de cero, nombra la `memory_key` y NO sobrescribe el archivo previo. El refresh
+on-write propaga el error de render y su llamador en el MCP lo captura y emite `console.warn`; los
+refreshes de lifecycle también emiten `console.warn` y no escriben un bloque degradado. Las
+superficies derivadas (`memory merge` y `memory consolidate --apply`) fallan con código distinto de
+cero cuando el refresh del working-context no puede completarse, para no reportar éxito con un bloque
+desactualizado. El formato de `<ContextOverflowWarning>` y sus consumidores no cambian.
 
 ## Scope
 
@@ -103,7 +105,7 @@ Out of scope:
 **Estado:** aprobado
 
 **memory_key:** working-context-critical-failure-policy
-**Elección:** error duro con memory_key en ancleto memory context (sin sobrescribir el archivo previo) y console.warn sin escritura degradada en lifecycle y refresh on-write.
+**Elección:** error duro con memory_key en ancleto memory context (sin sobrescribir el archivo previo); el refresh on-write propaga el error de render y su llamador en el MCP lo captura y emite console.warn; los refreshes de lifecycle emiten console.warn; ningún caso escribe un bloque degradado, y las superficies derivadas (memory merge, memory consolidate --apply) salen != 0 si el refresh falla.
 **Descartado:** truncamiento silencioso; advertir sin fallar en todas las superficies.
 **Justificación:** la superficie explícita tiene un humano esperando una respuesta y debe fallar visiblemente; el lifecycle no debe bloquear init/install/upgrade ni una escritura MCP, pero tampoco debe persistir un bloque degradado.
 **Refs:**

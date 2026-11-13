@@ -63,14 +63,15 @@ export function validateImportEntries(json) {
 // (dry-run): dado el nodo activo de la key (o null), la existencia de historial
 // `superseded` y la entrada, devuelve el bucket y la accion que ejecutaria el
 // import. `createdAt` no es parte de la identidad: solo decide la accion.
-// `content` se compara saneado con `sanitizePaths`, igual que `exportActive`.
+// `content` y `justification` se comparan saneados con `sanitizePaths`, igual
+// que `exportActive`.
 function decideImportEntry({ active, hasSuperseded }, entry) {
   if (active) {
     const samePayload =
       active.type === entry.type &&
       active.scope === entry.scope &&
       sanitizePaths(String(active.content)) === sanitizePaths(String(entry.content)) &&
-      String(active.justification ?? '') === String(entry.justification || '')
+      sanitizePaths(String(active.justification ?? '')) === sanitizePaths(String(entry.justification || ''))
     const action = Date.parse(entry.createdAt) > Date.parse(active.created_at) ? 'supersede' : 'skip'
     return { classification: samePayload ? 'identico' : 'divergente', action }
   }

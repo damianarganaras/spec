@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-12T22:43:00Z",
+  "generatedAt": "2026-11-13T02:37:23Z",
   "docs": {
     "index.md": ["package.json", "src", "agents", "skills", "commands", "aspec", "scripts", "docs", "profiles", "README.md", "CHANGELOG.md", "AGENTS.md", "PRODUCT.md", ".ancletorc", ".opencode", ".discovery-map.json", "documentation", "audit logs"],
     "overview.md": ["package.json", "src", "agents", "skills", "commands", "templates", "profiles", "aspec", "scripts", "docs", "README.md", "PRODUCT.md", "CHANGELOG.md", ".ancletorc", ".opencode", "documentation", "audit logs", ".gitignore"],
@@ -11,7 +11,7 @@
     "units/_map.md": ["src", "agents", "commands", "skills", "templates", "test", "docs", "aspec", "profiles", "scripts", "eslint.config.js", ".github", "README.md", "package.json", "opencode.json", "CHANGELOG.md", "AGENTS.md", "documentation", "audit logs"],
     "units/cli-install.md": ["src", "agents", "skills", "aspec", "test", "templates", "README.md", "profiles", "scripts", "CHANGELOG.md", "package.json", ".gitattributes", ".gitignore", "opencode.json", "docs", "AGENTS.md", "documentation", "audit logs"],
     "units/discovery-engine.md": ["src", "scripts", "test", "README.md", ".opencode", "aspec", "package.json", "opencode.json", ".discovery-map.json", "docs", "CHANGELOG.md", "documentation", "audit logs"],
-    "units/memory-engine.md": ["src", "test", "README.md", "aspec", "agents", "skills", "package.json", "commands", "CHANGELOG.md", "docs", "AGENTS.md", "documentation", "audit logs"],
+    "units/memory-engine.md": ["src", "test", "README.md", "aspec", "agents", "skills", "package.json", "commands", "CHANGELOG.md", "docs", "AGENTS.md", "documentation", "audit logs", ".ancletorc"],
     "unknowns.md": ["README.md", "PRODUCT.md", "package.json", "src", "scripts", "test", "aspec", "profiles", "CHANGELOG.md", ".ancletorc", ".discovery-map.json", ".opencode", ".gitattributes", ".gitignore", "agents", "skills", "docs", "opencode.json", "documentation", "audit logs"]
   }
 }

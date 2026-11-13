@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-12T22:43:00Z
-pluginVersion: 0.30.2
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.30.2)
+## Modelos y tiers (estado 0.31.0)
 
 ### Tabla y cadenas
 
@@ -965,7 +965,9 @@ sin `--tier` es `normal`.
   payload completo y `keys` expande claves presentes en la página. `required` es entrada de llamada
   (no estado persistido); si no entra en el `limit`/presupuesto, falla.
 - **Working-context**: `.ancleto/working-context.md` se renderiza desde el engine vivo o desde la
-  topología en día-cero; el refresh on-write es compare-based y no crea archivos vacíos.
+  topología en día-cero; el refresh on-write es compare-based y no crea archivos vacíos. Desde
+  0.31.0 el renderer suma el conjunto crítico declarado en `.ancletorc` → `memory.criticalKeys` y
+  lo pasa como `required` (ver más abajo).
 - **Ops read-only por defecto**: `memory doctor`, `memory curate`, `memory list` y
   `memory consolidate` (sin `--apply`) no migran ni escriben. `snapshot` usa conexión read-only y
   `VACUUM INTO`, con reemplazo seguro en Windows.
@@ -978,6 +980,31 @@ sin `--tier` es `normal`.
   desde 0.22.1, ocurre **antes del move** y su secuencia vive en `agents/` y `skills/`, no en el
   engine. La promoción sólo admite `decision` con `memory_key` propia y `Estado: aprobado`; nunca
   promueve `rule` ni inventa claves.
+
+### Conjunto crítico del working-context (0.31.0)
+
+- **Fuente de criticidad**: `.ancletorc` → `memory.criticalKeys` (array de `memory_key`) es el
+  seam de configuración del proyecto, no una columna ni una tabla de la DB. Es aditivo: ausente,
+  no-array o con entradas no-string equivale a `[]` y el bloque generado es idéntico al vigente.
+- **Inyección**: el renderer (`src/core/memory/working-context.js`) lee la lista en sus dos puntos
+  de render (`renderWorkingContextBlock` y `refreshWorkingContextOnWrite`) y la pasa como
+  `{ required }` a `buildWorkingContext`. Las claves declaradas se inyectan primero, en el orden
+  declarado, sin que una regla no crítica las desplace; el comparador determinístico del engine
+  sigue gobernando el resto (scope → anclaje → `created_at` → `memory_key`).
+- **Fallo**: una clave inexistente, inactiva o fuera de presupuesto falla nombrando la `memory_key`.
+  `ancleto memory context` (con o sin `--out`) sale ≠ 0 y no sobrescribe el archivo previo; el
+  lifecycle y el on-write del MCP emiten `console.warn` sin escribir un bloque degradado;
+  `memory merge`/`memory consolidate --apply` salen ≠ 0. `required` sigue siendo entrada de llamada
+  no persistida: sin migración ni cambio de schema.
+- **Frontera intacta**: `<ContextOverflowWarning>` conserva texto, conteo, tope de claves y
+  consumidores. Release **minor**; el change
+  `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` cerró `MEM-05`.
+- **Estado local**: este checkout declara 7 claves en `.ancletorc`
+  (`repo-validation-commands`, `node-test-scope-explicit-paths`,
+  `delta-modified-restates-requirement-body`, `content-guard-change-artifact-location`,
+  `agent-model-three-surfaces`, `working-context-render`,
+  `content-guard-literal-overflow-warning`). `.ancletorc` es gitignored: se describe como seam de
+  configuración, no como fuente de evidencia del seed.
 
 ## Discovery y seed
 
@@ -1007,9 +1034,9 @@ sin `--tier` es `normal`.
   exacto de glob. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al cuerpo del pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 860 fuentes, ~39.536 tokens (comprimido, 31 entradas de archivo).
-  El `.discovery-map.json` regenerado reporta 892 archivos (aspec 318, `.opencode` 66, docs 21,
-  test 29, src 21, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
+- **Pack actual**: tier `minimo`, 863 fuentes, 161.700 B (~40k tokens, comprimido, 31 entradas de
+  archivo). El `.discovery-map.json` regenerado reporta 895 archivos (aspec 321, `.opencode` 66,
+  docs 21, test 29, src 21, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
   el hash semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados
   bajo changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
   writer ni `ruleVersion`; 0.29.0 extiende ese filtro a `documentation/**` y `audit logs/**`
@@ -1171,7 +1198,7 @@ salida de `--check` y agrega un pin no conductual; `version: 1`, `ruleVersion: 2
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.30.2`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.31.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +

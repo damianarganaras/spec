@@ -2,10 +2,10 @@
 node: units/memory-engine
 kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
-covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
-sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-12T22:43:00Z
-pluginVersion: 0.30.2
+covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
+sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -32,15 +32,14 @@ tampoco: sólo cambia el contrato de prompt del archive (el sync invoca `specs m
 de `seedMapPresent` y el detector de frescura viven en `checkDiscovery`; **0.26.2** sólo agrega
 tests (walkers de snapshot y pines de frescura); **0.26.x** es documental/test (`cli-diagnostics` y
 el guard estructural de deltas de `spec-sync`), fuera de `src/core/memory/**`, y el motor, el
-esquema, el recall y las ops siguen sin cambios. **0.27.0–0.30.2** tampoco lo tocan: la
+esquema, el recall y las ops siguen sin cambios. **0.27.0–0.30.2** no tocan el motor: la
 normalización del `version` del `package.json` raíz, el filtro de rutas efímeras y el matcher de
 `discovery.exclude` viven en
 `checkDiscovery`/`computeSources` (`src/cli/index.js`) y, desde 0.30.1, en
 `src/core/discovery-glob.js`; desde 0.30.2 el armado offline del estado vive en
-`src/core/discovery-state.js`, siempre fuera de `src/core/memory/**`. 0.29.0 sólo
-extiende ese filtro de lectura a `documentation/**` y `audit logs/**`, 0.30.0/0.30.1 sólo
-corrigen y cachean `escapeRe`/`compileGlob`/`matchesGlob`, y 0.30.2 es un patch documental con pin
-no conductual.
+`src/core/discovery-state.js`, siempre fuera de `src/core/memory/**`. **0.31.0 sí toca esta unidad
+sólo en el renderer**: `working-context.js` lee el conjunto crítico de `.ancletorc` y lo pasa como
+`required`; el engine, el esquema, el recall y las ops no cambian.
 
 ## Recorrido relevante
 
@@ -91,6 +90,17 @@ no conductual.
   bloque; `writeWorkingContext` conserva paridad de salto final.
 - `refreshWorkingContextOnWrite` es compare-based: reescribe solo si el bloque difiere y no crea un
   archivo vacío. Se dispara en escrituras del lifecycle y en `import`/`merge`/`consolidate`.
+- **Conjunto crítico (0.31.0)**: `readCriticalMemoryKeys(projectRoot)` lee
+  `.ancletorc` → `memory.criticalKeys` con lectura tolerante: archivo ausente, JSON inválido, valor
+  no-array o entradas no-string equivalen a `[]`; las strings vacías se descartan. Los dos puntos de
+  render (`renderWorkingContextBlock` y `refreshWorkingContextOnWrite`) lo pasan como
+  `{ required }` a `buildWorkingContext`; las claves declaradas entran primero, en su orden, y una
+  no crítica no las desplaza. No hay escritura en la DB ni cambio de schema.
+- **Política de fallo (0.31.0)**: si una clave crítica no existe, está inactiva o no entra en el
+  presupuesto, `ancleto memory context` (incluido `--out`) sale con código ≠ 0 y no sobrescribe el
+  archivo previo; el lifecycle (`init`/`install`/`upgrade`) y el on-write del MCP emiten
+  `console.warn` y no escriben un bloque degradado; el on-write propaga el error y
+  `memory merge`/`memory consolidate --apply` salen ≠ 0. `<ContextOverflowWarning>` no cambia.
 - `checkWorkingContextFreshness` es read-only y devuelve `ausente`/`desactualizado`/`ok`.
 
 ### Operaciones
@@ -149,7 +159,9 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
   escriben. `no-db` nunca se reporta como reporte limpio.
 - **`source` no es forjable**: un `source` en los args del caller se ignora; lo resuelve el runtime.
 - **Riesgo de presupuesto**: una requerida no se trunca ni se degrada al aviso; si no entra, falla
-  con diagnóstico (key + ruta de refs resueltas).
+  con diagnóstico (key + ruta de refs resueltas). Desde 0.31.0 el conjunto requerido se declara en
+  `.ancletorc` → `memory.criticalKeys` (seam de configuración, no de DB): una clave inexistente,
+  inactiva o fuera de presupuesto falla visiblemente según la superficie.
 - **Riesgo de consistencia**: `merge`/`consolidate` revalidan bajo lock y abortan si el target dejó
   de estar activo; `gc` usa un cutoff único para SELECT y DELETE.
 - **MCP**: `src/core/memory/mcp-server.js` expone `searchMemory`, `recordRule` y `recordDecision`
@@ -170,12 +182,13 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 | `src/core/memory/database.js` | Apertura, migraciones aditivas, checkpoint WAL |
 | `src/core/memory/tools.js` | Handlers de `searchMemory`/`recordRule`/`recordDecision` |
 | `src/core/memory/mcp-server.js` | Servidor MCP stdio |
-| `src/core/memory/working-context.js` | Render, refresh y frescura del bloque |
+| `src/core/memory/working-context.js` | Render, refresh, frescura y lectura de `memory.criticalKeys` |
 | `src/core/memory/doctor.js` | Diagnóstico read-only y rebuild FTS5 |
 | `src/core/memory/curation.js` | Curaduría read-only de refs y duplicados |
 | `src/core/memory/snapshot.js` | Copia consistente con historial |
 | `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move |
-| `aspec/specs/memory-engine/spec.md` | Requirement de idempotencia de reescritura idéntica en `recordNode` (0.23.0) |
+| `aspec/specs/memory-engine/spec.md` | Requirement de idempotencia de reescritura idéntica en `recordNode` (0.23.0); `Orden determinístico de inyección de reglas` con 7 escenarios y `Conjunto crítico estable del working-context` (0.31.0) |
+| `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` | Delta `ADDED` del conjunto crítico y `MODIFIED` del orden determinístico; `MEM-05` cerrado en 0.31.0 |
 | `aspec/specs/cli-diagnostics/spec.md` | Fuera de esta unidad: contrato de frescura del seed (0.26.1) que no toca el motor |
 | `agents/orchestrator.md` | Secuencia del archive y delegación de la promoción entre fase A y fase B |
 | `agents/documenter.md` | Fase A (merge, sin move) y fase B (move, sólo tras la promoción) |

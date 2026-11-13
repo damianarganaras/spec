@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-12T22:43:00Z
-pluginVersion: 0.30.2
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (860 fuentes, ~39.536 tokens), `package.json` (`0.30.2`), `src/core/model-catalog.json` y
+`minimo` (863 fuentes, ~40k tokens), `package.json` (`0.31.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
@@ -51,6 +51,7 @@ paths citados (ver `unknowns.md`).
 | Portabilidad `export`/`import`: bundle, `--repair`, `installedPaths` acumulativo | `units/cli-install.md`, `decisions.md` |
 | Discovery: mapa topológico, pack Repomix, estado del seed, `affectedDocs`, affected-set | `units/discovery-engine.md` |
 | Memoria persistente: SQLite+FTS5, tools MCP, recall, refs, working-context, ops, doctor, curate | `units/memory-engine.md` |
+| **Conjunto crítico del working-context (0.31.0)**: `memory.criticalKeys` en `.ancletorc` (seam de configuración), claves inyectadas primero en orden declarado, lectura tolerante (ausente/no-array/entradas no-string → `[]`), fallo duro en `ancleto memory context` con `--out` sin sobrescribir, `console.warn` best-effort en lifecycle/on-write/MCP y exit ≠ 0 en `memory merge`/`consolidate --apply`; `<ContextOverflowWarning>` intacto | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -71,10 +72,15 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.30.2` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.31.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` (0.31.0: `ADDED` del
+  Requirement `Conjunto crítico estable del working-context` y `MODIFIED` de `Orden determinístico
+  de inyección de reglas` con 7 escenarios; `.ancletorc` declara 7 claves en
+  `memory.criticalKeys`; fallo duro en la CLI explícita, `console.warn` en lifecycle/on-write y
+  exit ≠ 0 en `merge`/`consolidate --apply`; `<ContextOverflowWarning>` intacto; cierra `MEM-05`),
   `aspec/changes/archive/2026-11-12-discovery-state-schema-wording/` (0.30.2: delta `MODIFIED` de
   `cli-diagnostics` que documenta el estado persistido `version: 1` + `ruleVersion: 2` frente a
   `schemaVersion: 2` de la salida de `--check`, con un pin de test no conductual; sin cambio de
@@ -153,15 +159,15 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-   archivos) mantienen el conteo; en 0.22.1-0.30.2 no cambió su cantidad.
-- **Pack actual**: 860 fuentes y ~39.536 tokens (comprimido, tier `minimo`), con 31 entradas de
-   archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del pack. El
-   `.discovery-map.json` de la corrida reporta 892 archivos (aspec 318, `.opencode` 66, docs 21,
+   archivos) mantienen el conteo; en 0.22.1-0.31.0 no cambió su cantidad.
+- **Pack actual**: 863 fuentes y ~40k tokens (161.700 B, comprimido, tier `minimo`), con 31 entradas
+   de archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del pack. El
+   `.discovery-map.json` de la corrida reporta 895 archivos (aspec 321, `.opencode` 66, docs 21,
    test 29, src 21, documentation 340, audit logs 9). La lista `sources` excluye 22
    `test/*.test.js` por `discovery.exclude` desde 0.30.1; los 7 fixtures de `test/fixtures/**`
    siguen incluidos.
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
-   citadas para reflejar 0.30.2, preservando la estructura del seed. En 0.26.0 `discovery --check`
+   citadas para reflejar 0.31.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
    pasó a calcular `seedMapPresent` antes de clasificar el estado (vale en
    `READY`/`STALE`/`PARTIAL`/`MISSING`); en 0.26.1 el detector de frescura quedó documentado y
    pineado en `cli-diagnostics`; en 0.26.4 la suite declarada sumó el guard estructural de los delta
@@ -187,6 +193,9 @@ paths citados (ver `unknowns.md`).
    local) y el DP por segmentos se descartó por no ser equivalente. En 0.30.2 no cambia el runtime:
    se corrige la redacción de `cli-diagnostics` (estado persistido `version: 1` + `ruleVersion: 2`
    frente a `schemaVersion: 2` de `--check`) y se pinea el armado offline de forma no conductual;
-   este patch no altera el matcher, el writer ni `ruleVersion`. `affectedDocs` sigue poblándose
-   sólo en `STALE`. El `ancleto discovery --check` de validación reportó `READY`/`impact: none` con
+   este patch no altera el matcher, el writer ni `ruleVersion`. En 0.31.0 el renderer del
+   working-context lee `memory.criticalKeys` de `.ancletorc` y lo pasa como `required`: las claves
+   críticas van primero y fallan visiblemente si no existen, están inactivas o no entran en el
+   presupuesto; el discovery y la frescura no cambian. `affectedDocs` sigue poblándose sólo en
+   `STALE`. El `ancleto discovery --check` de validación reportó `READY`/`impact: none` con
    `changedAreas: []`, `seedMapPresent: true` y `affectedDocs: []`.

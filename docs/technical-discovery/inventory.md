@@ -2,8 +2,8 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-12T22:43:00Z
-pluginVersion: 0.30.2
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -20,29 +20,29 @@ skillVersion: '2.3'
 | `src/core/specs-merge.js` | `decisions.md`, `units/cli-install.md` | Merge puro de delta specs: parseo, plan por título exacto, fail-closed y serialización; 0.22.1 endurece H1, `archive` y espaciado; 0.24.0 rechaza headings de sección de delta en la canónica para los cuatro tipos; 0.25.0 es la única vía de sync de delta del archive y del bulk-archive; desde 0.26.4 la suite declarada valida estructuralmente los deltas de changes activos con su parser |
 | `src/core/adapters/frontmatter.js` | `units/cli-install.md` | Adaptación pura de frontmatter por host y `frontmatterValue` |
 | `src/core/machine-env.js` | `units/cli-install.md`, `setup.md` | Detección de shell/EOL/tooling y exclusión local |
-| `src/core/memory/**` | `units/memory-engine.md` | Motor, DB, tools, MCP, doctor, curaduría, snapshot; idempotencia de `recordNode` (0.23.0) |
+| `src/core/memory/**` | `units/memory-engine.md` | Motor, DB, tools, MCP, doctor, curaduría, snapshot; idempotencia de `recordNode` (0.23.0); renderer del working-context con `memory.criticalKeys` y política de fallo (0.31.0) |
 | `scripts/**` | `decisions.md`, `units/discovery-engine.md` | Descubrimiento dev-only del catálogo; no se publica |
 | `agents/**` | `units/_map.md`, `units/cli-install.md` | 10 agentes instalables (superficie de producto) |
 | `commands/**` | `units/_map.md` | 16 comandos `/cleto-*` |
 | `skills/**` | `units/_map.md` | 21 skills del ciclo SDD/discovery/review |
 | `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
 | `profiles/**` | `units/cli-install.md`, `decisions.md` | Overlay del perfil `test` (agents/commands/templates) |
-| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y changes archivados de diagnóstico, portabilidad, conformidad, merge, orden del archive, idempotencia de memoria, aviso de bundle legacy y EOL de templates (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory`, `template-legacy-eol-preservation`, `agent-model-minimo-migration`, `specs-merge-canonical-guard`, `archive-sync-via-specs-merge`, `cli-subcommand-help-guards`, `fix-discovery-seedmap-present`, `spec-seed-freshness-detector`, `align-freshness-recommended-action-spec`, `active-delta-structure-guard`, `seed-freshness-version-bump-not-material`, `seed-freshness-ephemeral-paths` y `seed-freshness-ignored-areas`, `discovery-exclude-glob-match`, `discovery-exclude-regexp-cache`, `discovery-state-schema-wording` y `pin-offline-discovery-state`) |
-| `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery, contenido, `specs-merge.test.js`, `delta-spec-structure.test.js` (incluye la detección de `spec.md` mal ubicados desde 0.27.0) y `memory-engine.test.js`; `cli.test.js` pinea las rutas efímeras, el anclaje de `documentation`/`audit logs` y el estado legacy (0.28.0–0.29.0); `discovery-glob.test.js` cubre la equivalencia del matcher cacheado (0.30.1); desde 0.30.1 los 22 `*.test.js` quedan fuera de `sources` por `discovery.exclude` (`**/*.test.*`), no por el tier ni por el predicado de frescura |
+| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y changes archivados de diagnóstico, portabilidad, conformidad, merge, orden del archive, idempotencia de memoria, aviso de bundle legacy y EOL de templates (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory`, `template-legacy-eol-preservation`, `agent-model-minimo-migration`, `specs-merge-canonical-guard`, `archive-sync-via-specs-merge`, `cli-subcommand-help-guards`, `fix-discovery-seedmap-present`, `spec-seed-freshness-detector`, `align-freshness-recommended-action-spec`, `active-delta-structure-guard`, `seed-freshness-version-bump-not-material`, `seed-freshness-ephemeral-paths` y `seed-freshness-ignored-areas`, `discovery-exclude-glob-match`, `discovery-exclude-regexp-cache`, `discovery-state-schema-wording`, `pin-offline-discovery-state` y `mem-05-working-context-critical-set` (0.31.0)) |
+| `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery, contenido, `specs-merge.test.js`, `delta-spec-structure.test.js` (incluye la detección de `spec.md` mal ubicados desde 0.27.0) y `memory-engine.test.js`; `cli.test.js` pinea las rutas efímeras, el anclaje de `documentation`/`audit logs` y el estado legacy (0.28.0–0.29.0); `discovery-glob.test.js` cubre la equivalencia del matcher cacheado (0.30.1); desde 0.31.0 `working-context.test.js` y `cli.test.js` pinean el conjunto crítico y su política de fallo; desde 0.30.1 los 22 `*.test.js` quedan fuera de `sources` por `discovery.exclude` (`**/*.test.*`), no por el tier ni por el predicado de frescura |
 | `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
 | `eslint.config.js`, `package.json` | `setup.md`, `decisions.md` | Lint sobre `src/`, `test/`, `scripts/` y contrato de publicación |
 | `docs/technical-discovery/**` | `index.md` | Este seed (excluido del hash de fuentes) |
 | `docs/**` (resto) | `inventory.md` | Documentación del framework y guías |
 | `documentation/**`, `audit logs/**` | `integrations.md`, `decisions.md` | Material legado lnx-cli y logs locales, gitignored y sin archivos versionados; efímeros para `discovery --check` desde 0.29.0 |
-| `.ancletorc`, `.opencode/.ancleto-tier`, `opencode.json` | `setup.md`, `decisions.md` | Configuración y estado local por proyecto |
+| `.ancletorc`, `.opencode/.ancleto-tier`, `opencode.json` | `setup.md`, `decisions.md` | Configuración y estado local por proyecto; `.ancletorc` → `memory.criticalKeys` es el seam del conjunto crítico del working-context (0.31.0) |
 | `.ancleto/machine-env.md` | `setup.md` | Artefacto local derivado; `.ancleto` y `.ancleto/**` son rutas efímeras para `discovery --check` (0.28.0); `documentation/**` y `audit logs/**` también lo son desde 0.29.0 |
 | `package.json`, `.gitattributes`, `.gitignore` | `setup.md`, `decisions.md` | Contrato de runtime, EOL y exclusiones |
 
 ## Áreas raíz observadas (`.discovery-map.json` al empacar)
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (318), `audit logs` (9), `commands` (16),
+`.github` (1), `.opencode` (66), `agents` (10), `aspec` (321), `audit logs` (9), `commands` (16),
 `docs` (21), `documentation` (340), `profiles` (8), `scripts` (1), `skills` (35), `src` (21),
-`templates` (2), `test` (29), más 15 archivos raíz. Total observado: **892 archivos**.
+`templates` (2), `test` (29), más 15 archivos raíz. Total observado: **895 archivos**.
 
 Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime.
 `documentation/` tiene 366 archivos en disco, pero el mapa cuenta 340 tras excluir
@@ -53,11 +53,11 @@ suman 35 archivos; `test/` tiene 29 archivos: 22 `*.test.js` en la raíz (inclui
 el patrón declarado es `test/*.test.js`. Desde 0.30.1 los 22 `*.test.js` no entran en `sources`
 porque `discovery.exclude` (`**/*.test.*`) aplica; los 7 fixtures siguen incluidos. El
 tier `minimo` excluye además `test/**` del cuerpo del pack, por lo que la evidencia de esas áreas se
-verificó por lectura directa. El pack de esta generación registra 860 fuentes y ~39.536 tokens, con
-31 entradas de archivo en el cuerpo.
+verificó por lectura directa. El pack de esta generación registra 863 fuentes, 161.700 B y ~40k
+tokens, con 31 entradas de archivo en el cuerpo.
 
-El `.discovery-map.json` observado en esta corrida reporta 892 archivos (aspec 318, `.opencode` 66,
-src 21, test 29, documentation 340, audit logs 9). El estado `.discovery-state.json` lista 860
+El `.discovery-map.json` observado en esta corrida reporta 895 archivos (aspec 321, `.opencode` 66,
+src 21, test 29, documentation 340, audit logs 9). El estado `.discovery-state.json` lista 863
 fuentes e incluye 674 entradas `documentation/` + 18 `audit logs/` entre `sources` y `fileHashes`;
 desde 0.29.0 esas rutas no cuentan para la frescura, pero `docs/**` y `aspec/**` sí. Desde 0.30.1
 las 22 rutas `test/*.test.js` ya no figuran en `sources`. Ver `unknowns.md`.

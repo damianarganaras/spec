@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/discovery-glob.js", "src/core/discovery-state.js", "scripts/refresh-model-catalog.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state"]
-generatedAt: 2026-11-12T22:43:00Z
-pluginVersion: 0.30.2
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -46,8 +46,10 @@ forma del estado y `ruleVersion: 2` siguen intactos. **0.30.0** corrige el match
 sobre 9.669 evaluaciones el costo baja de 15,04 ms a 1,63 ms (9,2×), sin cambio de tokenización,
 anclaje ni semántica. **0.30.2** tampoco cambia la frescura: es un patch documental que distingue el
 estado persistido (`version: 1` + `ruleVersion: 2`) del `schemaVersion: 2` de `--check` y pinea el
-armado offline en `src/core/discovery-state.js` sin alterar los bytes persistidos. `DEFAULT_IGNORES`,
-`outputDir`, `packDiscovery`, el writer, la forma del estado y `ruleVersion: 2` siguen intactos.
+armado offline en `src/core/discovery-state.js` sin alterar los bytes persistidos. **0.31.0** no toca
+el discovery ni la frescura: sólo cambia el renderer del working-context, fuera de este módulo.
+`DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, el writer, la forma del estado y `ruleVersion: 2`
+siguen intactos.
 
 ## Recorrido relevante
 
@@ -310,10 +312,10 @@ relativos que no resuelven se reportan como inconclusos. Es read-only y determin
   filtro a `documentation/**` y `audit logs/**`; un estado legacy sin `fileHashes` sigue
   `STALE`/`minor`.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 860 fuentes y ~39.536 tokens, tier `minimo` (comprimido), con 31 entradas de
-  archivo en el cuerpo. El `.discovery-map.json` observado reporta 892 archivos (aspec 318,
+- **Pack actual**: 863 fuentes, 161.700 B y ~40k tokens, tier `minimo` (comprimido), con 31 entradas
+  de archivo en el cuerpo. El `.discovery-map.json` observado reporta 895 archivos (aspec 321,
   `.opencode` 66, src 21, test 29, docs 21, documentation 340, audit logs 9); el estado
-  `.discovery-state.json` lista 860 fuentes e incluye 674 entradas `documentation/` + 18
+  `.discovery-state.json` lista 863 fuentes e incluye 674 entradas `documentation/` + 18
   `audit logs/` entre `sources` y `fileHashes`, efímeras desde 0.29.0. Las 22 rutas
   `test/*.test.js` ya no figuran en `sources` por `discovery.exclude` (0.30.1); los 7 fixtures de
   `test/fixtures/**` siguen incluidos.

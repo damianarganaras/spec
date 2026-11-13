@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-12T22:43:00Z
-pluginVersion: 0.30.2
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -47,8 +47,8 @@ skillVersion: '2.3'
 - `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
-  esta generación se produjo con el fallback `npx` y quedó comprimido (860 fuentes, ~39.536
-   tokens); los cuerpos de funciones se eliden y Repomix aplica además sus ignores por defecto
+  esta generación se produjo con el fallback `npx` y quedó comprimido (863 fuentes, 161.700 B,
+  ~40k tokens); los cuerpos de funciones se eliden y Repomix aplica además sus ignores por defecto
    (incluye `**/*.md`), por eso el pack no contiene Markdown (ver `unknowns.md`).
 
 ## opencode (host, telemetría local y catálogo)
@@ -142,7 +142,7 @@ skillVersion: '2.3'
   secuencia de contratos de prompt (`skills/ancleto-archive`, `skills/ancleto-bulk-archive`,
   `agents/documenter.md`) sobre archivos locales, y el guard de `--help`/`-h` es un `console.log`
   del uso antes del dispatch, sin escritura de archivos. Sin red, procesos externos ni servicios.
-- **0.26.0–0.30.2 no agregan integraciones**: `discovery --check` ya era una lectura local de
+- **0.26.0–0.31.0 no agregan integraciones**: `discovery --check` ya era una lectura local de
   `.config`/estado/hashes, el detector de frescura de 0.26.1 sólo se documenta y pinea en tests,
   0.26.2 sólo consolida walkers de snapshot read-only y pines de frescura en tests, 0.26.4 agrega un
   guard estructural de delta specs a la suite y documenta el Requirement en `spec-sync`, 0.27.0
@@ -153,7 +153,8 @@ skillVersion: '2.3'
   corrige el matcher local de `discovery.exclude` (`escapeRe`/`matchesGlob`), 0.30.1 lo extrae a
   `src/core/discovery-glob.js` con caché en memoria por glob exacto y 0.30.2 sólo corrige la
   redacción canónica y pinea el armado offline del estado, sin tocar el writer ni sumar procesos.
-  Ninguno suma red, procesos ni servicios; no hay llamadas externas involucradas en el chequeo.
+  0.31.0 sólo lee `.ancletorc` → `memory.criticalKeys` en el renderer del working-context y falla o
+  advierte según la superficie; sigue siendo local y no suma red, procesos ni servicios.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee

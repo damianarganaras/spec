@@ -45,8 +45,8 @@ covers:
   - frescura del seed
   - machine-env
 sources: ["src/cli/index.js", "src/core/discovery-glob.js", "aspec/changes/archive/2026-11-10-spec-seed-freshness-detector", "aspec/changes/archive/2026-11-11-active-delta-structure-guard", "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material", "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths", "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-08-archive-sync-via-specs-merge", "aspec/changes/archive/2026-11-08-cli-subcommand-help-guards", "aspec/changes/archive/2026-11-08-agent-model-minimo-migration", "aspec/changes/archive/2026-11-08-specs-merge-canonical-guard", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-12T22:43:00Z
-pluginVersion: 0.30.2
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -568,9 +568,14 @@ tier puede quedar dormido en `check`.
   `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
   resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; deben
-  alinearse con `package.json` (`0.30.2`). No son fuentes del seed. Desde 0.28.0, `.ancleto/**` y
+  alinearse con `package.json` (`0.31.0`). No son fuentes del seed. Desde 0.28.0, `.ancleto/**` y
   `.discovery-map.json` raíz tampoco cuentan para la frescura del seed; desde 0.29.0, tampoco
   `documentation/**` y `audit logs/**` (gitignored, 0 tracked).
+- **Conjunto crítico (0.31.0)**: `ancleto memory context` es la superficie explícita y falla con
+  exit ≠ 0 nombrando la `memory_key` sin sobrescribir el archivo previo; el lifecycle
+  (`init`/`install`/`upgrade`) y el on-write advierten sin escribir un bloque degradado, y
+  `memory merge`/`memory consolidate --apply` salen ≠ 0 si el refresh falla. La lectura de
+  `memory.criticalKeys` es tolerante (ausente/inválida → `[]`).
 - **Merge de specs 0.22.0–0.22.1**: el fail-closed es por plan, no transaccional ante una caída de
   I/O a mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs
   traducidos ni crea capabilities. El contenedor `archive` ya no se trata como change. Desde 0.25.0
@@ -617,6 +622,7 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache/` | Change archivado de 0.30.1: extrae `escapeRe`/`compileGlob`/`matchesGlob` a `src/core/discovery-glob.js` y cachea el `RegExp` por glob exacto (15,04 ms → 1,63 ms, 9,2× sobre 9.669 evaluaciones), sin cambio de semántica; ReDoS con `**` repetidos aceptado y DP por segmentos descartado (optimización, sin delta de spec) |
 | `aspec/changes/archive/2026-11-12-discovery-state-schema-wording/` | Change archivado de 0.30.2: delta `MODIFIED` de `cli-diagnostics` que documenta el estado persistido `version: 1` + `ruleVersion: 2` frente a `schemaVersion: 2` de la salida de `--check`, con pin de test no conductual (sin cambio de runtime) |
 | `aspec/changes/archive/2026-11-12-pin-offline-discovery-state/` | Change archivado de conformidad (sin delta ni bump): extrae `buildDiscoveryState`/`renderDiscoveryState` a `src/core/discovery-state.js`, usados por `packDiscovery`, con golden byte-idéntico en `test/cli.test.js` |
+| `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` | Change archivado de 0.31.0: `memory.criticalKeys` en `.ancletorc`, inyección primero de las claves críticas y política de fallo (CLI explícita ≠ 0 sin sobrescribir; lifecycle/on-write con `console.warn`; `merge`/`consolidate --apply` ≠ 0); delta `ADDED` de `memory-engine` y `MODIFIED` del orden determinístico |
 | `aspec/changes/archive/2026-11-06-specs-merge-hardening/` | Change archivado del endurecimiento de `specs merge` (0.22.1): contenedor `archive`, H1 estructural, `ADDED` y atomicidad acotada |
 | `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` | Change archivado del merge determinístico de specs y la capability `spec-sync` (0.22.0) |
 | `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` | Change archivado del discriminador conformidad-vs-delta y archive sin delta (0.21.0; materializado por `upgrade`) |
@@ -631,6 +637,7 @@ tier puede quedar dormido en `check`.
 | `aspec/specs/spec-sync/spec.md` | Requirements del merge determinístico, idempotencia, fail-closed, dry-run y alcance acotado; 0.22.1 agrega H1 estructural, contenedor `archive` y atomicidad acotada; 0.24.0 agrega el guard canónica-only de headings de delta para los cuatro tipos; 0.26.4 agrega la validación estructural de los deltas de changes activos en la suite declarada y 0.27.0 suma la detección de un `spec.md` de change activo fuera de `specs/<capability>/spec.md` |
 | `aspec/specs/copilot-support/spec.md`, `aspec/specs/legacy-import/spec.md`, `aspec/specs/test-profile/spec.md` | Canónicas normalizadas a `## Requirements` (0.24.0) |
 | `aspec/specs/memory-ops/spec.md` | Requirements de memoria y de la promoción de decisiones al archivar antes del move (0.22.1) |
+| `aspec/specs/memory-engine/spec.md` | `Orden determinístico de inyección de reglas` (7 escenarios) y `Conjunto crítico estable del working-context` (0.31.0), incluida la política de fallo por superficie |
 | `aspec/changes/archive/2026-11-06-archive-order-correctness/` | Change archivado del orden del archive y la semántica de fallo (0.22.1) |
 | `aspec/specs/prompt-contracts/spec.md` | Requirements de conformidad-vs-delta y archive sin delta (0.21.0) y del sync de delta al archivar ruteado por `specs merge` (0.25.0) |
 | `aspec/specs/agent-install-routing/spec.md` | Requirements de destinos nativos, ruteo MCP por host y compresión host-scoped |

@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-12T22:43:00Z
-pluginVersion: 0.30.2
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -143,7 +143,9 @@ del paquete instalado.
 - **Descubrimiento y análisis**: `discovery`, `affected`, `specs check`, `specs merge`, `stats`,
   `stats failures`, `projects`.
 - **Memoria**: `memory context|list|doctor|curate|export|import|gc|snapshot|merge|consolidate`,
-  `mcp`.
+  `mcp`. Desde 0.31.0 `memory context` (con o sin `--out`) falla con exit ≠ 0 y no sobrescribe el
+  archivo previo si una clave de `memory.criticalKeys` no existe, está inactiva o no entra en el
+  presupuesto; el lifecycle y el on-write del MCP advierten sin escribir un bloque degradado.
 - **Tiers**: `normal` (opencode-go), `minimo` (cadena de dos candidatos
   `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free` contra el catálogo),
   `gratis` (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin
@@ -195,7 +197,8 @@ del paquete instalado.
   cambio de semántica; el ReDoS con `**` repetidos sigue aceptado y el DP por segmentos se descartó
   por no ser equivalente. En 0.30.2 no hay cambio de comportamiento: la canónica distingue el estado
   persistido (`version: 1` + `ruleVersion: 2`) del `schemaVersion: 2` que emite `--check`, y un pin
-  de test no conductual cubre el armado offline del estado.
+  de test no conductual cubre el armado offline del estado. 0.31.0 no cambia el discovery ni la
+  frescura: sólo toca el renderer del working-context.
 - **Ayuda sin ejecución (0.25.0)**: en `install`, `update`, `upgrade`, `init`, `memory`, `import`,
   `export`, `mcp`, `specs`, `specs merge`, `projects` y `list --projects`, `--help`/`-h` imprime el
   uso en stdout y sale con exit 0 sin escribir nada. `discovery --help`, la ayuda global y los
@@ -210,7 +213,8 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 
 | Variable / archivo | Propósito | Referencia |
 |---|---|---|
-| `.ancletorc` | Manifiesto de instalación y configuración del proyecto (`agent`, `language`, `profile`, `discovery`, `gratisModel`, `azure`, `installedPaths`, `version`) | `src/cli/index.js` → `readAncletorc` |
+| `.ancletorc` | Manifiesto de instalación y configuración del proyecto (`agent`, `language`, `profile`, `discovery`, `memory`, `gratisModel`, `azure`, `installedPaths`, `version`) | `src/cli/index.js` → `readAncletorc` |
+| `.ancletorc` → `memory.criticalKeys` | Lista curada de `memory_key` que el renderer del working-context inyecta primero; ausente, no-array o con entradas no-string equivale a `[]` | `src/core/memory/working-context.js` → `readCriticalMemoryKeys` |
 | `.opencode/.ancleto-tier` | Último tier aplicado; lo lee `check` y `repomix-tier` | `src/cli/index.js`, `src/core/repomix-tier.js` |
 | `ANCLETO_OPENCODE_DB` | Ruta alternativa a la base de sesiones de opencode para `stats` | `src/cli/index.js` → `opencodeDbPath` |
 | `ANCLETO_PROJECTS_FILE` | Ruta alternativa al registro global de proyectos | `src/cli/index.js` → `projectsRegistryPath` |
@@ -223,9 +227,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.30.2)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.31.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.30.2`.
+  la fija `package.json` = `0.31.0`.
 
 ## Entorno de máquina
 

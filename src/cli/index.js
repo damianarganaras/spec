@@ -2028,7 +2028,13 @@ async function upgradeCmd(args) {
   } else {
     console.log(`  ✔ skills actualizadas en ${skillsDir} (${ANCLETO_SKILLS.length} skills)`)
   }
-  console.log(wentContext ? '  ✔ working-context.md regenerado' : '  ✔ working-context.md sin reglas activas (vacio)')
+  // `undefined`: el refresh fallo (ya se advirtio por stderr); `null`: no habia bloque
+  // que escribir. El fallo no aborta el lifecycle, pero tampoco se reporta como exito.
+  if (wentContext === undefined) {
+    console.log('  ⚠ working-context.md no refrescado (ver advertencia)')
+  } else {
+    console.log(wentContext ? '  ✔ working-context.md regenerado' : '  ✔ working-context.md sin reglas activas (vacio)')
+  }
   console.log(machineEnv.written ? '  ✔ machine-env.md generado' : '  ✔ machine-env.md sin cambios')
   if (machineEnv.updated) console.log('  ✔ exclusión local actualizada')
   else if (machineEnv.ignored) console.log('  ✔ exclusión local verificada')
@@ -2653,21 +2659,30 @@ async function discovery(flags) {
 }
 
 async function refreshWorkingContext(projectDir, scope = 'project') {
-  const dbPath = defaultMemoryDbPath(projectDir)
-  if (!(await exists(dbPath))) {
-    // Dia-cero: sin base de memoria no se abre el motor; la topologia no depende de
-    // reglas ni de la DB, asi que se materializa igual cuando existe `.discovery-map.json`.
-    // Sin topologia no se crea contenido ficticio (no se escribe el archivo). El render
-    // (con o sin motor) tiene un unico camino en `renderWorkingContextBlock`.
-    const topoBlock = renderWorkingContextBlock(null, projectDir, scope)
-    if (topoBlock === null) return null
-    return writeWorkingContextBlock(projectDir, topoBlock)
-  }
-  const engine = createMemoryEngine(dbPath)
   try {
-    return writeWorkingContext(engine, projectDir, scope)
-  } finally {
-    engine.close()
+    const dbPath = defaultMemoryDbPath(projectDir)
+    if (!(await exists(dbPath))) {
+      // Dia-cero: sin base de memoria no se abre el motor; la topologia no depende de
+      // reglas ni de la DB, asi que se materializa igual cuando existe `.discovery-map.json`.
+      // Sin topologia no se crea contenido ficticio (no se escribe el archivo). El render
+      // (con o sin motor) tiene un unico camino en `renderWorkingContextBlock`.
+      const topoBlock = renderWorkingContextBlock(null, projectDir, scope)
+      if (topoBlock === null) return null
+      return writeWorkingContextBlock(projectDir, topoBlock)
+    }
+    const engine = createMemoryEngine(dbPath)
+    try {
+      return writeWorkingContext(engine, projectDir, scope)
+    } finally {
+      engine.close()
+    }
+  } catch (err) {
+    // Lifecycle best-effort: `init`/`install`/`upgrade` no abortan por una clave
+    // critica invalida, pero tampoco persisten un bloque degradado. `undefined`
+    // distingue este fallo de un refresh sin bloque (`null`) para que `upgrade`
+    // no lo reporte como "sin reglas activas".
+    console.warn(`ancleto: no se pudo refrescar el working-context: ${err.message}`)
+    return undefined
   }
 }
 
@@ -2686,7 +2701,22 @@ async function refreshMachineEnv(projectDir) {
 }
 
 async function memoryContext(flags) {
-  const scope = flagValue(flags, '--scope') || 'project'
+  // `--scope` es opcional, pero si aparece sin valor es error de uso: `flagValue`
+  // devolveria null y caeria en el default `project` en silencio.
+  const scopeRaw = requiredMemoryFlag(flags, '--scope')
+  if (flags.includes('--scope') && !scopeRaw) {
+    console.error('ancleto: --scope requiere un valor (project|feature|task)')
+    process.exitCode = 1
+    return
+  }
+  const scope = scopeRaw || 'project'
+  // Misma validacion que `memory list`: un scope invalido es un error de uso, no un
+  // fallo del engine ("la memory_key ... no existe como rule activa del scope X").
+  if (!['project', 'feature', 'task'].includes(scope)) {
+    console.error(`ancleto: --scope invalido: ${scope} (project|feature|task)`)
+    process.exitCode = 1
+    return
+  }
   const out = flagValue(flags, '--out')
   const projectDir = process.cwd()
   const dbPath = defaultMemoryDbPath(projectDir)
@@ -2710,6 +2740,11 @@ async function memoryContext(flags) {
     } else {
       console.log(block)
     }
+  } catch (err) {
+    // Superficie explicita: hay un humano esperando; falla visiblemente, nombra la
+    // memory_key y NO sobrescribe el archivo destino (ni con `--out`).
+    console.error(err.message)
+    process.exitCode = 1
   } finally {
     if (engine) engine.close()
   }
@@ -2734,12 +2769,21 @@ async function memoryDoctorCmd(flags) {
   let staleness
   try {
     staleness = checkWorkingContextFreshness(engine, projectRoot)
+  } catch (err) {
+    // Advisory best-effort: una clave critica invalida no debe tumbar el doctor ni
+    // cambiar su exit code (que sigue midiendo la integridad de la DB).
+    console.warn(`ancleto: no se pudo verificar el working-context: ${err.message}`)
+    staleness = null
   } finally {
     engine.close()
   }
-  const staleSymbol = staleness.state === 'ok' ? '✔' : '⚠'
-  const hint = staleness.state === 'ok' ? '' : ' (regenerá con `ancleto memory context --out .ancleto/working-context.md`)'
-  console.log(`  ${staleSymbol} Working-context: ${staleness.state}${hint}`)
+  if (staleness === null) {
+    console.log('  ⚠ Working-context: no verificable')
+  } else {
+    const staleSymbol = staleness.state === 'ok' ? '✔' : '⚠'
+    const hint = staleness.state === 'ok' ? '' : ' (regenerá con `ancleto memory context --out .ancleto/working-context.md`)'
+    console.log(`  ${staleSymbol} Working-context: ${staleness.state}${hint}`)
+  }
   process.exit(healthy ? 0 : 1)
 }
 

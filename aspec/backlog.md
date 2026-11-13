@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-12 (release 0.30.1: caché del RegExp del matcher de config.exclude; residual de ReDoS cerrado como decisión documentada).
+> Última actualización: 2026-11-12 (MEM-05 cerrado en 0.31.0: set crítico de working-context curado por `memory.criticalKeys`; release 0.30.1: caché del RegExp del matcher de config.exclude; residual de ReDoS cerrado como decisión documentada).
 
 ## Prioridad de ejecución
 
@@ -54,13 +54,15 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 - **P0:** PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`.
 - **P1:** CH-00 baseline como runbook; CH-06a cerrado en 0.22.0 (`ch-06a-specs-merge-deterministic`, capability `spec-sync`); CH-06b (selección de tests por affected-set) diferido por **segunda vez** (0.22.2), ahora por razón estructural: `test/cli.test.js` spawnea el CLI (sin arista de import) y los content guards leen markdown no indexado, así que declararla "no contrato completo" no la vuelve segura; se reabre sólo con consumidor probado + contrato que nombre las suites excluidas. `computeAffectedSet`/`ancleto affected` ya existen y son determinísticos; CH-07 A/B bloqueado por CH-00.
-- **P1 · MEM-05 (pendiente) — presupuesto del working-context:** el bloque inyectado
-  `<ProjectMemoryRules>` no distingue importancia. Con 39 reglas `scope: project` renderiza 8 y omite
-  31; agregar una regla larga (2026-11-06) hizo caer las renderizadas de 9 a 8 y desplazó dos reglas
-  que antes entraban, incluida `node-test-scope-explicit-paths`. MEM-05 debe fijar un set universal
-  estable, recuperar el resto por tarea y fallar explícito (con `memory_key`) cuando una regla crítica
-  no entra. Detalle y criterio de aceptación: `docs/BACKLOG_REINGENIERIA_MEMORIA_FIRST.md` §5.
-  Núcleo archivado el 2026-11-02; el "set universal estable" sigue pendiente y queda fuera de 0.22.0: requiere curaduría de memoria (MEM-01) y definición de criticality (CH-09a, diferido), y no es código offline-testeable.
+- **P1 · MEM-05 (resuelto en 0.31.0) — presupuesto del working-context:** `memory.criticalKeys` en
+  `.ancletorc` cura un set crítico (7 claves), inyectado primero y nunca desplazado por una regla no
+  crítica; se preserva el llenado determinístico existente (scope → anclaje → created_at →
+  memory_key). Fallo explícito con `memory_key`: `ancleto memory context` sale != 0 y no sobrescribe
+  el archivo; lifecycle (`init`/`install`/`upgrade`) y el caller MCP del on-write advierten sin
+  bloque degradado; `memory merge`/`consolidate --apply` salen != 0. `<ContextOverflowWarning>`
+  intacto (texto, conteo, tope +N, una Recall). Tests: 883 targeted / 1300 full, 0 fail; lint limpio;
+  DB real no mutada. Change archivado en
+  `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/`.
   **MEM-05f cerrado en 0.23.0** (`template-legacy-eol-preservation`): `reconcileLegacyBlocks` preserva el EOL por línea y el estado de newline final. **MEM-05g diferido**: inalcanzable — 0 code fences dentro de todo bloque `LOCKED` de `templates/`, `profiles/test/templates/` y `AGENTS.md`/`PRODUCT.md` raíz; sólo input artesanal dispara el cierre temprano.
 - **P2 colaboración:** `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10). **T25 (`formatVersion`) refutado en 0.23.0**: los exports viejos ya importan sin pérdida, `importNodes` ignora claves extra y exige `Array.isArray`, y ningún consumidor lee una versión; se reabre cuando CH-08 defina el lector.
 - **P2 motor/host:** T20 idempotencia **cerrado en 0.23.0** (`memory-record-idempotency`); T30 V1/V2, CH-10 matriz de hosts, #4, #6, #18 pendientes.
@@ -365,7 +367,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **`discovery-exclude-glob-match` (funcional, delta ADDED en `cli-diagnostics`):** change implementado, testeado y archivado en `aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/`; requirement nuevo `Semántica por segmentos de los patrones de exclusión del discovery` mergeado en `aspec/specs/cli-diagnostics/spec.md:988` (9→10 requirements, 34 escenarios de frescura intactos).
 - **Defecto y corrección:** `escapeRe` no escapaba `*`/`?` y la rama `**` de `matchesGlob` (`src/cli/index.js`) no traducía el `*` simple: `**/*.test.*` compilaba a `^.*/*\.test\.*$` y matcheaba 0 de 466 archivos trackeados. Ahora tokeniza `**/`→`(?:.*/)?`, `/**`→`(?:/.*)?`, `**`→`.*`, `*`→`[^/]*`, `?`→`[^/]` con anclaje conservado; `public`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml` y archivos raíz sin cambio.
 - **Evidencia:** e2e en fixture fuera del repo antes/después; `.discovery-state.json` tenía 872 sources y 21 rutas `test/*.test.js`; post-fix el primer `--check` da `STALE`/`minor` (no `material`: `test/fixtures/memory/**` mantiene viva el área `test`); 9 pins nuevos en `test/cli.test.js` (vía `discovery --check` READY, sin duplicar el regex); suite 1283 (1278 pass, 5 skip), lint passed, format not-configured, typecheck not-configured.
-- **Intactos:** `DEFAULT_IGNORES`, `outputDir`, writer, forma del estado (`schemaVersion 2`), `ruleVersion 2`, `isEphemeralSource` (la exclusión reader-side de `documentation/` y `audit logs/` no se reabrió), sin config nueva.
+- **Intactos:** `DEFAULT_IGNORES`, `outputDir`, writer, forma del estado (`version 1` + `ruleVersion 2`), `isEphemeralSource` (la exclusión reader-side de `documentation/` y `audit logs/` no se reabrió), sin config nueva.
 - **Release:** 0.30.0 (minor), merge `--no-ff` `305d388`, tag ANOTADO `v0.30.0`; run de publish `43258286738` (estado en verificación al momento de escribir).
 - **Compatibilidad/rollback:** un estado previo queda `STALE` una vez hasta regenerar; sin migración ni bump de `ruleVersion`; un reader 0.29.x lee el estado igual.
 
@@ -386,4 +388,4 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 **Pendiente:**
 
-- **Imprecisión de redacción en `aspec/specs/cli-diagnostics/spec.md:1011`** (fuera de alcance, requiere delta propio): dice que el estado persistido conserva `schemaVersion: 2`, pero el writer emite `version: 1` + `ruleVersion: 2` (`src/core/discovery-state.js:4-11`); `schemaVersion: 2` es el campo de la salida JSON de `discovery --check` (`src/cli/index.js:2563`). No se corrigió en 0.30.1.
+- **Imprecisión de redacción en `aspec/specs/cli-diagnostics/spec.md:1011` — RESUELTO:** corregida por el change `discovery-state-schema-wording` (archivado en `aspec/changes/archive/2026-11-12-discovery-state-schema-wording/`, commits `f626d15` + `053c032`); el spec canónico ahora documenta el estado persistido `version: 1` + `ruleVersion: 2` frente a la salida `schemaVersion: 2` de `--check`. Liberado como 0.30.2 (merge `ceeb65a`, tag `v0.30.2`, npm 0.30.2).

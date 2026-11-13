@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-12T19:52:28Z
-pluginVersion: 0.30.1
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.30.1)
+## Modelos y tiers (estado 0.31.0)
 
 ### Tabla y cadenas
 
@@ -965,7 +965,9 @@ sin `--tier` es `normal`.
   payload completo y `keys` expande claves presentes en la página. `required` es entrada de llamada
   (no estado persistido); si no entra en el `limit`/presupuesto, falla.
 - **Working-context**: `.ancleto/working-context.md` se renderiza desde el engine vivo o desde la
-  topología en día-cero; el refresh on-write es compare-based y no crea archivos vacíos.
+  topología en día-cero; el refresh on-write es compare-based y no crea archivos vacíos. Desde
+  0.31.0 el renderer suma el conjunto crítico declarado en `.ancletorc` → `memory.criticalKeys` y
+  lo pasa como `required` (ver más abajo).
 - **Ops read-only por defecto**: `memory doctor`, `memory curate`, `memory list` y
   `memory consolidate` (sin `--apply`) no migran ni escriben. `snapshot` usa conexión read-only y
   `VACUUM INTO`, con reemplazo seguro en Windows.
@@ -978,6 +980,31 @@ sin `--tier` es `normal`.
   desde 0.22.1, ocurre **antes del move** y su secuencia vive en `agents/` y `skills/`, no en el
   engine. La promoción sólo admite `decision` con `memory_key` propia y `Estado: aprobado`; nunca
   promueve `rule` ni inventa claves.
+
+### Conjunto crítico del working-context (0.31.0)
+
+- **Fuente de criticidad**: `.ancletorc` → `memory.criticalKeys` (array de `memory_key`) es el
+  seam de configuración del proyecto, no una columna ni una tabla de la DB. Es aditivo: ausente,
+  no-array o con entradas no-string equivale a `[]` y el bloque generado es idéntico al vigente.
+- **Inyección**: el renderer (`src/core/memory/working-context.js`) lee la lista en sus dos puntos
+  de render (`renderWorkingContextBlock` y `refreshWorkingContextOnWrite`) y la pasa como
+  `{ required }` a `buildWorkingContext`. Las claves declaradas se inyectan primero, en el orden
+  declarado, sin que una regla no crítica las desplace; el comparador determinístico del engine
+  sigue gobernando el resto (scope → anclaje → `created_at` → `memory_key`).
+- **Fallo**: una clave inexistente, inactiva o fuera de presupuesto falla nombrando la `memory_key`.
+  `ancleto memory context` (con o sin `--out`) sale ≠ 0 y no sobrescribe el archivo previo; el
+  lifecycle y el on-write del MCP emiten `console.warn` sin escribir un bloque degradado;
+  `memory merge`/`memory consolidate --apply` salen ≠ 0. `required` sigue siendo entrada de llamada
+  no persistida: sin migración ni cambio de schema.
+- **Frontera intacta**: `<ContextOverflowWarning>` conserva texto, conteo, tope de claves y
+  consumidores. Release **minor**; el change
+  `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` cerró `MEM-05`.
+- **Estado local**: este checkout declara 7 claves en `.ancletorc`
+  (`repo-validation-commands`, `node-test-scope-explicit-paths`,
+  `delta-modified-restates-requirement-body`, `content-guard-change-artifact-location`,
+  `agent-model-three-surfaces`, `working-context-render`,
+  `content-guard-literal-overflow-warning`). `.ancletorc` es gitignored: se describe como seam de
+  configuración, no como fuente de evidencia del seed.
 
 ## Discovery y seed
 
@@ -1007,15 +1034,18 @@ sin `--tier` es `normal`.
   exacto de glob. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al cuerpo del pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 857 fuentes, ~39.502 tokens (comprimido, 31 entradas de archivo).
-  El `.discovery-map.json` regenerado reporta 889 archivos (aspec 315, `.opencode` 66, docs 21,
-  test 29, src 21, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
+- **Pack actual**: tier `minimo`, 863 fuentes, 161.700 B (~40k tokens, comprimido, 31 entradas de
+  archivo). El `.discovery-map.json` regenerado reporta 895 archivos (aspec 321, `.opencode` 66,
+  docs 21, test 29, src 21, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
   el hash semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados
   bajo changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
   writer ni `ruleVersion`; 0.29.0 extiende ese filtro a `documentation/**` y `audit logs/**`
   anclados a la raíz; 0.30.0 corrige el matcher de `discovery.exclude`, también sin cambiar el
-  writer ni `ruleVersion`; 0.30.1 lo extrae a `src/core/discovery-glob.js` y cachea el `RegExp`
-  compilado por glob exacto.
+   writer ni `ruleVersion`; 0.30.1 lo extrae a `src/core/discovery-glob.js` y cachea el `RegExp`
+   compilado por glob exacto. 0.30.2 es un patch documental sin cambio de runtime: la canónica
+   distingue el estado persistido (`version: 1` + `ruleVersion: 2`) del `schemaVersion: 2` de la
+   salida de `--check`, y el change de conformidad `pin-offline-discovery-state` pinea el armado
+   offline (`buildDiscoveryState`/`renderDiscoveryState`) con bytes idénticos.
 
 ### Contrato del detector de frescura (0.26.1, reglas 0.27.0–0.29.0)
 
@@ -1106,7 +1136,10 @@ existente, sin un segundo oráculo ni una lista paralela de exclusiones. Efecto 
 sigue siendo una limitación aceptada porque el input es el `.ancletorc` local; el reemplazo por un
 DP por segmentos se descartó por no ser equivalente (9 divergencias en `**` embebido y 1 en `.` vs.
 `[^/]` frente a newline). Requisito canónico: «Semántica por segmentos de los patrones de exclusión
-del discovery» en `aspec/specs/cli-diagnostics/spec.md`; 0.30.1 no lo modifica.
+del discovery» en `aspec/specs/cli-diagnostics/spec.md`; 0.30.1 no lo modifica. 0.30.2 tampoco toca
+el matcher: sólo corrige la redacción canónica sobre la forma del estado persistido frente a la
+salida de `--check` y agrega un pin no conductual; `version: 1`, `ruleVersion: 2`, el writer y
+`schemaVersion: 2` de la salida se conservan.
 
 ## Lint y publicación
 
@@ -1165,7 +1198,7 @@ del discovery» en `aspec/specs/cli-diagnostics/spec.md`; 0.30.1 no lo modifica.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.30.1`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.31.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +
@@ -1178,8 +1211,9 @@ del discovery» en `aspec/specs/cli-diagnostics/spec.md`; 0.30.1 no lo modifica.
   `src/core/discovery-glob.js` (`escapeRe`/`compileGlob`/`matchesGlob`) y cachea el `RegExp` por
   string exacto de glob, de modo que las exclusiones declaradas se aplican sin recompilar por ruta;
   es una decisión de lectura de `computeSources`, no del writer, y no altera `DEFAULT_IGNORES` ni
-  `outputDir`. El contenido de `docs/technical-discovery/` no cuenta como cambio material (el
-  `outputDir` se excluye del hash).
+  `outputDir`. 0.30.2 no cambia ninguna regla de frescura: sólo alinea el texto canónico y pinea el
+  armado offline del estado. El contenido de `docs/technical-discovery/` no cuenta como cambio
+  material (el `outputDir` se excluye del hash).
 - **Churn ignorado en `documentation/` y `audit logs/` (0.29.0)**: tocar esas áreas ya no deja el
   seed `STALE`; es el objetivo del cambio, pero oculta churn local que antes alertaba. La mitigación
   es el anclaje exacto a la raíz y los escenarios que mantienen `docs/**` y `aspec/**` como señal

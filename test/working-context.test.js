@@ -9,6 +9,7 @@ import { createMemoryServer } from '../src/core/memory/mcp-server.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
 import {
   checkWorkingContextFreshness,
+  readCriticalMemoryKeys,
   refreshWorkingContextOnWrite,
   renderWorkingContextBlock,
   resolveMemoryProjectRoot,
@@ -640,6 +641,166 @@ describe('working-context — sin recursion ni corrupcion (6.9)', () => {
       assert.ok(fts, 'debe existir el check Indice FTS5')
       assert.equal(fts.skipped, undefined, 'con --rebuild el check no debe omitirse')
       assert.equal(fts.ok, true, 'el indice debe quedar consistente tras el rebuild')
+    })
+  })
+})
+
+describe('working-context — conjunto critico del proyecto (mem-05-critical-set)', () => {
+  // `.ancletorc` temporal: string crudo (para JSON invalido) u objeto serializado.
+  const writeRc = (dir, value) => {
+    writeFileSync(join(dir, '.ancletorc'), typeof value === 'string' ? value : JSON.stringify(value) + '\n')
+  }
+  const withoutWarn = (fn) => {
+    const original = console.warn
+    console.warn = () => {}
+    try {
+      return fn()
+    } finally {
+      console.warn = original
+    }
+  }
+
+  it('T6: las claves criticas se inyectan primero y en el orden declarado', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'crit-b', type: 'rule', scope: 'project', content: 'critica B', createdAt: '2020-01-01T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'crit-a', type: 'rule', scope: 'project', content: 'critica A', createdAt: '2020-01-02T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'plain-newest', type: 'rule', scope: 'project', content: 'no critica mas reciente', createdAt: '2026-01-01T00:00:00.000Z' })
+
+        // Sin config el orden natural pone primero la mas reciente.
+        const natural = renderWorkingContextBlock(engine, dir)
+        assert.ok(natural.indexOf('[plain-newest]') < natural.indexOf('[crit-a]'))
+
+        writeRc(dir, { memory: { criticalKeys: ['crit-b', 'crit-a'] } })
+        const block = renderWorkingContextBlock(engine, dir)
+        const at = (key) => block.indexOf(`[${key}]`)
+        assert.ok(at('crit-b') >= 0 && at('crit-a') >= 0 && at('plain-newest') >= 0)
+        assert.ok(at('crit-b') < at('crit-a'), 'respeta el orden declarado')
+        assert.ok(at('crit-a') < at('plain-newest'), 'las criticas van antes que cualquier no critica')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T7: con presupuesto ajustado una no critica no desplaza a la critica', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        // Presupuesto default (2.000 tokens): entra una sola de las dos reglas grandes.
+        engine.recordNode({ memory_key: 'crit-shift', type: 'rule', scope: 'project', content: `CRITICA ${'c'.repeat(5200)}`, createdAt: '2020-01-01T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'bulk-plain', type: 'rule', scope: 'project', content: `NO_CRITICA ${'p'.repeat(5200)}`, createdAt: '2026-01-01T00:00:00.000Z' })
+
+        const natural = withoutWarn(() => renderWorkingContextBlock(engine, dir))
+        assert.ok(natural.includes('[bulk-plain]'), 'sin config entra la no critica mas reciente')
+        assert.equal(natural.includes('[crit-shift]'), false, 'sin config la critica queda fuera')
+
+        writeRc(dir, { memory: { criticalKeys: ['crit-shift'] } })
+        const block = withoutWarn(() => renderWorkingContextBlock(engine, dir))
+        assert.ok(block.includes('[crit-shift]'), 'la critica entra')
+        assert.equal(block.includes('[bulk-plain]'), false, 'la no critica ya no desplaza a la critica')
+        assert.match(block, /1 rules omitted/)
+        assert.match(block, /Omitted: bulk-plain/)
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T8: una clave critica inexistente o inactiva falla nombrando la memory_key', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'known-rule', type: 'rule', scope: 'project', content: 'regla activa' })
+
+        writeRc(dir, { memory: { criticalKeys: ['ghost-key'] } })
+        assert.throws(() => renderWorkingContextBlock(engine, dir), /ghost-key/)
+
+        // Inactiva: la misma key quedo superseded por una decision.
+        engine.recordNode({ memory_key: 'known-rule', type: 'decision', scope: 'project', content: 'retira la regla' })
+        writeRc(dir, { memory: { criticalKeys: ['known-rule'] } })
+        assert.throws(() => renderWorkingContextBlock(engine, dir), /known-rule/)
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T9: configuracion ausente, no-array o JSON invalido equivale a [] y el bloque es byte-identico', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'cfg-a', type: 'rule', scope: 'project', content: 'regla A', createdAt: '2020-01-01T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'cfg-b', type: 'rule', scope: 'project', content: 'regla B', createdAt: '2020-01-02T00:00:00.000Z' })
+        const baseline = renderWorkingContextBlock(engine, dir) // sin .ancletorc
+
+        const cases = [
+          ['sin la clave', '{}\n'],
+          ['no-array', '{"memory":{"criticalKeys":"nope"}}\n'],
+          ['JSON invalido', '{ no es json'],
+          ['lista vacia', '{"memory":{"criticalKeys":[]}}\n'],
+          ['entradas no-string', '{"memory":{"criticalKeys":["cfg-a",42]}}\n']
+        ]
+        for (const [label, raw] of cases) {
+          writeRc(dir, raw)
+          assert.deepEqual(readCriticalMemoryKeys(dir), [], label)
+          assert.equal(renderWorkingContextBlock(engine, dir), baseline, label)
+        }
+        assert.deepEqual(readCriticalMemoryKeys(join(dir, 'no-existe')), [], 'sin .ancletorc es []')
+        assert.deepEqual(readCriticalMemoryKeys(null), [], 'sin raiz es []')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T11: el refresh on-write propaga el error nombrando la clave y no escribe un bloque degradado', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'onwrite-rule', type: 'rule', scope: 'project', content: 'regla previa' })
+        writeWorkingContext(engine, dir)
+        const before = readFileSync(workingContextPath(dir), 'utf8')
+        assert.match(before, /\[onwrite-rule\]/)
+
+        writeRc(dir, { memory: { criticalKeys: ['missing-onwrite'] } })
+        // El caller decide: merge/consolidate dependen de este throw para no reportar OK
+        // sobre un bloque derivado desactualizado.
+        assert.throws(() => refreshWorkingContextOnWrite(engine, dir), /missing-onwrite/)
+        assert.equal(readFileSync(workingContextPath(dir), 'utf8'), before, 'conserva el bloque previo')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T12: el aviso de overflow (texto, conteo y orden) no cambia sin configuracion critica', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        for (let i = 1; i <= 3; i++) {
+          engine.recordNode({
+            memory_key: `ov-${i}`,
+            type: 'rule',
+            scope: 'project',
+            content: `OV ${'x'.repeat(2600)}`,
+            createdAt: `2026-01-0${4 - i}T00:00:00.000Z`
+          })
+        }
+        const baseline = withoutWarn(() => renderWorkingContextBlock(engine, dir))
+        assert.match(
+          baseline,
+          /<ContextOverflowWarning>Context truncated due to size limits\. 1 rules omitted\. Omitted: ov-3\. Delegate one Recall to @memory-keeper/
+        )
+
+        for (const raw of ['{"memory":{"criticalKeys":[]}}\n', '{ roto\n']) {
+          writeRc(dir, raw)
+          assert.equal(withoutWarn(() => renderWorkingContextBlock(engine, dir)), baseline)
+        }
+      } finally {
+        engine.close()
+      }
     })
   })
 })

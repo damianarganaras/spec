@@ -46,11 +46,41 @@ export function writeWorkingContextBlock(projectRoot, block) {
   return block === null ? null : out
 }
 
+// Conjunto critico declarado en la configuracion del proyecto: `.ancletorc` ->
+// `memory.criticalKeys` (array de `memory_key`). Lectura tolerante: sin archivo, JSON
+// invalido, valor no-array o entradas que no son strings equivalen a la lista vacia;
+// las strings vacias se descartan. Nunca lanza y no importa la CLI (evita el ciclo).
+export function readCriticalMemoryKeys(projectRoot) {
+  if (!projectRoot) return []
+  let raw
+  try {
+    raw = readFileSync(join(projectRoot, '.ancletorc'), 'utf8')
+  } catch {
+    return []
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(raw.replace(/^\uFEFF/, ''))
+  } catch {
+    return []
+  }
+  const keys = parsed?.memory?.criticalKeys
+  if (!Array.isArray(keys)) return []
+  // Una lista con entradas que no son strings es invalida como conjunto: se descarta
+  // entera (comportamiento identico al vigente). Las strings vacias no son claves.
+  if (!keys.every((key) => typeof key === 'string')) return []
+  return keys.filter((key) => key.trim() !== '')
+}
+
 // Render del bloque del working-context: desde el engine vivo si se provee, o
 // dia-cero (solo topologia) sin abrir el motor. Unico camino de render, compartido
 // por el refresh de lifecycle y `memory context`; cada consumidor decide el destino.
+// Con engine, el conjunto critico del proyecto entra como `required`: el orden y el
+// corte los sigue gobernando el comparador unico del engine.
 export function renderWorkingContextBlock(engine, projectRoot, scope = 'project') {
-  if (engine) return engine.buildWorkingContext(scope, undefined, projectRoot)
+  if (engine) {
+    return engine.buildWorkingContext(scope, undefined, projectRoot, { required: readCriticalMemoryKeys(projectRoot) })
+  }
   return formatTopologyBlock(readTopologySummary(projectRoot))
 }
 
@@ -100,6 +130,11 @@ export function checkWorkingContextFreshness(engine, projectRoot, scope = 'proje
 // (p. ej. `ancleto memory import`): reescribe el artefacto solo si el bloque renderizado
 // difiere del contenido en disco. Evita reescrituras (y la creacion de un archivo vacio)
 // cuando la escritura no altero el bloque. Devuelve el path escrito o null si no cambio.
+// El fallo de render (p. ej. una memory_key critica invalida) PROPAGA: cada caller decide
+// si es best-effort (`ancleto memory import`) o si debe fallar la superficie
+// (merge/consolidate). El call path MCP no usa esta funcion: llama a
+// `writeWorkingContext` y absorbe ahi el fallo, sin propagarlo.
+// Como el render precede a toda escritura, nunca se persiste un bloque degradado.
 export function refreshWorkingContextOnWrite(engine, projectRoot, scope = 'project') {
   if (!projectRoot) return null
   const expected = renderWorkingContextBlock(engine, projectRoot, scope)

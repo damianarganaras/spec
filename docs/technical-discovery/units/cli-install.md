@@ -44,9 +44,9 @@ covers:
   - materialización de agents y skills
   - frescura del seed
   - machine-env
-sources: ["src/cli/index.js", "src/core/discovery-glob.js", "aspec/changes/archive/2026-11-10-spec-seed-freshness-detector", "aspec/changes/archive/2026-11-11-active-delta-structure-guard", "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material", "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths", "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-08-archive-sync-via-specs-merge", "aspec/changes/archive/2026-11-08-cli-subcommand-help-guards", "aspec/changes/archive/2026-11-08-agent-model-minimo-migration", "aspec/changes/archive/2026-11-08-specs-merge-canonical-guard", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-12T19:52:28Z
-pluginVersion: 0.30.1
+sources: ["src/cli/index.js", "src/core/discovery-glob.js", "aspec/changes/archive/2026-11-10-spec-seed-freshness-detector", "aspec/changes/archive/2026-11-11-active-delta-structure-guard", "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material", "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths", "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-08-archive-sync-via-specs-merge", "aspec/changes/archive/2026-11-08-cli-subcommand-help-guards", "aspec/changes/archive/2026-11-08-agent-model-minimo-migration", "aspec/changes/archive/2026-11-08-specs-merge-canonical-guard", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -187,7 +187,7 @@ cubierto es `install`, `update`, `upgrade`, `init`, `memory` (incl. `memory <sub
 `list --help` y `specs check --help` quedan fuera del guard. El alcance es de solo lectura: no se
 toca `.ancletorc` ni `.opencode/**` (`aspec/specs/cli-diagnostics/spec.md`).
 
-### Frescura del seed (0.26.0–0.30.1)
+### Frescura del seed (0.26.0–0.30.2)
 
 `checkDiscovery` (`src/cli/index.js`) es el dueño del estado del seed. `seedMapPresent` se calcula
 una sola vez antes de clasificar el estado (`READY`, `STALE`, `PARTIAL` o `MISSING`), y
@@ -241,6 +241,14 @@ que además exporta `compileGlob` y cachea el `RegExp` en un `Map` por string ex
 semántica. `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, `buildRepomixArgs`/`--ignore` de Repomix,
 el writer, la forma del estado (`version: 1` + `ruleVersion: 2`) y `ruleVersion` no cambian, y no hay
 delta de spec.
+
+En 0.30.2 no cambia el runtime: el delta `MODIFIED` de `cli-diagnostics` del change
+`discovery-state-schema-wording` alinea el texto canónico para distinguir el estado persistido
+(`version: 1` + `ruleVersion: 2`) del `schemaVersion: 2` que emite `discovery --check`, y agrega un
+pin de test no conductual. El change de conformidad `pin-offline-discovery-state` extrae
+`buildDiscoveryState`/`renderDiscoveryState` a `src/core/discovery-state.js`, usados por
+`packDiscovery`, con un golden byte-idéntico; el writer, la forma del estado y `ruleVersion: 2`
+siguen intactos.
 
 ### `import` / `export`
 
@@ -560,9 +568,14 @@ tier puede quedar dormido en `check`.
   `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
   resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; deben
-  alinearse con `package.json` (`0.30.1`). No son fuentes del seed. Desde 0.28.0, `.ancleto/**` y
+  alinearse con `package.json` (`0.31.0`). No son fuentes del seed. Desde 0.28.0, `.ancleto/**` y
   `.discovery-map.json` raíz tampoco cuentan para la frescura del seed; desde 0.29.0, tampoco
   `documentation/**` y `audit logs/**` (gitignored, 0 tracked).
+- **Conjunto crítico (0.31.0)**: `ancleto memory context` es la superficie explícita y falla con
+  exit ≠ 0 nombrando la `memory_key` sin sobrescribir el archivo previo; el lifecycle
+  (`init`/`install`/`upgrade`) y el on-write advierten sin escribir un bloque degradado, y
+  `memory merge`/`memory consolidate --apply` salen ≠ 0 si el refresh falla. La lectura de
+  `memory.criticalKeys` es tolerante (ausente/inválida → `[]`).
 - **Merge de specs 0.22.0–0.22.1**: el fail-closed es por plan, no transaccional ante una caída de
   I/O a mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs
   traducidos ni crea capabilities. El contenedor `archive` ya no se trata como change. Desde 0.25.0
@@ -580,6 +593,7 @@ tier puede quedar dormido en `check`.
 |---|---|
 | `src/cli/index.js` | Entry point, subcomandos, instalación, descriptor y ruteo MCP por host, diagnósticos, salud MCP, nota de compresión, validación de bundles, `export`/`import`, `specs merge`, MCP, stats, estado del seed, hash semántico y filtro de rutas efímeras (`isEphemeralSource`/`isEphemeralOnlyChange`), extendido a `documentation/**` y `audit logs/**` (0.29.0); desde 0.30.1 importa el matcher de `discovery.exclude` |
 | `src/core/discovery-glob.js` | `escapeRe`/`compileGlob`/`matchesGlob`: traducción glob→regex por tokens y caché `Map` del `RegExp` por string exacto de glob (0.30.1) |
+| `src/core/discovery-state.js` | `buildDiscoveryState`/`renderDiscoveryState` puros: armado y serialización del estado persistido, usados por `packDiscovery` y pineados con golden byte-idéntico (0.30.2) |
 | `src/core/specs-merge.js` | Merge puro de delta specs: `parseCanonicalSpec`, `parseDeltaSpec`, `mergeSpecText`, fail-closed y serialización |
 | `src/cli/ui.js` | Banner y menús TTY |
 | `src/core/adapters/frontmatter.js` | Adaptación pura de frontmatter por host y `frontmatterValue` |
@@ -606,6 +620,9 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas/` | Change archivado de 0.29.0: extensión del filtro a `documentation/**` y `audit logs/**` anclados a la raíz, con `docs/**`/`aspec/**` aún contando y writer/`ruleVersion` intactos (cambio de runtime en `src/cli/index.js`) |
 | `aspec/changes/archive/2026-11-12-discovery-exclude-glob-match/` | Change archivado de 0.30.0: `escapeRe`/`matchesGlob` traducen `discovery.exclude` por segmentos —entonces en `src/cli/index.js`—, `**/*.test.*`/`**/*.spec.*` vuelven a aplicar y `sources` baja 872→854; `DEFAULT_IGNORES`, `outputDir`, writer y `ruleVersion` intactos (delta `MODIFIED` de `cli-diagnostics`) |
 | `aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache/` | Change archivado de 0.30.1: extrae `escapeRe`/`compileGlob`/`matchesGlob` a `src/core/discovery-glob.js` y cachea el `RegExp` por glob exacto (15,04 ms → 1,63 ms, 9,2× sobre 9.669 evaluaciones), sin cambio de semántica; ReDoS con `**` repetidos aceptado y DP por segmentos descartado (optimización, sin delta de spec) |
+| `aspec/changes/archive/2026-11-12-discovery-state-schema-wording/` | Change archivado de 0.30.2: delta `MODIFIED` de `cli-diagnostics` que documenta el estado persistido `version: 1` + `ruleVersion: 2` frente a `schemaVersion: 2` de la salida de `--check`, con pin de test no conductual (sin cambio de runtime) |
+| `aspec/changes/archive/2026-11-12-pin-offline-discovery-state/` | Change archivado de conformidad (sin delta ni bump): extrae `buildDiscoveryState`/`renderDiscoveryState` a `src/core/discovery-state.js`, usados por `packDiscovery`, con golden byte-idéntico en `test/cli.test.js` |
+| `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` | Change archivado de 0.31.0: `memory.criticalKeys` en `.ancletorc`, inyección primero de las claves críticas y política de fallo (CLI explícita ≠ 0 sin sobrescribir; lifecycle/on-write con `console.warn`; `merge`/`consolidate --apply` ≠ 0); delta `ADDED` de `memory-engine` y `MODIFIED` del orden determinístico |
 | `aspec/changes/archive/2026-11-06-specs-merge-hardening/` | Change archivado del endurecimiento de `specs merge` (0.22.1): contenedor `archive`, H1 estructural, `ADDED` y atomicidad acotada |
 | `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` | Change archivado del merge determinístico de specs y la capability `spec-sync` (0.22.0) |
 | `aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity/` | Change archivado del discriminador conformidad-vs-delta y archive sin delta (0.21.0; materializado por `upgrade`) |
@@ -616,10 +633,11 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-05-mcp-command-health/` | Change archivado de salud MCP, descubrimiento único y avisos de check/import |
 | `aspec/changes/archive/2026-11-04-check-doctor-state-parity/` | Change archivado de paridad de diagnósticos (H7/H13/H14) |
 | `aspec/changes/archive/2026-11-04-host-compression-note-consistency/` | Change archivado de la nota de compresión y validación de `manifest.mcp` |
-| `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión, config MCP de `doctor`, salud MCP, avisos de `check`, aviso de `import`, `--help` sin ejecución (0.25.0), `seedMapPresent` state-independent (0.26.0), detector de frescura (0.26.1), `recommendedAction` `generate`/`complete` (0.26.x), regla normalizada `ruleVersion: 2`/`semantic` con bump de `version` no material (0.27.0), filtro simétrico de rutas efímeras (0.28.0), su extensión a `documentation/**`/`audit logs/**` (0.29.0) y semántica por segmentos de `discovery.exclude` (0.30.0; 0.30.1 no cambia el contrato) |
+| `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión, config MCP de `doctor`, salud MCP, avisos de `check`, aviso de `import`, `--help` sin ejecución (0.25.0), `seedMapPresent` state-independent (0.26.0), detector de frescura (0.26.1), `recommendedAction` `generate`/`complete` (0.26.x), regla normalizada `ruleVersion: 2`/`semantic` con bump de `version` no material (0.27.0), filtro simétrico de rutas efímeras (0.28.0), su extensión a `documentation/**`/`audit logs/**` (0.29.0), semántica por segmentos de `discovery.exclude` (0.30.0; 0.30.1 no cambia el contrato) y precisión 0.30.2 sobre el estado persistido (`version: 1` + `ruleVersion: 2`) frente a `schemaVersion: 2` de la salida |
 | `aspec/specs/spec-sync/spec.md` | Requirements del merge determinístico, idempotencia, fail-closed, dry-run y alcance acotado; 0.22.1 agrega H1 estructural, contenedor `archive` y atomicidad acotada; 0.24.0 agrega el guard canónica-only de headings de delta para los cuatro tipos; 0.26.4 agrega la validación estructural de los deltas de changes activos en la suite declarada y 0.27.0 suma la detección de un `spec.md` de change activo fuera de `specs/<capability>/spec.md` |
 | `aspec/specs/copilot-support/spec.md`, `aspec/specs/legacy-import/spec.md`, `aspec/specs/test-profile/spec.md` | Canónicas normalizadas a `## Requirements` (0.24.0) |
 | `aspec/specs/memory-ops/spec.md` | Requirements de memoria y de la promoción de decisiones al archivar antes del move (0.22.1) |
+| `aspec/specs/memory-engine/spec.md` | `Orden determinístico de inyección de reglas` (7 escenarios) y `Conjunto crítico estable del working-context` (0.31.0), incluida la política de fallo por superficie |
 | `aspec/changes/archive/2026-11-06-archive-order-correctness/` | Change archivado del orden del archive y la semántica de fallo (0.22.1) |
 | `aspec/specs/prompt-contracts/spec.md` | Requirements de conformidad-vs-delta y archive sin delta (0.21.0) y del sync de delta al archivar ruteado por `specs merge` (0.25.0) |
 | `aspec/specs/agent-install-routing/spec.md` | Requirements de destinos nativos, ruteo MCP por host y compresión host-scoped |

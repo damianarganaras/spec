@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-12T19:52:28Z
-pluginVersion: 0.30.1
+generatedAt: 2026-11-13T02:37:23Z
+pluginVersion: 0.31.0
 skillVersion: '2.3'
 ---
 
@@ -82,7 +82,7 @@ test/                   suite node --test (content guards incluidos)
 | Catálogo de modelos | Snapshot versionado; helpers puros; integridad de IDs y refresco manual dev-only | `src/core/model-catalog.js`, `src/core/model-catalog.json`, `scripts/refresh-model-catalog.mjs` |
 | Discovery | Topología, fuentes, hashes, impacto y estado del seed | `src/core/discovery.js`, `src/cli/index.js` |
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
-| Memoria | Nodos, supersesión, refs, recall, working-context | `src/core/memory/*` |
+| Memoria | Nodos, supersesión, refs, recall, working-context y conjunto crítico (`memory.criticalKeys`) | `src/core/memory/*` |
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
@@ -104,7 +104,9 @@ test/                   suite node --test (content guards incluidos)
    pack y guarda `.discovery-state.json`; la skill `ancleto-technical-discovery` produce el seed.
 4. **Memoria**: los agentes escriben reglas/decisiones (`recordRule`/`recordDecision` o CLI), el
    motor supersede por `memory_key`, valida refs y secretos, y materializa
-   `.ancleto/working-context.md` para el arranque de sesión.
+   `.ancleto/working-context.md` para el arranque de sesión. Desde 0.31.0 el renderer inyecta
+   primero las claves curadas de `.ancletorc` → `memory.criticalKeys` y falla visiblemente si una
+   clave crítica no existe, está inactiva o no entra en el presupuesto.
 5. **Tiers**: `normal` usa modelos de `opencode-go`; `minimo` resuelve por cadena contra el catálogo;
    `gratis` usa únicamente `opencode/big-pickle`. El catálogo se refresca a mano con
    `scripts/refresh-model-catalog.mjs`; ni el runtime ni CI descubren modelos ni acceden a la red.
@@ -270,6 +272,21 @@ test/                   suite node --test (content guards incluidos)
     repetidos sigue siendo una limitación aceptada (input `.ancletorc` local); el reemplazo por un
     DP por segmentos se descartó por no ser equivalente. Release patch del change
     `discovery-exclude-regexp-cache` (sin delta de spec).
+31. **Estado persistido vs. salida de `discovery --check` (0.30.2)**: patch documental del change
+    `discovery-state-schema-wording` (delta `MODIFIED` de `cli-diagnostics`) que alinea la canónica:
+    el estado persistido declara `version: 1` + `ruleVersion: 2`, mientras `schemaVersion: 2` es el
+    campo del JSON de `discovery --check`. Incluye un pin de test no conductual y el change de
+    conformidad `pin-offline-discovery-state` extrae `buildDiscoveryState`/`renderDiscoveryState` a
+    `src/core/discovery-state.js` con golden byte-idéntico. Sin cambio de runtime, estado ni
+    migración.
+32. **Conjunto crítico del working-context (0.31.0)**: `.ancletorc` → `memory.criticalKeys` declara
+    las `memory_key` que el renderer (`src/core/memory/working-context.js`) pasa como `required` a
+    `buildWorkingContext`; se inyectan primero, en el orden declarado, y una regla no crítica no las
+    desplaza. La lectura es tolerante (ausente, no-array o entradas no-string → `[]`). El fallo por
+    clave inexistente, inactiva o fuera de presupuesto es duro en `ancleto memory context` (≠ 0, sin
+    sobrescribir el archivo), advisory con `console.warn` en lifecycle/on-write del MCP y ≠ 0 en
+    `memory merge`/`consolidate --apply`. `<ContextOverflowWarning>` no cambia; release minor del
+    change `mem-05-working-context-critical-set`.
 
 ## Recorrido de una instalación con tier `minimo`
 

@@ -12,7 +12,7 @@
 ## 3. Política de fallo
 
 - [x] T4 — En `memoryContext` (`src/cli/index.js`): capturar el error de `renderWorkingContextBlock`, escribir el mensaje en `stderr` nombrando la `memory_key`, fijar `process.exitCode = 1` y NO escribir el archivo destino (ni con `--out`).
-- [x] T5 — En `refreshWorkingContext` (lifecycle) y `refreshWorkingContextOnWrite` (on-write): capturar el error de render, emitir `console.warn` nombrando la `memory_key` y no escribir un bloque degradado; el camino de `memory doctor` queda best-effort con el mismo criterio.
+- [x] T5 — En `refreshWorkingContext` (lifecycle): capturar el error de render, emitir `console.warn` nombrando la `memory_key`, no escribir un bloque degradado y devolver `undefined` para distinguir el fallo de un refresh vacío (`null`). En `refreshWorkingContextOnWrite` el error PROPAGA: los callers best-effort lo capturan (`memory import`, MCP) y `memory merge`/`memory consolidate` salen con código distinto de cero en vez de reportar OK. El camino de `memory doctor` queda best-effort con el mismo criterio.
 
 ## 4. Tests
 
@@ -21,7 +21,8 @@
 - [x] T8 — Test de clave crítica inexistente o inactiva: la generación falla con un error que nombra la `memory_key`.
 - [x] T9 — Test de configuración malformada (`memory.criticalKeys` ausente, no-array o JSON inválido): equivale a `[]` y el bloque es idéntico al vigente.
 - [x] T10 — Test de la superficie explícita: `ancleto memory context` falla con código distinto de cero y no sobrescribe el archivo previo.
-- [x] T11 — Test del lifecycle/on-write: el fallo emite `console.warn` con la `memory_key` y no escribe un bloque degradado.
+- [x] T11 — Test del refresh on-write: `refreshWorkingContextOnWrite` LANZA un error que nombra la `memory_key` y el archivo del working-context queda intacto.
+- [x] T11b — Test de las superficies de escritura y del lifecycle: con una clave crítica fantasma en un proyecto temporal, `memory merge` y `memory consolidate --apply` salen con código distinto de cero sin afirmar OK; `upgrade` advierte nombrando la clave, no imprime "sin reglas activas (vacio)" y no aborta.
 - [x] T12 — Test de regresión del `<ContextOverflowWarning>`: con una DB temporal sin claves críticas, el texto, el conteo y el orden de las claves omitidas no cambian.
 - [x] T13 — Verificar que ningún test abre la DB real `.ancleto/memory.db` (todo usa rutas temporales).
 

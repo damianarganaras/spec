@@ -3861,6 +3861,58 @@ describe('CLI memory context — conjunto critico (mem-05-critical-set)', () => 
       assert.doesNotMatch(r.stdout, /<ProjectMemoryRules>/, 'no emite un bloque parcial')
     })
   })
+  it('un --scope invalido falla como error de uso antes de renderizar', () => {
+    withDir((dir) => {
+      const r = run(['memory', 'context', '--scope', 'nope'], dir)
+      assert.notEqual(r.status, 0, 'el scope invalido es un error de uso')
+      assert.match(r.stderr, /--scope invalido: nope/)
+      assert.doesNotMatch(r.stderr, /memory_key/, 'no llega al mensaje del engine')
+    })
+  })
+})
+
+describe('CLI working-context — fallo del refresh en superficies de escritura (mem-05-critical-set)', () => {
+  it('memory merge sale != 0 con una clave critica fantasma y no reporta OK', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.ancleto'), { recursive: true })
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'mrg-target', type: 'rule', scope: 'project', content: 'target vigente' })
+        engine.recordNode({ memory_key: 'mrg-src', type: 'rule', scope: 'project', content: 'source a superseder' })
+      } finally {
+        engine.close()
+      }
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ memory: { criticalKeys: ['mrg-fantasma'] } }) + '\n')
+
+      const r = run(['memory', 'merge', '--target', 'mrg-target', '--sources', 'mrg-src'], dir)
+      assert.notEqual(r.status, 0, 'el merge no se reporta como exito con el bloque derivado desactualizado')
+      assert.match(r.stderr, /mrg-fantasma/, 'el error nombra la memory_key')
+      assert.doesNotMatch(r.stdout, /merge OK/, 'no afirma exito')
+    })
+  })
+
+  it('upgrade avisa la clave critica fantasma y no la reporta como "sin reglas activas"', () => {
+    withDir((dir) => {
+      const install = run(['install', '--project', dir, '--no-mcp', '--tier', 'gratis'], dir)
+      assert.equal(install.status, 0, install.stderr)
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'up-rule', type: 'rule', scope: 'project', content: 'regla previa' })
+      } finally {
+        engine.close()
+      }
+      const rc = JSON.parse(readFileSync(join(dir, '.ancletorc'), 'utf8'))
+      rc.memory = { criticalKeys: ['up-fantasma'] }
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify(rc, null, 2) + '\n')
+
+      const r = run(['upgrade'], dir)
+      assert.equal(r.status, 0, 'el lifecycle no aborta por el refresh fallido')
+      assert.match(r.stderr, /up-fantasma/, 'la advertencia nombra la memory_key')
+      assert.doesNotMatch(r.stdout, /sin reglas activas \(vacio\)/, 'no reporta un bloque vacio inexistente')
+      assert.match(r.stdout, /working-context\.md no refrescado/)
+      assert.equal(existsSync(join(dir, '.ancleto', 'working-context.md')), false, 'no persiste un bloque degradado')
+    })
+  })
 })
 
 describe('CLI memory import refresca el working-context', () => {
@@ -9165,6 +9217,18 @@ describe('CLI memory consolidate', () => {
       const ctx = readFileSync(ctxPath, 'utf8')
       assert.match(ctx, /\[cons-b\]/)
       assert.doesNotMatch(ctx, /\[cons-a\]/)
+    })
+  })
+
+  it('--apply con una clave critica fantasma sale != 0 y no reporta OK', () => {
+    withDir((dir) => {
+      seedDuplicates(dir)
+      writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ memory: { criticalKeys: ['cons-fantasma'] } }) + '\n')
+
+      const r = run(['memory', 'consolidate', '--apply'], dir)
+      assert.notEqual(r.status, 0, 'la consolidacion no se reporta como exito con el bloque derivado desactualizado')
+      assert.match(r.stderr, /cons-fantasma/, 'el error nombra la memory_key')
+      assert.doesNotMatch(r.stdout, /consolidate OK/, 'no afirma exito')
     })
   })
 

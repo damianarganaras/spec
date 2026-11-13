@@ -2028,7 +2028,13 @@ async function upgradeCmd(args) {
   } else {
     console.log(`  ✔ skills actualizadas en ${skillsDir} (${ANCLETO_SKILLS.length} skills)`)
   }
-  console.log(wentContext ? '  ✔ working-context.md regenerado' : '  ✔ working-context.md sin reglas activas (vacio)')
+  // `undefined`: el refresh fallo (ya se advirtio por stderr); `null`: no habia bloque
+  // que escribir. El fallo no aborta el lifecycle, pero tampoco se reporta como exito.
+  if (wentContext === undefined) {
+    console.log('  ⚠ working-context.md no refrescado (ver advertencia)')
+  } else {
+    console.log(wentContext ? '  ✔ working-context.md regenerado' : '  ✔ working-context.md sin reglas activas (vacio)')
+  }
   console.log(machineEnv.written ? '  ✔ machine-env.md generado' : '  ✔ machine-env.md sin cambios')
   if (machineEnv.updated) console.log('  ✔ exclusión local actualizada')
   else if (machineEnv.ignored) console.log('  ✔ exclusión local verificada')
@@ -2672,9 +2678,11 @@ async function refreshWorkingContext(projectDir, scope = 'project') {
     }
   } catch (err) {
     // Lifecycle best-effort: `init`/`install`/`upgrade` no abortan por una clave
-    // critica invalida, pero tampoco persisten un bloque degradado.
+    // critica invalida, pero tampoco persisten un bloque degradado. `undefined`
+    // distingue este fallo de un refresh sin bloque (`null`) para que `upgrade`
+    // no lo reporte como "sin reglas activas".
     console.warn(`ancleto: no se pudo refrescar el working-context: ${err.message}`)
-    return null
+    return undefined
   }
 }
 
@@ -2694,6 +2702,13 @@ async function refreshMachineEnv(projectDir) {
 
 async function memoryContext(flags) {
   const scope = flagValue(flags, '--scope') || 'project'
+  // Misma validacion que `memory list`: un scope invalido es un error de uso, no un
+  // fallo del engine ("la memory_key ... no existe como rule activa del scope X").
+  if (!['project', 'feature', 'task'].includes(scope)) {
+    console.error(`ancleto: --scope invalido: ${scope} (project|feature|task)`)
+    process.exitCode = 1
+    return
+  }
   const out = flagValue(flags, '--out')
   const projectDir = process.cwd()
   const dbPath = defaultMemoryDbPath(projectDir)

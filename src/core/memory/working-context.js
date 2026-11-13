@@ -130,17 +130,12 @@ export function checkWorkingContextFreshness(engine, projectRoot, scope = 'proje
 // (p. ej. `ancleto memory import`): reescribe el artefacto solo si el bloque renderizado
 // difiere del contenido en disco. Evita reescrituras (y la creacion de un archivo vacio)
 // cuando la escritura no altero el bloque. Devuelve el path escrito o null si no cambio.
+// El fallo de render (p. ej. una memory_key critica invalida) PROPAGA: cada caller decide
+// si es best-effort (`import`, MCP) o si debe fallar la superficie (merge/consolidate).
+// Como el render precede a toda escritura, nunca se persiste un bloque degradado.
 export function refreshWorkingContextOnWrite(engine, projectRoot, scope = 'project') {
   if (!projectRoot) return null
-  let expected
-  try {
-    expected = renderWorkingContextBlock(engine, projectRoot, scope)
-  } catch (err) {
-    // Best-effort: el fallo de render (p. ej. una memory_key critica invalida) se
-    // reporta nombrando la clave y NO se persiste un bloque degradado.
-    console.warn(`ancleto: no se pudo refrescar el working-context: ${err.message}`)
-    return null
-  }
+  const expected = renderWorkingContextBlock(engine, projectRoot, scope)
   const actual = readWorkingContextFile(projectRoot)
   const canonical = expected === null ? '' : expected + '\n'
   if (actual === null && expected === null) return null

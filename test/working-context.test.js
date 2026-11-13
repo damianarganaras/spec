@@ -736,7 +736,7 @@ describe('working-context — conjunto critico del proyecto (mem-05-critical-set
         const baseline = renderWorkingContextBlock(engine, dir) // sin .ancletorc
 
         const cases = [
-          ['ausente', '{}\n'],
+          ['sin la clave', '{}\n'],
           ['no-array', '{"memory":{"criticalKeys":"nope"}}\n'],
           ['JSON invalido', '{ no es json'],
           ['lista vacia', '{"memory":{"criticalKeys":[]}}\n'],
@@ -755,7 +755,7 @@ describe('working-context — conjunto critico del proyecto (mem-05-critical-set
     })
   })
 
-  it('T11: el refresh on-write advierte la clave y no escribe un bloque degradado', () => {
+  it('T11: el refresh on-write propaga el error nombrando la clave y no escribe un bloque degradado', () => {
     withProject((dir) => {
       const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
       try {
@@ -765,18 +765,9 @@ describe('working-context — conjunto critico del proyecto (mem-05-critical-set
         assert.match(before, /\[onwrite-rule\]/)
 
         writeRc(dir, { memory: { criticalKeys: ['missing-onwrite'] } })
-        const warnings = []
-        const original = console.warn
-        console.warn = (...args) => warnings.push(args.join(' '))
-        let ret
-        try {
-          ret = refreshWorkingContextOnWrite(engine, dir)
-        } finally {
-          console.warn = original
-        }
-
-        assert.equal(ret, null, 'no reporta escritura')
-        assert.ok(warnings.some((w) => /missing-onwrite/.test(w)), 'el warn nombra la memory_key')
+        // El caller decide: merge/consolidate dependen de este throw para no reportar OK
+        // sobre un bloque derivado desactualizado.
+        assert.throws(() => refreshWorkingContextOnWrite(engine, dir), /missing-onwrite/)
         assert.equal(readFileSync(workingContextPath(dir), 'utf8'), before, 'conserva el bloque previo')
       } finally {
         engine.close()

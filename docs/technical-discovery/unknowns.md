@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-13T14:56:12Z
-pluginVersion: 0.32.0
+generatedAt: 2026-11-13T19:05:43Z
+pluginVersion: 0.33.0
 skillVersion: '2.3'
 ---
 
@@ -20,8 +20,9 @@ skillVersion: '2.3'
   `reconcileLegacyBlocks`, `specsMergeCommand`, `resolveChangeDir`, `specsCommand`,
   `isEphemeralSource`, `isEphemeralOnlyChange`,
   `src/core/memory/engine.js` → `recordNode`; `src/core/specs-merge.js`;
-   `src/core/tier-models.js`, `src/core/test-selection.js`), no en el pack solo. El estado del pack
-   registra 869 fuentes (164.782 B, ~40k tokens) y su cuerpo contiene 33 entradas de archivo, porque
+   `src/core/tier-models.js`, `src/core/test-selection.js`, `src/core/memory/database.js` →
+   `runImmediateTransaction`), no en el pack solo. El estado del pack
+   registra 873 fuentes (166.322 B, ~41k tokens) y su cuerpo contiene 33 entradas de archivo, porque
    `**/*.md`, `test/**`, `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y
    los Markdown excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
@@ -181,13 +182,13 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **902 archivos** (aspec 324,
-  `.opencode` 66, docs 21, test 31, src 22, scripts 2, documentation 340, audit logs 9, etc.). El pack
-  registra **869 fuentes** (164.782 B, ~40k tokens) y 33 entradas de archivo porque los globs de
+- **`.discovery-map.json` observado**: el generador reporta **907 archivos** (aspec 327,
+  `.opencode` 66, docs 21, test 33, src 22, scripts 2, documentation 340, audit logs 9, etc.). El pack
+  registra **873 fuentes** (166.322 B, ~41k tokens) y 33 entradas de archivo porque los globs de
   `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además Repomix filtra por sus
-  propios ignores. Desde 0.30.0 `**/*.test.*`/`**/*.spec.*` vuelven a aplicar; desde 0.30.1 las 23
-  rutas `test/*.test.js` dejan de figurar en `sources`; los 7 fixtures bajo `test/fixtures/memory/`
-  siguen incluidos.
+  propios ignores. Desde 0.30.0 `**/*.test.*`/`**/*.spec.*` vuelven a aplicar; desde 0.30.1 las 24
+  rutas `test/*.test.js` dejan de figurar en `sources`; los 8 fixtures bajo `test/fixtures/**`
+  (7 en `test/fixtures/memory/` y `memory-writer-child.mjs`) siguen incluidos.
   `.ancleto/**` y `.discovery-map.json` raíz siguen en `sources`/`fileHashes` del estado, pero desde
   0.28.0 no cuentan para la frescura. Desde 0.29.0 tampoco cuentan `documentation/**` ni
   `audit logs/**`: el estado conserva 674 entradas `documentation/` + 18 `audit logs/` entre
@@ -197,7 +198,7 @@ skillVersion: '2.3'
   discovery registra **337** porque su `config.exclude` omite 3 archivos bajo `__tests__/`. No es
   una inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.32.0`). No se usan como fuente de contenido;
+  gitignored; deben alinearse con `package.json` (`0.33.0`). No se usan como fuente de contenido;
   `memory.criticalKeys` se describe como seam de configuración, no como evidencia de la DB.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
@@ -318,10 +319,26 @@ skillVersion: '2.3'
   `**/*.md`, así que `test/affected-tests.json`, `test/test-selection.test.js`, la spec canónica y
   los artifacts archivados se leyeron directamente fuera del pack; el cuerpo cubre `src/`, `scripts/`
   (incluido el nuevo `test-affected.mjs`) y configuración versionada.
+- **Estado inicial del chequeo (0.33.0)**: el `discovery --check` previo al comando de regeneración
+  reflejaba el churn del change `ch-04` y el bump 0.33.0 (`STALE/minor` esperado); tras
+  `node src/cli/index.js discovery`, el estado persistido se reescribió y el `--check` de validación
+  devolvió `READY`/`impact: none`, `seedMapPresent: true` y `affectedDocs: []`. Esta
+  materialización consumió el pack único de 873 fuentes, 166.322 B (~41.187 tokens).
+- **Evidencia de 0.33.0**: se verificó leyendo `src/core/memory/database.js`
+  (`MEMORY_WRITE_RETRY_POLICY`, `MemoryDatabaseBusyError`, `runImmediateTransaction`,
+  `isLockContention`), las cinco llamadas de `src/core/memory/engine.js` (`recordNode`, `import`,
+  `gc`, `merge`, `consolidate`), `test/memory-writers.test.js` y
+  `test/fixtures/memory-writer-child.mjs` (fuera del pack por el tier),
+  `test/affected-tests.json`, el delta archivado de `ch-04-memory-writer-serialization` y
+  `CHANGELOG.md`. No se ejecutó la suite ni se abrió `.ancleto/memory.db`.
+- **Límite de evidencia del pack 0.33.0**: el tier `minimo` excluye `test/**`, `docs/**` y
+  `**/*.md`, así que el oráculo, el fixture, la spec canónica y los artifacts archivados se leyeron
+  directamente fuera del pack; el cuerpo cubre `src/` (incluido `database.js`), `scripts/` y
+  configuración versionada.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.32.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.33.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -352,9 +369,13 @@ skillVersion: '2.3'
   (0.28.0), extendido en 0.29.0 a `documentation/**` y `audit logs/**` anclados a la raíz; el
   matcher de `discovery.exclude` corregido en 0.30.0 y extraído a `src/core/discovery-glob.js` con
   caché `Map` por glob exacto en 0.30.1, con `sources` 872→854 en 0.30.0, 857/22 tests en 0.30.1,
-  863 fuentes en 0.31.0 y 869 fuentes / 23 tests en 0.32.0; `planTestSelection`, el flag aditivo
+  863 fuentes en 0.31.0, 869 fuentes / 23 tests en 0.32.0 y 873 fuentes / 24 tests en 0.33.0;
+  `planTestSelection`, el flag aditivo
   `--tests`, el manifiesto `test/affected-tests.json` y el consumidor `scripts/test-affected.mjs`
-  (0.32.0); `readCriticalMemoryKeys` con lectura tolerante y la política de fallo por
+  (0.32.0); `MEMORY_WRITE_RETRY_POLICY`, `MemoryDatabaseBusyError`, `runImmediateTransaction` y
+  `isLockContention` con errcode 5/6 en `src/core/memory/database.js`, reutilizados por los cinco
+  writers del engine, y el oráculo `test/memory-writers.test.js` (0.33.0);
+  `readCriticalMemoryKeys` con lectura tolerante y la política de fallo por
   superficie (CLI explícita, lifecycle, on-write/MCP, `merge`/`consolidate --apply`);
   los comentarios de `specs-merge.js` sobre H1 estructural y la identidad de path del contenedor
   `archive`; y la secuencia de archive y los literales de fallo en `agents/orchestrator.md`,

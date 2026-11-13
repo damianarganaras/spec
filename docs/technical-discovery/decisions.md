@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-13T14:56:12Z
-pluginVersion: 0.32.0
+generatedAt: 2026-11-13T19:05:43Z
+pluginVersion: 0.33.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.32.0)
+## Modelos y tiers (estado 0.33.0)
 
 ### Tabla y cadenas
 
@@ -1034,9 +1034,9 @@ sin `--tier` es `normal`.
   exacto de glob. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al cuerpo del pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 869 fuentes, 164.782 B (~40k tokens, comprimido, 33 entradas de
-  archivo). El `.discovery-map.json` regenerado reporta 902 archivos (aspec 324, `.opencode` 66,
-  docs 21, test 31, src 22, scripts 2, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
+- **Pack actual**: tier `minimo`, 873 fuentes, 166.322 B (~41.187 tokens, comprimido, 33 entradas de
+  archivo). El `.discovery-map.json` regenerado reporta 907 archivos (aspec 327, `.opencode` 66,
+  docs 21, test 33, src 22, scripts 2, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
   el hash semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados
   bajo changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
   writer ni `ruleVersion`; 0.29.0 extiende ese filtro a `documentation/**` y `audit logs/**`
@@ -1187,6 +1187,36 @@ el consumidor declarado es `npm run test:affected` → `scripts/test-affected.mj
   cubierto sólo si ese test está en `always` o en un `coupling`; el plan no lo infiere por análisis
   estático del cuerpo.
 
+## Serialización de escritores de memoria (0.33.0)
+
+Change archivado: `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/` (cierra
+`CH-04`). Requirement canónico: «Serialización de escritores concurrentes sobre la base de memoria»
+en `aspec/specs/memory-engine/spec.md`. El helper único es `runImmediateTransaction` en
+`src/core/memory/database.js`; los cinco caminos del engine (`recordNode`, `import`, `gc`, `merge`,
+`consolidate`) lo reutilizan y no duplican la política.
+
+- **Lock y retry acotado**: `BEGIN IMMEDIATE` + `COMMIT`, con `journal_mode = WAL`,
+  `busy_timeout = 5000` y `foreign_keys = ON` conservados. `MEMORY_WRITE_RETRY_POLICY` fija 3
+  intentos y backoff de 200/600 ms sin jitter. Sólo se reintenta la adquisición del lock ante
+  `SQLITE_BUSY`/`SQLITE_LOCKED` (`errcode` 5/6, enmascarado a los 8 bits bajos para cubrir codes
+  extendidos como `SQLITE_BUSY_SNAPSHOT` = 517); una transacción ya abierta no se re-ejecuta. El
+  `BEGIN DEFERRED` + retry se descartó porque pierde escrituras por ese errcode 517.
+- **Error nombrado**: al agotar el presupuesto se lanza `MemoryDatabaseBusyError` con
+  `code: 'MEMORY_DB_BUSY'`, `name`, operación e intentos; el mensaje no incluye contenido ni
+  secretos. Los errores que no son de lock (refs fail-closed, secretos, grupo inválido) hacen
+  rollback y se propagan sin retry.
+- **Alcance**: la garantía cubre los cinco caminos del engine; `memory doctor --rebuild` es un sexto
+  camino mutante preexistente y queda fuera como deuda registrada. Los caminos read-only (`doctor`,
+  `curate`, dry-runs de `merge`/`consolidate`, `snapshot`, `createReadonlyMemoryEngine`) no
+  adquieren retry, no escriben ni migran schema.
+- **Invariantes**: no cambian schema, PRAGMAs persistidos, `ruleVersion`, comandos ni flags; un
+  binario previo abre y lee la misma base. El mecanismo es por conexión y por transacción, sin lock
+  global de proceso, así que la paralelización entre `aspec/changes/archive/` y
+  `.ancleto/memory.db` se preserva.
+- **Oráculo**: `test/memory-writers.test.js` con `test/fixtures/memory-writer-child.mjs` usa una base
+  temporal (`mkdtemp`) y procesos hijos; la suite se declara en `test/affected-tests.json`. No se
+  ejecutó en esta generación: el comportamiento se describe desde el código y el delta archivado.
+
 ## Lint y publicación
 
 - `npm run lint` ejecuta `eslint src/ test/ scripts/` con flat config y cuatro reglas
@@ -1244,7 +1274,7 @@ el consumidor declarado es `npm run test:affected` → `scripts/test-affected.mj
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.32.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.33.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +

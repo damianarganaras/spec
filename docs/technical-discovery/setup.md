@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-13T14:56:12Z
-pluginVersion: 0.32.0
+generatedAt: 2026-11-13T19:05:43Z
+pluginVersion: 0.33.0
 skillVersion: '2.3'
 ---
 
@@ -156,6 +156,10 @@ del paquete instalado.
   `node --test` con las rutas de `tests.selected` si `complete === true`; si el manifiesto
   `test/affected-tests.json` falta o es inválido, o hay `manifest-gap`, `test-glob-missing` o
   `unresolved-in-closure`, imprime las razones y corre la suite completa `test/*.test.js`.
+- **Writers serializados (0.33.0)**: sin comandos ni flags nuevos. Los cinco caminos de escritura de
+  `memory` comparten `runImmediateTransaction` (`BEGIN IMMEDIATE` + retry 3/200-600 ms) y fallan con
+  `MEMORY_DB_BUSY` al agotar el presupuesto; schema, PRAGMAs persistidos, comandos y `ruleVersion`
+  no cambian.
 - **Tiers**: `normal` (opencode-go), `minimo` (cadena de dos candidatos
   `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free` contra el catálogo),
   `gratis` (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin
@@ -237,9 +241,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.32.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.33.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.32.0`.
+  la fija `package.json` = `0.33.0`.
 
 ## Entorno de máquina
 

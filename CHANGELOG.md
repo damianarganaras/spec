@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.31.0] - 2026-11-12
+
+### Added
+- **`memory.criticalKeys` fija el conjunto crítico del working-context**: la configuración del proyecto en `.ancletorc` declara `memory_key` que se inyectan primero, en el orden declarado, mientras el relleno determinístico sigue cubriendo el resto; sin la clave el bloque generado es idéntico al vigente.
+
+### Changed
+- **Falla explícita nombrando el `memory_key` cuando una clave crítica no existe, está inactiva o no entra en el presupuesto**: `ancleto memory context` sale con código distinto de cero y no sobrescribe el archivo previo; el lifecycle y el on-write del MCP advierten sin escribir un bloque degradado; `memory merge` y `memory consolidate --apply` salen con código distinto de cero.
+
+### Notas
+- **`<ContextOverflowWarning>` sin cambios**: texto, conteo, tope de `+N` y único Recall intactos.
+- **Change `mem-05-working-context-critical-set` archivado** y `MEM-05` cerrado.
+
 ## [0.30.2] - 2026-11-12
 
 ### Docs

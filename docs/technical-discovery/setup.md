@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-13T02:37:23Z
-pluginVersion: 0.31.0
+generatedAt: 2026-11-13T14:56:12Z
+pluginVersion: 0.32.0
 skillVersion: '2.3'
 ---
 
@@ -28,6 +28,8 @@ skillVersion: '2.3'
 | Lint | `npm run lint` (`eslint src/ test/ scripts/`) | `package.json`, `PRODUCT.md` |
 | Tests | `npm test` (`node --test "test/*.test.js"`) | `package.json`, `PRODUCT.md` |
 | Tests acotados | `node --test test/<archivo>.test.js` | `PRODUCT.md` (rutas explícitas) |
+| Tests seleccionados por affected-set | `npm run test:affected <archivos...>` (`node scripts/test-affected.mjs`) | `package.json`, `scripts/test-affected.mjs` |
+| Ver plan de selección sin ejecutar | `node scripts/test-affected.mjs --plan-only <archivos...>` | `scripts/test-affected.mjs` |
 | CLI local | `node src/cli/index.js <comando>` | `package.json` (`bin`) |
 | Estado del seed | `ancleto discovery --check` | `src/cli/index.js` |
 | Empaquetar contexto | `ancleto discovery --compress` | `src/cli/index.js` |
@@ -146,6 +148,14 @@ del paquete instalado.
   `mcp`. Desde 0.31.0 `memory context` (con o sin `--out`) falla con exit ≠ 0 y no sobrescribe el
   archivo previo si una clave de `memory.criticalKeys` no existe, está inactiva o no entra en el
   presupuesto; el lifecycle y el on-write del MCP advierten sin escribir un bloque degradado.
+- **Selección de tests afectados (0.32.0)**: `ancleto affected --tests <archivos...>` implica salida
+  JSON y suma `tests` (`complete`, `reasons`, `selected`, `excluded`) a los cuatro campos
+  existentes; sin `--tests` el JSON y los exit codes no cambian. El consumo canónico es
+  `npm run test:affected <archivos...>` → `scripts/test-affected.mjs`, que importa el módulo puro
+  `src/core/test-selection.js` (read-only, sin abrir `.ancleto/memory.db` ni usar red) y sólo ejecuta
+  `node --test` con las rutas de `tests.selected` si `complete === true`; si el manifiesto
+  `test/affected-tests.json` falta o es inválido, o hay `manifest-gap`, `test-glob-missing` o
+  `unresolved-in-closure`, imprime las razones y corre la suite completa `test/*.test.js`.
 - **Tiers**: `normal` (opencode-go), `minimo` (cadena de dos candidatos
   `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free` contra el catálogo),
   `gratis` (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin
@@ -227,9 +237,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.31.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.32.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.31.0`.
+  la fija `package.json` = `0.32.0`.
 
 ## Entorno de máquina
 

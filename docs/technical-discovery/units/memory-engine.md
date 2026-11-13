@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor y la promoción de decisiones al archivar"
 covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode]
 sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-13T02:37:23Z
-pluginVersion: 0.31.0
+generatedAt: 2026-11-13T14:56:12Z
+pluginVersion: 0.32.0
 skillVersion: '2.3'
 ---
 
@@ -39,7 +39,8 @@ normalización del `version` del `package.json` raíz, el filtro de rutas efíme
 `src/core/discovery-glob.js`; desde 0.30.2 el armado offline del estado vive en
 `src/core/discovery-state.js`, siempre fuera de `src/core/memory/**`. **0.31.0 sí toca esta unidad
 sólo en el renderer**: `working-context.js` lee el conjunto crítico de `.ancletorc` y lo pasa como
-`required`; el engine, el esquema, el recall y las ops no cambian.
+`required`; el engine, el esquema, el recall y las ops no cambian. **0.32.0 no toca esta unidad**:
+la selección de tests (`src/core/test-selection.js`) es read-only y no abre `.ancleto/memory.db`.
 
 ## Recorrido relevante
 

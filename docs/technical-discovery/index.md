@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-13T02:37:23Z
-pluginVersion: 0.31.0
+generatedAt: 2026-11-13T14:56:12Z
+pluginVersion: 0.32.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (863 fuentes, ~40k tokens), `package.json` (`0.31.0`), `src/core/model-catalog.json` y
+`minimo` (869 fuentes, ~40k tokens), `package.json` (`0.32.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
@@ -52,6 +52,7 @@ paths citados (ver `unknowns.md`).
 | Discovery: mapa topológico, pack Repomix, estado del seed, `affectedDocs`, affected-set | `units/discovery-engine.md` |
 | Memoria persistente: SQLite+FTS5, tools MCP, recall, refs, working-context, ops, doctor, curate | `units/memory-engine.md` |
 | **Conjunto crítico del working-context (0.31.0)**: `memory.criticalKeys` en `.ancletorc` (seam de configuración), claves inyectadas primero en orden declarado, lectura tolerante (ausente/no-array/entradas no-string → `[]`), fallo duro en `ancleto memory context` con `--out` sin sobrescribir, `console.warn` best-effort en lifecycle/on-write/MCP y exit ≠ 0 en `memory merge`/`consolidate --apply`; `<ContextOverflowWarning>` intacto | `decisions.md`, `units/memory-engine.md`, `setup.md` |
+| **Selección de tests afectados (0.32.0)**: `ancleto affected --tests` agrega el objeto `tests` (`complete`, `reasons`, `selected`, `excluded`) al JSON existente, con el manifiesto cerrado `test/affected-tests.json` y el consumidor `npm run test:affected` que cae fail-closed a la suite completa | `decisions.md`, `setup.md`, `units/discovery-engine.md`, `units/cli-install.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -72,10 +73,16 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.31.0` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.32.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/` (0.32.0: `ADDED` del
+  Requirement `Selección determinística de tests por affected-set con manifiesto cerrado` en
+  `prompt-contracts`; `ancleto affected --tests` agrega `tests.complete|reasons|selected|excluded`,
+  el manifiesto cerrado `test/affected-tests.json` declara `always`/`couplings` y el consumidor
+  `npm run test:affected` cae fail-closed a `node --test "test/*.test.js"`; sin `--tests` el JSON
+  conserva exactamente `seeds`, `affected`, `unresolved` y `externalCount`; cierra `CH-06b`),
   `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` (0.31.0: `ADDED` del
   Requirement `Conjunto crítico estable del working-context` y `MODIFIED` de `Orden determinístico
   de inyección de reglas` con 7 escenarios; `.ancletorc` declara 7 claves en
@@ -159,15 +166,15 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-   archivos) mantienen el conteo; en 0.22.1-0.31.0 no cambió su cantidad.
-- **Pack actual**: 863 fuentes y ~40k tokens (161.700 B, comprimido, tier `minimo`), con 31 entradas
+   archivos) mantienen el conteo; en 0.22.1-0.32.0 no cambió su cantidad.
+- **Pack actual**: 869 fuentes y ~40k tokens (164.782 B, comprimido, tier `minimo`), con 33 entradas
    de archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del pack. El
-   `.discovery-map.json` de la corrida reporta 895 archivos (aspec 321, `.opencode` 66, docs 21,
-   test 29, src 21, documentation 340, audit logs 9). La lista `sources` excluye 22
+   `.discovery-map.json` de la corrida reporta 902 archivos (aspec 324, `.opencode` 66, docs 21,
+   test 31, src 22, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye 23
    `test/*.test.js` por `discovery.exclude` desde 0.30.1; los 7 fixtures de `test/fixtures/**`
    siguen incluidos.
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
-   citadas para reflejar 0.31.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
+   citadas para reflejar 0.32.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
    pasó a calcular `seedMapPresent` antes de clasificar el estado (vale en
    `READY`/`STALE`/`PARTIAL`/`MISSING`); en 0.26.1 el detector de frescura quedó documentado y
    pineado en `cli-diagnostics`; en 0.26.4 la suite declarada sumó el guard estructural de los delta
@@ -196,6 +203,10 @@ paths citados (ver `unknowns.md`).
    este patch no altera el matcher, el writer ni `ruleVersion`. En 0.31.0 el renderer del
    working-context lee `memory.criticalKeys` de `.ancletorc` y lo pasa como `required`: las claves
    críticas van primero y fallan visiblemente si no existen, están inactivas o no entran en el
-   presupuesto; el discovery y la frescura no cambian. `affectedDocs` sigue poblándose sólo en
+   presupuesto; el discovery y la frescura no cambian. En 0.32.0 se agrega `ancleto affected --tests`
+   y el módulo puro `src/core/test-selection.js`: el flag es aditivo, implica JSON y suma el objeto
+   `tests` sin alterar los cuatro campos de `affected --json`; el plan es read-only y determinístico,
+   y su gate `complete` es fail-closed (manifiesto ausente/inválido, `manifest-gap`,
+   `test-glob-missing` o `unresolved-in-closure`). `affectedDocs` sigue poblándose sólo en
    `STALE`. El `ancleto discovery --check` de validación reportó `READY`/`impact: none` con
    `changedAreas: []`, `seedMapPresent: true` y `affectedDocs: []`.

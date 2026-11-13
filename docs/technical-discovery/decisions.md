@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-13T02:37:23Z
-pluginVersion: 0.31.0
+generatedAt: 2026-11-13T14:56:12Z
+pluginVersion: 0.32.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.31.0)
+## Modelos y tiers (estado 0.32.0)
 
 ### Tabla y cadenas
 
@@ -1034,9 +1034,9 @@ sin `--tier` es `normal`.
   exacto de glob. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al cuerpo del pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 863 fuentes, 161.700 B (~40k tokens, comprimido, 31 entradas de
-  archivo). El `.discovery-map.json` regenerado reporta 895 archivos (aspec 321, `.opencode` 66,
-  docs 21, test 29, src 21, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
+- **Pack actual**: tier `minimo`, 869 fuentes, 164.782 B (~40k tokens, comprimido, 33 entradas de
+  archivo). El `.discovery-map.json` regenerado reporta 902 archivos (aspec 324, `.opencode` 66,
+  docs 21, test 31, src 22, scripts 2, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
   el hash semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados
   bajo changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
   writer ni `ruleVersion`; 0.29.0 extiende ese filtro a `documentation/**` y `audit logs/**`
@@ -1045,7 +1045,9 @@ sin `--tier` es `normal`.
    compilado por glob exacto. 0.30.2 es un patch documental sin cambio de runtime: la canónica
    distingue el estado persistido (`version: 1` + `ruleVersion: 2`) del `schemaVersion: 2` de la
    salida de `--check`, y el change de conformidad `pin-offline-discovery-state` pinea el armado
-   offline (`buildDiscoveryState`/`renderDiscoveryState`) con bytes idénticos.
+   offline (`buildDiscoveryState`/`renderDiscoveryState`) con bytes idénticos. 0.31.0 sólo toca el
+   renderer del working-context. 0.32.0 agrega a esta unidad `src/core/test-selection.js` y el
+   consumidor `scripts/test-affected.mjs`, sin tocar el descubrimiento, la frescura ni el estado.
 
 ### Contrato del detector de frescura (0.26.1, reglas 0.27.0–0.29.0)
 
@@ -1141,6 +1143,50 @@ el matcher: sólo corrige la redacción canónica sobre la forma del estado pers
 salida de `--check` y agrega un pin no conductual; `version: 1`, `ruleVersion: 2`, el writer y
 `schemaVersion: 2` de la salida se conservan.
 
+## Selección de tests afectados (0.32.0)
+
+Change archivado: `aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/` (cierra
+`CH-06b`). Requirement canónico: «Selección determinística de tests por affected-set con manifiesto
+cerrado» en `aspec/specs/prompt-contracts/spec.md`. El módulo puro es `src/core/test-selection.js`;
+el consumidor declarado es `npm run test:affected` → `scripts/test-affected.mjs`; el manifiesto es
+`test/affected-tests.json`.
+
+- **Flag aditivo**: `ancleto affected --tests` implica salida JSON y agrega `tests` a los cuatro
+  campos previos (`seeds`, `affected`, `unresolved`, `externalCount`). Sin `--tests` el objeto, sus
+  valores, su orden y los exit codes no cambian; `--tests` nunca se interpreta como semilla. El
+  texto de uso/ayuda sí puede mencionarlo. `affectedCommand` no escribe nada.
+- **Universo y manifiesto**: `U` = `test/*.test.js` (hijos directos de `test/`, no recursivo);
+  `M` = `test/affected-tests.json` con `{ version: 1, always: [paths], couplings: [{ trigger:
+  [globs], tests: [paths], reason }] }`. Toda ruta debe ser repo-relative posix y miembro de `U`;
+  una ruta fuera de `U`, `version` distinta de `1`, `reason` vacío/en blanco, `trigger`/`tests`
+  vacíos o un glob con backslash invalidan el manifiesto (fail-closed → `manifest-invalid`).
+- **Selección**: `tests.selected` es la unión de (1) tests de `U` presentes en `affected`;
+  (2) `always`; (3) tests de los `couplings` cuyo `trigger` interseca `affected` por `matchesGlob`;
+  (4) tests de `U` con imports irresolubles, seleccionados por precaución. `tests.excluded` es el
+  complemento exacto de `U` con `{ file, reason: "not-affected" }`; ambas listas van en orden
+  lexicográfico y ningún test puede quedar fuera de ambas o figurar en las dos.
+- **Gate `complete`**: `tests.complete === true` sólo si el manifiesto es válido y está cerrado, el
+  glob resuelve al menos un archivo y ningún archivo de `affected` tiene imports no resueltos. Las
+  razones son la lista cerrada y ordenada `manifest-missing`, `manifest-invalid`, `manifest-gap`,
+  `test-glob-missing`, `unresolved-in-closure`; `reasons` está vacío si y sólo si `complete` es
+  `true`. `manifest-gap` marca un test que el grafo nunca puede seleccionar (su cierre no toca
+  `src/`) y que no está declarado en `M`.
+- **Consumidor fail-closed**: `scripts/test-affected.mjs` importa `planTestSelection` (no spawnea el
+  CLI) y sólo ejecuta `node --test <selected>` con `complete === true` y selección no vacía. En
+  cualquier otro caso —sin semillas, error de cómputo, plan ausente, `complete:false` o selección
+  vacía— imprime las razones y ejecuta la suite declarada `node --test "test/*.test.js"`. Nunca
+  interpreta la ausencia de `tests` como selección vacía ni inventa un runner. `--plan-only`/`--json`
+  emite el plan sin ejecutar y exige al menos una semilla.
+- **Read-only y determinismo**: el cómputo del plan y el modo de sólo plan no escriben, no abren
+  `.ancleto/memory.db` y no usan red. Dos corridas sobre el mismo estado con la misma semilla
+  producen JSON byte-idéntico; `seeds`/`affected` conservan el orden del módulo y
+  `selected`/`excluded`/`reasons` tienen orden estable y lexicográfico.
+- **Invariante negativa**: `complete: true` no promete completitud semántica universal; sólo afirma
+  que el manifiesto está cerrado, que ningún test de `U` quedó sin clasificar y que el cierre no
+  tiene imports irresolubles. Un acoplamiento no-import nuevo dentro de un test ya declarado sigue
+  cubierto sólo si ese test está en `always` o en un `coupling`; el plan no lo infiere por análisis
+  estático del cuerpo.
+
 ## Lint y publicación
 
 - `npm run lint` ejecuta `eslint src/ test/ scripts/` con flat config y cuatro reglas
@@ -1198,7 +1244,7 @@ salida de `--check` y agrega un pin no conductual; `version: 1`, `ruleVersion: 2
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.31.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.32.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +

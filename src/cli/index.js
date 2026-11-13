@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { join, dirname, resolve, basename, relative, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
-import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../core/memory/engine.js'
+import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath, validateImportEntries } from '../core/memory/engine.js'
 import { snapshotDatabase } from '../core/memory/snapshot.js'
 import { adaptFrontmatter, parseFrontmatter, frontmatterValue } from '../core/adapters/frontmatter.js'
 import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite } from '../core/memory/working-context.js'
@@ -105,7 +105,7 @@ ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FT
                                      y reconstruye el indice FTS5 con --rebuild
   ancleto memory curate [--json] [--strict]  Curaduria read-only: refs rotas y duplicados exactos
   ancleto memory export [--out <archivo>]  Exporta nodos activos a JSON (stdout o archivo)
-  ancleto memory import <archivo>          Importa nodos desde JSON (upsert por memory_key, idempotente)
+  ancleto memory import <archivo> [--dry-run] [--json]  Importa nodos desde JSON (upsert por memory_key, idempotente)
   ancleto memory gc [--dry-run] [--days N] Purga superseded con antiguedad > N dias (default 30)
   ancleto memory snapshot --out <archivo.db> [--force] [--json]
                                    Copia consistente de la memoria (incluye historial; --force sobrescribe)
@@ -131,7 +131,7 @@ const MEMORY_USAGE = [
   'ancleto memory list [--type X] [--scope X] [--all] [--json]',
   'ancleto memory doctor [--rebuild]',
   'ancleto memory export [--out <archivo>]',
-  'ancleto memory import <archivo>',
+  'ancleto memory import <archivo> [--dry-run] [--json]',
   'ancleto memory gc [--dry-run] [--days <n>]',
   'ancleto memory snapshot --out <archivo.db> [--force] [--json]',
   'ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]',
@@ -2858,9 +2858,11 @@ async function memoryExport(flags) {
 async function memoryImport(flags) {
   const positional = flags.find((a) => !a.startsWith('-'))
   if (!positional) {
-    console.error('ancleto: uso: ancleto memory import <archivo>')
+    console.error('ancleto: uso: ancleto memory import <archivo> [--dry-run] [--json]')
     process.exit(1)
   }
+  const dryRun = flags.includes('--dry-run')
+  const asJson = flags.includes('--json')
   const file = resolve(positional)
   if (!(await exists(file))) {
     console.error(`ancleto: no existe el archivo: ${file}`)
@@ -2872,6 +2874,10 @@ async function memoryImport(flags) {
   } catch (err) {
     console.error(`ancleto: no se pudo parsear ${file} como JSON: ${err.message}`)
     process.exit(1)
+  }
+  if (dryRun) {
+    await memoryImportDryRun(json, asJson)
+    return
   }
   const dbPath = defaultMemoryDbPath()
   const projectDir = process.cwd()
@@ -2888,6 +2894,59 @@ async function memoryImport(flags) {
     }
   } finally {
     engine.close()
+  }
+}
+
+// Dry-run read-only de `memory import`: clasifica el archivo sin escribir ni
+// abrir transaccion y sin refrescar el working-context. Si la base no existe no
+// la crea: todo se clasifica `nuevo`/`insert` sobre un estado vacio.
+async function memoryImportDryRun(json, asJson) {
+  const dbPath = defaultMemoryDbPath()
+  const databasePresent = await exists(dbPath)
+  let report
+  if (databasePresent) {
+    const engine = createReadonlyMemoryEngine(dbPath)
+    try {
+      report = engine.classifyImport(json)
+    } catch (err) {
+      console.error(`ancleto: import invalido: ${err.message}`)
+      process.exitCode = 1
+      return
+    } finally {
+      engine.close()
+    }
+  } else {
+    try {
+      validateImportEntries(json)
+    } catch (err) {
+      console.error(`ancleto: import invalido: ${err.message}`)
+      process.exitCode = 1
+      return
+    }
+    report = {
+      summary: { nuevo: json.length, identico: 0, divergente: 0, tombstone: 0 },
+      entries: json.map((entry) => ({
+        memory_key: String(entry.memory_key).trim(),
+        classification: 'nuevo',
+        action: 'insert'
+      }))
+    }
+  }
+  if (asJson) {
+    console.log(JSON.stringify({
+      dryRun: true,
+      databasePresent,
+      summary: report.summary,
+      entries: report.entries
+    }))
+    return
+  }
+  const { summary, entries } = report
+  console.log(`ancleto: import --dry-run -> nuevo:${summary.nuevo} identico:${summary.identico} divergente:${summary.divergente} tombstone:${summary.tombstone}`)
+  for (const entry of entries) {
+    if (entry.action === 'skip' && (entry.classification === 'divergente' || entry.classification === 'tombstone')) {
+      console.log(`${entry.memory_key}: ${entry.classification} (skip)`)
+    }
   }
 }
 

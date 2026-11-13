@@ -2,6 +2,14 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.33.1] - 2026-11-13
+
+### Fixed
+- **`memory doctor --rebuild` abre su rebuild de FTS y su integrity-check dentro del helper de transacción inmediata compartido**: así, un write lock retenido más allá de `busy_timeout` se espera y se reintenta en lugar de fallar con un `SQLITE_BUSY` crudo; agotar el presupuesto reporta `MEMORY_DB_BUSY` en el detalle del check.
+
+### Notas
+- **`memory doctor` por defecto sigue siendo estrictamente read-only**; sin cambios en comandos, flags, schema persistido, PRAGMAs ni `ruleVersion`; el requirement `memory-engine` se actualizó en el lugar.
+
 ## [0.33.0] - 2026-11-13
 
 ### Added

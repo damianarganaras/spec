@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { join, dirname, resolve, basename, relative, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
-import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath, validateImportEntries } from '../core/memory/engine.js'
+import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath, validateImportEntries, simulateImportClassification } from '../core/memory/engine.js'
 import { snapshotDatabase } from '../core/memory/snapshot.js'
 import { adaptFrontmatter, parseFrontmatter, frontmatterValue } from '../core/adapters/frontmatter.js'
 import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite } from '../core/memory/working-context.js'
@@ -2899,13 +2899,22 @@ async function memoryImport(flags) {
 
 // Dry-run read-only de `memory import`: clasifica el archivo sin escribir ni
 // abrir transaccion y sin refrescar el working-context. Si la base no existe no
-// la crea: todo se clasifica `nuevo`/`insert` sobre un estado vacio.
+// la crea: simula la clasificacion sobre un estado vacio con el MISMO simulador
+// que `classifyImport`, de modo que los duplicados de una key en el archivo
+// predicen el mismo `inserted`/`updated` que el import real.
 async function memoryImportDryRun(json, asJson) {
   const dbPath = defaultMemoryDbPath()
   const databasePresent = await exists(dbPath)
   let report
   if (databasePresent) {
-    const engine = createReadonlyMemoryEngine(dbPath)
+    let engine
+    try {
+      engine = createReadonlyMemoryEngine(dbPath)
+    } catch (err) {
+      console.error(`ancleto: no se pudo abrir la memoria en solo lectura (${dbPath}): ${err.message}`)
+      process.exitCode = 1
+      return
+    }
     try {
       report = engine.classifyImport(json)
     } catch (err) {
@@ -2923,14 +2932,7 @@ async function memoryImportDryRun(json, asJson) {
       process.exitCode = 1
       return
     }
-    report = {
-      summary: { nuevo: json.length, identico: 0, divergente: 0, tombstone: 0 },
-      entries: json.map((entry) => ({
-        memory_key: String(entry.memory_key).trim(),
-        classification: 'nuevo',
-        action: 'insert'
-      }))
-    }
+    report = simulateImportClassification(json, () => ({ active: null, hasSuperseded: false }))
   }
   if (asJson) {
     console.log(JSON.stringify({

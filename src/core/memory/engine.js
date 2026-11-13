@@ -79,6 +79,52 @@ function decideImportEntry({ active, hasSuperseded }, entry) {
   return { classification: 'nuevo', action: 'insert' }
 }
 
+// Simulador secuencial puro del import: recorre las entradas EN ORDEN manteniendo
+// un estado por `memory_key` que arranca en `lookup(key)` y avanza con cada
+// entrada, aplicando la misma `decideImportEntry` que `importNodes`. Es la unica
+// fuente de la prediccion: lo usan `classifyImport` (base presente) y el dry-run
+// sin base (lookup vacio), de modo que la clasificacion coincide con el efecto
+// real aun con duplicados de la misma key en el archivo.
+export function simulateImportClassification(entries, lookup) {
+  const summary = { nuevo: 0, identico: 0, divergente: 0, tombstone: 0 }
+  const classified = []
+  // Estado simulado por key: nodo activo vigente (payload + createdAt) y si hay
+  // historial superseded. Se siembra con `lookup` en el primer encuentro de la
+  // key y luego avanza con cada entrada del archivo.
+  const state = new Map()
+  for (const entry of entries) {
+    const memory_key = String(entry.memory_key).trim()
+    let simulated = state.get(memory_key)
+    if (!simulated) {
+      simulated = lookup(memory_key)
+      state.set(memory_key, simulated)
+    }
+    const { classification, action } = decideImportEntry(simulated, entry)
+    summary[classification]++
+    classified.push({ memory_key, classification, action })
+    if (action === 'insert') {
+      simulated.active = {
+        type: entry.type,
+        scope: entry.scope,
+        content: String(entry.content),
+        justification: String(entry.justification || ''),
+        created_at: entry.createdAt
+      }
+      simulated.hasSuperseded = false
+    } else if (action === 'supersede') {
+      simulated.active = {
+        type: entry.type,
+        scope: entry.scope,
+        content: String(entry.content),
+        justification: String(entry.justification || ''),
+        created_at: entry.createdAt
+      }
+      simulated.hasSuperseded = true
+    }
+  }
+  return { summary, entries: classified }
+}
+
 const STOPWORDS = new Set([
   'como', 'cómo', 'the', 'a', 'an', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas',
   'en', 'y', 'o', 'que', 'qué', 'por', 'para', 'con', 'sin', 'sobre', 'al', 'se', 'su', 'sus',
@@ -1091,46 +1137,11 @@ function buildEngine(db, dbPath) {
   // prediccion por entrada coincide con el efecto real del import.
   function classifyImport(json) {
     validateImportEntries(json)
-
-    const summary = { nuevo: 0, identico: 0, divergente: 0, tombstone: 0 }
-    const entries = []
-    // Estado simulado por key: nodo activo vigente (payload + createdAt) y si hay
-    // historial superseded. Se siembra con la DB en el primer encuentro de la key
-    // y luego avanza con cada entrada del archivo.
-    const state = new Map()
-    for (const entry of json) {
-      const memory_key = String(entry.memory_key).trim()
-      let simulated = state.get(memory_key)
-      if (!simulated) {
-        const active = findActiveIdentity.get(memory_key)
-        const hasSuperseded = active ? false : countSuperseded.get(memory_key).c > 0
-        simulated = { active: active || null, hasSuperseded }
-        state.set(memory_key, simulated)
-      }
-      const { classification, action } = decideImportEntry(simulated, entry)
-      summary[classification]++
-      entries.push({ memory_key, classification, action })
-      if (action === 'insert') {
-        simulated.active = {
-          type: entry.type,
-          scope: entry.scope,
-          content: String(entry.content),
-          justification: String(entry.justification || ''),
-          created_at: entry.createdAt
-        }
-        simulated.hasSuperseded = false
-      } else if (action === 'supersede') {
-        simulated.active = {
-          type: entry.type,
-          scope: entry.scope,
-          content: String(entry.content),
-          justification: String(entry.justification || ''),
-          created_at: entry.createdAt
-        }
-        simulated.hasSuperseded = true
-      }
-    }
-    return { summary, entries }
+    return simulateImportClassification(json, (memory_key) => {
+      const active = findActiveIdentity.get(memory_key)
+      const hasSuperseded = active ? false : countSuperseded.get(memory_key).c > 0
+      return { active: active || null, hasSuperseded }
+    })
   }
 
   // Purga nodos superseded cuya edad de supersesion (`superseded_at`, con

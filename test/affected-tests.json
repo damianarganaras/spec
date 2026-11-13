@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "always": [],
+  "couplings": [
+    {
+      "trigger": ["src/cli/**"],
+      "tests": [
+        "test/affected-set.test.js",
+        "test/cli.test.js",
+        "test/curation.test.js",
+        "test/discovery-topology.test.js",
+        "test/mcp.test.js",
+        "test/memory-engine.test.js",
+        "test/memory-pr1-contract.test.js",
+        "test/specs-merge.test.js",
+        "test/stats-failures.test.js"
+      ],
+      "reason": "suites spawn the CLI without importing it, so the import graph has no edge to src/cli"
+    },
+    {
+      "trigger": ["src/core/memory/**"],
+      "tests": ["test/stats-failures.test.js"],
+      "reason": "stats-failures uses DatabaseSync against the memory schema without importing src/core/memory/database.js"
+    },
+    {
+      "trigger": [
+        "agents/**",
+        "skills/**",
+        "commands/**",
+        "templates/**",
+        "README.md",
+        "PRODUCT.md",
+        "AGENTS.md",
+        "aspec/specs/**",
+        "aspec/changes/**",
+        "src/**"
+      ],
+      "tests": ["test/content-guards.test.js"],
+      "reason": "content guards read agents, skills, commands, templates, docs and src files as text without importing them"
+    },
+    {
+      "trigger": [
+        "agents/**",
+        "skills/**",
+        "commands/**",
+        "templates/**",
+        "README.md",
+        "package.json",
+        "profiles/**",
+        "src/**"
+      ],
+      "tests": ["test/cli.test.js"],
+      "reason": "cli suite copies source/assets and reads package.json, README and agent frontmatter as text"
+    },
+    {
+      "trigger": ["agents/**", "profiles/**", "src/**"],
+      "tests": ["test/agent-model-coherence.test.js"],
+      "reason": "agent-model-coherence reads agent and profile sources plus src files as text"
+    },
+    {
+      "trigger": ["agents/**", "profiles/**"],
+      "tests": ["test/model-catalog.test.js"],
+      "reason": "model-catalog reads agents and profile frontmatter as text"
+    },
+    {
+      "trigger": ["README.md"],
+      "tests": ["test/model-catalog-discovery.test.js"],
+      "reason": "model-catalog-discovery reads README as text"
+    },
+    {
+      "trigger": ["agents/**"],
+      "tests": ["test/adapters-frontmatter.test.js"],
+      "reason": "adapters-frontmatter reads agent frontmatter as text"
+    },
+    {
+      "trigger": [
+        "eslint.config.js",
+        "package.json",
+        "PRODUCT.md",
+        ".github/workflows/publish.yml",
+        "src/**",
+        "test/**"
+      ],
+      "tests": ["test/linter-config.test.js"],
+      "reason": "linter-config reads the flat config, package.json, PRODUCT.md, the publish workflow and scans src/test as text"
+    }
+  ]
+}

@@ -21,10 +21,15 @@ exactamente el efecto que tendría `import` sobre la misma entrada en el mismo e
 - `tombstone`: no existe nodo activo pero sí existe historial `superseded` para la key; acción
   `skip`.
 
-`createdAt` NO SHALL formar parte de la identidad del payload. La comparación de `content` SHALL
-aplicar el mismo saneador que usa `exportActive` sobre ambos lados —el `content` del nodo activo
-local y el de la entrada—, de modo que un round-trip legítimo export→import y una entrada con el
-`content` crudo del nodo local clasifiquen `identico` y no `divergente`.
+`createdAt` NO SHALL formar parte de la identidad del payload. La comparación de `content` y de
+`justification` SHALL aplicar el mismo saneador que usa `exportActive` sobre ambos lados —el campo
+del nodo activo local y el de la entrada—, de modo que un round-trip legítimo export→import y una
+entrada con el `content` o el `justification` crudo del nodo local clasifiquen `identico` y no
+`divergente`. Ese saneado SHALL tratar los paths absolutos como no semánticos; por lo tanto un
+`identico` puede corresponder a un `content` que igual cambia en bytes al importar (el path redactado
+reemplaza al original) y esa diferencia NO SHALL reportarse como `divergente`: la promesa de
+predicción exacta aplica a la acción (`insert`/`supersede`/`skip`) y a los contadores, no a la
+igualdad byte a byte del `content`.
 
 `tombstone` NO SHALL ser un estado persistido: el esquema no tiene tombstone ni `deleted_at`, NO
 SHALL agregarse ninguno, y el término SHALL describir únicamente "retirada local que el import
@@ -43,16 +48,20 @@ coincidir con `inserted`, `updated` y `skipped` del import real sobre el mismo e
 escritura y `.db` con bytes idénticos. La ausencia de sidecars `-wal`/`-shm` NO SHALL afirmarse como
 parte del contrato. Si la base existe, el sistema SHALL reportar `databasePresent: true` sin
 escribirla. Si la base no existe, el sistema NO SHALL crearla y SHALL reportar
-`databasePresent: false`, clasificando todas las entradas como `nuevo` con acción `insert` y saliendo
-con código 0.
+`databasePresent: false`, clasificando cada entrada mediante la misma simulación secuencial sobre un
+estado vacío: una entrada cuyo `memory_key` no se repite en el archivo resulta `nuevo` con acción
+`insert`, y un duplicado posterior se clasifica contra la entrada anterior; la corrida sigue
+saliendo con código 0.
 
 **Salida.** El sistema SHALL producir un resumen `{ nuevo, identico, divergente, tombstone }` y, por
 entrada, `{ memory_key, classification, action }`, en el orden del archivo. Con `--json` SHALL
 emitir `{ dryRun: true, databasePresent, summary, entries }`. Sin `--json` SHALL emitir un texto
 humano con el resumen y una línea por cada entrada cuya acción sea `skip` con clasificación
 `divergente` o `tombstone`. El sistema SHALL salir con código 0 en éxito y con código 1 sólo cuando
-falte el archivo, el archivo no exista, el JSON no sea parseable o una entrada no satisfaga el
-esquema que `importNodes` exige; en este último caso NO SHALL emitirse una clasificación parcial.
+falte el archivo, el archivo no exista, el JSON no sea parseable, una entrada no satisfaga el
+esquema que `importNodes` exige, o la base exista pero no pueda abrirse en sólo lectura. En el caso
+de entrada inválida NO SHALL emitirse una clasificación parcial; en el caso de apertura fallida NO
+SHALL emitirse clasificación alguna.
 
 #### Scenario: Bucket `nuevo` inserta
 
@@ -119,11 +128,12 @@ esquema que `importNodes` exige; en este último caso NO SHALL emitirse una clas
 - **AND** ningún nodo cambia de estado
 - **AND** `.ancleto/working-context.md` no se refresca ni cambia
 
-#### Scenario: Base ausente no se crea y todo es nuevo
+#### Scenario: Base ausente no se crea y las keys únicas resultan nuevas
 
-- **WHEN** se ejecuta el dry-run y `.ancleto/memory.db` no existe
+- **WHEN** se ejecuta el dry-run y `.ancleto/memory.db` no existe, con un archivo cuyas
+  `memory_key` no se repiten
 - **THEN** la salida reporta `databasePresent: false`
-- **AND** todas las entradas se clasifican `nuevo` con acción `insert`
+- **AND** cada entrada se clasifica `nuevo` con acción `insert`
 - **AND** el archivo de base no se crea
 - **AND** el código de salida es 0
 
@@ -169,3 +179,19 @@ esquema que `importNodes` exige; en este último caso NO SHALL emitirse una clas
   exactamente ese mismo `content` sin redactar, con `createdAt` más nuevo
 - **THEN** la entrada se clasifica `identico` con acción `supersede`
 - **AND** no se clasifica `divergente`
+
+#### Scenario: Path absoluto en justification no produce divergente falso
+
+- **WHEN** existe un nodo activo cuyo `justification` contiene un path absoluto y la entrada es la
+  que produce `exportActive` para ese nodo, con el path redactado
+- **THEN** la entrada se clasifica `identico`
+- **AND** no se clasifica `divergente`
+
+#### Scenario: Base ausente con key duplicada predice el import real
+
+- **WHEN** la base no existe y el archivo trae dos entradas de la misma `memory_key`, la segunda con
+  contenido distinto y `createdAt` más nuevo
+- **THEN** la primera se clasifica `nuevo` con acción `insert`
+- **AND** la segunda se clasifica `divergente` con acción `supersede`
+- **AND** el import real sobre ese mismo estado reporta `inserted: 1` y `updated: 1`
+- **AND** el archivo de base se crea sólo por el import, nunca por el dry-run

@@ -5,11 +5,11 @@ Todas las versiones notables de `@ancleto/spec`.
 ## [0.34.0] - 2026-11-13
 
 ### Added
-- **ancleto memory import gana --dry-run y --json**: clasificación read-only por memory_key en nuevo, identico, divergente y tombstone, con acción predicha insert, supersede o skip. La clasificación comparte una única función de decisión con el import real, así que predice su acción y sus contadores sin escribir nada. import sin flags no cambia.
+- **`ancleto memory import` gana `--dry-run` y `--json`**: clasificación read-only por `memory_key` en `nuevo`, `identico`, `divergente` y `tombstone`, con acción predicha `insert`, `supersede` o `skip`. La clasificación comparte una única función de decisión con el import real, así que predice su acción y sus contadores sin escribir nada. `import` sin flags no cambia.
 
 ### Notas
-- **Refutado con evidencia**: reindex desde proposals (el contenido almacenado es una composición, no el bloque verbatim, y rule no tiene fuente en Git) y gate fail-closed en import (rompe el restore de snapshot y contradice cuatro requirements canónicos).
-- **Sin cambios** de schema, PRAGMAs persistentes, ruleVersion, dependencias ni superficies de agentes/skills/templates.
+- **Refutado con evidencia**: `reindex` desde `proposals` (el contenido almacenado es una composición, no el bloque verbatim, y `rule` no tiene fuente en `Git`) y gate `fail-closed` en `import` (rompe el restore de snapshot y contradice cuatro requirements canónicos).
+- **Sin cambios** de `schema`, `PRAGMAs` persistentes, `ruleVersion`, dependencias ni superficies de agentes/skills/templates.
 
 ## [0.33.1] - 2026-11-13
 

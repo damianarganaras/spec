@@ -2,7 +2,7 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-14T00:28:03Z
+generatedAt: 2026-11-14T00:48:16Z
 pluginVersion: 0.34.0
 skillVersion: '2.3'
 ---

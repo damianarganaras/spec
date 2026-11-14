@@ -2,7 +2,7 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-14T00:28:03Z
+generatedAt: 2026-11-14T00:48:16Z
 pluginVersion: 0.34.0
 skillVersion: '2.3'
 ---

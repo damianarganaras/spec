@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-13 (0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
+> Última actualización: 2026-11-13 (0.34.0: CH-08/MEM-06 entregó su única pieza sound — `memory import --dry-run [--json]` con clasificación read-only por memory_key (nuevo/identico/divergente/tombstone) y acción predicha (insert/supersede/skip) compartiendo una única función de decisión con el import real; reindex desde proposals y gate fail-closed refutados con evidencia; 0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
 
 ## Prioridad de ejecución
 
@@ -9,7 +9,7 @@
 2. **0.21.0 — `feat(cli)`**: **cerrado en 0.23.0** por `portability-legacy-bundle-advisory` (mitad bundle legacy sin intención MCP). La mitad `.opencode/*` histórico quedó **refutada**: `check` ya imprime `✔ .opencode/agents` en un install sano y el dir faltante ya falla con exit 1.
 3. **Reingeniería P0**: PR-5 cerrado (`p0-pr5-archive-conformity`); MEM-01 pendiente como runbook que requiere aprobación explícita del usuario antes de escribir en `.ancleto/memory.db`. PR-4 ya está cumplido.
 4. **Reingeniería P1**: CH-00 baseline (runbook, prerrequisito) → CH-06a merge determinístico de delta specs **cerrado en 0.22.0** (`ch-06a-specs-merge-deterministic`) → CH-06b selección de tests por affected-set **cerrado en 0.32.0** → CH-07 A/B de prefijos/caché/modelos (bloqueado por CH-00).
-5. **Reingeniería P2 colaboración**: CH-08/MEM-06 (pendiente) → T25 `formatVersion` (**refutado en 0.23.0**) → T27 (reindex, pendiente) → T20 (idempotencia) **cerrado en 0.23.0** → T30 (V1/V2, pendiente) → CH-10 (matriz de hosts, pendiente).
+5. **Reingeniería P2 colaboración**: CH-08/MEM-06 (slice `memory import --dry-run` cerrado en 0.34.0; reindex y gate fail-closed refutados con evidencia) → T25 `formatVersion` (**refutado en 0.23.0**) → T27 (reindex, pendiente) → T20 (idempotencia) **cerrado en 0.23.0** → T30 (V1/V2, pendiente) → CH-10 (matriz de hosts, pendiente).
 6. **Reingeniería P2 motor/host restante**: #4 (exclusión mutua de escritores) **cerrado en 0.33.0** (`ch-04-memory-writer-serialization`), #6 (tope de verificación / orden archive→merge), #18 (seed stale por diseño).
 7. **Deuda declarada**: MEM-05c–e pendientes, MEM-05f cerrado, MEM-05g diferido, CH-09a–g pendientes, CH-09h refutado.
 
@@ -64,7 +64,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
   DB real no mutada. Change archivado en
   `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/`.
   **MEM-05f cerrado en 0.23.0** (`template-legacy-eol-preservation`): `reconcileLegacyBlocks` preserva el EOL por línea y el estado de newline final. **MEM-05g diferido**: inalcanzable — 0 code fences dentro de todo bloque `LOCKED` de `templates/`, `profiles/test/templates/` y `AGENTS.md`/`PRODUCT.md` raíz; sólo input artesanal dispara el cierre temprano.
-- **P2 colaboración:** `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10). **T25 (`formatVersion`) refutado en 0.23.0**: los exports viejos ya importan sin pérdida, `importNodes` ignora claves extra y exige `Array.isArray`, y ningún consumidor lee una versión; se reabre cuando CH-08 defina el lector.
+- **P2 colaboración:** CH-08/MEM-06 entregó en 0.34.0 el dry-run clasificado; el reindex desde proposals y el gate fail-closed quedaron refutados con evidencia. `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10). **T25 (`formatVersion`) refutado en 0.23.0**: los exports viejos ya importan sin pérdida, `importNodes` ignora claves extra y exige `Array.isArray`, y ningún consumidor lee una versión; se reabre cuando CH-08 defina el lector.
 - **P2 motor/host:** T20 idempotencia **cerrado en 0.23.0** (`memory-record-idempotency`); #4 exclusión mutua de escritores **cerrado en 0.33.0** (`ch-04-memory-writer-serialization`); T30 V1/V2, CH-10 matriz de hosts, #6, #18 pendientes.
 - **Deuda:** MEM-05c–g, CH-09a–h.
 
@@ -443,4 +443,27 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 **Pendiente:**
 
-- **T27/CH-01, CH-08/MEM-06, MEM-01, CH-09a–g, CH-10, #6, #18:** diferimientos previos sin cambios.
+- **T27/CH-01, MEM-01, CH-09a–g, CH-10, #6, #18:** diferimientos previos sin cambios.
+- **CH-08/MEM-06:** su slice `memory import --dry-run` se entregó en 0.34.0; el reindex desde proposals y el gate fail-closed quedaron refutados con evidencia (ver `## Relación con 0.34.0`).
+
+## Relación con 0.34.0
+
+0.34.0 contiene un change archivado. Release minor (runtime + spec + test): `ancleto memory import` gana `--dry-run` y `--json` con clasificación read-only por `memory_key`; sin el flag el comando no cambia.
+
+**Hecho:**
+
+- **`ch-08-memory-import-dry-run-classified` (funcional, delta ADDED en `memory-ops`):** implementado, testeado y archivado en `aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/`; delta `Import con dry-run clasificado por memory_key` (19 escenarios) mergeado en `aspec/specs/memory-ops/spec.md:1308`.
+- **Contrato:** cuatro buckets —`nuevo` (sin activo ni historial), `identico` (payload durable igual, comparado en forma saneada), `divergente` (payload distinto), `tombstone` (sin activo pero con historial `superseded`, no persistido)— y acción predicha `insert`/`supersede`/`skip`. Salida humana con el resumen y las líneas de `skip` que hoy son invisibles; `--json` con `{dryRun, databasePresent, summary, entries}`. Base ausente: `databasePresent:false`, simulación sobre estado vacío, sin crear la base, exit 0. Exit 1 sólo por archivo ausente/JSON inválido/entrada inválida/base ilegible, sin clasificación parcial.
+- **Garantía:** `importNodes` y el dry-run comparten `decideImportEntry`, `readImportState` y `simulateImportClassification` (`src/core/memory/engine.js`), así que la predicción de acción y contadores no puede derivar del import. La simulación es secuencial en el orden del archivo (duplicados de la misma key se comparan contra la entrada anterior). Read-only estricto: `createReadonlyMemoryEngine` con `migrate:false`, sin transacción, sin `checkpoint` y sin refresh del working-context; la garantía es "ninguna sentencia de escritura y `.db` con bytes idénticos", no la ausencia de sidecars `-wal`/`-shm`.
+- **Defectos medidos que motivaron el change:** con dos bases divergentes y `createdAt` igual, `importNodes` comparaba con `>` estricto y ambas direcciones devolvían `skipped:1`, dejando la divergencia sin señal; y `memory import --dry-run` (flag inexistente, ignorado) insertaba una fila. Ambos reproducidos offline sobre DBs temporales.
+- **Refutado con evidencia:** `memory reindex` desde proposals/specs (el `content` persistido es una composición de 1–3 frases de `agents/memory-keeper.md`, no el bloque verbatim, y `rule` no tiene fuente en Git: un reindex supersedería memoria aprobada con prosa cruda) y gate fail-closed en `import` (es el camino documentado de restore del snapshot y cuatro requirements canónicos fijan la semántica LWW de `importNodes`; sin reindex no habría vía de recuperación).
+- **Validaciones:** suite 1359 tests / 1354 pass / 0 fail / 5 skips preexistentes; `npm run lint` passed; format `not-configured`; typecheck `n/a`. Review en dos rondas: R1 levantó `GUARANTEE NOT SUSTAINED` (la rama sin base duplicaba la política y predecía `nuevo:2` para una key duplicada), cerrado en `7a245a5`; R2 `APPROVED` sin CRITICAL ni MAJOR.
+- **Sin cambios** de schema, PRAGMAs persistentes, `ruleVersion`, dependencias, comandos ajenos ni superficies de agentes/skills/templates. Compatibilidad: un export viejo clasifica igual, un binario 0.33.1 lee el mismo estado y `import` sin flags conserva contadores y escritura.
+- **Release:** 0.34.0 (minor), tag ANOTADO `v0.34.0` (objeto `4970850`) apuntando al merge `--no-ff` `319ab4b` (padres `cdf3da1` + `7fb60ab`); run de publish `43535380500` success; npm `version`/`latest` 0.34.0, `gitHead` == `319ab4b`, tarball HTTP 200.
+- **Seed:** regenerado con `pluginVersion 0.34.0` en 11/11 docs; `discovery --check` `READY`/`none`.
+- **Memoria:** 4 decisiones promovidas (`memory-import-dry-run-shares-decision-function`, `memory-import-dry-run-sanitized-identity`, `memory-reindex-from-proposals-refuted-composed-content`, `memory-import-fail-closed-rejected-snapshot-restore`); 381 nodos / 266 activos / 824 refs / 0 sin resolver.
+
+**Pendiente nuevo en 0.34.0:**
+
+- **`scope` no-string en el import:** el dry-run clasifica por el valor crudo de la entrada mientras SQLite (afinidad TEXT) persiste el valor coercido; con `scope` numérico un dry-run posterior vería `divergente`, y con `scope` objeto el dry-run predice `insert` pero `importNodes` aborta al bindear. Corregirlo exige validar `scope` como string en la validación compartida, lo que cambia el contrato de `importNodes` (delta MODIFIED), así que quedó diferido.
+- **T27/reindex y el gate fail-closed** siguen sin implementarse: refutados con la evidencia de arriba, no diferidos por falta de tiempo.

@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-13T20:53:42Z
-pluginVersion: 0.33.1
+generatedAt: 2026-11-14T00:28:03Z
+pluginVersion: 0.34.0
 skillVersion: '2.3'
 ---
 
@@ -162,6 +162,11 @@ del paquete instalado.
   hace su rebuild FTS5 + integrity-check dentro del mismo helper y reporta `MEMORY_DB_BUSY` en el
   detalle, con el `doctor` por defecto aún read-only. Schema, PRAGMAs persistidos, comandos y
   `ruleVersion` no cambian.
+- **Import con dry-run (0.34.0)**: `ancleto memory import <archivo.json> [--dry-run] [--json]`.
+  `--dry-run` usa `createReadonlyMemoryEngine`, clasifica por `memory_key` en `nuevo`, `identico`,
+  `divergente` y `tombstone`, y predice `insert`/`supersede`/`skip` con la misma función que el
+  import real; no escribe ni refresca el working-context. `--json` emite
+  `{dryRun, databasePresent, summary, entries}`. Sin flags, `import` no cambia.
 - **Tiers**: `normal` (opencode-go), `minimo` (cadena de dos candidatos
   `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free` contra el catálogo),
   `gratis` (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin
@@ -243,9 +248,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.33.1)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.34.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.33.1`.
+  la fija `package.json` = `0.34.0`.
 
 ## Entorno de máquina
 

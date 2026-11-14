@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-13T20:53:42Z
-pluginVersion: 0.33.1
+generatedAt: 2026-11-14T00:28:03Z
+pluginVersion: 0.34.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.33.1)
+## Modelos y tiers (estado 0.34.0)
 
 ### Tabla y cadenas
 
@@ -1219,6 +1219,51 @@ en `aspec/specs/memory-engine/spec.md`. El helper único es `runImmediateTransac
 - **Oráculo**: `test/memory-writers.test.js` con `test/fixtures/memory-writer-child.mjs` usa una base
   temporal (`mkdtemp`) y procesos hijos; la suite se declara en `test/affected-tests.json`. No se
   ejecutó en esta generación: el comportamiento se describe desde el código y el delta archivado.
+
+## Import con dry-run clasificado (0.34.0)
+
+Change archivado: `aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/`.
+Requirement canónico: «Import con dry-run clasificado por memory_key» en
+`aspec/specs/memory-ops/spec.md`. Extiende el import sin modificar `importNodes` ni su resumen
+`{ inserted, updated, skipped }`.
+
+- **Predicción exacta por decisión única** (`memory-import-dry-run-shares-decision-function`):
+  `importNodes` (escritura) y `classifyImport` (dry-run) comparten `decideImportEntry`
+  (`src/core/memory/engine.js`). Dada la entrada y el estado activo/historial de su `memory_key`,
+  devuelve `{ classification, action }`; el dry-run recorre el archivo en orden y simula el estado,
+  así que los duplicados secuenciales predicen `inserted`/`updated`/`skipped`. Duplicar la política
+  se descartó porque el preview derivaría del import real.
+- **Buckets y acciones**: `nuevo` (sin activo ni historial → `insert`); `identico` y `divergente`
+  (hay activo; `supersede` sólo si el `createdAt` entrante es estrictamente más nuevo, si no `skip`);
+  `tombstone` (sin activo pero con historial `superseded` → `skip`, no reactiva). `createdAt` no
+  forma parte de la identidad.
+- **Identidad saneada** (`memory-import-dry-run-sanitized-identity`): el payload durable compara
+  `type`, `scope`, `content` y `justification`; `content` y `justification` usan el mismo saneador que
+  `exportActive` sobre ambos lados, de modo que un round-trip legítimo con un path absoluto redactado
+  clasifica `identico` y no `divergente`. La predicción exacta promete la acción y los contadores,
+  no la igualdad byte a byte del `content`.
+- **Read-only estricto**: abre con `createReadonlyMemoryEngine` (`migrate: false`), no ejecuta
+  `runImmediateTransaction`, `checkpoint`, `recordNode`, `importNodes`, `gc` ni el refresh del
+  working-context. Si la base no existe, reporta `databasePresent: false` y no la crea. La ausencia
+  de sidecars `-wal`/`-shm` no se promete.
+- **Salida y exit codes**: resumen `{ nuevo, identico, divergente, tombstone }` y
+  `{ memory_key, classification, action }` por entrada, en orden del archivo; con `--json`,
+  `{ dryRun: true, databasePresent, summary, entries }`. Exit 0 en éxito; 1 sólo por archivo
+  faltante, JSON no parseable, entrada fuera del esquema o base existente no abrible en read-only,
+  sin clasificación parcial.
+- **Tombstone no persistido**: el esquema no tiene tombstone ni `deleted_at` y no se agrega.
+- **Refutados** (`memory-reindex-from-proposals-refuted-composed-content`,
+  `memory-import-fail-closed-rejected-snapshot-restore`): `memory reindex` desde proposals se
+  descarta porque el `content` almacenado es una composición, no el bloque verbatim, y `rule` no
+  tiene fuente en Git; un gate fail-closed en `import` se rechaza porque rompe el restore documentado
+  del snapshot y contradice cuatro requirements canónicos que fijan la semántica LWW de `importNodes`.
+- **Riesgos aceptados**: la equivalencia se acota a la acción/contadores (no a bytes), el saneado
+  puede convertir en `identico` un `content` que cambia al importar, y la base puede materializar
+  sidecars aunque el contrato sea sólo "ninguna sentencia de escritura y `.db` con bytes idénticos".
+- **Oráculo**: `test/memory-engine.test.js` (equivalencia por entrada, buckets, solo-lectura, base
+  ausente, duplicados) y `test/cli.test.js` (flags, salida humana/JSON, exit codes y texto de ayuda).
+  No se ejecutó la suite en esta generación; el comportamiento se describe desde el código y el delta
+  archivado.
 
 ## Lint y publicación
 

@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la selección de tests afectados, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, seleccion-de-tests, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/discovery-glob.js", "src/core/discovery-state.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection"]
-generatedAt: 2026-11-13T20:53:42Z
-pluginVersion: 0.33.1
+generatedAt: 2026-11-14T00:28:03Z
+pluginVersion: 0.34.0
 skillVersion: '2.3'
 ---
 
@@ -53,7 +53,8 @@ el discovery ni la frescura: sólo cambia el renderer del working-context, fuera
 plan se computa en memoria sobre el affected-set. **0.33.0–0.33.1 tampoco tocan esta unidad**: la
 serialización de escritores y el rebuild de doctor (0.33.1) viven en `src/core/memory/**`, fuera
 del discovery; `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, el writer, la forma del estado y
-`ruleVersion: 2` siguen intactos.
+`ruleVersion: 2` siguen intactos. **0.34.0** tampoco la toca: el dry-run clasificado del import vive
+en `src/core/memory/**` y `src/cli/index.js` (`memoryImport`), fuera del discovery.
 
 ## Recorrido relevante
 

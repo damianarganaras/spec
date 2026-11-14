@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor, la promoción de decisiones al archivar y la serialización de escritores concurrentes (MEMORY_DB_BUSY) y el rebuild de doctor en transacción inmediata (0.33.1)"
-covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode, serialización de escritores, MEMORY_DB_BUSY, retry acotado, runImmediateTransaction, doctor-rebuild]
-sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization", "test/memory-writers.test.js", "test/fixtures/memory-writer-child.mjs", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-13T20:53:42Z
-pluginVersion: 0.33.1
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor, la promoción de decisiones al archivar y la serialización de escritores concurrentes (MEMORY_DB_BUSY) y el rebuild de doctor en transacción inmediata (0.33.1) y el import con dry-run clasificado (0.34.0)"
+covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode, serialización de escritores, MEMORY_DB_BUSY, retry acotado, runImmediateTransaction, doctor-rebuild, import-dry-run, decideImportEntry, databasePresent, clasificacion-read-only]
+sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization", "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified", "test/memory-writers.test.js", "test/fixtures/memory-writer-child.mjs", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
+generatedAt: 2026-11-14T00:28:03Z
+pluginVersion: 0.34.0
 skillVersion: '2.3'
 ---
 
@@ -83,6 +83,26 @@ read-only (ver "Escritura y supersesión").
 - La procedencia decide una sola cosa: si la escritura pasa por validación de refs. La excepción es
   el valor exacto `runtime`; el resto se valida fail-closed.
 
+### Import con dry-run clasificado (0.34.0)
+
+- `ancleto memory import --dry-run <archivo.json> [--json]` es una simulación read-only: abre con
+  `createReadonlyMemoryEngine` (`migrate: false`), no abre transacción, no llama `importNodes`,
+  `recordNode`, `gc` ni `checkpoint`, y no refresca el working-context.
+- `importNodes` y `classifyImport` comparten `decideImportEntry`; el preview recorre el archivo en
+  orden y simula el estado por `memory_key`, así que los duplicados secuenciales predicen el mismo
+  `inserted`/`updated`/`skipped` que el import real.
+- Buckets: `nuevo` (sin activo ni historial → `insert`), `identico` y `divergente` (hay activo;
+  `supersede` sólo si el `createdAt` entrante es estrictamente más nuevo, si no `skip`) y
+  `tombstone` (sin activo pero con historial `superseded` → `skip`). `createdAt` queda fuera de la
+  identidad; `content` y `justification` se comparan con el saneador de `exportActive`, por lo que un
+  path absoluto redactado no produce un `divergente` falso.
+- Salida: resumen `{ nuevo, identico, divergente, tombstone }` y `{ memory_key, classification,
+  action }` por entrada; con `--json`, `{ dryRun: true, databasePresent, summary, entries }`. Si la
+  base no existe, `databasePresent: false` y no se crea. Exit 0 en éxito y 1 por archivo faltante,
+  JSON inválido o entrada fuera del esquema, sin clasificación parcial.
+- El `tombstone` no se persiste: el esquema no tiene `deleted_at` y no se agrega. `reindex` desde
+  proposals y un gate fail-closed en `import` se refutaron (ver `decisions.md`).
+
 ### Refs y secretos
 
 - Gramática cerrada de `refs:`: `spec:`, `change:`, `path:`, `commit:`, `workitem:`. El bloque
@@ -130,7 +150,7 @@ read-only (ver "Escritura y supersesión").
 | Operación | Contrato |
 |---|---|
 | `export` | Solo nodos activos; sanea paths absolutos; no exporta historial |
-| `import` | Upsert por `memory_key`; no reactiva superseded; si el JSON es más reciente supersede, si no no-op |
+| `import` | Upsert por `memory_key`; no reactiva superseded; `--dry-run` clasifica sin escribir; si el JSON es más reciente supersede, si no no-op |
 | `gc --days N` | Purga superseded por `COALESCE(superseded_at, created_at)`; detacha `superseded_by` antes del DELETE; `--dry-run` no escribe |
 | `snapshot` | Copia consistente con historial (`VACUUM INTO`, conexión read-only, reemplazo seguro en Windows) |
 | `merge` | Supersede sources activas hacia un target activo; valida todo antes de una única transacción; `--dry-run` no escribe |
@@ -184,6 +204,10 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
   con diagnóstico (key + ruta de refs resueltas). Desde 0.31.0 el conjunto requerido se declara en
   `.ancletorc` → `memory.criticalKeys` (seam de configuración, no de DB): una clave inexistente,
   inactiva o fuera de presupuesto falla visiblemente según la superficie.
+- **Predicción del import (0.34.0)**: el dry-run y `importNodes` comparten `decideImportEntry`, de
+  modo que la acción (`insert`/`supersede`/`skip`) y los contadores predicen el import real; la
+  identidad usa el saneador de `exportActive`, así que un round-trip legítimo con paths absolutos no
+  se marca `divergente`. Un `tombstone` no es estado persistido: sólo historial `superseded` sin activo.
 - **Riesgo de consistencia**: `merge`/`consolidate` revalidan bajo lock y abortan si el target dejó
   de estar activo; `gc` usa un cutoff único para SELECT y DELETE.
 - **Riesgo de contención (0.33.0–0.33.1)**: el retry es acotado (3 intentos, 200/600 ms) para no
@@ -216,6 +240,7 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 | `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move |
 | `aspec/specs/memory-engine/spec.md` | Requirement de idempotencia de reescritura idéntica en `recordNode` (0.23.0); `Orden determinístico de inyección de reglas` con 7 escenarios y `Conjunto crítico estable del working-context` (0.31.0); desde 0.33.0 `Serialización de escritores concurrentes sobre la base de memoria`; desde 0.33.1 el requirement de doctor se actualizó en el lugar |
 | `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` | Delta `ADDED` del conjunto crítico y `MODIFIED` del orden determinístico; `MEM-05` cerrado en 0.31.0 |
+| `aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/` | Delta `ADDED` del import con dry-run clasificado; cierra `CH-08` en 0.34.0 |
 | `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/` | Delta `ADDED` de serialización de escritores concurrentes; cierra `CH-04` en 0.33.0 |
 | `test/memory-writers.test.js`, `test/fixtures/memory-writer-child.mjs` | Oráculo offline de escritores concurrentes y fixture de proceso hijo (0.33.0–0.33.1; cubre el rebuild de doctor bajo contención desde 0.33.1) |
 | `aspec/specs/cli-diagnostics/spec.md` | Fuera de esta unidad: contrato de frescura del seed (0.26.1) que no toca el motor |

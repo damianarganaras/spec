@@ -96,7 +96,9 @@ export function simulateImportClassification(entries, lookup) {
     const memory_key = String(entry.memory_key).trim()
     let simulated = state.get(memory_key)
     if (!simulated) {
-      simulated = lookup(memory_key)
+      const initial = lookup(memory_key)
+      // El lookup debe devolver un objeto nuevo por key: el simulador no muta la referencia recibida.
+      simulated = { active: initial.active, hasSuperseded: initial.hasSuperseded }
       state.set(memory_key, simulated)
     }
     const { classification, action } = decideImportEntry(simulated, entry)
@@ -789,6 +791,15 @@ function buildEngine(db, dbPath) {
   const findActivePublic = db.prepare(`SELECT ${PUBLIC_COLUMNS} FROM memory_nodes n WHERE n.memory_key = ? AND n.status = 'active'`)
   const findLatestStatus = db.prepare(`SELECT status FROM memory_nodes WHERE memory_key = ? ORDER BY rowid DESC LIMIT 1`)
   const countSuperseded = db.prepare(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = ? AND status = 'superseded'`)
+  // Lectura unica del estado que alimenta `decideImportEntry`: nodo activo (o
+  // null) y si existe historial `superseded`. La comparten `importNodes` y
+  // `classifyImport` para que el dry-run prediga exactamente el import real.
+  function readImportState(memory_key) {
+    const key = String(memory_key).trim()
+    const active = findActiveIdentity.get(key)
+    const hasSuperseded = active ? false : countSuperseded.get(key).c > 0
+    return { active: active || null, hasSuperseded }
+  }
   // Statements que referencian `superseded_at`: preparacion lazy. Una base previa
   // sin la columna debe poder construir el engine read-only (migrate:false) para
   // que `memory doctor`/`memory list` funcionen; prepararlos eager romperia eso.
@@ -1103,12 +1114,11 @@ function buildEngine(db, dbPath) {
       const summary = { inserted: 0, updated: 0, skipped: 0 }
       for (const entry of json) {
         const memory_key = String(entry.memory_key).trim()
-        const active = findActiveIdentity.get(memory_key)
-        const hasSuperseded = active ? false : countSuperseded.get(memory_key).c > 0
-        const { action } = decideImportEntry({ active: active || null, hasSuperseded }, entry)
+        const importState = readImportState(memory_key)
+        const { action } = decideImportEntry(importState, entry)
         if (action === 'supersede') {
           const newId = randomUUID()
-          getSupersede().run(newId, new Date().toISOString(), active.id)
+          getSupersede().run(newId, new Date().toISOString(), importState.active.id)
           insertNode.run(
             newId, memory_key, entry.type, entry.scope,
             String(entry.content), String(entry.justification || ''),
@@ -1137,11 +1147,7 @@ function buildEngine(db, dbPath) {
   // prediccion por entrada coincide con el efecto real del import.
   function classifyImport(json) {
     validateImportEntries(json)
-    return simulateImportClassification(json, (memory_key) => {
-      const active = findActiveIdentity.get(memory_key)
-      const hasSuperseded = active ? false : countSuperseded.get(memory_key).c > 0
-      return { active: active || null, hasSuperseded }
-    })
+    return simulateImportClassification(json, (memory_key) => readImportState(memory_key))
   }
 
   // Purga nodos superseded cuya edad de supersesion (`superseded_at`, con

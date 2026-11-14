@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-13T20:52:01.205Z",
+  "generatedAt": "2026-11-14T00:28:03.213Z",
   "sources": [
     ".ancleto/machine-env.md",
     ".ancleto/memory.db",
@@ -400,6 +400,9 @@
     "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/proposal.md",
     "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/specs/prompt-contracts/spec.md",
     "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/tasks.md",
+    "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/proposal.md",
+    "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/specs/memory-ops/spec.md",
+    "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/tasks.md",
     "aspec/config.yaml",
     "aspec/specs/agent-install-routing/spec.md",
     "aspec/specs/agent-model-tiers/spec.md",
@@ -879,13 +882,13 @@
   "fileHashes": {
     ".ancleto/machine-env.md": "ad2d1da1ffa30156",
     ".ancleto/memory.db": "761351ab2473d16a",
-    ".ancleto/memory.db-shm": "915b9f15f715ce01",
-    ".ancleto/memory.db-wal": "818c1824b06016be",
+    ".ancleto/memory.db-shm": "44013ce1ffd8674d",
+    ".ancleto/memory.db-wal": "9c908fa8d3c5bae8",
     ".ancleto/model-catalog.candidate.json": "b9a899ae6758c716",
     ".ancleto/next-session-prompt.md": "5f62001d37f41bf7",
     ".ancleto/working-context.md": "e6494069e2011a11",
     ".ancletorc": "8016489fc993d508",
-    ".discovery-map.json": "ab169560f1127a43",
+    ".discovery-map.json": "60a7f470376b7d28",
     ".gitattributes": "d60f352d0db1404c",
     ".github/workflows/publish.yml": "afdbac4220001818",
     ".gitignore": "851805d264f984c2",
@@ -956,7 +959,7 @@
     ".opencode/skills/ancleto-workflow/SKILL.md": "8d7efb19ddc62e1f",
     ".opencode/skills/triage-clarifier/SKILL.md": "6ae5fdd2d1db35f4",
     "AGENTS.md": "d9032ad0c6fb4072",
-    "CHANGELOG.md": "315272340f47c5eb",
+    "CHANGELOG.md": "39e7f62f1ad381f9",
     "DESIGN-memory-engine-v0.2.0.md": "21b54d02afa8ab62",
     "LICENSE": "e220b0c2013be5c6",
     "PRODUCT.md": "53099af9977a36b6",
@@ -1275,6 +1278,9 @@
     "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/proposal.md": "d462265ff75aa735",
     "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/specs/prompt-contracts/spec.md": "90d9111f44e7c89c",
     "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/tasks.md": "3424831fc060e9b0",
+    "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/proposal.md": "2d49af1662914330",
+    "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/specs/memory-ops/spec.md": "15a7996358642c9d",
+    "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/tasks.md": "3c1921c343755b67",
     "aspec/config.yaml": "0a2e0c55070caeaa",
     "aspec/specs/agent-install-routing/spec.md": "2686cfa840f18cff",
     "aspec/specs/agent-model-tiers/spec.md": "808c842d4c8de36c",
@@ -1290,7 +1296,7 @@
     "aspec/specs/linter-standard/spec.md": "64440e8c36435016",
     "aspec/specs/machine-environment/spec.md": "f6ab990eed5d9a2b",
     "aspec/specs/memory-engine/spec.md": "c59a2a7675d2e265",
-    "aspec/specs/memory-ops/spec.md": "6f36990a79011b42",
+    "aspec/specs/memory-ops/spec.md": "5f3008f9c6faa5cd",
     "aspec/specs/project-portability/spec.md": "48115d2dc0404e05",
     "aspec/specs/prompt-contracts/spec.md": "9044c8b3864de841",
     "aspec/specs/review/spec.md": "1bd1748072ec930a",
@@ -1671,7 +1677,7 @@
     "eslint.config.js": "7d78be10cad6930b",
     "opencode.json": "29f36fe1f3d04a49",
     "optimizacion-de-tokens.md": "f07c22fb8e7261c0",
-    "package.json": "4c87d6e329902ecd",
+    "package.json": "8f4445e2bcc5b3bd",
     "profiles/test/agents/reviewer.md": "2391dda0e569e2e0",
     "profiles/test/agents/tester.md": "7de936b2faf68939",
     "profiles/test/commands/cleto-test-apply.md": "ae12ed96e8690f54",
@@ -1717,7 +1723,7 @@
     "skills/ancleto-verify/SKILL.md": "c5256957580c8d27",
     "skills/ancleto-workflow/SKILL.md": "8d7efb19ddc62e1f",
     "skills/triage-clarifier/SKILL.md": "6ae5fdd2d1db35f4",
-    "src/cli/index.js": "910b3dd77d89fec5",
+    "src/cli/index.js": "c444e38207d73bdd",
     "src/cli/ui.js": "c1cc25527fc2bd2e",
     "src/core/adapters/frontmatter.js": "848261d40b092e8d",
     "src/core/affected-set.js": "ffdec865b020c3da",
@@ -1728,7 +1734,7 @@
     "src/core/memory/curation.js": "187f8e559b49c0ef",
     "src/core/memory/database.js": "d8ef209d55dea129",
     "src/core/memory/doctor.js": "9bea8725ee78373b",
-    "src/core/memory/engine.js": "11fde04fa8d8da69",
+    "src/core/memory/engine.js": "4f8cd8557b329cfa",
     "src/core/memory/mcp-server.js": "449579aa330e8453",
     "src/core/memory/snapshot.js": "9b6da0ed4f13ccf2",
     "src/core/memory/tools.js": "aeae2ed0f1921a02",
@@ -1751,13 +1757,13 @@
     "test/fixtures/memory/refs-root/aspec/specs/prompt-contracts/spec.md": "828fe5dfb0628de9",
     "test/fixtures/memory/seed.json": "ef04fc809da4e5ae"
   },
-  "hash": "b12eb7539f2880c90ef72a8746dade786698fbe7bac1e79268a56647bb6a933a",
+  "hash": "cf2434aea5fc7f5c7c4095d647ed7b0930ce8653d59b060d1867067ac11e7c9f",
   "ruleVersion": 2,
   "semantic": {
-    "hash": "9f6a2a2b66a6bd83da7d7a27eea6098db682e59ed796cf1d2d4816d840c962fa",
+    "hash": "ed687d3f25a40350d53038a6bc022d42d85fd289b60e8c292ce3b71f17f08809",
     "fileHashes": {
       "package.json": "b1792842dce4e963"
     }
   },
-  "packTokens": 41300
+  "packTokens": 41958
 }

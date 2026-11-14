@@ -36,6 +36,97 @@ function sanitizePaths(text) {
   return out
 }
 
+// Valida el archivo de import con el esquema que exige `importNodes`. Compartida
+// con `classifyImport` (dry-run): mismas reglas, mismo orden y mismos mensajes,
+// para que un archivo invalido aborte entero sin clasificacion parcial.
+export function validateImportEntries(json) {
+  if (!Array.isArray(json)) throw new Error('importNodes: el argumento debe ser un array')
+  const required = ['memory_key', 'type', 'content', 'scope', 'createdAt']
+  for (let i = 0; i < json.length; i++) {
+    const entry = json[i]
+    if (!entry || typeof entry !== 'object') throw new Error(`entry[${i}] invalida: no es objeto`)
+    for (const k of required) {
+      if (entry[k] === undefined || entry[k] === null || entry[k] === '') {
+        throw new Error(`entry[${i}] invalida: falta campo obligatorio "${k}"`)
+      }
+    }
+    if (entry.type !== 'rule' && entry.type !== 'decision') {
+      throw new Error(`entry[${i}].type invalido: ${entry.type}`)
+    }
+    if (typeof entry.createdAt !== 'string' || Number.isNaN(Date.parse(entry.createdAt))) {
+      throw new Error(`entry[${i}].createdAt invalido: ${entry.createdAt}`)
+    }
+  }
+}
+
+// Decision unica compartida por `importNodes` (escritura) y `classifyImport`
+// (dry-run): dado el nodo activo de la key (o null), la existencia de historial
+// `superseded` y la entrada, devuelve el bucket y la accion que ejecutaria el
+// import. `createdAt` no es parte de la identidad: solo decide la accion.
+// `content` y `justification` se comparan saneados con `sanitizePaths`, igual
+// que `exportActive`.
+function decideImportEntry({ active, hasSuperseded }, entry) {
+  if (active) {
+    const samePayload =
+      active.type === entry.type &&
+      active.scope === entry.scope &&
+      sanitizePaths(String(active.content)) === sanitizePaths(String(entry.content)) &&
+      sanitizePaths(String(active.justification ?? '')) === sanitizePaths(String(entry.justification || ''))
+    const action = Date.parse(entry.createdAt) > Date.parse(active.created_at) ? 'supersede' : 'skip'
+    return { classification: samePayload ? 'identico' : 'divergente', action }
+  }
+  if (hasSuperseded) return { classification: 'tombstone', action: 'skip' }
+  return { classification: 'nuevo', action: 'insert' }
+}
+
+// Simulador secuencial puro del import: recorre las entradas EN ORDEN manteniendo
+// un estado por `memory_key` que arranca en `lookup(key)` y avanza con cada
+// entrada, aplicando la misma `decideImportEntry` que `importNodes`. Es la unica
+// fuente de la prediccion: lo usan `classifyImport` (base presente) y el dry-run
+// sin base (lookup vacio), de modo que la clasificacion coincide con el efecto
+// real aun con duplicados de la misma key en el archivo.
+export function simulateImportClassification(entries, lookup) {
+  const summary = { nuevo: 0, identico: 0, divergente: 0, tombstone: 0 }
+  const classified = []
+  // Estado simulado por key: nodo activo vigente (payload + createdAt) y si hay
+  // historial superseded. Se siembra con `lookup` en el primer encuentro de la
+  // key y luego avanza con cada entrada del archivo.
+  const state = new Map()
+  for (const entry of entries) {
+    const memory_key = String(entry.memory_key).trim()
+    let simulated = state.get(memory_key)
+    if (!simulated) {
+      const initial = lookup(memory_key)
+      // El lookup debe devolver un objeto nuevo por key: el simulador no muta la referencia recibida.
+      simulated = { active: initial.active, hasSuperseded: initial.hasSuperseded }
+      state.set(memory_key, simulated)
+    }
+    const { classification, action } = decideImportEntry(simulated, entry)
+    summary[classification]++
+    classified.push({ memory_key, classification, action })
+    if (action === 'insert') {
+      simulated.active = {
+        type: entry.type,
+        scope: entry.scope,
+        content: String(entry.content),
+        justification: String(entry.justification || ''),
+        created_at: entry.createdAt
+      }
+      simulated.hasSuperseded = false
+    } else if (action === 'supersede') {
+      simulated.active = {
+        type: entry.type,
+        scope: entry.scope,
+        content: String(entry.content),
+        justification: String(entry.justification || ''),
+        created_at: entry.createdAt
+      }
+      simulated.hasSuperseded = true
+    }
+  }
+  return { summary, entries: classified }
+}
+
 const STOPWORDS = new Set([
   'como', 'cómo', 'the', 'a', 'an', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas',
   'en', 'y', 'o', 'que', 'qué', 'por', 'para', 'con', 'sin', 'sobre', 'al', 'se', 'su', 'sus',
@@ -698,9 +789,17 @@ function buildEngine(db, dbPath) {
     `SELECT id, memory_key, type, scope, content, justification, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`
   )
   const findActivePublic = db.prepare(`SELECT ${PUBLIC_COLUMNS} FROM memory_nodes n WHERE n.memory_key = ? AND n.status = 'active'`)
-  const findActiveRow = db.prepare(`SELECT id, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`)
   const findLatestStatus = db.prepare(`SELECT status FROM memory_nodes WHERE memory_key = ? ORDER BY rowid DESC LIMIT 1`)
   const countSuperseded = db.prepare(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = ? AND status = 'superseded'`)
+  // Lectura unica del estado que alimenta `decideImportEntry`: nodo activo (o
+  // null) y si existe historial `superseded`. La comparten `importNodes` y
+  // `classifyImport` para que el dry-run prediga exactamente el import real.
+  function readImportState(memory_key) {
+    const key = String(memory_key).trim()
+    const active = findActiveIdentity.get(key)
+    const hasSuperseded = active ? false : countSuperseded.get(key).c > 0
+    return { active: active || null, hasSuperseded }
+  }
   // Statements que referencian `superseded_at`: preparacion lazy. Una base previa
   // sin la columna debe poder construir el engine read-only (migrate:false) para
   // que `memory doctor`/`memory list` funcionen; prepararlos eager romperia eso.
@@ -1009,61 +1108,46 @@ function buildEngine(db, dbPath) {
   // antiguo o igual, no-op (idempotencia). Valida schema antes de procesar y
   // aborta todo el batch si alguna entrada es invalida.
   function importNodes(json) {
-    if (!Array.isArray(json)) throw new Error('importNodes: el argumento debe ser un array')
-    const required = ['memory_key', 'type', 'content', 'scope', 'createdAt']
-    for (let i = 0; i < json.length; i++) {
-      const entry = json[i]
-      if (!entry || typeof entry !== 'object') throw new Error(`entry[${i}] invalida: no es objeto`)
-      for (const k of required) {
-        if (entry[k] === undefined || entry[k] === null || entry[k] === '') {
-          throw new Error(`entry[${i}] invalida: falta campo obligatorio "${k}"`)
-        }
-      }
-      if (entry.type !== 'rule' && entry.type !== 'decision') {
-        throw new Error(`entry[${i}].type invalido: ${entry.type}`)
-      }
-      if (typeof entry.createdAt !== 'string' || Number.isNaN(Date.parse(entry.createdAt))) {
-        throw new Error(`entry[${i}].createdAt invalido: ${entry.createdAt}`)
-      }
-    }
+    validateImportEntries(json)
 
     return runImmediateTransaction(db, 'import', () => {
       const summary = { inserted: 0, updated: 0, skipped: 0 }
       for (const entry of json) {
         const memory_key = String(entry.memory_key).trim()
-        const active = findActiveRow.get(memory_key)
-        if (active) {
-          const incomingTs = Date.parse(entry.createdAt)
-          const existingTs = Date.parse(active.created_at)
-          if (incomingTs > existingTs) {
-            const newId = randomUUID()
-            getSupersede().run(newId, new Date().toISOString(), active.id)
-            insertNode.run(
-              newId, memory_key, entry.type, entry.scope,
-              String(entry.content), String(entry.justification || ''),
-              'cli:import', 1, entry.createdAt
-            )
-            summary.updated++
-          } else {
-            summary.skipped++
-          }
-          continue
-        }
-        const supersededCount = countSuperseded.get(memory_key).c
-        if (supersededCount > 0) {
-          // Decision aprobada: superseded es historia, no se reactiva.
+        const importState = readImportState(memory_key)
+        const { action } = decideImportEntry(importState, entry)
+        if (action === 'supersede') {
+          const newId = randomUUID()
+          getSupersede().run(newId, new Date().toISOString(), importState.active.id)
+          insertNode.run(
+            newId, memory_key, entry.type, entry.scope,
+            String(entry.content), String(entry.justification || ''),
+            'cli:import', 1, entry.createdAt
+          )
+          summary.updated++
+        } else if (action === 'insert') {
+          insertNode.run(
+            randomUUID(), memory_key, entry.type, entry.scope,
+            String(entry.content), String(entry.justification || ''),
+            'cli:import', 1, entry.createdAt
+          )
+          summary.inserted++
+        } else {
+          // identico/divergente mas viejo o igual, y tombstone: no-op aprobado.
           summary.skipped++
-          continue
         }
-        insertNode.run(
-          randomUUID(), memory_key, entry.type, entry.scope,
-          String(entry.content), String(entry.justification || ''),
-          'cli:import', 1, entry.createdAt
-        )
-        summary.inserted++
       }
       return summary
     })
+  }
+
+  // Clasificacion read-only del archivo de import. Simula el estado que deja cada
+  // entrada en orden (por memory_key) sin escribir: ni transaccion ni statements
+  // de escritura. Comparte `decideImportEntry` con `importNodes`, de modo que la
+  // prediccion por entrada coincide con el efecto real del import.
+  function classifyImport(json) {
+    validateImportEntries(json)
+    return simulateImportClassification(json, (memory_key) => readImportState(memory_key))
   }
 
   // Purga nodos superseded cuya edad de supersesion (`superseded_at`, con
@@ -1274,5 +1358,5 @@ function buildEngine(db, dbPath) {
     db.close()
   }
 
-  return { buildWorkingContext, searchMemory, recordNode, listNodes, exportActive, importNodes, gcSuperseded, merge, consolidate, checkpoint, close }
+  return { buildWorkingContext, searchMemory, recordNode, listNodes, exportActive, importNodes, classifyImport, gcSuperseded, merge, consolidate, checkpoint, close }
 }

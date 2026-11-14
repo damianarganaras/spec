@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-13T20:53:42Z
-pluginVersion: 0.33.1
+generatedAt: 2026-11-14T00:28:03Z
+pluginVersion: 0.34.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (873 fuentes, ~41k tokens), `package.json` (`0.33.1`), `src/core/model-catalog.json` y
+`minimo` (876 fuentes, ~41.958 tokens), `package.json` (`0.34.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
@@ -54,6 +54,7 @@ paths citados (ver `unknowns.md`).
 | **Conjunto crítico del working-context (0.31.0)**: `memory.criticalKeys` en `.ancletorc` (seam de configuración), claves inyectadas primero en orden declarado, lectura tolerante (ausente/no-array/entradas no-string → `[]`), fallo duro en `ancleto memory context` con `--out` sin sobrescribir, `console.warn` best-effort en lifecycle/on-write/MCP y exit ≠ 0 en `memory merge`/`consolidate --apply`; `<ContextOverflowWarning>` intacto | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **Selección de tests afectados (0.32.0)**: `ancleto affected --tests` agrega el objeto `tests` (`complete`, `reasons`, `selected`, `excluded`) al JSON existente, con el manifiesto cerrado `test/affected-tests.json` y el consumidor `npm run test:affected` que cae fail-closed a la suite completa | `decisions.md`, `setup.md`, `units/discovery-engine.md`, `units/cli-install.md` |
 | **Serialización de escritores y doctor (0.33.0–0.33.1)**: `runImmediateTransaction` (`BEGIN IMMEDIATE` + retry 3/200-600 ms), `MEMORY_DB_BUSY` y oráculo `test/memory-writers.test.js`; desde 0.33.1 `memory doctor --rebuild` corre rebuild FTS5 + integrity-check dentro del helper y reporta `MEMORY_DB_BUSY` en el detalle, mientras el `doctor` por defecto sigue read-only; sin cambio de schema, PRAGMAs, comandos ni `ruleVersion` | `decisions.md`, `units/memory-engine.md` |
+| **Import con dry-run clasificado (0.34.0)**: `memory import --dry-run [--json]` predice `insert`/`supersede`/`skip` por `memory_key` con buckets `nuevo`/`identico`/`divergente`/`tombstone`, comparte `decideImportEntry` con el import real, abre read-only, reporta `databasePresent` y no escribe ni refresca el working-context | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -74,9 +75,15 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.33.1` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.34.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
+- **Release 0.34.0**: `memory import` gana `--dry-run` y `--json`; clasifica cada entrada por
+  `memory_key` en `nuevo`, `identico`, `divergente` y `tombstone`, con acción predicha
+  `insert`/`supersede`/`skip`, sobre `createReadonlyMemoryEngine` y sin escribir ni refrescar el
+  working-context. La clasificación comparte `decideImportEntry` con el import real (ver
+  `decisions.md` y `units/memory-engine.md`); sin cambios de schema, PRAGMAs, comandos sin flags,
+  `ruleVersion`, dependencias ni superficies de agentes/skills/templates.
 - **Release 0.33.1 (sin change archivado)**: `fix(memory)` hace que `memory doctor --rebuild`
   ejecute el rebuild de FTS5 y su integrity-check dentro de `runImmediateTransaction`
   (`BEGIN IMMEDIATE` + retry 3/200-600 ms) y reporte `MEMORY_DB_BUSY` en el detalle del check al
@@ -84,6 +91,11 @@ paths citados (ver `unknowns.md`).
   schema persistido, PRAGMAs ni `ruleVersion`. El requirement de `memory-engine` se actualizó en el
   lugar.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/` (0.34.0: `ADDED` del
+  Requirement `Import con dry-run clasificado por memory_key` en `memory-ops`; buckets
+  `nuevo`/`identico`/`divergente`/`tombstone`, predicción exacta por `decideImportEntry`, base
+  ausente sin crear y salida `{dryRun, databasePresent, summary, entries}`; sin cambio de schema
+  ni `ruleVersion`; cierra `CH-08`),
   `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/` (0.33.0: `ADDED` de
   `Serialización de escritores concurrentes sobre la base de memoria` en `memory-engine`;
   `runImmediateTransaction` con `BEGIN IMMEDIATE` + retry acotado 3/200-600 ms, error nombrado

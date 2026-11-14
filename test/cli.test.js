@@ -3994,6 +3994,252 @@ describe('CLI memory import refresca el working-context', () => {
   })
 })
 
+// ch-08: `memory import --dry-run` clasifica sin escribir. La DB vive en un CWD
+// temporal; nunca se toca la memoria real del repositorio.
+describe('CLI memory import --dry-run (ch-08)', () => {
+  const fileEntry = (over = {}) => ({
+    memory_key: 'dry-rule',
+    type: 'rule',
+    scope: 'project',
+    content: 'contenido',
+    justification: '',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...over
+  })
+
+  function states(dbPath) {
+    const db = new DatabaseSync(dbPath)
+    try {
+      return db.prepare(`SELECT memory_key, status, superseded_by, content FROM memory_nodes ORDER BY memory_key`).all()
+    } finally {
+      db.close()
+    }
+  }
+
+  function writeJson(dir, name, value) {
+    const file = join(dir, name)
+    writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value) + '\n')
+    return file
+  }
+
+  // Estado con los cuatro buckets: activos identico/divergente (con createdAt
+  // igual y mas nuevo) y una key que solo existe como historial superseded.
+  function seedBuckets(dir) {
+    const dbPath = join(dir, '.ancleto', 'memory.db')
+    const engine = createMemoryEngine(dbPath)
+    try {
+      engine.recordNode({ memory_key: 'dry-ident', type: 'rule', scope: 'project', content: 'igual', justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' })
+      engine.recordNode({ memory_key: 'dry-ident-eq', type: 'rule', scope: 'project', content: 'igual eq', justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' })
+      engine.recordNode({ memory_key: 'dry-div', type: 'rule', scope: 'project', content: 'local', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+      engine.recordNode({ memory_key: 'dry-div-eq', type: 'rule', scope: 'project', content: 'local igual', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+    } finally {
+      engine.close()
+    }
+    const db = new DatabaseSync(dbPath)
+    try {
+      db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('dry-tomb-row', 'dry-tomb', 'rule', 'project', 'superseded', 'historia', '', 'test', 1, ?)`).run('2020-01-01T00:00:00.000Z')
+    } finally {
+      db.close()
+    }
+    return dbPath
+  }
+
+  it('--dry-run --json emite la forma exacta con los cuatro buckets', () => {
+    withDir((dir) => {
+      seedBuckets(dir)
+      writeJson(dir, 'dry.json', [
+        fileEntry({ memory_key: 'dry-new' }),
+        fileEntry({ memory_key: 'dry-ident', content: 'igual', justification: 'j', createdAt: '2027-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'dry-div', content: 'remoto', createdAt: '2027-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'dry-tomb', createdAt: '2027-01-01T00:00:00.000Z' })
+      ])
+
+      const r = run(['memory', 'import', '--dry-run', '--json', 'dry.json'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const payload = JSON.parse(r.stdout)
+      assert.equal(payload.dryRun, true)
+      assert.equal(payload.databasePresent, true)
+      assert.deepEqual(payload.summary, { nuevo: 1, identico: 1, divergente: 1, tombstone: 1 })
+      assert.deepEqual(payload.entries, [
+        { memory_key: 'dry-new', classification: 'nuevo', action: 'insert' },
+        { memory_key: 'dry-ident', classification: 'identico', action: 'supersede' },
+        { memory_key: 'dry-div', classification: 'divergente', action: 'supersede' },
+        { memory_key: 'dry-tomb', classification: 'tombstone', action: 'skip' }
+      ])
+    })
+  })
+
+  it('la salida humana lista divergente y tombstone skip, pero no identico skip', () => {
+    withDir((dir) => {
+      seedBuckets(dir)
+      writeJson(dir, 'dry.json', [
+        fileEntry({ memory_key: 'dry-new' }),
+        fileEntry({ memory_key: 'dry-ident-eq', content: 'igual eq', justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'dry-div-eq', content: 'remoto igual', createdAt: '2026-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'dry-tomb', createdAt: '2027-01-01T00:00:00.000Z' })
+      ])
+
+      const r = run(['memory', 'import', '--dry-run', 'dry.json'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /nuevo:1 identico:1 divergente:1 tombstone:1/)
+      assert.match(r.stdout, /^dry-div-eq: divergente \(skip\)$/m)
+      assert.match(r.stdout, /^dry-tomb: tombstone \(skip\)$/m)
+      assert.doesNotMatch(r.stdout, /identico \(skip\)/, 'el skip identico no se lista')
+      assert.doesNotMatch(r.stdout, /dry-ident-eq/, 'el skip identico queda invisible')
+    })
+  })
+
+  it('sin base: databasePresent false; las keys únicas resultan nuevas/insert y no crea el archivo', () => {
+    withDir((dir) => {
+      writeJson(dir, 'dry.json', [fileEntry({ memory_key: 'dry-ausente-a' }), fileEntry({ memory_key: 'dry-ausente-b' })])
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+
+      const r = run(['memory', 'import', '--dry-run', '--json', 'dry.json'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const payload = JSON.parse(r.stdout)
+      assert.equal(payload.databasePresent, false)
+      assert.deepEqual(payload.summary, { nuevo: 2, identico: 0, divergente: 0, tombstone: 0 })
+      assert.deepEqual(payload.entries, [
+        { memory_key: 'dry-ausente-a', classification: 'nuevo', action: 'insert' },
+        { memory_key: 'dry-ausente-b', classification: 'nuevo', action: 'insert' }
+      ])
+      assert.equal(existsSync(dbPath), false, 'el dry-run no crea la base')
+    })
+  })
+
+  // Regresion R1: con dos entradas de la misma key y sin base, el dry-run debe
+  // simular el orden (1 insert + 1 supersede), no contar ambas como `nuevo`.
+  it('sin base y con duplicados de la misma key predice nuevo/insert + divergente/supersede, y el import real lo confirma', () => {
+    withDir((dir) => {
+      writeJson(dir, 'dup.json', [
+        fileEntry({ memory_key: 'dry-dup', content: 'primera', createdAt: '2026-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'dry-dup', content: 'segunda', createdAt: '2026-02-01T00:00:00.000Z' })
+      ])
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+
+      const dry = run(['memory', 'import', '--dry-run', '--json', 'dup.json'], dir)
+      assert.equal(dry.status, 0, dry.stderr)
+      const payload = JSON.parse(dry.stdout)
+      assert.equal(payload.databasePresent, false)
+      assert.deepEqual(payload.summary, { nuevo: 1, identico: 0, divergente: 1, tombstone: 0 })
+      assert.deepEqual(payload.entries, [
+        { memory_key: 'dry-dup', classification: 'nuevo', action: 'insert' },
+        { memory_key: 'dry-dup', classification: 'divergente', action: 'supersede' }
+      ])
+      assert.equal(existsSync(dbPath), false, 'el dry-run no crea la base')
+
+      const real = run(['memory', 'import', 'dup.json'], dir)
+      assert.equal(real.status, 0, real.stderr)
+      assert.match(real.stdout, /import OK -> insertados:1 actualizados:1 omitidos:0/)
+      assert.equal(existsSync(dbPath), true, 'el import real crea la base')
+    })
+  })
+
+  it('falla con exit 1 sin escribir: archivo faltante, inexistente, JSON roto o entrada invalida', () => {
+    withDir((dir) => {
+      const dbPath = seedBuckets(dir)
+      const before = states(dbPath)
+
+      const missingArg = run(['memory', 'import', '--dry-run'], dir)
+      assert.equal(missingArg.status, 1)
+      assert.match(missingArg.stderr, /uso: ancleto memory import/)
+
+      const missingFile = run(['memory', 'import', '--dry-run', 'no-existe.json'], dir)
+      assert.equal(missingFile.status, 1)
+      assert.match(missingFile.stderr, /no existe el archivo/)
+
+      writeJson(dir, 'roto.json', '{')
+      const brokenJson = run(['memory', 'import', '--dry-run', 'roto.json'], dir)
+      assert.equal(brokenJson.status, 1)
+      assert.match(brokenJson.stderr, /no se pudo parsear/)
+
+      writeJson(dir, 'invalido.json', [
+        fileEntry({ memory_key: 'dry-invalido-ok' }),
+        { type: 'rule', scope: 'project', content: 'sin key', createdAt: '2026-01-01T00:00:00.000Z' }
+      ])
+      const invalidEntry = run(['memory', 'import', '--dry-run', '--json', 'invalido.json'], dir)
+      assert.equal(invalidEntry.status, 1)
+      assert.match(invalidEntry.stderr, /import invalido: entry\[1\] invalida/)
+      assert.equal(invalidEntry.stdout.trim(), '', 'no se emite clasificacion parcial')
+
+      assert.deepEqual(states(dbPath), before, 'ningun intento fallido escribe la base')
+    })
+  })
+
+  // Regresion R1: la apertura read-only ya no escapa del manejo de errores. Una
+  // base corrupta produce exit 1 con mensaje legible, sin stack trace.
+  it('base existente pero invalida: exit 1 con mensaje legible y sin stack trace', () => {
+    withDir((dir) => {
+      mkdirSync(join(dir, '.ancleto'), { recursive: true })
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+      writeFileSync(dbPath, 'esto no es una base sqlite')
+      writeJson(dir, 'dry.json', [fileEntry({ memory_key: 'dry-corrupta' })])
+
+      const r = run(['memory', 'import', '--dry-run', '--json', 'dry.json'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /no se pudo abrir la memoria en solo lectura/)
+      assert.doesNotMatch(r.stderr, /^\s+at /m, 'no se filtra un stack trace')
+      assert.equal(r.stdout.trim(), '', 'no se emite clasificacion')
+      assert.equal(readFileSync(dbPath, 'utf8'), 'esto no es una base sqlite', 'el archivo invalido no se toca')
+    })
+  })
+
+  it('no refresca el working-context, mientras el import real si lo hace', () => {
+    withDir((dir) => {
+      writeJson(dir, 'wc.json', [fileEntry({ memory_key: 'dry-wc', content: 'regla de proyecto' })])
+      const ctx = join(dir, '.ancleto', 'working-context.md')
+
+      const dry = run(['memory', 'import', '--dry-run', 'wc.json'], dir)
+      assert.equal(dry.status, 0, dry.stderr)
+      assert.equal(existsSync(ctx), false, 'el dry-run no materializa el working-context')
+
+      const real = run(['memory', 'import', 'wc.json'], dir)
+      assert.equal(real.status, 0, real.stderr)
+      assert.equal(existsSync(ctx), true, 'el import real si refresca el working-context')
+      const bytes = readFileSync(ctx)
+      const mtimeMs = statSync(ctx).mtimeMs
+
+      const again = run(['memory', 'import', '--dry-run', '--json', 'wc.json'], dir)
+      assert.equal(again.status, 0, again.stderr)
+      const againPayload = JSON.parse(again.stdout)
+      assert.equal(againPayload.databasePresent, true)
+      assert.deepEqual(againPayload.summary, { nuevo: 0, identico: 1, divergente: 0, tombstone: 0 })
+      assert.deepEqual(againPayload.entries, [
+        { memory_key: 'dry-wc', classification: 'identico', action: 'skip' }
+      ])
+      assert.deepEqual(readFileSync(ctx), bytes, 'el dry-run no cambia los bytes')
+      assert.equal(statSync(ctx).mtimeMs, mtimeMs, 'el dry-run no toca el mtime')
+    })
+  })
+
+  it('regresion: el import sin flags conserva el resumen y la escritura', () => {
+    withDir((dir) => {
+      writeJson(dir, 'real.json', [fileEntry({ memory_key: 'dry-real', content: 'regla real' })])
+      const r = run(['memory', 'import', 'real.json'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /import OK -> insertados:1 actualizados:0 omitidos:0/)
+
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        const nodes = engine.listNodes({ scope: 'project' })
+        assert.equal(nodes.length, 1)
+        assert.equal(nodes[0].memory_key, 'dry-real')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('la ayuda de memory documenta --dry-run y --json en import', () => {
+    withDir((dir) => {
+      const r = run(['memory', '--help'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /ancleto memory import <archivo> \[--dry-run\] \[--json\]/)
+    })
+  })
+})
+
 // Guarda (Fase 7): la ayuda de `memory doctor` enumera el quinto check. Aserto
 // estrecho sobre la mencion, no sobre la oracion completa.
 describe('CLI memory doctor (MEM-04)', () => {
@@ -9475,7 +9721,7 @@ describe('CLI subcommand --help guards', () => {
         'ancleto: uso: ancleto memory list [--type X] [--scope X] [--all] [--json]',
         'ancleto: uso: ancleto memory doctor [--rebuild]',
         'ancleto: uso: ancleto memory export [--out <archivo>]',
-        'ancleto: uso: ancleto memory import <archivo>',
+        'ancleto: uso: ancleto memory import <archivo> [--dry-run] [--json]',
         'ancleto: uso: ancleto memory gc [--dry-run] [--days <n>]',
         'ancleto: uso: ancleto memory snapshot --out <archivo.db> [--force] [--json]',
         'ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]',

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDatabase } from '../src/core/memory/database.js'
-import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath, resolveNodeRefs, resolveProjectRoot } from '../src/core/memory/engine.js'
+import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath, resolveNodeRefs, resolveProjectRoot, simulateImportClassification } from '../src/core/memory/engine.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
 import { memoryTools, createMemoryToolkit } from '../src/core/memory/tools.js'
 import { resolveMemoryProjectRoot } from '../src/core/memory/working-context.js'
@@ -1448,6 +1448,283 @@ describe('importNodes', () => {
       const superseded = rawAt(`SELECT source FROM memory_nodes WHERE memory_key = 'imp-src' AND status = 'superseded'`)
       assert.equal(superseded.length, 1)
       assert.equal(superseded[0].source, 'cli:import')
+    })
+  })
+})
+
+// ch-08: clasificacion read-only del archivo de import. `classifyImport` comparte
+// `decideImportEntry` con `importNodes`, asi que la prediccion no puede derivar del
+// efecto real. Estos tests pinean los buckets, la equivalencia accion<->efecto, el
+// orden secuencial y la garantia de cero escrituras.
+describe('classifyImport (dry-run clasificado de import)', () => {
+  const fileEntry = (over = {}) => ({
+    memory_key: 'ci-base',
+    type: 'rule',
+    scope: 'project',
+    content: 'contenido',
+    justification: '',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...over
+  })
+
+  function insertSupersededOnly(dbPath, id, memory_key, createdAt = '2020-01-01T00:00:00.000Z') {
+    const db = openDatabase(dbPath)
+    try {
+      db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES (?, ?, 'rule', 'project', 'superseded', 'historia', '', 'test', 1, ?)`).run(id, memory_key, createdAt)
+    } finally {
+      db.close()
+    }
+  }
+
+  it('clasifica los cuatro buckets con su accion', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'ci-ident-sup', type: 'rule', scope: 'project', content: 'igual', justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-ident-skip', type: 'rule', scope: 'project', content: 'igual skip', justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-ident-eq', type: 'rule', scope: 'project', content: 'igual eq', justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-div-sup', type: 'rule', scope: 'project', content: 'local vieja', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-div-skip', type: 'rule', scope: 'project', content: 'local nueva', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-div-eq', type: 'rule', scope: 'project', content: 'local igual', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+      insertSupersededOnly(dbPath, 'ci-tomb-row', 'ci-tomb')
+
+      const report = eng.classifyImport([
+        fileEntry({ memory_key: 'ci-nuevo' }),
+        fileEntry({ memory_key: 'ci-ident-sup', content: 'igual', justification: 'j', createdAt: '2027-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-ident-skip', content: 'igual skip', justification: 'j', createdAt: '2020-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-ident-eq', content: 'igual eq', justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-div-sup', content: 'entrante nueva', createdAt: '2027-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-div-skip', content: 'entrante distinta', createdAt: '2020-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-div-eq', content: 'entrante igual', createdAt: '2026-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-tomb', content: 'no reactivar', createdAt: '2027-01-01T00:00:00.000Z' })
+      ])
+
+      assert.deepEqual(report.entries.map((e) => [e.memory_key, e.classification, e.action]), [
+        ['ci-nuevo', 'nuevo', 'insert'],
+        ['ci-ident-sup', 'identico', 'supersede'],
+        ['ci-ident-skip', 'identico', 'skip'],
+        ['ci-ident-eq', 'identico', 'skip'],
+        ['ci-div-sup', 'divergente', 'supersede'],
+        ['ci-div-skip', 'divergente', 'skip'],
+        ['ci-div-eq', 'divergente', 'skip'],
+        ['ci-tomb', 'tombstone', 'skip']
+      ])
+      assert.deepEqual(report.summary, { nuevo: 1, identico: 3, divergente: 3, tombstone: 1 })
+
+      // El tombstone solo describe historial: la clasificacion no crea un activo.
+      const tombRows = rawAt(`SELECT status FROM memory_nodes WHERE memory_key = 'ci-tomb'`)
+      assert.equal(tombRows.length, 1)
+      assert.equal(tombRows[0].status, 'superseded')
+    })
+  })
+
+  it('predice exactamente los contadores de importNodes sobre el mismo estado y archivo', () => {
+    withFreshEngine((eng, _dbPath, _rawAt) => {
+      eng.recordNode({ memory_key: 'ci-eq-ident', type: 'rule', scope: 'project', content: 'igual', justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-eq-div', type: 'rule', scope: 'project', content: 'local', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-eq-skip', type: 'rule', scope: 'project', content: 'local skip', justification: '', createdAt: '2099-01-01T00:00:00.000Z' })
+
+      const file = [
+        fileEntry({ memory_key: 'ci-eq-new' }),
+        fileEntry({ memory_key: 'ci-eq-ident', content: 'igual', justification: 'j', createdAt: '2027-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-eq-div', content: 'remoto', createdAt: '2027-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-eq-skip', content: 'remoto skip', createdAt: '2020-01-01T00:00:00.000Z' })
+      ]
+
+      // Primero la prediccion: no escribe, asi que el import corre sobre el mismo estado.
+      const report = eng.classifyImport(file)
+      const predicted = {
+        insert: report.entries.filter((e) => e.action === 'insert').length,
+        supersede: report.entries.filter((e) => e.action === 'supersede').length,
+        skip: report.entries.filter((e) => e.action === 'skip').length
+      }
+      const summary = eng.importNodes(file)
+
+      assert.equal(predicted.insert, summary.inserted)
+      assert.equal(predicted.supersede, summary.updated)
+      assert.equal(predicted.skip, summary.skipped)
+      assert.deepEqual(summary, { inserted: 1, updated: 2, skipped: 1 })
+    })
+  })
+
+  it('es determinista, respeta el orden del archivo y repite entradas identicas', () => {
+    withFreshEngine((eng, _dbPath, _rawAt) => {
+      eng.recordNode({ memory_key: 'ci-ord-b', type: 'rule', scope: 'project', content: 'b', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+      const file = [
+        fileEntry({ memory_key: 'ci-ord-c' }),
+        fileEntry({ memory_key: 'ci-ord-a' }),
+        fileEntry({ memory_key: 'ci-ord-b', content: 'b', justification: '', createdAt: '2027-01-01T00:00:00.000Z' })
+      ]
+
+      const first = eng.classifyImport(file)
+      const second = eng.classifyImport(file)
+      assert.deepEqual(second, first)
+      assert.deepEqual(first.entries.map((e) => e.memory_key), ['ci-ord-c', 'ci-ord-a', 'ci-ord-b'])
+    })
+  })
+
+  it('simula duplicados secuenciales de la misma key y el import real coincide', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const file = [
+        fileEntry({ memory_key: 'ci-seq', content: 'primera', createdAt: '2026-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-seq', content: 'segunda', createdAt: '2027-01-01T00:00:00.000Z' })
+      ]
+
+      const report = eng.classifyImport(file)
+      assert.deepEqual(report.entries.map((e) => [e.classification, e.action]), [
+        ['nuevo', 'insert'],
+        ['divergente', 'supersede']
+      ])
+
+      const summary = eng.importNodes(file)
+      assert.deepEqual(summary, { inserted: 1, updated: 1, skipped: 0 })
+      const active = rawAt(`SELECT content FROM memory_nodes WHERE memory_key = 'ci-seq' AND status = 'active'`)
+      assert.equal(active.length, 1)
+      assert.equal(active[0].content, 'segunda')
+    })
+  })
+
+  it('simulateImportClassification con lookup vacio simula los duplicados de la misma key', () => {
+    const emptyLookup = () => ({ active: null, hasSuperseded: false })
+    const report = simulateImportClassification([
+      fileEntry({ memory_key: 'sim-dup', content: 'uno', createdAt: '2026-01-01T00:00:00.000Z' }),
+      fileEntry({ memory_key: 'sim-dup', content: 'dos', createdAt: '2027-01-01T00:00:00.000Z' })
+    ], emptyLookup)
+
+    assert.deepEqual(report.entries, [
+      { memory_key: 'sim-dup', classification: 'nuevo', action: 'insert' },
+      { memory_key: 'sim-dup', classification: 'divergente', action: 'supersede' }
+    ])
+    assert.deepEqual(report.summary, { nuevo: 1, identico: 0, divergente: 1, tombstone: 0 })
+  })
+
+  it('classifyImport sobre una DB real equivale al simulador con el mismo lookup', () => {
+    withFreshEngine((eng, dbPath, _rawAt) => {
+      eng.recordNode({ memory_key: 'ci-eqr-ident', type: 'rule', scope: 'project', content: 'igual', justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-eqr-div', type: 'rule', scope: 'project', content: 'local', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+      insertSupersededOnly(dbPath, 'ci-eqr-tomb-row', 'ci-eqr-tomb')
+
+      const file = [
+        fileEntry({ memory_key: 'ci-eqr-new' }),
+        fileEntry({ memory_key: 'ci-eqr-ident', content: 'igual', justification: 'j', createdAt: '2027-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-eqr-div', content: 'remoto', createdAt: '2027-01-01T00:00:00.000Z' }),
+        fileEntry({ memory_key: 'ci-eqr-tomb', createdAt: '2027-01-01T00:00:00.000Z' }),
+        // Duplicado de una key nueva: el simulador avanza estado, igual que el import.
+        fileEntry({ memory_key: 'ci-eqr-new', content: 'remoto dos', createdAt: '2027-01-01T00:00:00.000Z' })
+      ]
+
+      const db = openDatabase(dbPath)
+      let lookup
+      try {
+        const findActive = db.prepare(
+          `SELECT id, memory_key, type, scope, content, justification, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`
+        )
+        const countSuperseded = db.prepare(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = ? AND status = 'superseded'`)
+        lookup = (memory_key) => {
+          const active = findActive.get(memory_key)
+          const hasSuperseded = active ? false : countSuperseded.get(memory_key).c > 0
+          return { active: active || null, hasSuperseded }
+        }
+
+        const fromEngine = eng.classifyImport(file)
+        const fromSimulator = simulateImportClassification(file, lookup)
+        assert.deepEqual(fromSimulator, fromEngine)
+        assert.deepEqual(fromEngine.summary, { nuevo: 1, identico: 1, divergente: 2, tombstone: 1 })
+      } finally {
+        db.close()
+      }
+    })
+  })
+
+  it('usa la identidad saneada de content y justification que produce exportActive', () => {
+    withFreshEngine((eng, _dbPath, _rawAt) => {
+      const absContent = 'ver C:\\Users\\damia\\repo\\a.js'
+      const absJustification = 'ojo /Users/alice/work'
+      eng.recordNode({ memory_key: 'ci-path-content', type: 'rule', scope: 'project', content: absContent, justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-path-raw', type: 'rule', scope: 'project', content: absContent, justification: 'j', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-path-just', type: 'rule', scope: 'project', content: 'sin path', justification: absJustification, createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-no-just', type: 'rule', scope: 'project', content: 'sin justificacion', createdAt: '2026-01-01T00:00:00.000Z' })
+
+      const exported = eng.exportActive()
+      const exportedContent = exported.find((n) => n.memory_key === 'ci-path-content')
+      const exportedJustification = exported.find((n) => n.memory_key === 'ci-path-just')
+      assert.match(exportedContent.content, /<redacted>/)
+      assert.match(exportedJustification.justification, /<redacted>/)
+
+      const report = eng.classifyImport([
+        // (a) round-trip export->import: ya viene redactado por exportActive.
+        { ...exportedContent, createdAt: '2027-01-01T00:00:00.000Z' },
+        // (b) content crudo igual al local: el saneador se aplica a ambos lados.
+        fileEntry({ memory_key: 'ci-path-raw', content: absContent, justification: 'j', createdAt: '2027-01-01T00:00:00.000Z' }),
+        // (c) justification con path absoluto: export la redacta y la identidad la sanea.
+        { ...exportedJustification, createdAt: '2027-01-01T00:00:00.000Z' },
+        // (d) justification ausente o null en ambos lados no rompe la clasificacion.
+        { memory_key: 'ci-no-just', type: 'rule', scope: 'project', content: 'sin justificacion', createdAt: '2026-01-01T00:00:00.000Z' },
+        { memory_key: 'ci-no-just', type: 'rule', scope: 'project', content: 'sin justificacion', justification: null, createdAt: '2026-01-01T00:00:00.000Z' }
+      ])
+
+      assert.deepEqual(report.entries.map((e) => [e.memory_key, e.classification, e.action]), [
+        ['ci-path-content', 'identico', 'supersede'],
+        ['ci-path-raw', 'identico', 'supersede'],
+        ['ci-path-just', 'identico', 'supersede'],
+        ['ci-no-just', 'identico', 'skip'],
+        ['ci-no-just', 'identico', 'skip']
+      ])
+    })
+  })
+
+  it('es solo lectura: .db con bytes identicos, estados intactos y escrituras bloqueadas en el wrapper', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      eng.recordNode({ memory_key: 'ci-ro-a', type: 'rule', scope: 'project', content: 'activa a', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'ci-ro-b', type: 'rule', scope: 'project', content: 'activa b', justification: '', createdAt: '2026-01-01T00:00:00.000Z' })
+      // Fuerza el estado al .db principal para que el hash observe la foto real.
+      eng.checkpoint()
+      const before = createHash('sha256').update(readFileSync(dbPath)).digest('hex')
+      const rowsBefore = rawAt(`SELECT id, memory_key, status, superseded_by, content, created_at FROM memory_nodes ORDER BY memory_key`)
+
+      const ro = createReadonlyMemoryEngine(dbPath)
+      try {
+        const report = ro.classifyImport([
+          fileEntry({ memory_key: 'ci-ro-a', content: 'remota', createdAt: '2027-01-01T00:00:00.000Z' })
+        ])
+        assert.deepEqual(report.entries[0], { memory_key: 'ci-ro-a', classification: 'divergente', action: 'supersede' })
+        assert.throws(() => ro.importNodes([fileEntry({ memory_key: 'ci-ro-write' })]), /readonly|read-only|attempt to write/i)
+        assert.throws(
+          () => ro.recordNode({ memory_key: 'ci-ro-record', type: 'rule', scope: 'project', content: 'x' }),
+          /readonly|read-only|attempt to write/i
+        )
+      } finally {
+        ro.close()
+      }
+
+      assert.equal(createHash('sha256').update(readFileSync(dbPath)).digest('hex'), before, 'el .db conserva sus bytes')
+      assert.deepEqual(
+        rawAt(`SELECT id, memory_key, status, superseded_by, content, created_at FROM memory_nodes ORDER BY memory_key`),
+        rowsBefore,
+        'ningun nodo cambia de estado'
+      )
+    })
+  })
+
+  it('valida el archivo completo antes de clasificar y respeta Array.isArray', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const invalid = [
+        fileEntry({ memory_key: 'ci-invalid-good' }),
+        { type: 'rule', scope: 'project', content: 'sin key', createdAt: '2026-01-01T00:00:00.000Z' }
+      ]
+      let importMessage
+      let classifyMessage
+      assert.throws(() => eng.importNodes(invalid), (err) => {
+        importMessage = err.message
+        return true
+      })
+      assert.throws(() => eng.classifyImport(invalid), (err) => {
+        classifyMessage = err.message
+        return true
+      })
+      assert.equal(classifyMessage, importMessage, 'mismo error que importNodes')
+      assert.match(classifyMessage, /entry\[1\] invalida: falta campo obligatorio "memory_key"/)
+      assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes WHERE memory_key = 'ci-invalid-good'`)[0].c, 0, 'sin clasificacion parcial')
+      assert.throws(() => eng.classifyImport({}), /debe ser un array/)
     })
   })
 })

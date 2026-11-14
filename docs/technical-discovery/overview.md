@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-13T20:53:42Z
-pluginVersion: 0.33.1
+generatedAt: 2026-11-14T00:28:03Z
+pluginVersion: 0.34.0
 skillVersion: '2.3'
 ---
 
@@ -306,6 +306,13 @@ test/                   suite node --test (content guards incluidos)
     transacción, `rebuilt` sólo tras `COMMIT` y `MEMORY_DB_BUSY` en el detalle ante contención; el
     `doctor` por defecto sigue read-only. No cambian schema, PRAGMAs persistidos, comandos, flags ni
     `ruleVersion`. Releases patch de `ch-04-memory-writer-serialization` y del fix de doctor.
+35. **Import con dry-run clasificado (0.34.0)**: `ancleto memory import --dry-run [--json]` clasifica
+    cada entrada por `memory_key` en `nuevo`, `identico`, `divergente` o `tombstone`, con acción
+    predicha `insert`/`supersede`/`skip`. Comparte `decideImportEntry` con `importNodes`, compara la
+    identidad durable (`type`, `scope`, `content`, `justification` con el saneador de `exportActive`)
+    y abre `createReadonlyMemoryEngine`; no escribe, no refresca el working-context y, si la base no
+    existe, reporta `databasePresent: false` sin crearla. Sin cambios de schema, PRAGMAs, `ruleVersion`
+    ni dependencias; release minor de `ch-08-memory-import-dry-run-classified`.
 
 ## Recorrido de una instalación con tier `minimo`
 

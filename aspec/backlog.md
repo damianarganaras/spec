@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-15 (cierre de MEM-05c/d/e y CH-09f/g: GC por instantes con `julianday` — defecto de frontera de segundo corregido —, limitación de plan y `status='deleted'` documentados, `memory curate` bajo un snapshot único de lectura y gramática de refs con fuente única; M-1 «integridad del motor de memoria» cerrado; sin versión, tag ni run todavía; propuesta `jev-spec-advisory-judge` agregada para review — juez semántico opcional JEV, **sin implementar**, ver "Propuestas en revisión"). Antes, 2026-11-13 (0.34.0: CH-08/MEM-06 entregó su única pieza sound — `memory import --dry-run [--json]` con clasificación read-only por memory_key (nuevo/identico/divergente/tombstone) y acción predicha (insert/supersede/skip) compartiendo una única función de decisión con el import real; reindex desde proposals y gate fail-closed refutados con evidencia; 0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
+> Última actualización: 2026-11-15 (cierre de MEM-05c/d/e y CH-09f/g: GC por instantes con `julianday` — defecto de frontera de segundo corregido —, limitación de plan y `status='deleted'` documentados, `memory curate` bajo un snapshot único de lectura y gramática de refs con fuente única; M-1 «integridad del motor de memoria» cerrado; sin versión, tag ni run todavía; propuesta `jev-spec-advisory-judge` agregada para review — juez semántico opcional JEV, **sin implementar**, ver "Propuestas en revisión"; evaluación del proposal JEV registrada: no se implementa ahora, reservado para Lucas). Antes, 2026-11-13 (0.34.0: CH-08/MEM-06 entregó su única pieza sound — `memory import --dry-run [--json]` con clasificación read-only por memory_key (nuevo/identico/divergente/tombstone) y acción predicha (insert/supersede/skip) compartiendo una única función de decisión con el import real; reindex desde proposals y gate fail-closed refutados con evidencia; 0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
 
 ## Prioridad de ejecución
 
@@ -42,6 +42,43 @@ Propuesta: `aspec/changes/jev-spec-advisory-judge/proposal.md` (sólo `proposal.
   feature que requiere una cuenta paga de un tercero.
 - **Si se aprueba:** `design.md` + `specs/spec-judge/spec.md` + `tasks.md`; release minor (nuevo
   subcomando + superficie de skills), con `format`/`typecheck` no configurados como hoy.
+
+#### Evaluación (2026-11-15) — no se implementa ahora
+
+**Veredicto:** propuesta bien acotada y respetuosa de los contratos vigentes, pero es una
+**decisión de producto** (cuenta paga de un tercero, el código sale de la máquina, OSS de un solo
+mantenedor). **No se implementa en esta etapa.** Queda reservada para que la tome Lucas cuando la
+trabaje.
+
+**Fortalezas:** no toca `check`, no gatea el archive (`prompt-contracts:1226-1228`), no mete red en
+`src/` (verificado: sin `fetch(`), no agrega dependencias de runtime; tiene criterio de abandono
+explícito (spike de 5 pasos), tests offline con mock y degrada a `skipped`.
+
+**A corregir antes de aprobar:**
+
+- **Premisa falsa:** el proposal dice "este repositorio no tiene `.ancletorc`". En el working tree
+  sí existe (`azure`, `discovery`, `memory`, `version: 0.28.0`). Si la intención era "no está
+  versionado", corregir el texto; la lectura tolerante sigue siendo válida.
+- **`jev-spec.config.ts` se ejecuta** (también en `--dry-run`): riesgo en CI / PRs de forks.
+- **Sin redacción de secretos:** `codePaths` puede incluir `.env`; las exclusiones quedan a cargo
+  del usuario.
+- **Specs en español vs modelo English-first:** medir, no asumir.
+- **Costo/latencia** (70–400 ms, ~$0.042/M tokens) son del propio `jev-spec`, no doc oficial de
+  TypeSafe: verificar con una corrida real.
+- **`## Decisiones` no canónico** (`**memory_key:**` sin bullet, `Estado: propuesto`): al pasar a
+  change, el gate de promoción exige la forma canónica (bullets, `Estado: aprobado`).
+- **Superficie de producto:** subcomando `judge` + capability `spec-judge` + tocar
+  `skills/ancleto-verify`/`ancleto-apply`/`ancleto-workflow` ⇒ MINOR + `ancleto upgrade`.
+
+**Decisiones abiertas (6):** nombre del comando (`judge` vs `verify --judge` vs `/cleto-judge`),
+default de `enabled`, pin del tool vs `jev-latest`, capability `spec-judge` vs delta de
+`cli-diagnostics`, alcance v1 (canónicas vs `--change`), y si el producto acepta una cuenta paga de
+un tercero.
+
+**Primer paso si se retoma:** correr el spike (5 pasos) sobre `cli-diagnostics` con 5 rubrics en
+inglés + 2 probes que fallen contra código roto; medir si agrega información que `ancleto-verify`
+no tiene. Sólo con verdes se habilita `--require` y se decide la cuenta paga. Si el spike da rojo,
+se archiva como refutada.
 
 > **Actualización 0.22.1 (2026-11-06):** se cerró la deuda residual de CH-06a (ítems 1–4) y se documentó el ítem 5 como exclusión explícita; también quedó fijado el orden archive → merge. CH-06b sigue **diferido** (proyección de tests incompleta, sin consumidor probado) y CH-07 sigue **bloqueado por CH-00**.
 

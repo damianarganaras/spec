@@ -9496,6 +9496,22 @@ describe('CLI memory consolidate', () => {
       assert.deepEqual(states(dbPath), before)
     })
   })
+
+  it('sin base de memoria sale 1, igual que `memory merge`', () => {
+    withDir((dir) => {
+      assert.equal(existsSync(join(dir, '.ancleto', 'memory.db')), false)
+
+      const consolidate = run(['memory', 'consolidate'], dir)
+      assert.equal(consolidate.status, 1, consolidate.stderr)
+      assert.match(consolidate.stderr, /no hay memoria en este repo/)
+
+      const merge = run(['memory', 'merge', '--target', 'a', '--sources', 'b'], dir)
+      assert.equal(merge.status, 1, merge.stderr)
+      assert.match(merge.stderr, /no hay memoria en este repo/)
+
+      assert.equal(existsSync(join(dir, '.ancleto', 'memory.db')), false)
+    })
+  })
 })
 
 // ch-09a: puerta de criticidad en `memory consolidate` y `memory merge`. El

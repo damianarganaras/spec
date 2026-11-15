@@ -3124,6 +3124,7 @@ async function memoryConsolidate(flags) {
   const dbPath = defaultMemoryDbPath()
   if (!(await exists(dbPath))) {
     console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exitCode = 1
     return
   }
   // La raiz se deriva una sola vez: alimenta el conjunto critico inyectado al

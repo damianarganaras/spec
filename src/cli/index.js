@@ -11,7 +11,7 @@ import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath, validateImportEntries, simulateImportClassification } from '../core/memory/engine.js'
 import { snapshotDatabase } from '../core/memory/snapshot.js'
 import { adaptFrontmatter, parseFrontmatter, frontmatterValue } from '../core/adapters/frontmatter.js'
-import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite } from '../core/memory/working-context.js'
+import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite, readCriticalMemoryKeys } from '../core/memory/working-context.js'
 import { materializeMachineEnv, checkMachineEnvTracked } from '../core/machine-env.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { curateMemory } from '../core/memory/curation.js'
@@ -109,9 +109,9 @@ ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FT
   ancleto memory gc [--dry-run] [--days N] Purga superseded con antiguedad > N dias (default 30)
   ancleto memory snapshot --out <archivo.db> [--force] [--json]
                                    Copia consistente de la memoria (incluye historial; --force sobrescribe)
-  ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]
+  ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--force-critical] [--json]
                                    Supersede cada source activa hacia el target (sin crear nodos)
-  ancleto memory consolidate [--dry-run] [--apply] [--json]
+  ancleto memory consolidate [--dry-run] [--apply] [--force-critical] [--json]
                                    Agrupa duplicados exactos y supersede los no canonicos
   ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE
                                         expone searchMemory, recordRule y recordDecision
@@ -134,8 +134,8 @@ const MEMORY_USAGE = [
   'ancleto memory import <archivo> [--dry-run] [--json]',
   'ancleto memory gc [--dry-run] [--days <n>]',
   'ancleto memory snapshot --out <archivo.db> [--force] [--json]',
-  'ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]',
-  'ancleto memory consolidate [--dry-run] [--apply] [--json]',
+  'ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--force-critical] [--json]',
+  'ancleto memory consolidate [--dry-run] [--apply] [--force-critical] [--json]',
   'ancleto memory curate [--json] [--strict]'
 ]
 
@@ -3020,27 +3020,44 @@ async function memorySnapshot(flags) {
   }
 }
 
+// Rechazo de la puerta de criticidad: exit 2 sin refrescar el bloque derivado.
+// Con `--json` el objeto va a stdout; sin `--json`, stderr nombra cada clave.
+function criticalGateExit(err, asJson) {
+  const keys = Array.isArray(err.criticalAffected) ? err.criticalAffected : []
+  if (asJson) {
+    console.log(JSON.stringify({ error: 'critical-key-gate', criticalAffected: keys }))
+  } else {
+    console.error(`ancleto: rechazado por criticidad: ${keys.join(', ')}; usa --force-critical para autorizar la escritura`)
+  }
+  process.exitCode = 2
+}
+
 async function memoryMerge(flags) {
   const target = requiredMemoryFlag(flags, '--target')
   const sourcesRaw = requiredMemoryFlag(flags, '--sources')
   if (!target || !sourcesRaw) {
-    console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]')
+    console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--force-critical] [--json]')
     process.exitCode = 1
     return
   }
   const sources = sourcesRaw.split(',').map((s) => s.trim()).filter(Boolean)
   if (sources.length === 0) {
-    console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]')
+    console.error('ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--force-critical] [--json]')
     process.exitCode = 1
     return
   }
   const dryRun = flags.includes('--dry-run')
+  // En dry-run el flag no tiene efecto: el engine nunca bloquea por criticidad.
+  const forceCritical = !dryRun && flags.includes('--force-critical')
   const dbPath = defaultMemoryDbPath()
   if (!(await exists(dbPath))) {
     console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
     process.exitCode = 1
     return
   }
+  // La raiz se deriva una sola vez: alimenta el conjunto critico inyectado al
+  // engine y el refresh del bloque derivado (`resolveMemoryProjectRoot`).
+  const projectRoot = resolveMemoryProjectRoot(dbPath)
   // `createMemoryEngine` aplica `PRAGMA journal_mode=WAL` y migraciones al abrir;
   // un dry-run no debe escribir ni la base ni sus sidecars, asi que usa la
   // conexion read-only (su `merge` solo acepta `dryRun: true`).
@@ -3048,20 +3065,29 @@ async function memoryMerge(flags) {
   try {
     let result
     try {
-      result = engine.merge({ target, sources, dryRun })
+      result = engine.merge({ target, sources, dryRun, criticalKeys: readCriticalMemoryKeys(projectRoot), forceCritical })
     } catch (err) {
+      if (!dryRun && err.code === 'MEMORY_CRITICAL_KEY') {
+        criticalGateExit(err, flags.includes('--json'))
+        return
+      }
       console.error(`ancleto: merge rechazado: ${err.message}`)
       process.exitCode = 1
       return
     }
     if (result.dryRun) {
-      if (flags.includes('--json')) console.log(JSON.stringify(result))
-      else console.log(`ancleto: merge --dry-run -> target ${result.target}; sources ${result.sources.join(', ')}; ${result.superseded} nodo(s) a superseder`)
+      if (flags.includes('--json')) {
+        console.log(JSON.stringify(result))
+      } else {
+        console.log(`ancleto: merge --dry-run -> target ${result.target}; sources ${result.sources.join(', ')}; ${result.superseded} nodo(s) a superseder`)
+        if (result.criticalAffected.length > 0) {
+          console.log(`  claves criticas afectadas: ${result.criticalAffected.join(', ')}`)
+        }
+      }
       return
     }
     // Mismo render que el refresh on-write de `import`; la raiz se deriva del
     // directorio de la DB, no de process.cwd() (aisla fixtures en tmpdir).
-    const projectRoot = resolveMemoryProjectRoot(dbPath)
     try {
       refreshWorkingContextOnWrite(engine, projectRoot)
     } catch (err) {
@@ -3087,29 +3113,37 @@ async function memoryMerge(flags) {
 async function memoryConsolidate(flags) {
   const apply = flags.includes('--apply')
   if (apply && flags.includes('--dry-run')) {
-    console.error('ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--json]')
+    console.error('ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--force-critical] [--json]')
     process.exitCode = 1
     return
   }
   const dryRun = !apply
   const asJson = flags.includes('--json')
+  // En dry-run el flag no tiene efecto: el engine nunca bloquea por criticidad.
+  const forceCritical = !dryRun && flags.includes('--force-critical')
   const dbPath = defaultMemoryDbPath()
   if (!(await exists(dbPath))) {
     console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
     return
   }
+  // La raiz se deriva una sola vez: alimenta el conjunto critico inyectado al
+  // engine y el refresh del bloque derivado (`resolveMemoryProjectRoot`).
+  const projectRoot = resolveMemoryProjectRoot(dbPath)
   const engine = dryRun ? createReadonlyMemoryEngine(dbPath) : createMemoryEngine(dbPath)
   try {
     let result
     try {
-      result = engine.consolidate({ dryRun })
+      result = engine.consolidate({ dryRun, criticalKeys: readCriticalMemoryKeys(projectRoot), forceCritical })
     } catch (err) {
+      if (!dryRun && err.code === 'MEMORY_CRITICAL_KEY') {
+        criticalGateExit(err, asJson)
+        return
+      }
       console.error(`ancleto: consolidate rechazado: ${err.message}`)
       process.exitCode = 1
       return
     }
     if (!dryRun) {
-      const projectRoot = resolveMemoryProjectRoot(dbPath)
       try {
         refreshWorkingContextOnWrite(engine, projectRoot)
       } catch (err) {
@@ -3134,6 +3168,9 @@ async function memoryConsolidate(flags) {
       for (const pair of result.nearDuplicates) {
         console.log(`    ${pair.a} ~ ${pair.b} (${pair.score})`)
       }
+    }
+    if (result.criticalAffected.length > 0) {
+      console.log(`  claves criticas afectadas: ${result.criticalAffected.join(', ')}`)
     }
   } finally {
     engine.close()

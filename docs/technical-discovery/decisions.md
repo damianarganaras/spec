@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-15T14:34:33Z
-pluginVersion: 0.35.0
+generatedAt: 2026-11-15T23:32:12Z
+pluginVersion: 0.36.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.35.0)
+## Modelos y tiers (estado 0.36.0)
 
 ### Tabla y cadenas
 
@@ -1006,6 +1006,22 @@ sin `--tier` es `normal`.
   `content-guard-literal-overflow-warning`). `.ancletorc` es gitignored: se describe como seam de
   configuración, no como fuente de evidencia del seed.
 
+### Puerta de criticidad de escritura (0.36.0)
+
+- **Regla**: `memory merge` y `memory consolidate --apply` no pueden superseder en silencio una
+  `memory_key` declarada en `.ancletorc` → `memory.criticalKeys`. La fuente de criticidad es la
+  misma del working-context (`readCriticalMemoryKeys`, lectura tolerante); el engine no lee
+  `.ancletorc`: el CLI inyecta el conjunto.
+- **Riesgo calculado**: `criticalAffected` es la intersección entre el conjunto crítico y los nodos
+  que se supersederían —sources en `merge`, `superseded` de grupos exactos en `consolidate`—; el
+  target/canónico y los near-duplicates no cuentan. El orden es determinístico y sin locale.
+- **Contrato**: dry-run reporta `criticalAffected` y sale 0 sin bloquear; sin `--force-critical` la
+  corrida real aborta dentro de la `BEGIN IMMEDIATE` con `code: MEMORY_CRITICAL_KEY`, exit 2 y cero
+  filas modificadas; con `--json`, stdout
+  `{"error":"critical-key-gate","criticalAffected":[...]}`; sin `--json`, stderr nombra las claves
+  y menciona el flag. `--force-critical` sólo tiene efecto en la corrida real. Sin cambios de
+  schema, PRAGMAs ni `ruleVersion`.
+
 ## Discovery y seed
 
 - **Estado del seed**: `READY` si el hash de fuentes coincide con `.discovery-state.json`; `STALE`
@@ -1301,6 +1317,46 @@ Requirements canónicos: «Garbage collection de nodos superseded» y «Curadur�
   generación; el comportamiento se describe desde el código
   (`src/core/memory/{engine,curation,database}.js`) y el delta archivado.
 
+## Puerta de criticidad de memoria (0.36.0)
+
+Change archivado: `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/`. Requirements
+canónicos: «Merge de nodos por supersesión», «Consolidación determinística de nodos duplicados» y
+``Comando CLI `ancleto memory merge` `` en `aspec/specs/memory-ops/spec.md`, reescritos completos
+con `MODIFIED`.
+
+- **Daño evitado**: `consolidate --apply` elegía canónico por refs, `created_at`, scope, longitud,
+  tipo y `memory_key`; si una clave crítica perdía el desempate quedaba superseded, el refresh
+  posterior fallaba y la base ya estaba commiteada. `merge` abría la misma vía al superseder sus
+  sources. La puerta corre **antes del primer `UPDATE`**, dentro de la misma transacción
+  `BEGIN IMMEDIATE`, así que el rechazo revierte todo (atomicidad real) y no refresca el
+  working-context.
+- **Fuente única de criticidad** (`memory-criticality-source-of-truth`): `.ancletorc` →
+  `memory.criticalKeys`, leída con `readCriticalMemoryKeys` y pasada como `criticalKeys`. Ausente,
+  no-array, JSON inválido o entradas no-string equivale a lista vacía y desactiva el bloqueo: es
+  compatibilidad deliberada, no un bypass. No se agrega columna `critical` ni clave nueva.
+- **Cobertura de `merge`** (`memory-criticality-gate-covers-merge`): `criticalAffected` son las
+  sources superseded; una clave crítica que es target no bloquea.
+- **Flag explícito** (`memory-criticality-gate-pre-write`): `--force-critical` es la única vía de
+  override, no hay confirmación interactiva y el exit 2 queda reservado al rechazo fail-closed sin
+  escritura; el exit 1 sigue siendo error interno/fallo del refresh. En dry-run el flag no tiene
+  efecto.
+- **Fix asociado**: `memory consolidate` sin `.ancleto/memory.db` sale con código 1, alineado con
+  `memory merge`, sin crear la base.
+- **Riesgo residual**: `--force-critical` sobre una `rule` crítica del scope inyectado aplica la
+  escritura y luego falla el refresh con exit 1, dejando la base mutada y el bloque derivado
+  desactualizado; se mitiga quitando la clave de `.ancletorc` y regenerando con
+  `ancleto memory context --out`.
+- **Downgrade**: un binario 0.35.0 ignora `--force-critical` y puede volver a superseder una clave
+  crítica; no hay cambio de formato persistido ni de `ruleVersion`, y la base sigue siendo legible.
+- **Invariantes**: sin schema, PRAGMAs, `ruleVersion` ni columnas nuevos; la garantía post-escritura
+  de `memory-engine` («Conjunto crítico estable del working-context») no se relaja, porque
+  `--force-critical` autoriza la escritura pero no suprime el fallo del refresh.
+- **Oráculo**: `test/memory-engine.test.js` (gate en motor: dry-run reporta, rechazo deja cero filas,
+  `forceCritical` aplica, target/near-duplicates no cuentan, orden determinístico, read-only acepta
+  `criticalKeys` en dry-run) y `test/cli.test.js` (exit 2, JSON, texto humano, pin de
+  `MEMORY_USAGE`, regresión de clave fantasma y `consolidate` sin base). No se ejecutó la suite en
+  esta generación; el comportamiento se describe desde el código y el delta archivado.
+
 ## Lint y publicación
 
 - `npm run lint` ejecuta `eslint src/ test/ scripts/` con flat config y cuatro reglas
@@ -1340,6 +1396,10 @@ Requirements canónicos: «Garbage collection de nodos superseded» y «Curadur�
   `opencode`) porque el formato no cambió.
 - **Aviso nuevo de `export`**: un destino no parseable produce un aviso por `stderr`; no bloquea ni
   cambia el exit code, pero puede aparecer en CI.
+- **Downgrade de la puerta de criticidad (0.36.0)**: un binario `0.35.0` sobre la misma base ignora
+  `--force-critical` y puede superseder una `memory_key` crítica; no hay cambio de formato persistido
+  que lo impida. Mitigación: operar `merge`/`consolidate --apply` con el CLI ≥ 0.36.0 y revisar
+  `criticalAffected` en el dry-run antes del apply.
 - **Tier dormido silencioso (0.18.15)**: un manifiesto incompleto que omita `installedPaths.agents`
   y un host sin target de agentes no produce aviso. Es el comportamiento buscado, pero oculta el
   caso degenerado.

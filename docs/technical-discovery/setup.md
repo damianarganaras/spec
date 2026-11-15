@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-15T14:34:33Z
-pluginVersion: 0.35.0
+generatedAt: 2026-11-15T23:32:12Z
+pluginVersion: 0.36.0
 skillVersion: '2.3'
 ---
 
@@ -148,6 +148,9 @@ del paquete instalado.
   `mcp`. Desde 0.31.0 `memory context` (con o sin `--out`) falla con exit ≠ 0 y no sobrescribe el
   archivo previo si una clave de `memory.criticalKeys` no existe, está inactiva o no entra en el
   presupuesto; el lifecycle y el on-write del MCP advierten sin escribir un bloque degradado.
+  Desde 0.36.0 `memory merge` y `memory consolidate --apply` aceptan `--force-critical` y
+  reportan `criticalAffected`; sin el flag, superseder una clave crítica sale con exit 2 (con
+  `--json`, `{"error":"critical-key-gate","criticalAffected":[...]}`) sin escribir.
 - **Selección de tests afectados (0.32.0)**: `ancleto affected --tests <archivos...>` implica salida
   JSON y suma `tests` (`complete`, `reasons`, `selected`, `excluded`) a los cuatro campos
   existentes; sin `--tests` el JSON y los exit codes no cambian. El consumo canónico es
@@ -167,6 +170,12 @@ del paquete instalado.
   `divergente` y `tombstone`, y predice `insert`/`supersede`/`skip` con la misma función que el
   import real; no escribe ni refresca el working-context. `--json` emite
   `{dryRun, databasePresent, summary, entries}`. Sin flags, `import` no cambia.
+- **Puerta de criticidad de memoria (0.36.0)**: `ancleto memory merge --target <key> --sources
+  <k1,k2,...> [--dry-run] [--force-critical] [--json]` y `ancleto memory consolidate
+  [--dry-run] [--apply] [--force-critical] [--json]`. El dry-run reporta `criticalAffected` y sale
+  0; sin `--force-critical`, la corrida real que supersedería una clave de `memory.criticalKeys`
+  aborta antes de escribir con exit 2. `memory consolidate` sin `.ancleto/memory.db` sale con
+  código 1. Sin schema, PRAGMAs ni `ruleVersion` nuevos.
 - **Tiers**: `normal` (opencode-go), `minimo` (cadena de dos candidatos
   `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free` contra el catálogo),
   `gratis` (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin
@@ -235,7 +244,7 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 | Variable / archivo | Propósito | Referencia |
 |---|---|---|
 | `.ancletorc` | Manifiesto de instalación y configuración del proyecto (`agent`, `language`, `profile`, `discovery`, `memory`, `gratisModel`, `azure`, `installedPaths`, `version`) | `src/cli/index.js` → `readAncletorc` |
-| `.ancletorc` → `memory.criticalKeys` | Lista curada de `memory_key` que el renderer del working-context inyecta primero; ausente, no-array o con entradas no-string equivale a `[]` | `src/core/memory/working-context.js` → `readCriticalMemoryKeys` |
+| `.ancletorc` → `memory.criticalKeys` | Lista curada de `memory_key` que el renderer del working-context inyecta primero y que la puerta de criticidad protege en `merge`/`consolidate --apply`; ausente, no-array o con entradas no-string equivale a `[]` | `src/core/memory/working-context.js` → `readCriticalMemoryKeys` |
 | `.opencode/.ancleto-tier` | Último tier aplicado; lo lee `check` y `repomix-tier` | `src/cli/index.js`, `src/core/repomix-tier.js` |
 | `ANCLETO_OPENCODE_DB` | Ruta alternativa a la base de sesiones de opencode para `stats` | `src/cli/index.js` → `opencodeDbPath` |
 | `ANCLETO_PROJECTS_FILE` | Ruta alternativa al registro global de proyectos | `src/cli/index.js` → `projectsRegistryPath` |
@@ -248,9 +257,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.35.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.36.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.35.0`.
+  la fija `package.json` = `0.36.0`.
 
 ## Entorno de máquina
 

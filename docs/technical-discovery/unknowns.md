@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-15T14:34:33Z
-pluginVersion: 0.35.0
+generatedAt: 2026-11-15T23:32:12Z
+pluginVersion: 0.36.0
 skillVersion: '2.3'
 ---
 
@@ -22,7 +22,7 @@ skillVersion: '2.3'
    `src/core/memory/engine.js` → `recordNode`, `gcSuperseded`, `REF_GRAMMAR`; `src/core/specs-merge.js`;
    `src/core/tier-models.js`, `src/core/test-selection.js`, `src/core/memory/database.js` →
    `runImmediateTransaction`, `runReadTransaction`), no en el pack solo. El estado del pack
-   registra 879 fuentes (170.793 B, ~42.297 tokens) y su cuerpo contiene 33 entradas de archivo, porque
+   registra 883 fuentes (172.073 B, ~42.614 tokens) y su cuerpo contiene 33 entradas de archivo, porque
    `**/*.md`, `test/**`, `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y
    los Markdown excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
@@ -182,9 +182,9 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **913 archivos** (aspec 333,
+- **`.discovery-map.json` observado**: el generador reporta **917 archivos** (aspec 337,
   `.opencode` 66, docs 21, test 33, src 22, scripts 2, documentation 340, audit logs 9, etc.). El pack
-  registra **879 fuentes** (170.793 B, ~42.297 tokens) y 33 entradas de archivo porque los globs de
+  registra **883 fuentes** (172.073 B, ~42.614 tokens) y 33 entradas de archivo porque los globs de
   `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además Repomix filtra por sus
   propios ignores. Desde 0.30.0 `**/*.test.*`/`**/*.spec.*` vuelven a aplicar; desde 0.30.1 las 24
   rutas `test/*.test.js` dejan de figurar en `sources`; los 8 fixtures bajo `test/fixtures/**`
@@ -366,10 +366,27 @@ skillVersion: '2.3'
   así que `test/memory-engine.test.js`, `test/curation.test.js`, `test/memory-writers.test.js`, la
   spec canónica y los artifacts archivados se leyeron directamente fuera del pack; el cuerpo cubre
   `src/` (incluidos los tres archivos de memoria) y `scripts/`.
+- **Estado del chequeo (0.36.0)**: el `discovery --check` previo devolvió `STALE`/`impact: minor`
+  con `changedAreas: ["CHANGELOG.md", "aspec", "src"]`, `materialReasons: []`, `seedMapPresent: true`
+  y `affectedDocs` con los once documentos. Esta materialización consumió el pack único de 883
+  fuentes (172.073 B, ~42.614 tokens) y reescribió `.discovery-state.json`; el delta 0.35.0→0.36.0
+  es la puerta de criticidad de `merge`/`consolidate --apply` y el exit 1 de `consolidate` sin base.
+- **Evidencia de 0.36.0**: se verificó leyendo `src/core/memory/engine.js`
+  (`affectedCriticalKeys`, `criticalKeyError`, `merge`, `consolidate`, `createReadonlyMemoryEngine`),
+  `src/cli/index.js` (`criticalGateExit`, `memoryMerge`, `memoryConsolidate`, `MEMORY_USAGE` y el
+  parseo de `--force-critical`), `src/core/memory/working-context.js` (`readCriticalMemoryKeys`), el
+  delta archivado `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/` (fuera del pack por el
+  tier), `aspec/specs/memory-ops/spec.md` y `CHANGELOG.md`. No se ejecutó la suite ni un
+  `merge`/`consolidate` real contra `.ancleto/memory.db`; el comportamiento se describió desde el
+  código y el contrato.
+- **Límite de evidencia del pack 0.36.0**: el tier `minimo` excluye `test/**`, `docs/**` y `**/*.md`,
+  así que `test/memory-engine.test.js`, `test/cli.test.js`, la spec canónica y los artifacts
+  archivados se leyeron directamente fuera del pack; el cuerpo cubre `src/`, `scripts/` y la
+  configuración versionada.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.35.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.36.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -402,9 +419,10 @@ skillVersion: '2.3'
   caché `Map` por glob exacto en 0.30.1, con `sources` 872→854 en 0.30.0, 857/22 tests en 0.30.1,
   863 fuentes en 0.31.0, 869 fuentes / 23 tests en 0.32.0, 873 fuentes / 24 tests en 0.33.0–0.33.1,
   876 fuentes / 24 tests en 0.34.0 (con `memory-engine.test.js` y `cli.test.js` cubriendo el dry-run)
-  y 879 fuentes / 24 tests en 0.35.0 (con `memory-engine.test.js`, `curation.test.js` y
+  879 fuentes / 24 tests en 0.35.0 (con `memory-engine.test.js`, `curation.test.js` y
   `memory-writers.test.js` cubriendo GC por instante, fechas no parseables, `deleted` reservado y
-  snapshot único);
+  snapshot único) y 883 fuentes / 24 tests en 0.36.0 (con la puerta de criticidad cubierta por
+  `memory-engine.test.js` y `cli.test.js`);
   `planTestSelection`, el flag aditivo
   `--tests`, el manifiesto `test/affected-tests.json` y el consumidor `scripts/test-affected.mjs`
   (0.32.0); `MEMORY_WRITE_RETRY_POLICY`, `MemoryDatabaseBusyError`, `runImmediateTransaction` y
@@ -419,7 +437,9 @@ skillVersion: '2.3'
   `skills/ancleto-onboard` y `aspec/specs/memory-ops/spec.md`; desde 0.35.0 `julianday` en los tres
   statements de GC con cutoff único, la retención de fechas no parseables, `status='deleted'` como
   reservado, `runReadTransaction` (`BEGIN DEFERRED`) y `REF_GRAMMAR` en
-  `src/core/memory/{engine,database,curation}.js`.
+  `src/core/memory/{engine,database,curation}.js`; desde 0.36.0 `affectedCriticalKeys`,
+  `criticalKeyError`, la puerta dentro de `merge`/`consolidate` y `criticalGateExit` en
+  `src/core/memory/engine.js`/`src/cli/index.js`.
 - **Media (inferido)**: comportamiento de hosts no probados, efecto exacto de cada adaptador en
   cada IDE, resultados del workflow, ausencia real del 403 en configuraciones
   concretas, materialización/saneamiento de la nota de compresión sin ejecución real, no-escritura

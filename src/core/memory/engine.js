@@ -397,6 +397,27 @@ function compareKeys(a, b) {
   return a < b ? -1 : 1
 }
 
+// Puerta de criticidad: interseccion deterministica entre el conjunto inyectado
+// por el llamador y las `memory_key` que la corrida supersederia. El engine nunca
+// lee `.ancletorc`.
+function affectedCriticalKeys(criticalKeys, candidateKeys) {
+  const critical = new Set(criticalKeys)
+  const affected = new Set()
+  for (const key of candidateKeys) {
+    if (critical.has(key)) affected.add(key)
+  }
+  return [...affected].sort(compareKeys)
+}
+
+// Error unico de la puerta: `code` estable para que el CLI lo mapee a exit 2 sin
+// inspeccionar el mensaje; las claves viajan para la salida JSON del rechazo.
+function criticalKeyError(keys) {
+  const error = new Error(`memory: claves criticas afectadas: ${keys.join(', ')}; usa --force-critical para autorizar la escritura`)
+  error.code = 'MEMORY_CRITICAL_KEY'
+  error.criticalAffected = [...keys]
+  return error
+}
+
 // Jaccard sobre tokens deduplicados separados por whitespace (sin stopwords ni filtro de longitud).
 function similarityTokens(text) {
   return new Set(String(text).toLowerCase().split(/\s+/).filter(Boolean))
@@ -773,13 +794,13 @@ function buildReadonlyEngine(db, dbPath) {
   const engine = buildEngine(db, dbPath)
   return {
     ...engine,
-    merge({ target, sources, dryRun = false } = {}) {
+    merge({ target, sources, dryRun = false, criticalKeys = [], forceCritical = false } = {}) {
       if (!dryRun) throw new Error('merge: la conexion es read-only')
-      return engine.merge({ target, sources, dryRun: true })
+      return engine.merge({ target, sources, dryRun: true, criticalKeys, forceCritical })
     },
-    consolidate({ dryRun = true, includeNearDuplicates = true } = {}) {
+    consolidate({ dryRun = true, includeNearDuplicates = true, criticalKeys = [], forceCritical = false } = {}) {
       if (dryRun === false) throw new Error('consolidate: la conexion es read-only')
-      return engine.consolidate({ dryRun: true, includeNearDuplicates })
+      return engine.consolidate({ dryRun: true, includeNearDuplicates, criticalKeys, forceCritical })
     }
   }
 }
@@ -1238,13 +1259,15 @@ function buildEngine(db, dbPath) {
   // Consolida duplicados supersediendo cada source activa hacia un target activo,
   // sin insertar nodos ni aceptar contenido. Valida todo antes de escribir y usa
   // una unica transaccion: cualquier violacion deja la base intacta. `dryRun` no
-  // abre transaccion ni escribe.
-  function merge({ target, sources, dryRun = false } = {}) {
+  // abre transaccion ni escribe. La puerta de criticidad mira solo las sources.
+  function merge({ target, sources, dryRun = false, criticalKeys = [], forceCritical = false } = {}) {
     const { targetKey, sourceKeys, sourceIds } = validateMerge({ target, sources })
-    const plan = { target: targetKey, sources: sourceKeys, superseded: sourceIds.length }
+    const criticalAffected = affectedCriticalKeys(criticalKeys, sourceKeys)
+    const plan = { target: targetKey, sources: sourceKeys, superseded: sourceIds.length, criticalAffected }
     if (dryRun) return { dryRun: true, ...plan }
 
     runImmediateTransaction(db, 'merge', () => {
+      if (criticalAffected.length > 0 && !forceCritical) throw criticalKeyError(criticalAffected)
       // Revalidacion bajo lock: el target pudo quedar superseded entre la
       // validacion previa y la transaccion, y las sources quedarian enlazadas a
       // un nodo inactivo.
@@ -1274,7 +1297,8 @@ function buildEngine(db, dbPath) {
   // transaccion; los near-duplicates solo se reportan y nunca se tocan.
   // `includeNearDuplicates: false` omite el escaneo O(n^2) cuando el llamador no
   // usa la seccion (p. ej. curaduria); el default conserva el reporte actual.
-  function consolidate({ dryRun = true, includeNearDuplicates = true } = {}) {
+  // La puerta de criticidad mira solo los miembros superseded de los grupos exactos.
+  function consolidate({ dryRun = true, includeNearDuplicates = true, criticalKeys = [], forceCritical = false } = {}) {
     const nodes = listActiveForConsolidate.all().map((row) => ({
       ...row,
       refs: declaredRefCount(row.content),
@@ -1311,6 +1335,7 @@ function buildEngine(db, dbPath) {
       refs: canonical.refs
     }))
     const supersededKeys = plans.flatMap(({ superseded }) => superseded.map((node) => node.memory_key))
+    const criticalAffected = affectedCriticalKeys(criticalKeys, supersededKeys)
 
     const nearDuplicates = []
     if (includeNearDuplicates) {
@@ -1338,10 +1363,11 @@ function buildEngine(db, dbPath) {
       })
     }
 
-    const report = { dryRun: !!dryRun, exactGroups, superseded: supersededKeys, nearDuplicates }
+    const report = { dryRun: !!dryRun, exactGroups, superseded: supersededKeys, nearDuplicates, criticalAffected }
     if (dryRun || plans.length === 0) return report
 
     return runImmediateTransaction(db, 'consolidate', () => {
+      if (criticalAffected.length > 0 && !forceCritical) throw criticalKeyError(criticalAffected)
       const supersededAt = new Date().toISOString()
       for (const { canonical, superseded } of plans) {
         if (!findActiveById.get(canonical.id)) {

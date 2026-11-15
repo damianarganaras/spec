@@ -2304,7 +2304,7 @@ describe('merge (PR-1)', () => {
       const schemaBefore = rawAt(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`)
 
       const result = eng.merge({ target: 'm-target', sources: ['m-src-1', 'm-src-2'] })
-      assert.deepEqual(result, { dryRun: false, target: 'm-target', sources: ['m-src-1', 'm-src-2'], superseded: 2 })
+      assert.deepEqual(result, { dryRun: false, target: 'm-target', sources: ['m-src-1', 'm-src-2'], superseded: 2, criticalAffected: [] })
 
       const targetId = targetBefore[0].id
       const sources = rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes
@@ -2718,7 +2718,7 @@ describe('memory merge (CLI)', () => {
     })
   })
 
-  it('--dry-run --json imprime las cuatro claves y no escribe (G5)', () => {
+  it('--dry-run --json imprime las cinco claves y no escribe (G5 + ch-09a)', () => {
     withCliFixture(({ dir, engine, close, rawAt }) => {
       const { ctxPath } = seedMergeFixture({ dir, engine, rawAt })
       const ctxBefore = readFileSync(ctxPath)
@@ -2728,7 +2728,7 @@ describe('memory merge (CLI)', () => {
       const r = runCli(dir, ['memory', 'merge', '--dry-run', '--target', 'cli-target', '--sources', 'cli-src-1,cli-src-2', '--json'])
       assert.equal(r.status, 0, r.stderr)
       const payload = JSON.parse(r.stdout)
-      assert.deepEqual(Object.keys(payload).sort(), ['dryRun', 'sources', 'superseded', 'target'])
+      assert.deepEqual(Object.keys(payload).sort(), ['criticalAffected', 'dryRun', 'sources', 'superseded', 'target'])
       assert.equal(payload.dryRun, true)
       assert.equal(payload.target, 'cli-target')
       assert.deepEqual([...payload.sources].sort(), ['cli-src-1', 'cli-src-2'])
@@ -2742,8 +2742,8 @@ describe('memory merge (CLI)', () => {
     })
   })
 
-  // G5 cubre ambos caminos: el real tambien publica las cuatro claves.
-  it('merge real --json imprime las cuatro claves (G5)', () => {
+  // G5 cubre ambos caminos: el real tambien publica las cinco claves.
+  it('merge real --json imprime las cinco claves (G5 + ch-09a)', () => {
     withCliFixture(({ dir, engine, close, rawAt }) => {
       seedMergeFixture({ dir, engine, rawAt })
       close()
@@ -2751,7 +2751,7 @@ describe('memory merge (CLI)', () => {
       const r = runCli(dir, ['memory', 'merge', '--target', 'cli-target', '--sources', 'cli-src-1,cli-src-2', '--json'])
       assert.equal(r.status, 0, r.stderr)
       const payload = JSON.parse(r.stdout)
-      assert.deepEqual(Object.keys(payload).sort(), ['dryRun', 'sources', 'superseded', 'target'])
+      assert.deepEqual(Object.keys(payload).sort(), ['criticalAffected', 'dryRun', 'sources', 'superseded', 'target'])
       assert.equal(payload.dryRun, false)
       assert.equal(payload.target, 'cli-target')
       assert.deepEqual([...payload.sources].sort(), ['cli-src-1', 'cli-src-2'])
@@ -3778,6 +3778,255 @@ describe('consolidate', () => {
       }
 
       assert.deepEqual(rawAt(`SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY memory_key`), before)
+    })
+  })
+})
+
+// ch-09a: puerta de criticidad del engine. El conjunto critico lo inyecta el
+// llamador (el engine nunca lee `.ancletorc`); el riesgo son las claves criticas
+// que la corrida supersederia y la puerta se evalua dentro de la misma
+// transaccion que la escritura, asi que un rechazo deja cero filas modificadas.
+describe('puerta de criticidad — consolidate y merge (ch-09a)', () => {
+  const SNAPSHOT = `SELECT memory_key, status, superseded_by, superseded_at FROM memory_nodes ORDER BY memory_key`
+
+  // `crit-canon` gana por created_at; `crit-sup` es el unico que se supersede.
+  function seedConsolidate(eng) {
+    eng.recordNode({ memory_key: 'crit-sup', type: 'rule', scope: 'project', content: 'regla critica duplicada', createdAt: '2026-01-01T00:00:00.000Z' })
+    eng.recordNode({ memory_key: 'crit-canon', type: 'rule', scope: 'project', content: 'regla critica duplicada', createdAt: '2026-01-02T00:00:00.000Z' })
+  }
+
+  function seedMerge(eng) {
+    eng.recordNode({ memory_key: 'mrg-target', type: 'rule', scope: 'project', content: 'target vigente' })
+    eng.recordNode({ memory_key: 'mrg-src', type: 'rule', scope: 'project', content: 'source a superseder' })
+  }
+
+  it('consolidate dry-run reporta criticalAffected sin escribir', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      seedConsolidate(eng)
+      const before = rawAt(SNAPSHOT)
+
+      const report = eng.consolidate({ dryRun: true, criticalKeys: ['crit-sup'] })
+
+      assert.equal(report.dryRun, true)
+      assert.deepEqual(report.superseded, ['crit-sup'])
+      assert.deepEqual(report.criticalAffected, ['crit-sup'])
+      assert.deepEqual(rawAt(SNAPSHOT), before, 'el dry-run no escribe')
+    })
+  })
+
+  it('consolidate apply sin forceCritical lanza MEMORY_CRITICAL_KEY y hace rollback total', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      seedConsolidate(eng)
+      const before = rawAt(SNAPSHOT)
+
+      assert.throws(
+        () => eng.consolidate({ dryRun: false, criticalKeys: ['crit-sup'] }),
+        (err) => {
+          assert.equal(err.code, 'MEMORY_CRITICAL_KEY')
+          assert.match(err.message, /crit-sup/)
+          assert.match(err.message, /--force-critical/)
+          assert.deepEqual(err.criticalAffected, ['crit-sup'])
+          return true
+        }
+      )
+      assert.deepEqual(rawAt(SNAPSHOT), before, 'un rechazo no deja ninguna fila modificada')
+    })
+  })
+
+  it('consolidate apply con forceCritical aplica y reporta el riesgo calculado', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      seedConsolidate(eng)
+      const canonicalId = rawAt(`SELECT id FROM memory_nodes WHERE memory_key = 'crit-canon'`)[0].id
+
+      const result = eng.consolidate({ dryRun: false, criticalKeys: ['crit-sup'], forceCritical: true })
+
+      assert.equal(result.dryRun, false)
+      assert.deepEqual(result.superseded, ['crit-sup'])
+      assert.deepEqual(result.criticalAffected, ['crit-sup'])
+      const rows = Object.fromEntries(rawAt(SNAPSHOT).map((row) => [row.memory_key, row]))
+      assert.equal(rows['crit-sup'].status, 'superseded')
+      assert.equal(rows['crit-sup'].superseded_by, canonicalId)
+      assert.ok(rows['crit-sup'].superseded_at)
+      assert.equal(rows['crit-canon'].status, 'active')
+    })
+  })
+
+  it('una clave critica que queda canonica no cuenta como riesgo', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      seedConsolidate(eng)
+
+      const report = eng.consolidate({ dryRun: true, criticalKeys: ['crit-canon'] })
+      assert.deepEqual(report.criticalAffected, [])
+
+      // Sin riesgo, la corrida real no requiere autorizacion explicita.
+      const applied = eng.consolidate({ dryRun: false, criticalKeys: ['crit-canon'] })
+      assert.deepEqual(applied.criticalAffected, [])
+      assert.deepEqual(applied.superseded, ['crit-sup'])
+      assert.equal(rawAt(`SELECT status FROM memory_nodes WHERE memory_key = 'crit-sup'`)[0].status, 'superseded')
+    })
+  })
+
+  it('los near-duplicates no cuentan como riesgo', () => {
+    withFreshEngine((eng) => {
+      eng.recordNode({ memory_key: 'near-a', type: 'rule', scope: 'project', content: 'alpha beta gamma delta epsilon zeta' })
+      eng.recordNode({ memory_key: 'near-b', type: 'rule', scope: 'project', content: 'alpha beta gamma delta epsilon eta' })
+
+      const report = eng.consolidate({ dryRun: true, criticalKeys: ['near-a', 'near-b'] })
+
+      assert.deepEqual(report.exactGroups, [])
+      assert.equal(report.nearDuplicates.length, 1)
+      assert.deepEqual(report.criticalAffected, [])
+    })
+  })
+
+  it('criticalKeys ausente o vacio conserva el comportamiento previo', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      seedConsolidate(eng)
+
+      assert.deepEqual(eng.consolidate({ dryRun: true }).criticalAffected, [])
+      assert.deepEqual(eng.consolidate({ dryRun: true, criticalKeys: [] }).criticalAffected, [])
+      assert.deepEqual(eng.merge({ target: 'crit-canon', sources: ['crit-sup'], dryRun: true }).criticalAffected, [])
+
+      // Sin claves, la corrida real no requiere forceCritical.
+      const applied = eng.consolidate({ dryRun: false })
+      assert.deepEqual(applied.criticalAffected, [])
+      assert.equal(rawAt(`SELECT status FROM memory_nodes WHERE memory_key = 'crit-sup'`)[0].status, 'superseded')
+    })
+  })
+
+  it('criticalAffected se ordena deterministicamente sin locale', () => {
+    withFreshEngine((eng) => {
+      // Un collator locale ordenaria case-insensitive; el contrato fija el orden
+      // lexicografico por unidades UTF-16 (mayusculas antes que minusculas).
+      eng.recordNode({ memory_key: 'Beta-sup', type: 'rule', scope: 'project', content: 'orden sin locale', createdAt: '2026-01-01T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'alpha-sup', type: 'rule', scope: 'project', content: 'orden sin locale', createdAt: '2026-01-02T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'gamma-sup', type: 'rule', scope: 'project', content: 'orden sin locale', createdAt: '2026-01-03T00:00:00.000Z' })
+      eng.recordNode({ memory_key: 'order-canon', type: 'rule', scope: 'project', content: 'orden sin locale', createdAt: '2026-01-04T00:00:00.000Z' })
+
+      const expected = ['Beta-sup', 'alpha-sup', 'gamma-sup']
+      const first = eng.consolidate({ dryRun: true, criticalKeys: ['gamma-sup', 'Beta-sup', 'alpha-sup'] })
+      const second = eng.consolidate({ dryRun: true, criticalKeys: ['alpha-sup', 'gamma-sup', 'Beta-sup'] })
+
+      assert.deepEqual(first.criticalAffected, expected)
+      assert.deepEqual(second.criticalAffected, expected, 'dos corridas producen el mismo arreglo')
+    })
+  })
+
+  it('el engine read-only acepta criticalKeys en consolidate dry-run y rechaza el real', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      seedConsolidate(eng)
+      const before = rawAt(SNAPSHOT)
+
+      const ro = createReadonlyMemoryEngine(dbPath)
+      try {
+        const preview = ro.consolidate({ criticalKeys: ['crit-sup'] })
+        assert.equal(preview.dryRun, true)
+        assert.deepEqual(preview.criticalAffected, ['crit-sup'])
+        assert.throws(
+          () => ro.consolidate({ dryRun: false, criticalKeys: ['crit-sup'], forceCritical: true }),
+          /consolidate: la conexion es read-only/
+        )
+      } finally {
+        ro.close()
+      }
+
+      assert.deepEqual(rawAt(SNAPSHOT), before)
+    })
+  })
+
+  it('merge dry-run reporta criticalAffected sin escribir', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      seedMerge(eng)
+      const before = rawAt(SNAPSHOT)
+
+      const plan = eng.merge({ target: 'mrg-target', sources: ['mrg-src'], dryRun: true, criticalKeys: ['mrg-src'] })
+
+      assert.equal(plan.dryRun, true)
+      assert.deepEqual(plan.sources, ['mrg-src'])
+      assert.deepEqual(plan.criticalAffected, ['mrg-src'])
+      assert.deepEqual(rawAt(SNAPSHOT), before, 'el dry-run no escribe')
+    })
+  })
+
+  it('merge real sin forceCritical lanza MEMORY_CRITICAL_KEY y no escribe', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      seedMerge(eng)
+      const before = rawAt(SNAPSHOT)
+
+      assert.throws(
+        () => eng.merge({ target: 'mrg-target', sources: ['mrg-src'], criticalKeys: ['mrg-src'] }),
+        (err) => {
+          assert.equal(err.code, 'MEMORY_CRITICAL_KEY')
+          assert.match(err.message, /mrg-src/)
+          assert.match(err.message, /--force-critical/)
+          return true
+        }
+      )
+      assert.deepEqual(rawAt(SNAPSHOT), before, 'un rechazo no deja ninguna fila modificada')
+    })
+  })
+
+  it('merge real con forceCritical aplica cada source hacia el target', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      seedMerge(eng)
+      const targetId = rawAt(`SELECT id FROM memory_nodes WHERE memory_key = 'mrg-target'`)[0].id
+
+      const result = eng.merge({ target: 'mrg-target', sources: ['mrg-src'], criticalKeys: ['mrg-src'], forceCritical: true })
+
+      assert.equal(result.dryRun, false)
+      assert.deepEqual(result.criticalAffected, ['mrg-src'])
+      const rows = Object.fromEntries(rawAt(SNAPSHOT).map((row) => [row.memory_key, row]))
+      assert.equal(rows['mrg-src'].status, 'superseded')
+      assert.equal(rows['mrg-src'].superseded_by, targetId)
+      assert.ok(rows['mrg-src'].superseded_at)
+      assert.equal(rows['mrg-target'].status, 'active')
+    })
+  })
+
+  it('merge: un target critico o una source no critica no cuentan como riesgo', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      seedMerge(eng)
+
+      const plan = eng.merge({ target: 'mrg-target', sources: ['mrg-src'], dryRun: true, criticalKeys: ['mrg-target'] })
+      assert.deepEqual(plan.criticalAffected, [])
+
+      // Sin riesgo, la corrida real no requiere autorizacion explicita.
+      const result = eng.merge({ target: 'mrg-target', sources: ['mrg-src'], criticalKeys: ['mrg-target'] })
+      assert.deepEqual(result.criticalAffected, [])
+      assert.equal(rawAt(`SELECT status FROM memory_nodes WHERE memory_key = 'mrg-src'`)[0].status, 'superseded')
+    })
+  })
+
+  it('merge ordena criticalAffected deterministicamente sin locale', () => {
+    withFreshEngine((eng) => {
+      eng.recordNode({ memory_key: 'ord-target', type: 'rule', scope: 'project', content: 'target' })
+      eng.recordNode({ memory_key: 'Beta-src', type: 'rule', scope: 'project', content: 'source beta' })
+      eng.recordNode({ memory_key: 'alpha-src', type: 'rule', scope: 'project', content: 'source alpha' })
+
+      const plan = eng.merge({ target: 'ord-target', sources: ['alpha-src', 'Beta-src'], dryRun: true, criticalKeys: ['alpha-src', 'Beta-src'] })
+
+      assert.deepEqual(plan.criticalAffected, ['Beta-src', 'alpha-src'])
+    })
+  })
+
+  it('el engine read-only acepta criticalKeys en merge dry-run y rechaza el real', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      seedMerge(eng)
+      const before = rawAt(SNAPSHOT)
+
+      const ro = createReadonlyMemoryEngine(dbPath)
+      try {
+        const plan = ro.merge({ target: 'mrg-target', sources: ['mrg-src'], dryRun: true, criticalKeys: ['mrg-src'] })
+        assert.deepEqual(plan.criticalAffected, ['mrg-src'])
+        assert.throws(
+          () => ro.merge({ target: 'mrg-target', sources: ['mrg-src'], criticalKeys: ['mrg-src'], forceCritical: true }),
+          /merge: la conexion es read-only/
+        )
+      } finally {
+        ro.close()
+      }
+
+      assert.deepEqual(rawAt(SNAPSHOT), before)
     })
   })
 })

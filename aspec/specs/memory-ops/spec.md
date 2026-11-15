@@ -536,8 +536,9 @@ El sistema NO SHALL crear un comando `memory maintenance`.
 
 ### Requirement: Merge de nodos por supersesión
 
-El sistema SHALL exponer un método de merge en el engine que reciba `target`, `sources` y `dryRun`, y que
-superseda cada source hacia el target sin crear nodos ni contenido nuevo.
+El sistema SHALL exponer un método de merge en el engine que reciba `target`, `sources`,
+`dryRun`, `criticalKeys` y `forceCritical`, y que superseda cada source hacia el target sin crear
+nodos ni contenido nuevo.
 
 El contrato SHALL ser:
 
@@ -563,6 +564,19 @@ El contrato SHALL ser:
   objetos nuevos en `sqlite_master`.
 - Ningún nodo cuya `memory_key` no esté en `sources` SHALL ser modificado; en particular
   `node-test-scope-explicit-paths` SHALL permanecer intacta en todo merge que no la nombre.
+- El método NO SHALL leer `.ancletorc`: el conjunto de `memory_key` críticas SHALL llegar
+  inyectado por el llamador. El riesgo SHALL ser la intersección entre ese conjunto y las
+  `sources` que la corrida supersedería; una clave crítica que es el target NO SHALL contar como
+  riesgo. El plan SHALL reportar `criticalAffected` con esas claves, ordenadas
+  lexicográficamente de forma determinística y sin locale.
+- Sin `dryRun`, si `criticalAffected` no está vacío y `forceCritical` no está activo, la
+  operación SHALL fallar antes de escribir ninguna fila, con un error cuyo `code` sea
+  `MEMORY_CRITICAL_KEY` y cuyo mensaje nombre cada `memory_key` afectada. La puerta SHALL evaluarse
+  dentro de la transacción `BEGIN IMMEDIATE`; el conjunto de riesgo SHALL derivarse del plan
+  calculado antes de abrirla y cada escritura SHALL revalidar por `id` que el nodo siga activo, de
+  modo que un rechazo o una carrera deje cero filas del plan aplicadas sin verificar.
+- Con `dryRun`, la operación NO SHALL bloquear por criticidad: SHALL reportar
+  `criticalAffected` con el plan, aunque no esté vacío.
 
 #### Scenario: Dry-run reporta sin escribir
 
@@ -607,10 +621,39 @@ El contrato SHALL ser:
 - **WHEN** se ejecuta un merge que no incluye `node-test-scope-explicit-paths` en `sources`
 - **THEN** ese nodo conserva su `status` y su `superseded_by` sin cambios
 
+#### Scenario: Dry-run reporta una source crítica sin bloquear
+
+- **WHEN** se invoca el merge con `dryRun` y una source tiene una `memory_key` declarada en
+  `criticalKeys`
+- **THEN** el plan reporta esa `memory_key` en `criticalAffected`
+- **AND** la operación no lanza por criticidad
+- **AND** ninguna fila cambia de estado
+
+#### Scenario: Merge real con source crítica rechaza sin escribir
+
+- **WHEN** se invoca el merge real con una source crítica y sin `forceCritical`
+- **THEN** la operación falla con `code` `MEMORY_CRITICAL_KEY`
+- **AND** el mensaje nombra la `memory_key` afectada
+- **AND** ninguna source queda superseded y el target permanece activo
+
+#### Scenario: Autorización explícita aplica el merge
+
+- **WHEN** se invoca el merge real con una source crítica y `forceCritical` activo
+- **THEN** cada source queda superseded hacia el target como en un merge sin claves críticas
+- **AND** el target permanece activo
+
+#### Scenario: Sin claves críticas el comportamiento no cambia
+
+- **WHEN** `criticalKeys` está ausente o vacío
+- **THEN** `criticalAffected` es la lista vacía
+- **AND** el merge real se comporta igual que antes de esta puerta, sin requerir autorización
+  explícita
+
 ### Requirement: Comando CLI `ancleto memory merge`
 
 El sistema SHALL exponer el subcomando
-`ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]`. `--sources` SHALL
+`ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--force-critical] [--json]`.
+`--sources` SHALL
 aceptarse como lista separada por comas. `--target` y `--sources` SHALL ser obligatorios; si falta alguno,
 el comando SHALL salir con código distinto de `0` y mostrar el uso.
 
@@ -619,8 +662,23 @@ derivado. Sin `--dry-run`, SHALL imprimir un resumen con la cantidad de nodos su
 el bloque de contexto. Ante cualquier rechazo del contrato de merge, SHALL salir con código distinto de `0`
 y un mensaje que nombre la `memory_key` y el motivo.
 
+El subcomando SHALL resolver el conjunto crítico con `readCriticalMemoryKeys` sobre la raíz del
+proyecto derivada de la base (`resolveMemoryProjectRoot(dbPath)`) y SHALL inyectarlo en la
+operación del engine. El plan SHALL incluir `criticalAffected`. Con `--dry-run`, el comando NO
+SHALL bloquear por criticidad: SHALL reportar `criticalAffected` y salir con código `0` aun cuando
+no esté vacío; `--force-critical` NO SHALL tener efecto en dry-run. Sin `--json`, el plan legible
+SHALL nombrar las claves de `criticalAffected` cuando no esté vacío.
+
+Sin `--dry-run`, si `criticalAffected` no está vacío y no se pasó `--force-critical`, el comando
+SHALL salir con código `2` sin escribir la base ni refrescar el bloque. Con `--json` SHALL emitir
+en stdout un objeto JSON parseable con `error: "critical-key-gate"` y `criticalAffected`; sin
+`--json` SHALL escribir en stderr un mensaje que nombre cada clave afectada y mencione
+`--force-critical`. Con `--force-critical`, el merge real SHALL aplicarse y SHALL conservar el
+refresco post-escritura vigente. Cualquier otro rechazo del contrato de merge SHALL conservar el
+código `1`.
+
 El subcomando SHALL aceptar `--json`. Con `--json`, SHALL imprimir un objeto JSON parseable con al menos
-`dryRun`, `target`, `sources` y `superseded`; sin `--json`, el resumen legible se mantiene.
+`dryRun`, `target`, `sources`, `superseded` y `criticalAffected`; sin `--json`, el resumen legible se mantiene.
 
 El refresco del bloque es responsabilidad de este subcomando, igual que en `import`, `gc` y `recordNode`;
 NO SHALL atribuirse al método de merge del engine. Tras una corrida real, el subcomando SHALL refrescar
@@ -644,7 +702,7 @@ repositorio.
 
 - **WHEN** se ejecuta `ancleto memory merge --dry-run --target k-target --sources k-1,k-2 --json`
 - **THEN** la salida es un objeto JSON parseable
-- **AND** incluye `dryRun: true`, `target`, `sources` y `superseded`
+- **AND** incluye `dryRun: true`, `target`, `sources`, `superseded` y `criticalAffected`
 - **AND** la base no se modifica
 
 #### Scenario: Corrida real por CLI refresca el bloque
@@ -679,6 +737,38 @@ repositorio.
 - **WHEN** se ejecuta `ancleto memory merge --target k-inexistente --sources k-1`
 - **THEN** el comando sale con código distinto de `0`
 - **AND** el mensaje nombra `k-inexistente` y el motivo del rechazo
+
+#### Scenario: Dry-run por CLI reporta la crítica afectada sin bloquear
+
+- **WHEN** se ejecuta `ancleto memory merge --dry-run --target k-target --sources k-src` y `k-src`
+  está declarada en `memory.criticalKeys`
+- **THEN** la salida incluye `k-src` en `criticalAffected`
+- **AND** el comando sale con código `0`
+- **AND** la base y el bloque de contexto no se modifican
+
+#### Scenario: Merge real con source crítica rechaza con código 2
+
+- **WHEN** se ejecuta `ancleto memory merge --target k-target --sources k-src` sin
+  `--force-critical` y `k-src` está declarada crítica
+- **THEN** el comando sale con código `2`
+- **AND** con `--json`, stdout es un objeto JSON parseable con `error: "critical-key-gate"` y
+  `criticalAffected`
+- **AND** sin `--json`, stderr nombre `k-src` y mencione `--force-critical`
+- **AND** ninguna source queda superseded
+- **AND** el bloque de contexto no se reescribe
+
+#### Scenario: `--force-critical` habilita el merge real
+
+- **WHEN** se ejecuta el mismo merge real con `--force-critical`
+- **THEN** cada source queda superseded hacia el target
+- **AND** el comando refresca el bloque de contexto como una corrida real normal
+
+#### Scenario: Sin claves críticas el comportamiento no cambia
+
+- **WHEN** `memory.criticalKeys` está ausente, no es un array o es una lista vacía
+- **THEN** `criticalAffected` es la lista vacía
+- **AND** el dry-run y el merge real se comportan igual que antes de esta puerta, sin requerir
+  `--force-critical`
 
 ### Requirement: Harness de regresión golden M01–M10
 
@@ -1107,11 +1197,12 @@ prometerse detección de paths que escapan por symlink.
 
 ### Requirement: Consolidación determinística de nodos duplicados
 
-El sistema SHALL exponer el subcomando `ancleto memory consolidate [--apply] [--json]` dentro
-de la familia existente `memory`. Sin `--apply`, el subcomando SHALL operar en dry-run por
-defecto y NO SHALL escribir en la base de datos ni en el filesystem. El subcomando SHALL
-aceptar `--json` para una salida estructurada. El subcomando SHALL ser un wrapper fino sobre
-la operación del engine y NO SHALL introducir una tool MCP nueva.
+El sistema SHALL exponer el subcomando
+`ancleto memory consolidate [--apply] [--force-critical] [--json]` dentro de la familia existente
+`memory`. Sin `--apply`, el subcomando SHALL operar en dry-run por defecto y NO SHALL escribir en
+la base de datos ni en el filesystem. El subcomando SHALL aceptar `--json` para una salida
+estructurada. El subcomando SHALL ser un wrapper fino sobre la operación del engine y NO SHALL
+introducir una tool MCP nueva.
 
 **Normalización.** Dos nodos activos SHALL considerarse duplicados exactos cuando comparten
 `type` y sus `content` normalizados son idénticos. La normalización SHALL quitar el bloque
@@ -1136,6 +1227,39 @@ los grupos SHALL aplicarse en una sola transacción atómica: si un miembro dej�
 al momento de escribir, la transacción SHALL hacer rollback total. Una segunda corrida sobre el
 mismo estado SHALL reportar cero grupos aplicables.
 
+**Puerta de criticidad.** El conjunto de `memory_key` críticas SHALL ser el declarado en
+`.ancletorc` bajo `memory.criticalKeys`, con la lectura tolerante vigente: ausente, no-array, JSON
+inválido o con entradas que no son strings SHALL equivaler a la lista vacía, y las strings vacías
+SHALL descartarse. El engine NO SHALL leer `.ancletorc`; el subcomando SHALL resolver el conjunto
+con el helper existente `readCriticalMemoryKeys` sobre la raíz derivada de la base y SHALL
+inyectarlo en la operación.
+
+El riesgo de la corrida SHALL ser la intersección entre ese conjunto y las `memory_key` que la
+corrida supersedería en los grupos exactos. Una clave crítica que queda canónica NO SHALL contar
+como riesgo, y los near-duplicates NO SHALL contar. El reporte SHALL exponer `criticalAffected`
+con esas claves, ordenadas lexicográficamente de forma determinística y sin locale.
+
+Con `--apply`, si `criticalAffected` no está vacío y no se pasó `--force-critical`, la operación
+SHALL rechazar antes de escribir ninguna fila: cero nodos modificados, cero grupos aplicados y el
+working-context derivado sin reescribir. La puerta NO SHALL omitir miembros de un grupo: o se
+aplican todos los grupos exactos o se rechaza la operación completa. El rechazo SHALL propagarse
+como un error cuyo `code` sea `MEMORY_CRITICAL_KEY` y cuyo mensaje nombre cada `memory_key`
+afectada y mencione `--force-critical` como vía explícita. La puerta SHALL evaluarse dentro de la
+transacción `BEGIN IMMEDIATE`; el conjunto de riesgo SHALL derivarse del plan calculado antes de
+abrirla y cada escritura SHALL revalidar por `id` que el nodo siga activo, de modo que un rechazo
+o una carrera deje cero filas del plan aplicadas sin verificar.
+
+Con `--force-critical` la corrida SHALL aplicar los grupos como hoy y SHALL conservar el
+comportamiento post-escritura vigente, incluido el refresco del working-context y su código de
+salida ante un fallo de refresh. El dry-run NO SHALL bloquear nunca por criticidad: SHALL reportar
+`criticalAffected` y salir con código `0` aun cuando no esté vacío; en dry-run `--force-critical`
+NO SHALL tener efecto. Sin `--json`, cuando `criticalAffected` no esté vacío, el texto humano
+SHALL nombrar esas claves. El subcomando SHALL salir con código `2` cuando `--apply` rechaza por
+esta puerta y NO SHALL escribir la base ni el bloque derivado; con `--json` SHALL emitir en
+stdout un objeto JSON parseable con `error: "critical-key-gate"` y `criticalAffected`, y sin
+`--json` SHALL escribir en stderr un mensaje que nombre las claves. Cualquier otro error de la
+operación SHALL conservar el código `1`.
+
 **Near-duplicates.** El reporte SHALL incluir, de forma informativa y separada de los grupos
 exactos, los pares de nodos activos que cumplan simultáneamente: mismo `type`, mismo `scope`,
 `content` normalizado distinto y similitud Jaccard ≥ 0,60 sobre el conjunto de tokens del
@@ -1148,9 +1272,11 @@ su `memory_key`; sus miembros SHALL ordenarse según los criterios de canónico.
 near-duplicate SHALL ordenarse por similitud descendente y, a igual similitud, por sus
 `memory_key`. El reporte SHALL identificar cada
 grupo, su canónico, sus miembros y, tras `--apply`, qué nodos fueron superseded y hacia cuál.
+El reporte SHALL incluir `criticalAffected` tanto en dry-run como en `--apply`.
 Con `--json`, la salida SHALL ser un objeto JSON parseable.
 
-**Read-only.** El engine SHALL exponer `consolidate({ dryRun = true } = {})`. En el engine
+**Read-only.** El engine SHALL exponer
+`consolidate({ dryRun = true, criticalKeys = [], forceCritical = false } = {})`. En el engine
 read-only, `consolidate` SHALL permitir sólo `dryRun: true` y SHALL rechazar una corrida real
 antes de tocar la conexión, con el mismo patrón que `merge`. El subcomando en modo dry-run
 SHALL usar la conexión read-only.
@@ -1229,6 +1355,44 @@ vistas). El conjunto de objetos de `sqlite_master` SHALL ser idéntico antes y d
 - **WHEN** se ejecuta `--apply` sobre una base con grupos exactos
 - **THEN** el conjunto de objetos de `sqlite_master` es idéntico antes y después
 - **AND** no se creó ninguna tabla ni índice
+
+#### Scenario: Dry-run reporta `criticalAffected` sin bloquear
+
+- **WHEN** se ejecuta el dry-run sobre una base donde un miembro que sería superseded tiene una
+  `memory_key` declarada en `memory.criticalKeys`
+- **THEN** el reporte incluye esa `memory_key` en `criticalAffected`
+- **AND** el comando sale con código `0`
+- **AND** ningún nodo cambia de estado y el bloque derivado no se reescribe
+
+#### Scenario: `--apply` con clave crítica afectada rechaza sin escribir
+
+- **WHEN** se ejecuta `--apply` sobre el mismo estado, sin `--force-critical`
+- **THEN** el comando sale con código `2`
+- **AND** el mensaje nombre la `memory_key` afectada y mencione `--force-critical`
+- **AND** con `--json`, stdout es un objeto JSON parseable con `error: "critical-key-gate"` y
+  `criticalAffected`
+- **AND** ningún nodo cambia `status`, `superseded_by` ni `superseded_at`
+- **AND** el bloque de contexto derivado no se reescribe
+
+#### Scenario: `--apply --force-critical` aplica los grupos
+
+- **WHEN** se ejecuta `--apply --force-critical` sobre el mismo estado
+- **THEN** los grupos exactos se aplican como en una corrida sin claves críticas
+- **AND** cada miembro no canónico queda superseded hacia su canónico
+- **AND** el comando sale con código `0` si el refresco del working-context no falla
+
+#### Scenario: Sin claves críticas el comportamiento no cambia
+
+- **WHEN** `memory.criticalKeys` está ausente, no es un array o es una lista vacía
+- **THEN** `criticalAffected` es la lista vacía
+- **AND** el dry-run y `--apply` se comportan igual que antes de esta puerta, sin requerir
+  `--force-critical`
+
+#### Scenario: Base de memoria ausente
+
+- **WHEN** se ejecuta `ancleto memory consolidate` en un directorio sin `.ancleto/memory.db`
+- **THEN** el comando sale con código `1` y un mensaje que indica que no hay memoria en el repositorio
+- **AND** no crea la base ni el bloque derivado
 
 ### Requirement: Curaduría read-only con `memory curate`
 

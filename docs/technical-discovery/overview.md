@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-15T14:34:33Z
-pluginVersion: 0.35.0
+generatedAt: 2026-11-15T23:32:12Z
+pluginVersion: 0.36.0
 skillVersion: '2.3'
 ---
 
@@ -322,6 +322,15 @@ test/                   suite node --test (content guards incluidos)
     filesystem después del commit; el literal de gramática de refs queda en `REF_GRAMMAR`. Sin cambio
     de schema, PRAGMAs persistidos, flags ni `ruleVersion`; release minor de
     `mem-05-gc-eligibility-curate-snapshot`.
+37. **Puerta de criticidad de memoria (0.36.0)**: `memory merge` y `memory consolidate --apply`
+    calculan `criticalAffected` (intersección con las sources/superseded) contra
+    `.ancletorc` → `memory.criticalKeys` y evalúan el bloqueo dentro de la misma `BEGIN IMMEDIATE`
+    que la escritura. El dry-run reporta y nunca bloquea; sin `--force-critical`, la corrida real
+    rechaza con `code: MEMORY_CRITICAL_KEY`, exit 2 y cero filas modificadas (con `--json`,
+    `{"error":"critical-key-gate","criticalAffected":[...]}`). `--force-critical` autoriza el
+    apply pero no suprime el fallo posterior del refresh; `memory consolidate` sin base sale con
+    código 1. Sin schema, PRAGMAs, flags ajenos ni `ruleVersion` nuevos; release minor de
+    `ch-09a-criticality-gate`.
 
 ## Recorrido de una instalación con tier `minimo`
 

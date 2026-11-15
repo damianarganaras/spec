@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.36.0] - 2026-11-15
+
+### Added
+- **Puerta de criticidad en `memory consolidate --apply` y `memory merge`**: ambas escrituras rechazan de forma atómica antes de escribir cuando el resultado afectaría un `memory_key` crítico. El dry-run y el apply publican `criticalAffected` con las claves afectadas, y `--force-critical` permite continuar de forma explícita. Sin el flag, el rechazo sale con exit 2 y el JSON `{"error":"critical-key-gate","criticalAffected":[...]}`.
+- **La fuente del conjunto crítico es `memory.criticalKeys` de `.ancletorc`**: una lista vacía o ausente desactiva el bloqueo.
+
+### Fixed
+- **`memory consolidate` sin base de datos sale con código 1**: el caso de DB ausente deja de reportar éxito.
+
+### Notas
+- **Downgrade**: un binario `0.35.0` ignora `--force-critical` y puede superseder una clave crítica; no hay cambio de formato persistido y `ruleVersion` queda intacto.
+
 ## [0.35.0] - 2026-11-15
 
 ### Fixed

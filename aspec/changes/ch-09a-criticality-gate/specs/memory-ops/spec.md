@@ -51,10 +51,10 @@ SHALL rechazar antes de escribir ninguna fila: cero nodos modificados, cero grup
 working-context derivado sin reescribir. La puerta NO SHALL omitir miembros de un grupo: o se
 aplican todos los grupos exactos o se rechaza la operación completa. El rechazo SHALL propagarse
 como un error cuyo `code` sea `MEMORY_CRITICAL_KEY` y cuyo mensaje nombre cada `memory_key`
-afectada y mencione `--force-critical` como vía explícita. La comparación de criticidad y las
-escrituras SHALL ocurrir dentro de la misma transacción `BEGIN IMMEDIATE`; cada escritura SHALL
-revalidar por `id` que el nodo siga activo, de modo que un rechazo o una carrera deje cero filas
-del plan aplicadas sin verificar.
+afectada y mencione `--force-critical` como vía explícita. La puerta SHALL evaluarse dentro de la
+transacción `BEGIN IMMEDIATE`; el conjunto de riesgo SHALL derivarse del plan calculado antes de
+abrirla y cada escritura SHALL revalidar por `id` que el nodo siga activo, de modo que un rechazo
+o una carrera deje cero filas del plan aplicadas sin verificar.
 
 Con `--force-critical` la corrida SHALL aplicar los grupos como hoy y SHALL conservar el
 comportamiento post-escritura vigente, incluido el refresco del working-context y su código de
@@ -238,10 +238,10 @@ El contrato SHALL ser:
   lexicográficamente de forma determinística y sin locale.
 - Sin `dryRun`, si `criticalAffected` no está vacío y `forceCritical` no está activo, la
   operación SHALL fallar antes de escribir ninguna fila, con un error cuyo `code` sea
-  `MEMORY_CRITICAL_KEY` y cuyo mensaje nombre cada `memory_key` afectada. La comparación de
-  criticidad y las escrituras SHALL ocurrir dentro de la misma transacción `BEGIN IMMEDIATE`; cada
-  escritura SHALL revalidar por `id` que el nodo siga activo, de modo que un rechazo o una carrera
-  deje cero filas del plan aplicadas sin verificar.
+  `MEMORY_CRITICAL_KEY` y cuyo mensaje nombre cada `memory_key` afectada. La puerta SHALL evaluarse
+  dentro de la transacción `BEGIN IMMEDIATE`; el conjunto de riesgo SHALL derivarse del plan
+  calculado antes de abrirla y cada escritura SHALL revalidar por `id` que el nodo siga activo, de
+  modo que un rechazo o una carrera deje cero filas del plan aplicadas sin verificar.
 - Con `dryRun`, la operación NO SHALL bloquear por criticidad: SHALL reportar
   `criticalAffected` con el plan, aunque no esté vacío.
 

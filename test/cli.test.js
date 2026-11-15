@@ -9498,6 +9498,238 @@ describe('CLI memory consolidate', () => {
   })
 })
 
+// ch-09a: puerta de criticidad en `memory consolidate` y `memory merge`. El
+// conjunto sale de `.ancletorc` -> `memory.criticalKeys`; el dry-run solo
+// reporta, el rechazo sale 2 sin escribir y `--force-critical` aplica.
+describe('CLI memory criticality gate (ch-09a)', () => {
+  const sha = (file) => createHash('sha256').update(readFileSync(file)).digest('hex')
+  const ctxPath = (dir) => join(dir, '.ancleto', 'working-context.md')
+
+  function states(dbPath) {
+    const db = new DatabaseSync(dbPath)
+    try {
+      return db.prepare('SELECT memory_key, status, superseded_by FROM memory_nodes ORDER BY memory_key').all()
+    } finally {
+      db.close()
+    }
+  }
+
+  function nodeId(dbPath, memoryKey) {
+    const db = new DatabaseSync(dbPath)
+    try {
+      return db.prepare('SELECT id FROM memory_nodes WHERE memory_key = ?').get(memoryKey).id
+    } finally {
+      db.close()
+    }
+  }
+
+  function declareCritical(dir, keys) {
+    writeFileSync(join(dir, '.ancletorc'), JSON.stringify({ memory: { criticalKeys: keys } }) + '\n')
+  }
+
+  function seedConsolidate(dir) {
+    const dbPath = join(dir, '.ancleto', 'memory.db')
+    const eng = createMemoryEngine(dbPath)
+    eng.recordNode({ memory_key: 'cons-a', type: 'rule', scope: 'project', content: 'misma regla duplicada', createdAt: '2026-01-01T00:00:00.000Z' })
+    eng.recordNode({ memory_key: 'cons-b', type: 'rule', scope: 'project', content: 'misma regla duplicada', createdAt: '2026-01-02T00:00:00.000Z' })
+    eng.close()
+    return dbPath
+  }
+
+  function seedMerge(dir) {
+    const dbPath = join(dir, '.ancleto', 'memory.db')
+    const eng = createMemoryEngine(dbPath)
+    eng.recordNode({ memory_key: 'mrg-target', type: 'rule', scope: 'project', content: 'target vigente' })
+    eng.recordNode({ memory_key: 'mrg-src', type: 'rule', scope: 'project', content: 'source a superseder' })
+    eng.close()
+    return dbPath
+  }
+
+  it('consolidate dry-run reporta criticalAffected sin mutar la base ni el working-context', () => {
+    withDir((dir) => {
+      const dbPath = seedConsolidate(dir)
+      declareCritical(dir, ['cons-a'])
+      const beforeStates = states(dbPath)
+      const before = sha(dbPath)
+
+      const human = run(['memory', 'consolidate'], dir)
+      assert.equal(human.status, 0, human.stderr)
+      assert.match(human.stdout, /claves criticas afectadas: cons-a/)
+
+      const json = run(['memory', 'consolidate', '--json'], dir)
+      assert.equal(json.status, 0, json.stderr)
+      const payload = JSON.parse(json.stdout)
+      assert.equal(payload.dryRun, true)
+      assert.deepEqual(payload.superseded, ['cons-a'])
+      assert.deepEqual(payload.criticalAffected, ['cons-a'])
+
+      assert.deepEqual(states(dbPath), beforeStates)
+      assert.equal(sha(dbPath), before, 'el dry-run no muta el .db')
+      assert.equal(existsSync(ctxPath(dir)), false, 'el dry-run no escribe el bloque derivado')
+    })
+  })
+
+  it('consolidate --apply sin --force-critical sale 2, nombra la clave y no escribe', () => {
+    withDir((dir) => {
+      const dbPath = seedConsolidate(dir)
+      declareCritical(dir, ['cons-a'])
+      const beforeStates = states(dbPath)
+      const before = sha(dbPath)
+
+      const r = run(['memory', 'consolidate', '--apply'], dir)
+
+      assert.equal(r.status, 2, r.stderr)
+      assert.match(r.stderr, /cons-a/)
+      assert.match(r.stderr, /--force-critical/)
+      assert.doesNotMatch(r.stdout, /consolidate OK/)
+      assert.deepEqual(states(dbPath), beforeStates)
+      assert.equal(sha(dbPath), before, 'el rechazo no muta el .db')
+      assert.equal(existsSync(ctxPath(dir)), false, 'el rechazo no refresca el bloque')
+    })
+  })
+
+  it('consolidate --apply sin --force-critical --json emite el error en stdout', () => {
+    withDir((dir) => {
+      const dbPath = seedConsolidate(dir)
+      declareCritical(dir, ['cons-a'])
+      const before = sha(dbPath)
+
+      const r = run(['memory', 'consolidate', '--apply', '--json'], dir)
+
+      assert.equal(r.status, 2, r.stderr)
+      assert.deepEqual(JSON.parse(r.stdout), { error: 'critical-key-gate', criticalAffected: ['cons-a'] })
+      assert.equal(r.stderr.trim(), '', 'con --json el rechazo no escribe stderr')
+      assert.equal(sha(dbPath), before)
+    })
+  })
+
+  it('consolidate --apply --force-critical aplica y conserva el fallo documentado del refresh', () => {
+    withDir((dir) => {
+      const dbPath = seedConsolidate(dir)
+      declareCritical(dir, ['cons-a'])
+      const canonicalId = nodeId(dbPath, 'cons-b')
+
+      const r = run(['memory', 'consolidate', '--apply', '--force-critical'], dir)
+
+      // La rule critica ya no existe como activa: el refresh posterior falla con
+      // exit 1 y la base queda mutada (riesgo residual documentado en el proposal).
+      assert.equal(r.status, 1, r.stderr)
+      assert.match(r.stderr, /SI se aplico en la base/)
+      assert.match(r.stderr, /cons-a/)
+      const rows = Object.fromEntries(states(dbPath).map((row) => [row.memory_key, row]))
+      assert.equal(rows['cons-a'].status, 'superseded')
+      assert.equal(rows['cons-a'].superseded_by, canonicalId)
+      assert.equal(rows['cons-b'].status, 'active')
+      assert.equal(existsSync(ctxPath(dir)), false, 'el refresh fallido no escribe el bloque')
+    })
+  })
+
+  it('merge dry-run reporta criticalAffected en humano y JSON sin escribir', () => {
+    withDir((dir) => {
+      const dbPath = seedMerge(dir)
+      declareCritical(dir, ['mrg-src'])
+      const beforeStates = states(dbPath)
+      const before = sha(dbPath)
+
+      const human = run(['memory', 'merge', '--dry-run', '--target', 'mrg-target', '--sources', 'mrg-src'], dir)
+      assert.equal(human.status, 0, human.stderr)
+      assert.match(human.stdout, /claves criticas afectadas: mrg-src/)
+
+      const json = run(['memory', 'merge', '--dry-run', '--target', 'mrg-target', '--sources', 'mrg-src', '--json'], dir)
+      assert.equal(json.status, 0, json.stderr)
+      const payload = JSON.parse(json.stdout)
+      assert.equal(payload.dryRun, true)
+      assert.deepEqual(payload.sources, ['mrg-src'])
+      assert.deepEqual(payload.criticalAffected, ['mrg-src'])
+
+      assert.deepEqual(states(dbPath), beforeStates)
+      assert.equal(sha(dbPath), before, 'el dry-run no muta el .db')
+      assert.equal(existsSync(ctxPath(dir)), false)
+    })
+  })
+
+  it('merge real sin --force-critical sale 2 y no escribe ni refresca', () => {
+    withDir((dir) => {
+      const dbPath = seedMerge(dir)
+      declareCritical(dir, ['mrg-src'])
+      const beforeStates = states(dbPath)
+      const before = sha(dbPath)
+
+      const human = run(['memory', 'merge', '--target', 'mrg-target', '--sources', 'mrg-src'], dir)
+      assert.equal(human.status, 2, human.stderr)
+      assert.match(human.stderr, /mrg-src/)
+      assert.match(human.stderr, /--force-critical/)
+      assert.doesNotMatch(human.stdout, /merge OK/)
+
+      const json = run(['memory', 'merge', '--target', 'mrg-target', '--sources', 'mrg-src', '--json'], dir)
+      assert.equal(json.status, 2, json.stderr)
+      assert.deepEqual(JSON.parse(json.stdout), { error: 'critical-key-gate', criticalAffected: ['mrg-src'] })
+      assert.equal(json.stderr.trim(), '')
+
+      assert.deepEqual(states(dbPath), beforeStates)
+      assert.equal(sha(dbPath), before)
+      assert.equal(existsSync(ctxPath(dir)), false, 'el rechazo no refresca el bloque')
+    })
+  })
+
+  it('merge --force-critical aplica y conserva el fallo documentado del refresh', () => {
+    withDir((dir) => {
+      const dbPath = seedMerge(dir)
+      declareCritical(dir, ['mrg-src'])
+      const targetId = nodeId(dbPath, 'mrg-target')
+
+      const r = run(['memory', 'merge', '--target', 'mrg-target', '--sources', 'mrg-src', '--force-critical'], dir)
+
+      assert.equal(r.status, 1, r.stderr)
+      assert.match(r.stderr, /SI se aplico en la base/)
+      assert.match(r.stderr, /mrg-src/)
+      const rows = Object.fromEntries(states(dbPath).map((row) => [row.memory_key, row]))
+      assert.equal(rows['mrg-src'].status, 'superseded')
+      assert.equal(rows['mrg-src'].superseded_by, targetId)
+      assert.equal(rows['mrg-target'].status, 'active')
+    })
+  })
+
+  it('sin claves criticas (ausente o []) el comportamiento previo se conserva', () => {
+    withDir((dir) => {
+      seedConsolidate(dir)
+      const r = run(['memory', 'consolidate', '--apply', '--json'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      const payload = JSON.parse(r.stdout)
+      assert.equal(payload.dryRun, false)
+      assert.deepEqual(payload.criticalAffected, [])
+      assert.equal(existsSync(ctxPath(dir)), true, 'sin claves el refresh si escribe el bloque')
+    })
+    withDir((dir) => {
+      const dbPath = seedMerge(dir)
+      declareCritical(dir, [])
+      const r = run(['memory', 'merge', '--target', 'mrg-target', '--sources', 'mrg-src', '--json'], dir)
+      assert.equal(r.status, 0, r.stderr)
+      assert.deepEqual(JSON.parse(r.stdout).criticalAffected, [])
+      assert.equal(states(dbPath).find((row) => row.memory_key === 'mrg-src').status, 'superseded')
+    })
+  })
+
+  it('regresion: una clave critica fantasma sigue saliendo 1, no 2', () => {
+    withDir((dir) => {
+      seedConsolidate(dir)
+      declareCritical(dir, ['cons-fantasma'])
+      const r = run(['memory', 'consolidate', '--apply'], dir)
+      assert.equal(r.status, 1, 'la clave fantasma no esta entre los nodos afectados: la puerta no la captura')
+      assert.match(r.stderr, /cons-fantasma/)
+      assert.doesNotMatch(r.stdout, /consolidate OK/)
+    })
+    withDir((dir) => {
+      seedMerge(dir)
+      declareCritical(dir, ['mrg-fantasma'])
+      const r = run(['memory', 'merge', '--target', 'mrg-target', '--sources', 'mrg-src'], dir)
+      assert.equal(r.status, 1)
+      assert.match(r.stderr, /mrg-fantasma/)
+      assert.doesNotMatch(r.stdout, /merge OK/)
+    })
+  })
+})
+
 // Guard central de `--help`/`-h` para subcomandos que mutan estado o corren largo.
 // La invariante es doble: uso en STDOUT con exit 0 (sin handler) y cero escrituras en el
 // proyecto; los read-only y la ayuda global quedan fuera y no cambian.
@@ -9724,8 +9956,8 @@ describe('CLI subcommand --help guards', () => {
         'ancleto: uso: ancleto memory import <archivo> [--dry-run] [--json]',
         'ancleto: uso: ancleto memory gc [--dry-run] [--days <n>]',
         'ancleto: uso: ancleto memory snapshot --out <archivo.db> [--force] [--json]',
-        'ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--json]',
-        'ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--json]',
+        'ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--force-critical] [--json]',
+        'ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--force-critical] [--json]',
         'ancleto: uso: ancleto memory curate [--json] [--strict]'
       ]
       assert.deepEqual(r.stderr.split(/\r?\n/).filter(Boolean), expected)

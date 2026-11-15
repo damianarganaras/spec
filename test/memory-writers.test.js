@@ -18,7 +18,8 @@ import {
   MEMORY_WRITE_RETRY_POLICY,
   MemoryDatabaseBusyError,
   openDatabase,
-  runImmediateTransaction
+  runImmediateTransaction,
+  runReadTransaction
 } from '../src/core/memory/database.js'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath } from '../src/core/memory/engine.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
@@ -810,6 +811,76 @@ describe('ch-04 — serializacion de escritores de memoria', () => {
         ['ausente', { attempts: 2 }]
       ]) {
         expectBusyAgainstRetainedLock(policy, `backoff-${label}`)
+      }
+    })
+  })
+
+  // MEM-05c/05e: la transaccion de lectura agrupa lecturas bajo un snapshot. Se
+  // verifica sobre una conexion read-only real en WAL, sin procesos hijos y con
+  // una segunda conexion del mismo proceso para el COMMIT externo.
+  describe('helper runReadTransaction - snapshot de lectura', () => {
+    it('lee estable ante un COMMIT externo, rechaza escrituras y no deja transaccion abierta', () => {
+      const dir = makeTempDir()
+      const dbPath = seedEmptyDatabase(dir)
+      assertTemporaryDatabase(dbPath)
+
+      const seed = createMemoryEngine(dbPath)
+      try {
+        seed.recordNode({ memory_key: 'snap-seed', type: 'rule', scope: 'project', content: 'lectura estable' })
+      } finally {
+        seed.close()
+      }
+
+      const reader = openDatabase(dbPath, { readonly: true })
+      try {
+        assert.equal(reader.prepare('PRAGMA journal_mode').get().journal_mode, 'wal')
+
+        const cut = runReadTransaction(reader, () => {
+          const first = reader.prepare('SELECT count(*) AS n FROM memory_nodes').get().n
+          // COMMIT externo en otra conexion mientras el snapshot sigue abierto.
+          const other = new DatabaseSync(dbPath)
+          try {
+            other.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+              VALUES (?, 'snap-late', 'rule', 'project', 'active', 'escritura externa', '', 'test', 1, ?)`)
+              .run(randomUUID(), new Date().toISOString())
+          } finally {
+            other.close()
+          }
+          const second = reader.prepare('SELECT count(*) AS n FROM memory_nodes').get().n
+          return { first, second }
+        })
+        assert.deepEqual(cut, { first: 1, second: 1 }, 'ambas lecturas ven el mismo snapshot')
+        assert.equal(reader.isTransaction, false)
+        assert.equal(
+          reader.prepare('SELECT count(*) AS n FROM memory_nodes').get().n,
+          2,
+          'fuera de la transaccion la escritura externa ya es visible'
+        )
+
+        // Un INSERT dentro de la transaccion read-only falla y hace ROLLBACK.
+        let writeError = null
+        assert.throws(
+          () =>
+            runReadTransaction(reader, () => {
+              reader.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+                VALUES (?, 'snap-write', 'rule', 'project', 'active', 'no debe escribirse', '', 'test', 1, ?)`)
+                .run(randomUUID(), new Date().toISOString())
+            }),
+          (error) => {
+            writeError = error
+            return true
+          }
+        )
+        assert.match(writeError.message, /attempt to write a readonly database/)
+        assert.equal(reader.isTransaction, false, 'el error no deja transaccion abierta')
+
+        // Excepcion no SQL: ROLLBACK y la conexion queda reutilizable.
+        const boom = new Error('boom en el cuerpo')
+        assert.throws(() => runReadTransaction(reader, () => { throw boom }), (error) => error === boom)
+        assert.equal(reader.isTransaction, false)
+        assert.equal(runReadTransaction(reader, () => 'reusable'), 'reusable')
+      } finally {
+        reader.close()
       }
     })
   })

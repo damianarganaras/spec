@@ -29,8 +29,7 @@ como instante SHALL ser RETENIDA. `julianday()` sobre un valor no parseable prod
 NO SHALL tratarse como elegible ni ser purgada, en dry-run ni en purge real: el sistema NUNCA SHALL
 purgar por un valor que no puede interpretar.
 
-**Estados fuera del alcance.** Los nodos con `status='active'` NO SHALL ser afectados bajo ninguna
-condición. El valor `deleted` del CHECK de `status` es un estado RESERVADO que ningún camino de
+**Estados fuera del alcance.** El valor `deleted` del CHECK de `status` es un estado RESERVADO que ningún camino de
 escritura produce; `gc` SHALL ignorarlo en la selección, en el borrado y en el conteo, y NO SHALL
 interpretarlo como `superseded` ni como candidato a purga. Este change NO SHALL agregar ni activar
 escrituras de `status='deleted'`.

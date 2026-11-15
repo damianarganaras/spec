@@ -27,7 +27,7 @@ es FASE 9).
   cualquier error, `ROLLBACK` sólo si hay transacción activa y propagar el error original.
   **Hecho cuando:** el helper no reintenta, no escribe filas, no usa `BEGIN IMMEDIATE` y devuelve el
   valor de `fn`.
-- [ ] **1.2** Verificar el helper sobre una conexión `readOnly: true` en WAL.
+- [x] **1.2** Verificar el helper sobre una conexión `readOnly: true` en WAL.
   **Hecho cuando:** dos lecturas dentro de la transacción son estables ante un `COMMIT` externo y un
   `INSERT` intentado dentro falla con "attempt to write a readonly database" sin dejar transacción
   abierta.
@@ -83,26 +83,26 @@ es FASE 9).
 
 ## Fase 5 — Tests y validación
 
-- [ ] **5.1** En `test/memory-engine.test.js`, agregar el caso de frontera de segundo: un nodo con
+- [x] **5.1** En `test/memory-engine.test.js`, agregar el caso de frontera de segundo: un nodo con
   `superseded_at` en el segundo del cutoff y con milisegundos no se purga ni se cuenta en dry-run.
   **Hecho cuando:** el test falla con la comparación textual previa y pasa con `julianday`.
-- [ ] **5.2** En `test/memory-engine.test.js`, cubrir formatos mixtos con y sin milisegundos (mismo
+- [x] **5.2** En `test/memory-engine.test.js`, cubrir formatos mixtos con y sin milisegundos (mismo
   instante ⇒ mismo veredicto y paridad dry-run/purge), fecha no parseable retenida, `deleted`
   reservado ignorado y `sqlite_master` idéntico antes y después de GC.
   **Hecho cuando:** cada caso tiene una aserción discriminante y no escribe en `.ancleto/memory.db`.
-- [ ] **5.3** En `test/curation.test.js`, cubrir el snapshot único: con un `COMMIT` externo entre la
+- [x] **5.3** En `test/curation.test.js`, cubrir el snapshot único: con un `COMMIT` externo entre la
   lectura de nodos y la detección de duplicados, el nodo nuevo no aparece en ninguna sección.
   **Hecho cuando:** el oráculo es determinista (sin sleeps ciegos), usa base temporal y verifica que
   no queda transacción abierta al volver.
-- [ ] **5.4** En `test/memory-writers.test.js`, verificar `runReadTransaction` sobre la conexión
+- [x] **5.4** En `test/memory-writers.test.js`, verificar `runReadTransaction` sobre la conexión
   read-only: lectura estable ante un `COMMIT` externo y `INSERT` rechazado.
   **Hecho cuando:** el test usa `mkdtemp`, no depende del cwd y limpia su directorio.
-- [ ] **5.5** Ejecutar `npm run lint`.
+- [x] **5.5** Ejecutar `npm run lint`.
   **Hecho cuando:** termina sin errores.
-- [ ] **5.6** Ejecutar
+- [x] **5.6** Ejecutar
   `node --test test/memory-engine.test.js test/curation.test.js test/memory-writers.test.js`.
   **Hecho cuando:** los tests acotados terminan verdes.
-- [ ] **5.7** Ejecutar `npm test`.
+- [x] **5.7** Ejecutar `npm test`.
   **Hecho cuando:** la suite completa termina sin fallos nuevos.
-- [ ] **5.8** Registrar en el resumen de cierre `format: not-configured` y `typecheck: n/a`.
+- [x] **5.8** Registrar en el resumen de cierre `format: not-configured` y `typecheck: n/a`.
   **Hecho cuando:** ambas omisiones quedan declaradas, sin inventar un formatter ni un typechecker.

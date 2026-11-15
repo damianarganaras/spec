@@ -9510,6 +9510,7 @@ describe('CLI memory consolidate', () => {
       assert.match(merge.stderr, /no hay memoria en este repo/)
 
       assert.equal(existsSync(join(dir, '.ancleto', 'memory.db')), false)
+      assert.equal(existsSync(join(dir, '.ancleto', 'working-context.md')), false, 'sin base no se crea el bloque derivado')
     })
   })
 })
@@ -9632,6 +9633,7 @@ describe('CLI memory criticality gate (ch-09a)', () => {
       assert.equal(r.status, 1, r.stderr)
       assert.match(r.stderr, /SI se aplico en la base/)
       assert.match(r.stderr, /cons-a/)
+      assert.doesNotMatch(r.stdout, /consolidate OK/, 'el refresh fallido no se reporta como exito')
       const rows = Object.fromEntries(states(dbPath).map((row) => [row.memory_key, row]))
       assert.equal(rows['cons-a'].status, 'superseded')
       assert.equal(rows['cons-a'].superseded_by, canonicalId)

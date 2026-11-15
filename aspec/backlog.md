@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-13 (0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
+> Última actualización: 2026-11-15 (propuesta `jev-spec-advisory-judge` agregada para review — juez semántico opcional JEV; **sin implementar**; ver "Propuestas en revisión"). 2026-11-13 (0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
 
 ## Prioridad de ejecución
 
@@ -14,6 +14,34 @@
 7. **Deuda declarada**: MEM-05c–e pendientes, MEM-05f cerrado, MEM-05g diferido, CH-09a–g pendientes, CH-09h refutado.
 
 > Nota: el paso 2 (0.21.0) quedó **cerrado en 0.23.0** por `portability-legacy-bundle-advisory`; su mitad `.opencode/*` fue refutada. La nota histórica de diferirlo ya no aplica.
+
+## Propuestas en revisión (sin change aprobado)
+
+### `jev-spec-advisory-judge` — juez semántico opcional (JEV), 2026-11-15
+
+Propuesta: `aspec/changes/jev-spec-advisory-judge/proposal.md` (sólo `proposal.md`; sin `design.md`,
+`tasks.md` ni delta). **Estado: pendiente de review; no implementada.**
+
+- **Qué propone:** un adaptador opcional y advisory a `jev-spec` (Jev de TypeSafe) para que cualquier
+  repo que use ancleto pueda correr preguntas `noul`/`choice`/`score` por requirement y obtener
+  probabilidades calibradas en 70–400 ms, en lugar de depender sólo del juicio del agente en
+  `/cleto-verify` (`skills/ancleto-verify/SKILL.md:37` es búsqueda de keywords).
+- **Cómo:** binario externo pinneado resuelto por `PATH`/`npx` (mismo patrón que Repomix,
+  `src/cli/index.js:2589-2597`); `ancleto judge` read-only; `judge.enabled` en `.ancletorc` default
+  `false`; exit `0` pass/skip · `1` assertion fallida · `2` setup roto; `--require` para CI. Sin red
+  en `src/` y sin dependencias de runtime.
+- **Dónde NO:** archive/conformidad (`aspec/specs/prompt-contracts/spec.md:1222-1228` prohíbe un
+  segundo gate y presentar la relevancia como prueba mecánica), `ancleto check`, y deltas de changes
+  activos en v1 (sus rutas se mueven al archivar).
+- **Antes de implementar:** spike con 1 capability, 5 rubrics en inglés, 2 probes que **fallen**
+  contra código roto a propósito, y medición de costo/latencia. Sin probes verdes no se habilita
+  `--require`.
+- **Decisiones que necesita el review (6):** nombre del comando (`judge` vs `verify --judge` vs
+  `/cleto-judge`); default de `enabled`; pin del tool vs `jev-latest`; capability nueva `spec-judge`
+  vs delta de `cli-diagnostics`; alcance v1 (canónicas vs `--change`); y si el producto acepta una
+  feature que requiere una cuenta paga de un tercero.
+- **Si se aprueba:** `design.md` + `specs/spec-judge/spec.md` + `tasks.md`; release minor (nuevo
+  subcomando + superficie de skills), con `format`/`typecheck` no configurados como hoy.
 
 > **Actualización 0.22.1 (2026-11-06):** se cerró la deuda residual de CH-06a (ítems 1–4) y se documentó el ítem 5 como exclusión explícita; también quedó fijado el orden archive → merge. CH-06b sigue **diferido** (proyección de tests incompleta, sin consumidor probado) y CH-07 sigue **bloqueado por CH-00**.
 

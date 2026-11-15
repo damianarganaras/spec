@@ -519,4 +519,6 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **CH-09f:** `memory curate` corre bajo un único snapshot de lectura read-only.
 - **CH-09g:** literal de gramática de refs con fuente única (`REF_GRAMMAR`); texto y exit codes sin cambio.
 - **Compatibilidad:** sin cambios de schema ni de formato persistido; un binario 0.34.0 lee el mismo estado.
-- **Release:** datos de publicación (tag `v0.35.0`, sha del tag, run de publish y npm) PENDIENTES — se completan al publicar; aquí no se afirman.
+- **Release:** tag **anotado** `v0.35.0` (objeto `e006834`) → merge commit `0363110`, fecha 2026-11-15. Merge de integración previo `ebd6d62` (integró `origin/main` `b9bd486` en `development`).
+- **Publish:** workflow `Publish` run id `43726253401`, conclusion `success` — https://github.com/damianarganaras/spec/actions/runs/43726253401
+- **npm:** `@ancleto/spec@0.35.0`, dist-tags `latest: 0.35.0`, gitHead `036311030da39cf3d8ae4ee2e27d1d229331026b`; tarball `https://registry.npmjs.org/@ancleto/spec/-/spec-0.35.0.tgz` responde HTTP 200.

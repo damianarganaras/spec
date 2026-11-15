@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-14T00:48:16Z
-pluginVersion: 0.34.0
+generatedAt: 2026-11-15T14:34:33Z
+pluginVersion: 0.35.0
 skillVersion: '2.3'
 ---
 
@@ -313,6 +313,15 @@ test/                   suite node --test (content guards incluidos)
     y abre `createReadonlyMemoryEngine`; no escribe, no refresca el working-context y, si la base no
     existe, reporta `databasePresent: false` sin crearla. Sin cambios de schema, PRAGMAs, `ruleVersion`
     ni dependencias; release minor de `ch-08-memory-import-dry-run-classified`.
+36. **GC por instante y snapshot de curaduría (0.35.0)**: los tres statements de `memory gc`
+    (selección, borrado y desvinculación de `superseded_by`) comparan
+    `julianday(COALESCE(superseded_at, created_at)) < julianday(?)` contra un cutoff único; una fecha
+    no parseable se retiene y `status='deleted'` es un estado reservado que ningún writer produce y
+    que no se purga ni cuenta. `memory curate` compone sus dos lecturas (nodos activos y duplicados
+    exactos) dentro de `runReadTransaction` (`BEGIN DEFERRED` … `COMMIT`) y resuelve refs contra el
+    filesystem después del commit; el literal de gramática de refs queda en `REF_GRAMMAR`. Sin cambio
+    de schema, PRAGMAs persistidos, flags ni `ruleVersion`; release minor de
+    `mem-05-gc-eligibility-curate-snapshot`.
 
 ## Recorrido de una instalación con tier `minimo`
 

@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la selección de tests afectados, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, seleccion-de-tests, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/discovery-glob.js", "src/core/discovery-state.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection"]
-generatedAt: 2026-11-14T00:48:16Z
-pluginVersion: 0.34.0
+generatedAt: 2026-11-15T14:34:33Z
+pluginVersion: 0.35.0
 skillVersion: '2.3'
 ---
 
@@ -54,7 +54,9 @@ plan se computa en memoria sobre el affected-set. **0.33.0–0.33.1 tampoco toca
 serialización de escritores y el rebuild de doctor (0.33.1) viven en `src/core/memory/**`, fuera
 del discovery; `DEFAULT_IGNORES`, `outputDir`, `packDiscovery`, el writer, la forma del estado y
 `ruleVersion: 2` siguen intactos. **0.34.0** tampoco la toca: el dry-run clasificado del import vive
-en `src/core/memory/**` y `src/cli/index.js` (`memoryImport`), fuera del discovery.
+en `src/core/memory/**` y `src/cli/index.js` (`memoryImport`), fuera del discovery. **0.35.0** tampoco:
+la elegibilidad de GC por instante, el snapshot de lectura de `curate` y `REF_GRAMMAR` viven en
+`src/core/memory/{engine,database,curation}.js`, fuera de esta unidad.
 
 ## Recorrido relevante
 
@@ -340,10 +342,10 @@ vacía; en cualquier otro caso imprime las razones y corre la suite completa dec
   filtro a `documentation/**` y `audit logs/**`; un estado legacy sin `fileHashes` sigue
   `STALE`/`minor`.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 873 fuentes, 166.322 B y ~41k tokens, tier `minimo` (comprimido), con 33 entradas
-  de archivo en el cuerpo. El `.discovery-map.json` observado reporta 907 archivos (aspec 327,
+- **Pack actual**: 879 fuentes, 170.793 B y ~42k tokens, tier `minimo` (comprimido), con 33 entradas
+  de archivo en el cuerpo. El `.discovery-map.json` observado reporta 913 archivos (aspec 333,
   `.opencode` 66, src 22, test 33, scripts 2, docs 21, documentation 340, audit logs 9); el estado
-  `.discovery-state.json` lista 873 fuentes e incluye 674 entradas `documentation/` + 18
+  `.discovery-state.json` lista 879 fuentes e incluye 674 entradas `documentation/` + 18
   `audit logs/` entre `sources` y `fileHashes`, efímeras desde 0.29.0. Las 24 rutas
   `test/*.test.js` ya no figuran en `sources` por `discovery.exclude` (0.30.1); los 8 fixtures de
   `test/fixtures/**` siguen incluidos.

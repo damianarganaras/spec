@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor, la promoción de decisiones al archivar y la serialización de escritores concurrentes (MEMORY_DB_BUSY) y el rebuild de doctor en transacción inmediata (0.33.1) y el import con dry-run clasificado (0.34.0)"
-covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode, serialización de escritores, MEMORY_DB_BUSY, retry acotado, runImmediateTransaction, doctor-rebuild, import-dry-run, decideImportEntry, databasePresent, clasificacion-read-only]
-sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization", "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified", "test/memory-writers.test.js", "test/fixtures/memory-writer-child.mjs", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-14T00:48:16Z
-pluginVersion: 0.34.0
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor, la promoción de decisiones al archivar y la serialización de escritores concurrentes (MEMORY_DB_BUSY) y el rebuild de doctor en transacción inmediata (0.33.1), el import con dry-run clasificado (0.34.0) y el GC por instante con snapshot de lectura en curate (0.35.0)"
+covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode, serialización de escritores, MEMORY_DB_BUSY, retry acotado, runImmediateTransaction, runReadTransaction, doctor-rebuild, import-dry-run, decideImportEntry, databasePresent, clasificacion-read-only, gc-julianday, fechas-no-parseables, deleted-reservado, curate-snapshot, REF_GRAMMAR]
+sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization", "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified", "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot", "test/memory-writers.test.js", "test/memory-engine.test.js", "test/curation.test.js", "test/fixtures/memory-writer-child.mjs", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
+generatedAt: 2026-11-15T14:34:33Z
+pluginVersion: 0.35.0
 skillVersion: '2.3'
 ---
 
@@ -46,7 +46,12 @@ la selección de tests (`src/core/test-selection.js`) es read-only y no abre `.a
 `MEMORY_DB_BUSY`; schema, PRAGMAs persistidos, recall y ops no cambian. **0.33.1 suma el sexto
 camino**: `memory doctor --rebuild` ejecuta rebuild FTS5 + integrity-check dentro del mismo helper
 (`doctor-rebuild`) y reporta `MEMORY_DB_BUSY` en el detalle; el `doctor` por defecto sigue
-read-only (ver "Escritura y supersesión").
+read-only (ver "Escritura y supersesión"). **0.34.0** suma el import con `--dry-run`/`--json` sin
+tocar el esquema. **0.35.0 sí corrige el motor**: `memory gc` resuelve la elegibilidad por instante
+con `julianday` y retiene fechas no parseables, `status='deleted'` queda documentado como reservado,
+`memory curate` compone su reporte bajo un único snapshot de lectura y el literal de gramática de
+refs pasa a una constante exportada (`REF_GRAMMAR`); sin cambio de schema ni de formato persistido
+(ver "GC por instante y snapshot de curaduría").
 
 ## Recorrido relevante
 
@@ -103,12 +108,40 @@ read-only (ver "Escritura y supersesión").
 - El `tombstone` no se persiste: el esquema no tiene `deleted_at` y no se agrega. `reindex` desde
   proposals y un gate fail-closed en `import` se refutaron (ver `decisions.md`).
 
+### GC por instante y snapshot de curaduría (0.35.0)
+
+- **Elegibilidad por instante**: `gcSuperseded({ days, dryRun })` calcula un cutoff único y los tres
+  statements (`gcSelect`, `gcDelete` y el DETACH de `superseded_by`) comparan
+  `julianday(COALESCE(superseded_at, created_at)) < julianday(?)`. La comparación textual anterior
+  podía purgar hasta casi 1 s antes de tiempo cuando `superseded_at` traía milisegundos y el cutoff
+  no (`'.' < 'Z'`). Una fila con fecha no parseable queda con `julianday(...) = NULL` y se retiene:
+  nunca se purga por un valor que no puede interpretar.
+- **`deleted` reservado**: el CHECK de `status` admite `deleted`, pero ningún camino de escritura lo
+  produce; `gc` lo ignora en selección, borrado y conteo. No se agregó ninguna escritura de ese
+  estado.
+- **Snapshot único en `curate`**: `curateMemory` exige `engine.readTransaction(fn)` y ejecuta
+  `listNodes({ status: 'active' })` y `consolidate({ dryRun: true, includeNearDuplicates: false })`
+  dentro de una única `runReadTransaction` (`BEGIN DEFERRED` … `COMMIT`, `ROLLBACK` ante error). La
+  transacción no escribe, no migra y no adquiere `runImmediateTransaction` ni su retry. Las refs
+  contra el filesystem se resuelven después del commit, así el I/O no mantiene el snapshot abierto;
+  bajo WAL no bloquea a otros lectores ni escritores.
+- **Gramática de refs con fuente única**: `REF_GRAMMAR = { ref: 'refs:', reason: 'inválido
+  (gramática)' }` se exporta desde `engine.js` y lo consumen `inspectRefs` (doctor) y `curation.js`;
+  el texto, el motivo y los exit codes observables no cambian.
+- **Invariantes**: sin cambios de schema, del formato persistido de `superseded_at`/`created_at`, de
+  PRAGMAs, del statement `supersede`, de los cinco caminos de escritura ni de `ruleVersion`; GC no
+  crea índices ni otros objetos de schema (se acepta `SCAN memory_nodes`).
+- **Oráculo**: `test/memory-engine.test.js`, `test/curation.test.js` y `test/memory-writers.test.js`
+  (frontera de segundo, formatos mixtos con y sin milisegundos, fecha no parseable, `deleted`
+  reservado, snapshot único y no retención del WAL). No se ejecutó la suite en esta generación.
+
 ### Refs y secretos
 
 - Gramática cerrada de `refs:`: `spec:`, `change:`, `path:`, `commit:`, `workitem:`. El bloque
   empieza en una línea `refs:` y termina en la primera línea en blanco o no indentada que no es
   item. Un segundo bloque, una gramática inválida o una línea indentada inválida son `error`
-  (fail-closed).
+  (fail-closed). Desde 0.35.0 el par de literales de ese diagnóstico (`refs:` /
+  `inválido (gramática)`) vive sólo en `REF_GRAMMAR` y lo comparten `inspectRefs` y `curate`.
 - `resolveNodeRefs` resuelve `spec:`/`change:`/`path:` contra la raíz del repo; `commit:` y
   `workitem:` se reportan como no verificables. La raíz se deriva de `context.projectRoot` o de la
   ubicación de la DB, nunca de `process.cwd()`.
@@ -151,11 +184,11 @@ read-only (ver "Escritura y supersesión").
 |---|---|
 | `export` | Solo nodos activos; sanea paths absolutos; no exporta historial |
 | `import` | Upsert por `memory_key`; no reactiva superseded; `--dry-run` clasifica sin escribir; si el JSON es más reciente supersede, si no no-op |
-| `gc --days N` | Purga superseded por `COALESCE(superseded_at, created_at)`; detacha `superseded_by` antes del DELETE; `--dry-run` no escribe |
+| `gc --days N` | Purga superseded por instante: `julianday(COALESCE(superseded_at, created_at)) < julianday(cutoff)` con cutoff único; retiene fechas no parseables e ignora `deleted`; detacha `superseded_by` antes del DELETE; `--dry-run` no escribe (0.35.0) |
 | `snapshot` | Copia consistente con historial (`VACUUM INTO`, conexión read-only, reemplazo seguro en Windows) |
 | `merge` | Supersede sources activas hacia un target activo; valida todo antes de una única transacción; `--dry-run` no escribe |
 | `consolidate` | Duplicados exactos por `type` + content normalizado; canónico por orden total; `--apply` supersede; near-duplicates solo reporte; `includeNearDuplicates: false` evita O(n²) |
-| `curate` | Read-only: refs rotas, no verificables (`commit:`/`workitem:`) y duplicados exactos; advisory, `--strict` convierte hallazgos en exit ≠ 0 |
+| `curate` | Read-only: refs rotas, no verificables (`commit:`/`workitem:`) y duplicados exactos, compuestos bajo un único snapshot `BEGIN DEFERRED`; advisory, `--strict` convierte hallazgos en exit ≠ 0 (0.35.0) |
 | `doctor` | Cinco checks read-only: integridad, FTS5, reglas activas, refs de nodos activos, checkpoint WAL; `--rebuild` es el único camino mutante y desde 0.33.1 ejecuta rebuild + integrity-check dentro de `runImmediateTransaction` (`doctor-rebuild`) |
 
 ### Promoción al archivar (0.22.1)
@@ -209,7 +242,12 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
   identidad usa el saneador de `exportActive`, así que un round-trip legítimo con paths absolutos no
   se marca `divergente`. Un `tombstone` no es estado persistido: sólo historial `superseded` sin activo.
 - **Riesgo de consistencia**: `merge`/`consolidate` revalidan bajo lock y abortan si el target dejó
-  de estar activo; `gc` usa un cutoff único para SELECT y DELETE.
+  de estar activo; `gc` usa un cutoff único para SELECT, DELETE y DETACH y, desde 0.35.0, compara
+  instantes con `julianday` (retiene fechas no parseables); `curate` compone sus dos lecturas bajo un
+  único snapshot `BEGIN DEFERRED` y resuelve refs después del commit.
+- **Estados reservados (0.35.0)**: `status='deleted'` existe en el CHECK del esquema pero ningún
+  camino de escritura lo produce; `gc` lo ignora y el import no lo reactiva. No se agregan
+  escrituras de ese estado.
 - **Riesgo de contención (0.33.0–0.33.1)**: el retry es acotado (3 intentos, 200/600 ms) para no
   ampliar la latencia indefinidamente; bajo un lock retenido más allá del presupuesto la operación
   falla con `MEMORY_DB_BUSY` y sin transacción abierta. Desde 0.33.1 `memory doctor --rebuild`
@@ -229,19 +267,21 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 
 | Path | Rol |
 |---|---|
-| `src/core/memory/engine.js` | Núcleo: recall, refs, supersesión, ops, consolidate |
-| `src/core/memory/database.js` | Apertura, migraciones aditivas, checkpoint WAL, `runImmediateTransaction`, política de retry y `MemoryDatabaseBusyError` (0.33.0) |
+| `src/core/memory/engine.js` | Núcleo: recall, refs, supersesión, ops, consolidate; desde 0.35.0 `REF_GRAMMAR`, GC con `julianday` y `readTransaction` |
+| `src/core/memory/database.js` | Apertura, migraciones aditivas, checkpoint WAL, `runImmediateTransaction` (0.33.0), `runReadTransaction` (`BEGIN DEFERRED`, 0.35.0), política de retry y `MemoryDatabaseBusyError` |
 | `src/core/memory/tools.js` | Handlers de `searchMemory`/`recordRule`/`recordDecision` |
 | `src/core/memory/mcp-server.js` | Servidor MCP stdio |
 | `src/core/memory/working-context.js` | Render, refresh, frescura y lectura de `memory.criticalKeys` |
 | `src/core/memory/doctor.js` | Diagnóstico read-only y rebuild FTS5 dentro de `runImmediateTransaction` desde 0.33.1 |
-| `src/core/memory/curation.js` | Curaduría read-only de refs y duplicados |
+| `src/core/memory/curation.js` | Curaduría read-only de refs y duplicados; desde 0.35.0 compone bajo `engine.readTransaction` e importa `REF_GRAMMAR` |
 | `src/core/memory/snapshot.js` | Copia consistente con historial |
-| `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move |
+| `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move; desde 0.35.0 GC y `memory curate` se reescribieron en el lugar (instante, `deleted` reservado, snapshot único) |
 | `aspec/specs/memory-engine/spec.md` | Requirement de idempotencia de reescritura idéntica en `recordNode` (0.23.0); `Orden determinístico de inyección de reglas` con 7 escenarios y `Conjunto crítico estable del working-context` (0.31.0); desde 0.33.0 `Serialización de escritores concurrentes sobre la base de memoria`; desde 0.33.1 el requirement de doctor se actualizó en el lugar |
 | `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` | Delta `ADDED` del conjunto crítico y `MODIFIED` del orden determinístico; `MEM-05` cerrado en 0.31.0 |
 | `aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/` | Delta `ADDED` del import con dry-run clasificado; cierra `CH-08` en 0.34.0 |
+| `aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/` | Delta `MODIFIED` de GC y curaduría (instante, `deleted` reservado, snapshot único y `REF_GRAMMAR`); cierra `MEM-05` en 0.35.0 |
 | `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/` | Delta `ADDED` de serialización de escritores concurrentes; cierra `CH-04` en 0.33.0 |
+| `test/memory-engine.test.js`, `test/curation.test.js` | Cobertura de GC por instante, formatos mixtos, fechas no parseables, `deleted` reservado y snapshot único de `curate` (0.35.0) |
 | `test/memory-writers.test.js`, `test/fixtures/memory-writer-child.mjs` | Oráculo offline de escritores concurrentes y fixture de proceso hijo (0.33.0–0.33.1; cubre el rebuild de doctor bajo contención desde 0.33.1) |
 | `aspec/specs/cli-diagnostics/spec.md` | Fuera de esta unidad: contrato de frescura del seed (0.26.1) que no toca el motor |
 | `agents/orchestrator.md` | Secuencia del archive y delegación de la promoción entre fase A y fase B |

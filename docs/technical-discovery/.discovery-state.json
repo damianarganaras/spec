@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-15T14:32:44.488Z",
+  "generatedAt": "2026-11-15T14:59:59.086Z",
   "sources": [
     ".ancleto/machine-env.md",
     ".ancleto/memory.db",
@@ -406,6 +406,7 @@
     "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/proposal.md",
     "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/specs/memory-ops/spec.md",
     "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/tasks.md",
+    "aspec/changes/jev-spec-advisory-judge/proposal.md",
     "aspec/config.yaml",
     "aspec/specs/agent-install-routing/spec.md",
     "aspec/specs/agent-model-tiers/spec.md",
@@ -891,7 +892,7 @@
     ".ancleto/next-session-prompt.md": "5f62001d37f41bf7",
     ".ancleto/working-context.md": "cdc72cf90a6106e1",
     ".ancletorc": "8016489fc993d508",
-    ".discovery-map.json": "e9a5586199ff2c09",
+    ".discovery-map.json": "d3d21163e263d6cc",
     ".gitattributes": "d60f352d0db1404c",
     ".github/workflows/publish.yml": "afdbac4220001818",
     ".gitignore": "851805d264f984c2",
@@ -977,7 +978,7 @@
     "agents/technical-discovery.md": "ec2f9093746a06f8",
     "agents/technical-seed-writer.md": "380d8a62c93dc006",
     "agents/tester.md": "cd2a0ece6b48144a",
-    "aspec/backlog.md": "7d4b6b0573b25fe6",
+    "aspec/backlog.md": "a5558b95d9ae0ac2",
     "aspec/changes/ancleto-vscode-extension/design.md": "7c9463bc7f436e1b",
     "aspec/changes/ancleto-vscode-extension/proposal.md": "2c1a5b4f34084482",
     "aspec/changes/ancleto-vscode-extension/specs/vscode-distribution/spec.md": "fb2c7bb3ed161e75",
@@ -1287,6 +1288,7 @@
     "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/proposal.md": "26d2c0a8fbdcee18",
     "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/specs/memory-ops/spec.md": "52648fddaf1a3071",
     "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/tasks.md": "77920ec406908e0e",
+    "aspec/changes/jev-spec-advisory-judge/proposal.md": "c8f10be72aceb66b",
     "aspec/config.yaml": "0a2e0c55070caeaa",
     "aspec/specs/agent-install-routing/spec.md": "2686cfa840f18cff",
     "aspec/specs/agent-model-tiers/spec.md": "808c842d4c8de36c",
@@ -1763,10 +1765,10 @@
     "test/fixtures/memory/refs-root/aspec/specs/prompt-contracts/spec.md": "828fe5dfb0628de9",
     "test/fixtures/memory/seed.json": "ef04fc809da4e5ae"
   },
-  "hash": "99762585cbbe911b5c9f682ae754c07ee2618a15f8a3e7b67675d69ed194020b",
+  "hash": "c5f7b1cccefd05b37a21fb46104865dc7fc0dd0f55b86d48d6b856ce50fa0d69",
   "ruleVersion": 2,
   "semantic": {
-    "hash": "e2baa93c9b00e41af4413ec0ce2bbb84e970828dcfb265b0ca7438be4e90360b",
+    "hash": "e38e9c40bd9b3b10d1589e90dde56a0e8d0323b65f21e01793676b42e8646d59",
     "fileHashes": {
       "package.json": "b1792842dce4e963"
     }

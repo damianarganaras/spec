@@ -477,3 +477,18 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **MEM-05e — CERRADO como documentado.** `status='deleted'` lo permite el CHECK (`src/core/memory/database.js:11`) pero ningún `INSERT`/`UPDATE` del código lo produce: es un estado reservado/inalcanzable. `gc` lo ignora (filtra `status='superseded'`). Sin retención nueva ni cambio de schema; documentado en el requirement, bloque «Estados fuera del alcance» (`aspec/specs/memory-ops/spec.md:144`) y cubierto por test (`test/memory-engine.test.js:1967`).
 - **CH-09f — CERRADO.** `curateMemory` compone `listNodes` + `consolidate({dryRun:true})` bajo un único snapshot de lectura (`engine.readTransaction` → `runReadTransaction`, `BEGIN DEFERRED` en conexión read-only, sin retry, sin escritura) y resuelve refs DESPUÉS del commit (`src/core/memory/curation.js:40`). Test determinista con segunda conexión intercalada (`test/curation.test.js:353`). Spec: requirement `Curaduría read-only con memory curate` (`aspec/specs/memory-ops/spec.md:1233`), bloque «Snapshot de lectura» (`:1253`).
 - **CH-09g — CERRADO.** El literal de gramática de refs quedó en una única definición exportada `REF_GRAMMAR` (`ref: 'refs:'`, `reason: 'inválido (gramática)'`; `src/core/memory/engine.js:25`), consumida por `inspectRefs` (`:718`, `:722`) y `curateMemory` (`src/core/memory/curation.js:1`, `:66`, `:70`); texto observable y exit codes sin cambio. Spec: `aspec/specs/memory-ops/spec.md:1247` fija que la curaduría no SHALL redeclarar el literal.
+
+## Relación con 0.35.0
+
+0.35.0 (2026-11-15) contiene un change archivado. Release MINOR (runtime + spec + test): cierra el ítem M-1 «integridad del motor de memoria»; sin cambios de schema ni de formato persistido.
+
+**Hecho:**
+
+- Change: `mem-05-gc-eligibility-curate-snapshot`, archivado en `aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/` (delta en `memory-ops`). Detalle completo en `## Cierre de deuda M-1 — integridad del motor de memoria (2026-11-15, sin release)`.
+- **MEM-05d:** elegibilidad de `memory gc` por instante con `julianday`, eliminando la purga temprana por formato de fecha (cutoff sin milisegundos comparado textualmente contra timestamps ISO con milisegundos).
+- **MEM-05c:** limitación `SCAN memory_nodes` documentada; no se agregó índice porque el contrato prohíbe schema nuevo.
+- **MEM-05e:** `status='deleted'` reservado/inalcanzable documentado, sin retención nueva ni cambio de schema.
+- **CH-09f:** `memory curate` corre bajo un único snapshot de lectura read-only.
+- **CH-09g:** literal de gramática de refs con fuente única (`REF_GRAMMAR`); texto y exit codes sin cambio.
+- **Compatibilidad:** sin cambios de schema ni de formato persistido; un binario 0.34.0 lee el mismo estado.
+- **Release:** datos de publicación (tag `v0.35.0`, sha del tag, run de publish y npm) PENDIENTES — se completan al publicar; aquí no se afirman.

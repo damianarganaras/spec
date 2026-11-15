@@ -1855,6 +1855,153 @@ describe('gcSuperseded', () => {
       assert.equal(remaining[0].superseded_by, null, 'la referencia retenida queda suelta')
     })
   })
+
+  // MEM-05d: la elegibilidad se mide por instante, no por el texto persistido.
+  // `Date.now` se pinnea para que el cutoff caiga en un segundo exacto y la
+  // frontera del segundo sea observable sin depender del reloj real.
+  const PINNED_NOW = Date.parse('2026-06-01T12:00:00.000Z')
+  // cutoff = pinned - 30 d = 2026-05-02T12:00:00Z (sin milisegundos).
+  const PINNED_CUTOFF_TEXT = '2026-05-02T12:00:00Z'
+
+  function insertSupersededExact(dbPath, id, supersededAt, { createdAt = '2020-01-01T00:00:00.000Z' } = {}) {
+    const db = openDatabase(dbPath)
+    try {
+      db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at, superseded_at)
+        VALUES (?, ?, 'rule', 'project', 'superseded', 'historia', '', 'test', 1, ?, ?)`)
+        .run(id, id, createdAt, supersededAt)
+    } finally {
+      db.close()
+    }
+  }
+
+  function withPinnedNow(fn) {
+    const realNow = Date.now
+    Date.now = () => PINNED_NOW
+    try {
+      return fn()
+    } finally {
+      Date.now = realNow
+    }
+  }
+
+  it('frontera del segundo: un superseded_at con milisegundos del mismo segundo no es elegible', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      withPinnedNow(() => {
+        // Mismo segundo del cutoff: uno con milisegundos y otro sin ellos.
+        insertSupersededExact(dbPath, 'gc-boundary-ms', `${PINNED_CUTOFF_TEXT.replace('Z', '')}.500Z`)
+        insertSupersededExact(dbPath, 'gc-boundary-s', PINNED_CUTOFF_TEXT)
+
+        // Defecto viejo: la comparacion textual considera elegible al `.500Z`
+        // porque '.' (0x2E) ordena antes que 'Z' (0x5A) tras los segundos.
+        const legacy = rawAt(
+          `SELECT id FROM memory_nodes WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < ?`,
+          PINNED_CUTOFF_TEXT
+        )
+        assert.deepEqual(
+          legacy.map((row) => row.id),
+          ['gc-boundary-ms'],
+          'la comparacion textual previa seleccionaba el nodo con milisegundos'
+        )
+
+        const dry = eng.gcSuperseded({ days: 30, dryRun: true })
+        assert.equal(dry.nodes, 0, 'por instante ninguno es anterior al cutoff')
+        const real = eng.gcSuperseded({ days: 30 })
+        assert.equal(real.removed, dry.nodes, 'paridad dry-run/purge')
+        assert.deepEqual(
+          rawAt(`SELECT id FROM memory_nodes ORDER BY id`).map((row) => row.id),
+          ['gc-boundary-ms', 'gc-boundary-s'],
+          'ambos quedan retenidos'
+        )
+      })
+    })
+  })
+
+  it('formatos mixtos con y sin milisegundos del mismo instante son elegibles por igual', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      withPinnedNow(() => {
+        // Mismo instante, 60 s antes del cutoff: uno con .000 y otro sin milisegundos.
+        insertSupersededExact(dbPath, 'gc-mixed-ms', '2026-05-02T11:59:00.000Z')
+        insertSupersededExact(dbPath, 'gc-mixed-s', '2026-05-02T11:59:00Z')
+
+        const dry = eng.gcSuperseded({ days: 30, dryRun: true })
+        assert.equal(dry.nodes, 2)
+        const real = eng.gcSuperseded({ days: 30 })
+        assert.equal(real.removed, dry.nodes, 'el purge coincide exactamente con el dry-run')
+        assert.equal(rawAt(`SELECT COUNT(*) AS c FROM memory_nodes WHERE status = 'superseded'`)[0].c, 0)
+      })
+    })
+  })
+
+  it('una fecha no parseable se retiene aunque created_at sea muy anterior, mientras un parseable viejo se purga', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      withPinnedNow(() => {
+        // (a) no parseable (`julianday` NULL) con created_at viejo: el fallback a
+        // created_at lo purgaria; por instante debe sobrevivir. Ademas ordena antes
+        // del cutoff como texto, asi que una comparacion textual tambien lo purgaria.
+        insertSupersededExact(dbPath, 'gc-unparseable', '2019-13-45', { createdAt: '2020-01-01T00:00:00.000Z' })
+        // (b) parseable y claramente anterior al cutoff: debe purgarse. Sin este nodo,
+        // un GC que no purga nada tambien pasaria el oraculo.
+        insertSupersededExact(dbPath, 'gc-parseable-old', '2026-05-02T11:59:00Z')
+
+        // Premisa: la comparacion textual previa seleccionaba ambos (incluido el no
+        // parseable), asi que el veredicto por instante es discriminante.
+        const legacy = rawAt(
+          `SELECT id FROM memory_nodes WHERE status = 'superseded' AND COALESCE(superseded_at, created_at) < ? ORDER BY id`,
+          PINNED_CUTOFF_TEXT
+        )
+        assert.deepEqual(legacy.map((row) => row.id), ['gc-parseable-old', 'gc-unparseable'])
+
+        const dry = eng.gcSuperseded({ days: 30, dryRun: true })
+        assert.equal(dry.nodes, 1, 'solo el parseable anterior al cutoff es elegible')
+        const real = eng.gcSuperseded({ days: 30 })
+        assert.equal(real.removed, 1, 'el purge borra exactamente el parseable')
+        assert.deepEqual(
+          rawAt(`SELECT id, status, superseded_at FROM memory_nodes ORDER BY id`).map((row) => [row.id, row.status, row.superseded_at]),
+          [['gc-unparseable', 'superseded', '2019-13-45']],
+          'el no parseable sobrevive y el parseable desaparece'
+        )
+      })
+    })
+  })
+
+  it("una fila con status='deleted' no se cuenta ni se borra y conserva status/superseded_by", () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      const db = openDatabase(dbPath)
+      try {
+        // Retenido: superseded hace 1 dia. La fila reservada `deleted` apunta a el.
+        db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at, superseded_at)
+          VALUES ('gc-del-target', 'gc-del-target', 'rule', 'project', 'superseded', 'retenido', '', 'test', 1, '2020-01-01T00:00:00.000Z', ?)`)
+          .run(new Date(Date.now() - 86400000).toISOString())
+        db.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, superseded_by, source, confidence, created_at, superseded_at)
+          VALUES ('gc-del-row', 'gc-del-row', 'rule', 'project', 'deleted', 'reservado', '', 'gc-del-target', 'test', 1, '2019-01-01T00:00:00.000Z', '2019-01-01T00:00:00.000Z')`)
+          .run()
+      } finally {
+        db.close()
+      }
+
+      const dry = eng.gcSuperseded({ days: 30, dryRun: true })
+      assert.equal(dry.nodes, 0, 'deleted no cuenta como superseded')
+      const real = eng.gcSuperseded({ days: 30 })
+      assert.equal(real.removed, 0)
+      assert.deepEqual(
+        rawAt(`SELECT id, status, superseded_by FROM memory_nodes ORDER BY id`).map((row) => [row.id, row.status, row.superseded_by]),
+        [
+          ['gc-del-row', 'deleted', 'gc-del-target'],
+          ['gc-del-target', 'superseded', null]
+        ]
+      )
+    })
+  })
+
+  it('sqlite_master (nombre y tipo) queda identico tras un GC con purga', () => {
+    withFreshEngine((eng, dbPath, rawAt) => {
+      insertSuperseded(dbPath, 'gc-schema', 'gc-schema', 40)
+      const before = rawAt(`SELECT type, name FROM sqlite_master ORDER BY type, name`)
+      const result = eng.gcSuperseded({ days: 30 })
+      assert.equal(result.removed, 1)
+      assert.deepEqual(rawAt(`SELECT type, name FROM sqlite_master ORDER BY type, name`), before)
+    })
+  })
 })
 
 // MEM-05b: toda ruta de supersesion persiste el instante en `superseded_at`.

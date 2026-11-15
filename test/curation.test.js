@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { DatabaseSync } from 'node:sqlite'
-import { createMemoryEngine, createReadonlyMemoryEngine, resolveNodeRefs } from '../src/core/memory/engine.js'
+import { createMemoryEngine, createReadonlyMemoryEngine, inspectRefs, resolveNodeRefs } from '../src/core/memory/engine.js'
 import { resolveMemoryProjectRoot } from '../src/core/memory/working-context.js'
 import { curateMemory } from '../src/core/memory/curation.js'
 
@@ -344,6 +344,102 @@ describe('memory curate — modulo de curaduria', () => {
     } finally {
       forward.cleanup()
       reverse.cleanup()
+    }
+  })
+
+  // CH-09f: nodos y duplicados se leen bajo UN unico snapshot. El proxy conserva
+  // la superficie del engine real y dispara la escritura externa dentro de la
+  // primera lectura, sin sleeps: la determinacion viene del orden de llamadas.
+  it('una escritura externa entre las dos lecturas no aparece en ninguna seccion (snapshot unico)', () => {
+    const duplicateContent = refsContent(['change:no-existe'])
+    const fx = createFixture([repoNode('snap-seed', duplicateContent)])
+    const engine = createReadonlyMemoryEngine(fx.dbPath)
+    try {
+      let firstRead
+      let secondRead
+      let externalKey = null
+      let externalCommitted = false
+
+      const proxy = {
+        readTransaction: (fn) => engine.readTransaction(fn),
+        listNodes: (opts) => {
+          const rows = engine.listNodes(opts)
+          if (!externalCommitted) {
+            externalCommitted = true
+            firstRead = rows.map((row) => row.memory_key)
+            // Segunda conexion del mismo proceso: confirma un nodo activo nuevo con
+            // el MISMO content que el seed (seria duplicado exacto y ref rota).
+            externalKey = 'snap-external'
+            const other = new DatabaseSync(fx.dbPath)
+            try {
+              other.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+                VALUES (?, ?, 'rule', 'project', 'active', ?, '', 'test', 1, ?)`)
+                .run('snap-external-id', externalKey, duplicateContent, new Date().toISOString())
+              assert.equal(
+                other.prepare(`SELECT count(*) AS c FROM memory_nodes WHERE memory_key = ?`).get(externalKey).c,
+                1,
+                'la escritura externa quedo confirmada'
+              )
+            } finally {
+              other.close()
+            }
+          }
+          return rows
+        },
+        consolidate: (opts) => {
+          secondRead = engine.listNodes({ status: 'active' }).map((row) => row.memory_key)
+          return engine.consolidate(opts)
+        }
+      }
+
+      const report = curateMemory(proxy, { projectRoot: fx.dir })
+      assert.deepEqual(firstRead, ['snap-seed'], 'la primera lectura no ve el nodo externo')
+      assert.deepEqual(secondRead, firstRead, 'la deteccion de duplicados ve el mismo estado')
+      assert.deepEqual(report.brokenRefs.map((item) => item.memory_key), ['snap-seed'])
+      assert.deepEqual(report.unverifiable, [])
+      assert.deepEqual(report.exactDuplicates, [], 'el nodo externo no forma grupo exacto dentro del snapshot')
+      // Sin transaccion abierta: la misma conexion puede volver a leer...
+      assert.equal(engine.readTransaction(() => 'ok'), 'ok')
+      // ...y fuera del snapshot la escritura externa ya es visible.
+      assert.deepEqual(
+        engine.listNodes({ status: 'active' }).map((row) => row.memory_key).sort(),
+        ['snap-external', 'snap-seed']
+      )
+
+      // Una escritura posterior en otra conexion confirma sin esperar.
+      const after = new DatabaseSync(fx.dbPath)
+      try {
+        after.prepare(`UPDATE memory_nodes SET justification = 'post' WHERE memory_key = ?`).run(externalKey)
+        assert.equal(after.prepare(`SELECT justification FROM memory_nodes WHERE memory_key = ?`).get(externalKey).justification, 'post')
+      } finally {
+        after.close()
+      }
+    } finally {
+      engine.close()
+      fx.cleanup()
+    }
+  })
+
+  it('gramatica invalida: mismo texto y motivo que inspectRefs y mismos exit codes del CLI', () => {
+    const content = 'prosa\n\nrefs:\n  no-es-una-ref'
+    const fx = createFixture([repoNode('gram-1', content)])
+    try {
+      const report = curate(fx.dbPath)
+      const inspected = inspectRefs({ nodes: [{ memory_key: 'gram-1', content }], projectRoot: fx.dir })
+      assert.deepEqual(inspected.unresolved, [
+        { memory_key: 'gram-1', ref: 'no-es-una-ref', reason: 'inválido (gramática)' }
+      ])
+      assert.deepEqual(report.brokenRefs, inspected.unresolved, 'mismo texto y motivo que el diagnostico de refs')
+      assert.equal(report.brokenRefs[0].reason, inspected.unresolved[0].reason)
+
+      const advisory = runCli(fx.dir, ['memory', 'curate', '--json'])
+      const strict = runCli(fx.dir, ['memory', 'curate', '--strict', '--json'])
+      assert.equal(advisory.status, 0)
+      assert.notEqual(strict.status, 0)
+      assert.equal(strict.stdout, advisory.stdout, '--strict no cambia el reporte, solo el exit code')
+      assert.deepEqual(JSON.parse(advisory.stdout).brokenRefs, inspected.unresolved)
+    } finally {
+      fx.cleanup()
     }
   })
 })

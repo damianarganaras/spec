@@ -2,6 +2,19 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.35.0] - 2026-11-15
+
+### Fixed
+- **`memory gc` mide la elegibilidad por instante**: los tres statements de purga comparan `julianday(COALESCE(superseded_at, created_at))` en lugar de depender del formato textual de la fecha, así que una fecha que no ordena lexicográficamente ya no provoca purga temprana; las fechas no parseables se retienen de forma conservadora.
+
+### Changed
+- **`status='deleted'` documentado como reservado/inalcanzable**: ningún flujo del motor lo produce y así se explicita en la documentación del estado persistido.
+- **`memory curate` compone su reporte bajo un único snapshot de lectura read-only**: todas las consultas del reporte se resuelven contra la misma vista consistente.
+- **El literal de gramática de refs tiene fuente única**: texto y exit codes sin cambio; sólo se elimina la duplicación del literal.
+
+### Notas
+- Sin cambios de schema ni de formato persistido.
+
 ## [0.34.0] - 2026-11-13
 
 ### Added

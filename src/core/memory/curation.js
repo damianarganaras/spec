@@ -1,4 +1,4 @@
-import { resolveNodeRefs } from './engine.js'
+import { REF_GRAMMAR, resolveNodeRefs } from './engine.js'
 
 // Curaduria read-only: compone las primitivas del engine y no duplica SQL, parser,
 // resolvedor ni la normalizacion de duplicados exactos. No abre, cierra, migra,
@@ -25,13 +25,26 @@ function renderBrokenRef(ref) {
 }
 
 export function curateMemory(engine, { projectRoot = null } = {}) {
-  if (!engine || typeof engine.listNodes !== 'function' || typeof engine.consolidate !== 'function') {
+  if (
+    !engine ||
+    typeof engine.listNodes !== 'function' ||
+    typeof engine.consolidate !== 'function' ||
+    typeof engine.readTransaction !== 'function'
+  ) {
     throw new Error('curateMemory: se requiere un engine de memoria ya abierto')
   }
 
+  // Las dos lecturas (nodos activos y grupos exactos) comparten un unico snapshot:
+  // un COMMIT externo entre ambas no puede hacer que una seccion vea nodos que la
+  // otra no vio. La resolucion de refs contra el filesystem queda fuera.
+  const { nodes: activeNodes, consolidation } = engine.readTransaction(() => ({
+    nodes: engine.listNodes({ status: 'active' }),
+    consolidation: engine.consolidate({ dryRun: true, includeNearDuplicates: false })
+  }))
+
   // Orden total: memory_key ascendente sin localeCompare. El orden de la consulta
   // (`listNodes`) no participa.
-  const nodes = engine.listNodes({ status: 'active' })
+  const nodes = activeNodes
     .map((node) => ({ memory_key: String(node.memory_key), content: String(node.content ?? '') }))
     .sort((a, b) => compareKeys(a.memory_key, b.memory_key))
 
@@ -50,11 +63,11 @@ export function curateMemory(engine, { projectRoot = null } = {}) {
     // Bloque repetido o ref invalida: la entrada usa la linea ofensora como ref,
     // omite `kind` y conserva el motivo gramatical del diagnostico vigente.
     if (resolved.blocks) {
-      brokenRefs.push({ memory_key: node.memory_key, ref: 'refs:', reason: 'inválido (gramática)' })
+      brokenRefs.push({ memory_key: node.memory_key, ref: REF_GRAMMAR.ref, reason: REF_GRAMMAR.reason })
       continue
     }
     if (resolved.error) {
-      brokenRefs.push({ memory_key: node.memory_key, ref: resolved.error, reason: 'inválido (gramática)' })
+      brokenRefs.push({ memory_key: node.memory_key, ref: resolved.error, reason: REF_GRAMMAR.reason })
       continue
     }
     for (const ref of resolved.refs) {
@@ -76,8 +89,7 @@ export function curateMemory(engine, { projectRoot = null } = {}) {
   // La definicion de duplicado exacto, la cadena de canonico y su orden son las
   // de `consolidate({ dryRun: true })`: no se reimplementan. El dry-run no escribe.
   // La curaduria no reporta near-duplicates: se omite el escaneo O(n^2).
-  const { exactGroups } = engine.consolidate({ dryRun: true, includeNearDuplicates: false })
-  const exactDuplicates = exactGroups.map((group) => ({
+  const exactDuplicates = consolidation.exactGroups.map((group) => ({
     canonical: group.canonical,
     // Nodos NO canonicos del grupo; el canonico se reporta aparte en `canonical`.
     // Un grupo exacto siempre tiene al menos uno: `consolidate` exige >= 2 nodos.

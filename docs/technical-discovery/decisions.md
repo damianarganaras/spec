@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-14T00:28:03Z
-pluginVersion: 0.34.0
+generatedAt: 2026-11-15T14:34:33Z
+pluginVersion: 0.35.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.34.0)
+## Modelos y tiers (estado 0.35.0)
 
 ### Tabla y cadenas
 
@@ -1264,6 +1264,42 @@ Requirement canónico: «Import con dry-run clasificado por memory_key» en
   ausente, duplicados) y `test/cli.test.js` (flags, salida humana/JSON, exit codes y texto de ayuda).
   No se ejecutó la suite en esta generación; el comportamiento se describe desde el código y el delta
   archivado.
+
+## GC por instante y snapshot de curaduría (0.35.0)
+
+Change archivado: `aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/`.
+Requirements canónicos: «Garbage collection de nodos superseded» y «Curaduría read-only con
+`memory curate`» en `aspec/specs/memory-ops/spec.md`, reescritos completos con `MODIFIED`.
+
+- **Elegibilidad por instante** (`memory-gc-instant-eligibility`): los tres statements de GC
+  (`gcSelect`, `gcDelete` y el DETACH de `superseded_by`) comparan
+  `julianday(COALESCE(superseded_at, created_at)) < julianday(?)` contra un cutoff único por
+  invocación. La comparación textual anterior fallaba en la frontera del segundo: `...:00.123Z`
+  ordena antes que `...:00Z` (`'.' < 'Z'`), así que un nodo superseded dentro de
+  `[cutoff, cutoff + 1 s)` podía purgarse hasta casi 1 s antes de tiempo con cualquier `--days`.
+- **Fechas no parseables se retienen**: `julianday()` devuelve NULL para un valor no interpretable,
+  así que la fila no es elegible ni se purga, en dry-run ni en purge real.
+- **`deleted` reservado** (`memory-status-deleted-reserved`): el valor del CHECK `status='deleted'`
+  no lo produce ningún camino de escritura; GC lo ignora en selección, borrado y conteo, y no se
+  agrega ni se activa ninguna escritura de ese estado.
+- **Snapshot único en `curate`** (`memory-curate-single-read-snapshot`): `curateMemory` exige
+  `engine.readTransaction` y ejecuta `listNodes({ status: 'active' })` y
+  `consolidate({ dryRun: true, includeNearDuplicates: false })` dentro de una misma transacción
+  `BEGIN DEFERRED` … `COMMIT` con `ROLLBACK` ante error (`runReadTransaction` en
+  `src/core/memory/database.js`). No escribe, no migra y no adquiere el lock de escritura ni su
+  retry; bajo WAL no bloquea a otros lectores ni escritores. Las refs contra el filesystem se
+  resuelven después del commit para no mantener el snapshot abierto durante I/O.
+- **Gramática de refs con fuente única** (`memory-ref-grammar-single-source`): `REF_GRAMMAR`
+  (`{ ref: 'refs:', reason: 'inválido (gramática)' }`) se exporta desde `engine.js` y lo consumen
+  `inspectRefs` y `curation.js`; el texto, el motivo y los exit codes observables no cambian.
+- **Invariantes**: sin cambios de schema ni del formato persistido de `superseded_at`/`created_at`,
+  sin índices, tablas, triggers ni vistas nuevos (GC se acepta como `SCAN memory_nodes`), sin cambios
+  en los cinco caminos de escritura ni en el statement `supersede`, y sin cambio de `ruleVersion`.
+- **Oráculo**: `test/memory-engine.test.js`, `test/curation.test.js` y `test/memory-writers.test.js`
+  cubren la frontera de segundo, los formatos mixtos con y sin milisegundos, la fecha no parseable,
+  `deleted` reservado, el snapshot único y la no retención del WAL. No se ejecutó la suite en esta
+  generación; el comportamiento se describe desde el código
+  (`src/core/memory/{engine,curation,database}.js`) y el delta archivado.
 
 ## Lint y publicación
 

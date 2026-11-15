@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-14T00:28:03Z
-pluginVersion: 0.34.0
+generatedAt: 2026-11-15T14:34:33Z
+pluginVersion: 0.35.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (876 fuentes, ~41.958 tokens), `package.json` (`0.34.0`), `src/core/model-catalog.json` y
+`minimo` (879 fuentes, ~42.297 tokens), `package.json` (`0.35.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
@@ -55,6 +55,7 @@ paths citados (ver `unknowns.md`).
 | **Selección de tests afectados (0.32.0)**: `ancleto affected --tests` agrega el objeto `tests` (`complete`, `reasons`, `selected`, `excluded`) al JSON existente, con el manifiesto cerrado `test/affected-tests.json` y el consumidor `npm run test:affected` que cae fail-closed a la suite completa | `decisions.md`, `setup.md`, `units/discovery-engine.md`, `units/cli-install.md` |
 | **Serialización de escritores y doctor (0.33.0–0.33.1)**: `runImmediateTransaction` (`BEGIN IMMEDIATE` + retry 3/200-600 ms), `MEMORY_DB_BUSY` y oráculo `test/memory-writers.test.js`; desde 0.33.1 `memory doctor --rebuild` corre rebuild FTS5 + integrity-check dentro del helper y reporta `MEMORY_DB_BUSY` en el detalle, mientras el `doctor` por defecto sigue read-only; sin cambio de schema, PRAGMAs, comandos ni `ruleVersion` | `decisions.md`, `units/memory-engine.md` |
 | **Import con dry-run clasificado (0.34.0)**: `memory import --dry-run [--json]` predice `insert`/`supersede`/`skip` por `memory_key` con buckets `nuevo`/`identico`/`divergente`/`tombstone`, comparte `decideImportEntry` con el import real, abre read-only, reporta `databasePresent` y no escribe ni refresca el working-context | `decisions.md`, `units/memory-engine.md`, `setup.md` |
+| **GC por instante y snapshot de curaduría (0.35.0)**: `memory gc` compara `julianday(COALESCE(superseded_at, created_at))` contra un cutoff único y retiene fechas no parseables; `status='deleted'` es un estado reservado que no se purga ni cuenta; `memory curate` compone su reporte bajo un único snapshot `BEGIN DEFERRED` (`runReadTransaction`) y resuelve refs después del commit; el literal de gramática de refs tiene fuente única (`REF_GRAMMAR`) | `decisions.md`, `units/memory-engine.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -75,9 +76,16 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.34.0` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.35.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
+- **Release 0.35.0**: corrige la elegibilidad de `memory gc` midiendo instantes con
+  `julianday(COALESCE(superseded_at, created_at)) < julianday(?)` en sus tres statements (SELECT,
+  DELETE y desvinculación de `superseded_by`), conserva las filas con fechas no parseables y trata
+  `status='deleted'` como estado reservado que ningún writer produce; `memory curate` compone su
+  reporte bajo un único snapshot read-only (`runReadTransaction`, `BEGIN DEFERRED`) y resuelve refs
+  después del commit; el literal de gramática de refs queda en `REF_GRAMMAR`. Sin cambios de schema,
+  PRAGMAs, flags ni `ruleVersion` (ver `decisions.md` y `units/memory-engine.md`).
 - **Release 0.34.0**: `memory import` gana `--dry-run` y `--json`; clasifica cada entrada por
   `memory_key` en `nuevo`, `identico`, `divergente` y `tombstone`, con acción predicha
   `insert`/`supersede`/`skip`, sobre `createReadonlyMemoryEngine` y sin escribir ni refrescar el
@@ -91,6 +99,10 @@ paths citados (ver `unknowns.md`).
   schema persistido, PRAGMAs ni `ruleVersion`. El requirement de `memory-engine` se actualizó en el
   lugar.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/` (0.35.0: `MODIFIED` de
+  los Requirements de GC y de curaduría en `memory-ops`; elegibilidad por instante con `julianday`,
+  `deleted` reservado, retención de fechas no parseables, snapshot único de lectura en `curate` y
+  literal de gramática de refs con dueño único; sin cambio de schema ni `ruleVersion`),
   `aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/` (0.34.0: `ADDED` del
   Requirement `Import con dry-run clasificado por memory_key` en `memory-ops`; buckets
   `nuevo`/`identico`/`divergente`/`tombstone`, predicción exacta por `decideImportEntry`, base
@@ -190,15 +202,15 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-   archivos) mantienen el conteo; en 0.22.1-0.33.1 no cambió su cantidad.
-- **Pack actual**: 873 fuentes y ~41k tokens (166.322 B, comprimido, tier `minimo`), con 33 entradas
+   archivos) mantienen el conteo; en 0.22.1-0.35.0 no cambió su cantidad.
+- **Pack actual**: 879 fuentes y ~42k tokens (170.793 B, comprimido, tier `minimo`), con 33 entradas
    de archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del pack. El
-   `.discovery-map.json` de la corrida reporta 907 archivos (aspec 327, `.opencode` 66, docs 21,
+   `.discovery-map.json` de la corrida reporta 913 archivos (aspec 333, `.opencode` 66, docs 21,
    test 33, src 22, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye 24
    `test/*.test.js` por `discovery.exclude` desde 0.30.1; los 8 fixtures de `test/fixtures/**`
    siguen incluidos.
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
-   citadas para reflejar 0.33.1, preservando la estructura del seed. En 0.26.0 `discovery --check`
+   citadas para reflejar 0.35.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
    pasó a calcular `seedMapPresent` antes de clasificar el estado (vale en
    `READY`/`STALE`/`PARTIAL`/`MISSING`); en 0.26.1 el detector de frescura quedó documentado y
    pineado en `cli-diagnostics`; en 0.26.4 la suite declarada sumó el guard estructural de los delta
@@ -238,7 +250,12 @@ paths citados (ver `unknowns.md`).
     `memory doctor --rebuild` se suma al helper con la operación `doctor-rebuild`: rebuild de FTS5 +
     integrity-check en una única transacción inmediata, `MEMORY_DB_BUSY` en el detalle ante
     contención agotada y `rebuilt` sólo tras `COMMIT` exitoso; el `doctor` por defecto sigue
-    read-only. Schema, PRAGMAs persistidos, comandos, flags y `ruleVersion` no cambian. El
-    `ancleto discovery --check` de validación, tras regenerar el estado con el pack de 873 fuentes
-    (166.779 B, ~41k tokens), reportó `READY`/`impact: none` con `changedAreas: []`,
+    read-only. Schema, PRAGMAs persistidos, comandos, flags y `ruleVersion` no cambian. En 0.34.0
+    `memory import --dry-run [--json]` agrega la clasificación read-only por `memory_key`; en 0.35.0
+    `memory gc` compara instantes con `julianday`, retiene fechas no parseables, trata
+    `status='deleted'` como reservado, `memory curate` compone su reporte bajo un único snapshot
+    `BEGIN DEFERRED` y el literal de gramática de refs pasa a `REF_GRAMMAR`; ninguno de los dos
+    cambia schema, PRAGMAs, comandos sin flags ni `ruleVersion`. El
+    `ancleto discovery --check` de validación, tras regenerar el estado con el pack de 879 fuentes
+    (170.793 B, ~42k tokens), reportó `READY`/`impact: none` con `changedAreas: []`,
     `seedMapPresent: true` y `affectedDocs: []`.

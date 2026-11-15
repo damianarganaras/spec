@@ -134,6 +134,29 @@ function sleepSynchronously(ms) {
   Atomics.wait(sleepBuffer, 0, 0, ms)
 }
 
+// Transaccion de lectura: `BEGIN DEFERRED`, cuerpo y `COMMIT`. No reintenta, no
+// pide lock de escritura y no escribe filas: agrupa varias lecturas bajo un unico
+// snapshot. No es reentrante: se abre sobre una conexion sin transaccion activa y
+// no anida. Devuelve el valor de `fn`; cualquier fallo del cuerpo o del `COMMIT`
+// hace rollback y propaga el error original.
+export function runReadTransaction(db, fn) {
+  db.exec('BEGIN DEFERRED')
+  try {
+    const result = fn()
+    db.exec('COMMIT')
+    return result
+  } catch (err) {
+    // Guard: SQLite puede haber revertido solo; no se hace ROLLBACK sin
+    // transaccion activa porque ese error taparia el original.
+    try {
+      if (db.isTransaction) db.exec('ROLLBACK')
+    } catch {
+      // Rollback best-effort: se propaga el error original de todos modos.
+    }
+    throw err
+  }
+}
+
 // Transaccion de escritura unica: `BEGIN IMMEDIATE`, cuerpo y `COMMIT`. Solo se
 // reintenta la adquisicion del lock; una vez abierta la transaccion el cuerpo
 // nunca se re-ejecuta. Cualquier fallo del cuerpo o del `COMMIT` hace rollback y

@@ -46,35 +46,36 @@ working-context, `.ancleto/memory.db` real, `agents/**`, `skills/**`, `commands/
 
 ## Fase 3 — Tests de motor
 
-- [ ] 3.1 Test: `consolidate` dry-run reporta `criticalAffected` con la clave crítica que sería superseded y no modifica filas.
-- [ ] 3.2 Test: `consolidate({ dryRun: false })` sin `forceCritical` lanza con `code: 'MEMORY_CRITICAL_KEY'`, ninguna fila cambia y el canónico no se altera.
-- [ ] 3.3 Test: `consolidate({ dryRun: false, forceCritical: true })` aplica los grupos y deja `criticalAffected` igual al riesgo calculado.
-- [ ] 3.4 Test: una clave crítica que queda canónica no aparece en `criticalAffected`; los near-duplicates tampoco.
-- [ ] 3.5 Test: `criticalKeys` vacío o ausente produce `criticalAffected: []` y el reporte y la aplicación son idénticos al comportamiento previo.
-- [ ] 3.6 Test: `merge` dry-run reporta `criticalAffected` y no escribe; `merge` real sin `forceCritical` lanza con el `code` y deja cero filas; con `forceCritical` aplica.
-- [ ] 3.7 Test: un target crítico no bloquea el merge; una source no crítica tampoco.
-- [ ] 3.8 Test: el orden de `criticalAffected` es determinístico y dos corridas sobre el mismo estado producen el mismo arreglo.
-- [ ] 3.9 Test: el engine read-only acepta `criticalKeys` en dry-run y sigue rechazando la corrida real.
+- [x] 3.1 Test: `consolidate` dry-run reporta `criticalAffected` con la clave crítica que sería superseded y no modifica filas.
+- [x] 3.2 Test: `consolidate({ dryRun: false })` sin `forceCritical` lanza con `code: 'MEMORY_CRITICAL_KEY'`, ninguna fila cambia y el canónico no se altera.
+- [x] 3.3 Test: `consolidate({ dryRun: false, forceCritical: true })` aplica los grupos y deja `criticalAffected` igual al riesgo calculado.
+- [x] 3.4 Test: una clave crítica que queda canónica no aparece en `criticalAffected`; los near-duplicates tampoco.
+- [x] 3.5 Test: `criticalKeys` vacío o ausente produce `criticalAffected: []` y el reporte y la aplicación son idénticos al comportamiento previo.
+- [x] 3.6 Test: `merge` dry-run reporta `criticalAffected` y no escribe; `merge` real sin `forceCritical` lanza con el `code` y deja cero filas; con `forceCritical` aplica.
+- [x] 3.7 Test: un target crítico no bloquea el merge; una source no crítica tampoco.
+- [x] 3.8 Test: el orden de `criticalAffected` es determinístico y dos corridas sobre el mismo estado producen el mismo arreglo.
+- [x] 3.9 Test: el engine read-only acepta `criticalKeys` en dry-run y sigue rechazando la corrida real.
 
 ## Fase 4 — Tests de CLI
 
-- [ ] 4.1 Test: `memory consolidate --apply` con clave crítica afectada sale `2`, nombra la clave por stderr y no imprime `consolidate OK`.
-- [ ] 4.2 Test: la misma corrida con `--json` emite en stdout un objeto parseable con `error: "critical-key-gate"` y `criticalAffected`.
-- [ ] 4.3 Test: `memory consolidate` (dry-run) con la misma clave sale `0`, reporta `criticalAffected` en texto humano y JSON, y no muta la base ni el working-context.
-- [ ] 4.4 Test: `memory consolidate --apply --force-critical` aplica la supersesión y refresca el bloque.
-- [ ] 4.5 Test: `memory merge` real con source crítica sale `2` sin escribir ni refrescar el bloque; con `--json`, emite el objeto de error.
-- [ ] 4.6 Test: `memory merge --dry-run` con source crítica sale `0`, reporta `criticalAffected` en texto humano y JSON, y no escribe.
-- [ ] 4.7 Test: `memory merge --force-critical` aplica el merge y refresca el bloque.
-- [ ] 4.8 Test: sin `.ancletorc` o con `criticalKeys: []`, los caminos felices existentes de `merge` y `consolidate` conservan exit `0` y el mismo reporte, con `criticalAffected: []`.
-- [ ] 4.9 Test de regresión: la clave crítica fantasma existente (`test/cli.test.js:9477-9487` y `:3883-3900`) sigue saliendo `1` tras el commit, no `2`, porque no está entre los nodos afectados.
-- [ ] 4.10 Test: `--force-critical` sobre una `rule` crítica del scope inyectado aplica el merge/consolidate en la base y falla el refresh con exit `1`, dejando el bloque desactualizado; documenta el riesgo residual.
-- [ ] 4.11 Actualizar el pin de `MEMORY_USAGE` (`test/cli.test.js:9714-9733`) con las dos líneas nuevas.
+- [x] 4.1 Test: `memory consolidate --apply` con clave crítica afectada sale `2`, nombra la clave por stderr y no imprime `consolidate OK`.
+- [x] 4.2 Test: la misma corrida con `--json` emite en stdout un objeto parseable con `error: "critical-key-gate"` y `criticalAffected`.
+- [x] 4.3 Test: `memory consolidate` (dry-run) con la misma clave sale `0`, reporta `criticalAffected` en texto humano y JSON, y no muta la base ni el working-context.
+- [x] 4.4 Test: `memory consolidate --apply --force-critical` aplica la supersesión y refresca el bloque.
+- [x] 4.5 Test: `memory merge` real con source crítica sale `2` sin escribir ni refrescar el bloque; con `--json`, emite el objeto de error.
+- [x] 4.6 Test: `memory merge --dry-run` con source crítica sale `0`, reporta `criticalAffected` en texto humano y JSON, y no escribe.
+- [x] 4.7 Test: `memory merge --force-critical` aplica el merge y refresca el bloque.
+- [x] 4.8 Test: sin `.ancletorc` o con `criticalKeys: []`, los caminos felices existentes de `merge` y `consolidate` conservan exit `0` y el mismo reporte, con `criticalAffected: []`.
+- [x] 4.9 Test de regresión: la clave crítica fantasma existente (`test/cli.test.js:9477-9487` y `:3883-3900`) sigue saliendo `1` tras el commit, no `2`, porque no está entre los nodos afectados.
+- [x] 4.10 Test: `--force-critical` sobre una `rule` crítica del scope inyectado aplica el merge/consolidate en la base y falla el refresh con exit `1`, dejando el bloque desactualizado; documenta el riesgo residual.
+- [x] 4.11 Actualizar el pin de `MEMORY_USAGE` (`test/cli.test.js:9714-9733`) con las dos líneas nuevas.
+- [x] 4.12 Test: `memory consolidate` sin `.ancleto/memory.db` sale `1` (alineado con `memory merge`), sin crear la base.
 
 ## Fase 5 — Validación declarada
 
 - [x] 5.1 Ejecutar `npm run lint` y confirmar `passed`.
-- [ ] 5.2 Ejecutar `node --test "test/memory-engine.test.js" "test/cli.test.js"` con rutas explícitas y confirmar verde.
-- [ ] 5.3 Ejecutar `npm test` y confirmar la suite completa en verde.
+- [x] 5.2 Ejecutar `node --test "test/memory-engine.test.js" "test/cli.test.js"` con rutas explícitas y confirmar verde.
+- [x] 5.3 Ejecutar `npm test` y confirmar la suite completa en verde.
 - [x] 5.4 Registrar format check `not-configured` y typecheck no aplica; no inventar comandos.
 - [x] 5.5 Reproducir el invariante sobre una base temporal: dry-run reporta; apply sin flag sale `2` con cero filas; `--force-critical` aplica; `criticalKeys` vacío reproduce el comportamiento previo. No usar `.ancleto/memory.db` real.
 

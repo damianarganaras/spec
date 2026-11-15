@@ -125,6 +125,27 @@ configurable vía `opts.days`. Después del purge, el sistema SHALL ejecutar `VA
 post-commit (SQLite no permite `VACUUM` dentro de una transacción). Los nodos con `status='active'`
 NO SHALL ser afectados bajo ninguna condición.
 
+**Comparación de instantes.** La elegibilidad SHALL resolverse como una comparación de instantes y
+NO como una comparación de texto. Los tres statements de GC —selección para el dry-run, borrado y
+desvinculación de `superseded_by`— SHALL comparar
+`julianday(COALESCE(superseded_at, created_at)) < julianday(?)` contra el mismo valor de cutoff. La
+evaluación NO SHALL depender de la representación textual persistida: dos escrituras del mismo
+instante, con o sin milisegundos, SHALL compararse como el mismo instante. Un nodo cuyo instante es
+igual o posterior al cutoff NO SHALL purgarse, aunque su texto ordene antes que el texto del cutoff
+por la diferencia de milisegundos. El cutoff SHALL calcularse una sola vez por invocación y ese
+único valor SHALL alimentar las tres sentencias, de modo que no exista una ventana en la que una fila
+cruce el umbral entre la selección y el borrado.
+
+**Fechas no parseables.** Una fila cuyo `COALESCE(superseded_at, created_at)` no pueda interpretarse
+como instante SHALL ser RETENIDA. `julianday()` sobre un valor no parseable produce NULL, y esa fila
+NO SHALL tratarse como elegible ni ser purgada, en dry-run ni en purge real: el sistema NUNCA SHALL
+purgar por un valor que no puede interpretar.
+
+**Estados fuera del alcance.** El valor `deleted` del CHECK de `status` es un estado RESERVADO que ningún camino de
+escritura produce; `gc` SHALL ignorarlo en la selección, en el borrado y en el conteo, y NO SHALL
+interpretarlo como `superseded` ni como candidato a purga. Este change NO SHALL agregar ni activar
+escrituras de `status='deleted'`.
+
 **Registro del instante.** Toda supersesión SHALL escribir `superseded_at` con el instante de la
 operación, en el mismo statement que marca `status='superseded'` y `superseded_by`. El registro
 SHALL aplicar a todas las rutas de supersesión del engine: `recordNode`, `importNodes`, `merge` y
@@ -148,10 +169,16 @@ umbral, y uno que no lo era SHALL seguir sin serlo. El cambio de semántica SHAL
 constructor de `buildEngine`. El statement `supersede` —que escribe
 `status='superseded', superseded_by, superseded_at`— SHALL prepararse de forma lazy y memoizada
 mediante un helper interno (p. ej. `getSupersede()`), y ese helper SHALL ser la única vía usada por
-`recordNode`, `importNodes`, `merge` y `consolidate`. Los statements de selección y borrado de GC
-(`gcSelect`, `gcDelete`) SHALL prepararse dentro de la invocación de `gcSuperseded`. El objetivo es
-que un engine read-only abierto con `migrate: false` sobre una base previa a la columna no falle al
-construirse, de modo que `memory doctor` y `memory list` sigan funcionando sobre esa base.
+`recordNode`, `importNodes`, `merge` y `consolidate`. Los statements de selección, borrado y
+desvinculación de GC (`gcSelect`, `gcDelete` y `gcDetach`) SHALL prepararse dentro de la invocación
+de `gcSuperseded`. El objetivo es que un engine read-only abierto con `migrate: false` sobre una base
+previa a la columna no falle al construirse, de modo que `memory doctor` y `memory list` sigan
+funcionando sobre esa base.
+
+**Limitación de plan.** GC SHALL aceptarse como `SCAN memory_nodes`: el contrato vigente prohíbe
+tablas, índices, triggers y vistas nuevos, así que GC NO SHALL agregar un índice para esta consulta.
+La ausencia de índice NO SHALL justificar un cambio de semántica, un purge distinto ni un recorte de
+los escenarios de este requirement. GC NO SHALL crear objetos de schema.
 
 #### Scenario: GC mide la edad de supersesión, no la de creación
 
@@ -212,6 +239,43 @@ construirse, de modo que `memory doctor` y `memory list` sigan funcionando sobre
 - **THEN** el engine se construye sin error
 - **AND** la construcción no prepara ningún statement que referencie `superseded_at`
 - **AND** las lecturas que no tocan GC siguen funcionando
+
+#### Scenario: La frontera del segundo no purga antes de tiempo
+
+- **WHEN** el cutoff de `gcSuperseded({ days })` cae en un segundo sin milisegundos y un nodo
+  superseded tiene `superseded_at` en ese mismo segundo pero con milisegundos
+- **THEN** el nodo NO es purgado, porque su instante no es anterior al cutoff
+- **AND** el dry-run tampoco lo cuenta como elegible
+
+#### Scenario: Formatos mixtos con y sin milisegundos se comparan como instantes
+
+- **WHEN** dos nodos superseded representan el mismo instante anterior al cutoff, uno con
+  `superseded_at` con milisegundos y otro sin ellos
+- **AND** se invoca primero el dry-run y luego el purge real
+- **THEN** ambos nodos son elegibles por igual según su instante
+- **AND** el conjunto purgado coincide exactamente con el contado por el dry-run
+
+#### Scenario: Una fecha no parseable se retiene
+
+- **WHEN** un nodo superseded tiene un `superseded_at` no nulo que no puede interpretarse como
+  instante
+- **AND** se invoca `gcSuperseded({ days: 30, dryRun: true })` y luego `gcSuperseded({ days: 30 })`
+- **THEN** el nodo no se cuenta como elegible en el dry-run
+- **AND** el nodo no se purga, aunque su `created_at` sea muy anterior al cutoff
+
+#### Scenario: `deleted` reservado no se purga ni se cuenta
+
+- **WHEN** la base contiene una fila con `status='deleted'` y una antigüedad anterior al cutoff
+- **AND** se invoca `gcSuperseded({ days: 30, dryRun: true })` y luego `gcSuperseded({ days: 30 })`
+- **THEN** la fila no se cuenta como superseded en el dry-run
+- **AND** la fila no se purga en el purge real
+- **AND** la fila conserva su `status` y su `superseded_by`
+
+#### Scenario: GC no crea objetos de schema
+
+- **WHEN** se ejecuta `gcSuperseded({ days: 30 })` sobre una base con nodos elegibles
+- **THEN** el conjunto de objetos de `sqlite_master` (nombre y tipo) es idéntico antes y después
+- **AND** la semántica de elegibilidad aplicada es la de los escenarios anteriores
 
 ### Requirement: Comando CLI `ancleto memory gc`
 
@@ -1178,11 +1242,24 @@ familia existente `memory`. El subcomando SHALL ser un wrapper fino sobre un mó
 exactos. `inspectRefs` es un agregado de nivel doctor que no expone `reason` por ref y NO es la
 primitiva que compone este módulo. El módulo NO SHALL contener SQL propio, un parser de refs propio,
 un resolvedor de refs propio ni una segunda normalización de duplicados, cualquiera sea la primitiva
-que componga. Un duplicado exacto SHALL ser el que produce esa primitiva: `type`
-igual y `content` normalizado sin el bloque `refs:`; el canónico SHALL ser el que elige su cadena
-fija de criterios. Como la curaduría no reporta near-duplicates, SHALL invocar la primitiva con
-`includeNearDuplicates: false` para no pagar ese escaneo; la definición de duplicado exacto y el
-default de esa primitiva NO cambian.
+que componga. El literal de clasificación de gramática inválida —la línea ofensora `refs:` y el
+motivo `inválido (gramática)`— SHALL tener una única definición exportada por el engine y SHALL ser
+el mismo literal que usa el diagnóstico de refs; la curaduría NO SHALL redeclararlo. Un duplicado
+exacto SHALL ser el que produce esa primitiva: `type` igual y `content` normalizado sin el bloque
+`refs:`; el canónico SHALL ser el que elige su cadena fija de criterios. Como la curaduría no reporta
+near-duplicates, SHALL invocar la primitiva con `includeNearDuplicates: false` para no pagar ese
+escaneo; la definición de duplicado exacto y el default de esa primitiva NO cambian.
+
+**Snapshot de lectura.** El reporte SHALL componerse bajo UN único snapshot de lectura: la lectura de
+los nodos activos y la detección de duplicados exactos SHALL ejecutarse dentro de una misma
+transacción diferida read-only (`BEGIN DEFERRED` … `COMMIT`, con `ROLLBACK` ante error). Esa
+transacción NO SHALL escribir, NO SHALL migrar y NO SHALL adquirir el helper de escritura ni su
+retry. Bajo `journal_mode=WAL` NO SHALL bloquear a otros lectores ni a escritores, y SHALL cerrarse
+antes de resolver refs contra el filesystem, de modo que el I/O no mantenga el snapshot abierto. Una
+escritura confirmada por otro proceso entre las dos lecturas NO SHALL ser visible en ninguna de las
+dos: ambas SHALL ver el mismo estado, correspondiente al instante en que se abrió la transacción. Si
+una lectura falla, el error SHALL propagarse como estado distinto de `ok` y NO SHALL quedar la
+transacción abierta.
 
 **Read-only.** El comando SHALL abrir la base exclusivamente con `readonly: true` y
 `migrate: false`. NO SHALL aceptar `--rebuild` ni ejecutar `VACUUM`, `VACUUM INTO`, snapshot, DDL,
@@ -1300,10 +1377,34 @@ reporte limpio. Cualquier error de apertura o lectura SHALL reportarse como esta
 - **AND** la cantidad de nodos y sus `status`, `superseded_by` y `superseded_at` no cambian
 - **AND** dos corridas consecutivas son idempotentes
 
+#### Scenario: La composición lee bajo un único snapshot
+
+- **WHEN** se ejecuta `ancleto memory curate --json` y otro proceso confirma un nodo activo nuevo
+  después de que la curaduría leyó los nodos activos
+- **THEN** el nodo nuevo no aparece en `brokenRefs`, `unverifiable` ni `exactDuplicates`
+- **AND** la lectura de nodos y la detección de duplicados exactos ven el mismo estado
+- **AND** sin escrituras concurrentes, dos corridas consecutivas son idénticas
+
+#### Scenario: El snapshot no deja el WAL retenido ni bloquea escritores
+
+- **WHEN** la curaduría corre mientras un escritor concurrente confirma una escritura
+- **THEN** el escritor confirma sin `MEMORY_DB_BUSY` y sin esperar a que la curaduría termine
+- **AND** al volver la curaduría no queda ninguna transacción abierta
+- **AND** una escritura posterior en otra conexión confirma sin esperar
+
+#### Scenario: El texto y el motivo de gramática inválida no cambian
+
+- **WHEN** un nodo activo declara un bloque `refs:` repetido o una línea no-item dentro del bloque
+- **THEN** la entrada usa `refs:` o la línea ofensora como `ref`, omite `kind` y reporta `reason`
+  `inválido (gramática)`
+- **AND** el texto y el motivo coinciden con los del diagnóstico de refs vigente
+- **AND** los códigos de salida no cambian respecto de la curaduría anterior
+
 _No-testeable-por-construcción: que el módulo no contenga una ruta de escritura ni un segundo
 parser o normalizador es una propiedad de construcción sin salida observable directa. Se ancla en
 el contrato del módulo descrito arriba y en la revisión de código; el efecto observable —la base
-byte a byte idéntica— sí queda cubierto por el scenario anterior._
+byte a byte idéntica— sí queda cubierto por el scenario anterior. Lo mismo aplica a que el literal
+de gramática tenga un único punto de definición._
 
 ### Requirement: Import con dry-run clasificado por memory_key
 

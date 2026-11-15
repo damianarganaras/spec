@@ -570,3 +570,24 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Validaciones:** `npm test` 1391 pass / 0 fail / 5 skip (preexistentes); `npm run lint` passed; format `not-configured`; typecheck `n/a`.
 - **CH-09e — DIFERIDO sin consumidor (no es bug abierto):** `exactGroups` ya expone `type`; el write-path y esta puerta no necesitan la proyección de `memory curate`, que es read-only y no tiene consumidor real. Agregarla sería especulación y rompería el pin de forma del reporte (`test/curation.test.js:195`). Se reabre sólo cuando un consumidor real necesite desambiguar grupos por tipo.
 - **Compatibilidad y downgrade:** sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`. Un binario `0.35.0` lee la misma base pero ignora `--force-critical`, así que puede volver a superseder una clave crítica: se documenta en el release, no hay migración ni rollback de datos pendiente.
+
+## Relación con 0.36.0
+
+0.36.0 (2026-11-15) contiene un change archivado. Release MINOR (runtime + spec + test): cierra CH-09a (puerta de criticidad) y corrige el exit code de `memory consolidate` sin base; **pendiente de publicar** — sin tag, run ni npm todavía.
+
+**Hecho:**
+
+- **`ch-09a-criticality-gate`** (delta `## MODIFIED` en `memory-ops`), archivado en `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/`. Detalle en `## Cierre de deuda — CH-09a puerta de criticidad (2026-11-15, pendiente de publicar 0.36.0)`.
+- **Puerta de criticidad:** `memory consolidate --apply` y `memory merge` reportan `criticalAffected` (dry-run y apply); sin `--force-critical` rechazan atómicamente antes de escribir con exit `2` y, con `--json`, `{"error":"critical-key-gate","criticalAffected":[...]}`. El dry-run reporta y nunca bloquea.
+- **Fuente del set crítico:** `.ancletorc` → `memory.criticalKeys`; vacío, ausente o inválido equivale a lista vacía; el engine no lee `.ancletorc`, el CLI inyecta el set y la evaluación ocurre dentro de la misma `BEGIN IMMEDIATE`.
+- **Fix de exit code:** `memory consolidate` sin `.ancleto/memory.db` ahora sale `1` (antes `0`), alineado con `memory merge`, sin crear la base.
+- **Preparación de release:** `package.json`, `package-lock.json` y `CHANGELOG.md` ya están en `0.36.0` (commit `chore(release): 0.36.0`); MINOR.
+- **Compatibilidad:** sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`; un binario `0.35.0` lee la misma base pero ignora `--force-critical` (puede volver a superseder una clave crítica).
+
+**Diferido en 0.36.0 (sigue pendiente, no hecho):**
+
+- **CH-09e — DIFERIDO sin consumidor:** `exactGroups` ya expone `type`; la proyección de `memory curate` no tiene consumidor real y agregarla sería especulación, además de romper el pin de forma del reporte (`test/curation.test.js:195`). Se reabre sólo cuando un consumidor real necesite desambiguar grupos por tipo.
+
+**Release pendiente de publicar:**
+
+- Tag `v0.36.0`, run de publish y npm: **pendiente de publicar**; no se afirman hash de tag, id de run ni resultado de npm en esta edición; la fase posterior los completa.

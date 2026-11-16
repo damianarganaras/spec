@@ -66,7 +66,7 @@ Se agrega un requirement en el delta de `memory-ops`:
 
 ### Requirement: Reparación explícita de refs no resueltas con `memory repair refs`
 
-El contrato completo, con sus trece escenarios, vive en
+El contrato completo, con sus catorce escenarios, vive en
 `aspec/changes/memory-repair-refs/specs/memory-ops/spec.md`.
 
 ## Decisión de arquitectura
@@ -89,8 +89,10 @@ Se descartaron las alternativas por estas razones:
 ## Riesgos y mitigaciones
 
 - **Remover una ref que vuelva a existir.** Sólo se remueven refs con `inexistente` demostrado; el
-  dry-run muestra el plan y el nodo superseded conserva el `content` original, recuperable por
-  export/import.
+  dry-run muestra el plan y el nodo anterior queda `superseded` conservando su `content` original en
+  la tabla. La recuperación soportada es el snapshot previo (`memory snapshot --out`) y la
+  inspección con `memory list --all`; `memory export` no lo incluye porque sólo exporta nodos
+  activos.
 - **Deriva entre el plan y la escritura.** La selección y la escritura comparten la transacción
   `BEGIN IMMEDIATE`; la cardinalidad se revalida dentro de ella.
 - **Bloque malformado interpretado como reparable.** Se rechaza antes de escribir y no se reescribe
@@ -114,9 +116,10 @@ Sólo comandos declarados en `PRODUCT.md` → `## Project Commands`:
 - Typecheck: no aplica (JavaScript ESM sin `tsconfig.json`).
 
 Prueba funcional sobre una base temporal, nunca sobre `.ancleto/memory.db` real: dry-run no escribe;
-`--apply` remueve sólo `inexistente`; `ambiguo`, `sin raíz`, `commit:` y `workitem:` se conservan;
-segunda corrida es `no-op`; clave crítica sin `--force-critical` sale `2`; snapshot + restore
-devuelve `quick_check='ok'`, `memory_fts_docsize == memory_nodes` y el `content` previo.
+`--apply` remueve sólo `inexistente`; `ambiguo`, `commit:` y `workitem:` se conservan; una raíz no
+derivable sale `1` sin escribir; segunda corrida es `no-op`; clave crítica sin `--force-critical`
+sale `2`; snapshot + restore devuelve `quick_check='ok'`, `memory_fts_docsize == memory_nodes` y el
+`content` previo.
 
 ## Rutas autorizadas
 
@@ -142,7 +145,9 @@ No se agrega un comando `restore`. El procedimiento documentado es:
 3. Verificar `PRAGMA quick_check='ok'`, la igualdad entre `memory_fts_docsize` y `memory_nodes`, y
    el `content` restaurado.
 
-Además, el nodo superseded conserva su `content` original, recuperable por export/import.
+Además, el nodo anterior queda `superseded` conservando su `content` original en la tabla; la
+recuperación soportada es el snapshot previo (`memory snapshot --out`) y la inspección con
+`memory list --all`; `memory export` no lo incluye porque sólo exporta nodos activos.
 
 ## Decisiones
 
@@ -157,9 +162,9 @@ Además, el nodo superseded conserva su `content` original, recuperable por expo
 **Estado:** aprobado
 
 - **memory_key:** memory-repair-refs-scope
-  **Elección:** la operación remueve exactamente las refs con `ok: false` y motivo `inexistente`; nunca toca `commit:`, `workitem:`, `ambiguo (<n> coincidencias)` ni `sin raíz`.
+  **Elección:** la operación remueve exactamente las refs con `ok: false` y motivo `inexistente`; nunca toca `commit:`, `workitem:` ni `ambiguo (<n> coincidencias)`; si la raíz del proyecto no se puede derivar, sale con código `1` sin escribir.
   **Descartado:** remover toda ref no resuelta y redirigir refs entre `memory_key`.
-  **Justificación:** las refs no verificables no tienen resolvedor local (`src/core/memory/engine.js:660-666`), y `ambiguo`/`sin raíz` no son ausencia demostrada; la gramática no tiene kind hacia `memory_key` (`src/core/memory/engine.js:247,278-310`).
+  **Justificación:** las refs no verificables no tienen resolvedor local (`src/core/memory/engine.js:660-666`), y `ambiguo` no es ausencia demostrada; la gramática no tiene kind hacia `memory_key` (`src/core/memory/engine.js:247,278-310`).
 **Refs:**
 - spec:memory-engine#Refs normalizadas materializadas en el contenido del nodo
 - spec:memory-ops#Diagnóstico de refs no resueltas en nodos activos

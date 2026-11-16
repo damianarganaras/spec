@@ -12,6 +12,7 @@
         "test/mcp.test.js",
         "test/memory-engine.test.js",
         "test/memory-pr1-contract.test.js",
+        "test/repair-refs.test.js",
         "test/specs-merge.test.js",
         "test/stats-failures.test.js",
         "test/test-selection.test.js"
@@ -20,8 +21,8 @@
     },
     {
       "trigger": ["src/core/memory/**"],
-      "tests": ["test/stats-failures.test.js", "test/memory-writers.test.js"],
-      "reason": "stats-failures and memory-writers use DatabaseSync directly against the memory schema; memory-writers is also declared here per ch-04 task 5.1"
+      "tests": ["test/memory-writers.test.js", "test/repair-refs.test.js", "test/stats-failures.test.js"],
+      "reason": "stats-failures, memory-writers and repair-refs use DatabaseSync directly against the memory schema; memory-writers is also declared here per ch-04 task 5.1, and repair-refs seeds invalid states and reads the schema without the engine API"
     },
     {
       "trigger": [

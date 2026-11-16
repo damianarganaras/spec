@@ -13,7 +13,14 @@ SHALL introducir una tool MCP nueva ni un comando `memory restore`.
 en su bloque `refs:` cuya resolución devuelva `ok: false` con motivo `inexistente`. El resto del
 `content` SHALL permanecer byte-idéntico: prosa, separadores, indentación y las demás refs NO SHALL
 alterarse. Las refs `commit:` y `workitem:` NO SHALL removerse nunca porque no son verificables
-localmente. Las refs con motivo `ambiguo (<n> coincidencias)` o `sin raíz` NO SHALL removerse. La
+localmente. Las refs con motivo `ambiguo (<n> coincidencias)` NO SHALL removerse.
+
+**Allowlist fail-closed.** La única ref removible SHALL ser la que devuelve `ok: false` con motivo
+exactamente `inexistente`; cualquier otro motivo —incluido uno nuevo no contemplado— NO SHALL
+considerarse removible ni removerse. La lista de motivos removibles NO SHALL interpretarse como
+complemento de la de motivos diagnosticados.
+
+Si la raíz del proyecto no se puede derivar, el comando SHALL salir con código `1` sin escribir. La
 reparación NO SHALL redirigir una ref de una `memory_key` a otra, NO SHALL reescribir un bloque
 `refs:` malformado y NO SHALL reactivar un nodo `superseded`.
 
@@ -23,8 +30,10 @@ SHALL exigir exactamente un nodo activo con la `memory_key` indicada; con cero o
 nodos activos SHALL salir con código `1` sin escribir la base ni el working-context.
 
 **Dry-run y aplicación.** Sin `--apply`, el comando SHALL operar en dry-run, SHALL abrir la base en
-modo read-only con `migrate: false` y NO SHALL escribir la base, sus sidecars ni el
-working-context; SHALL reportar el plan de remoción. Con `--apply`, SHALL aplicar la reparación.
+modo read-only con `migrate: false` y NO SHALL escribir la base ni el working-context; los bytes de
+`.ancleto/memory.db` SHALL permanecer idénticos. La materialización de sidecars vacíos
+(`-wal`/`-shm`) por una lectura read-only NO SHALL contar como escritura. El dry-run SHALL reportar
+el plan de remoción. Con `--apply`, SHALL aplicar la reparación.
 El dry-run SHALL validar el `content` candidato con la misma validación que usa la escritura, de
 modo que un plan que `--apply` rechazaría NO SHALL reportarse como aplicable; en ese caso la salida
 SHALL ser `status: "error"` con código `1` y cero escrituras, nombrando la ref que impide la
@@ -61,10 +70,12 @@ se aplicó y que el bloque quedó desactualizado.
 **Salida.** Con `--json`, la salida SHALL ser un objeto JSON parseable con `status` (`ok`, `no-op`,
 `no-db` o `error`), `memory_key`, `dry_run`, `applied`, `critical`, `removed[]` y `remaining`. Cada
 entrada de `removed[]` SHALL incluir `kind`, `ref` —el texto declarado tal cual— y `reason`;
-`remaining` SHALL ser la cantidad de refs conservadas. El orden de `removed[]` SHALL ser el orden de
-aparición en `content`, sin timestamps ni campos volátiles. Sin `--json`, SHALL imprimirse un
-resumen legible. Si la base no existe, `status` SHALL ser `no-db` y la salida SHALL ser distinta de
-`0`.
+`remaining`, la cantidad de refs conservadas, SHALL estar presente sólo cuando `status` es `ok` o
+`no-op`, y SHALL omitirse en `error` y en `no-db`. Cuando `status` es `error`, el objeto SHALL
+incluir además `reason`, un string con el motivo del rechazo. El orden de `removed[]` SHALL ser el
+orden de aparición en `content`, sin timestamps ni campos volátiles. Sin `--json`, SHALL imprimirse
+un resumen legible. Si la base no existe, `status` SHALL ser `no-db` y la salida SHALL ser distinta
+de `0`.
 
 **Compatibilidad.** El change NO SHALL modificar el schema, los PRAGMAs persistentes ni
 `ruleVersion`; un binario `0.36.0` SHALL leer el mismo estado persistido.
@@ -72,8 +83,10 @@ resumen legible. Si la base no existe, `status` SHALL ser `no-db` y la salida SH
 **Rollback.** Al no existir un comando `restore`, el procedimiento documentado SHALL ser: snapshot
 previo con `memory snapshot --out`; para revertir, copiar el snapshot sobre `.ancleto/memory.db`,
 borrar los sidecars `-wal`/`-shm` y verificar `PRAGMA quick_check='ok'`, la igualdad entre
-`memory_fts_docsize` y `memory_nodes`, y el `content` restaurado. El nodo superseded SHALL conservar
-su `content` original, recuperable por export/import.
+`memory_fts_docsize` y `memory_nodes`, y el `content` restaurado. El nodo anterior SHALL quedar
+`superseded` conservando su `content` original en la tabla; la recuperación soportada es el snapshot
+previo (`memory snapshot --out`) y la inspección con `memory list --all`. `memory export` NO lo
+incluye porque sólo exporta nodos activos.
 
 #### Scenario: Ref inexistente removida con el resto del content intacto
 
@@ -84,9 +97,9 @@ su `content` original, recuperable por export/import.
 - **AND** todo el `content` distinto de la línea removida permanece byte-idéntico, incluidas la
   prosa, la indentación y las demás refs
 
-#### Scenario: Refs ambiguas o sin raíz no se remueven
+#### Scenario: Refs ambiguas no se remueven
 
-- **WHEN** el nodo declara refs cuyo motivo es `ambiguo (<n> coincidencias)` o `sin raíz`
+- **WHEN** el nodo declara refs cuyo motivo es `ambiguo (<n> coincidencias)`
 - **THEN** ninguna aparece en `removed[]`
 - **AND** `--apply` las conserva en el `content`
 
@@ -167,3 +180,10 @@ su `content` original, recuperable por export/import.
 - **AND** `--apply` sale con código `1` y no modifica bytes de la base ni el `working-context`
 - **AND** el motivo nombra la ref no removible
 - **AND** las refs `ambiguo` no se eliminan ni se reportan como removibles.
+
+#### Scenario: Working-context refrescado tras reparar una regla crítica del proyecto
+
+- **WHEN** `--apply` repara un nodo `type:'rule'`, `scope:'project'`
+- **THEN** el bloque proactivo del working-context del proyecto se refresca y refleja el `content`
+  nuevo
+- **AND** el nodo `superseded` conserva el `content` original

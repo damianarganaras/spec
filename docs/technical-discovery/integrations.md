@@ -2,7 +2,7 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-16T14:32:06Z
+generatedAt: 2026-11-16T14:59:46Z
 pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---

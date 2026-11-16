@@ -2,7 +2,7 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-16T14:32:06Z
+generatedAt: 2026-11-16T14:59:46Z
 pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---

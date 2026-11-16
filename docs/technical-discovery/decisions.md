@@ -2,7 +2,7 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-16T14:32:06Z
+generatedAt: 2026-11-16T14:59:46Z
 pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---
@@ -1435,6 +1435,11 @@ Change archivado: `aspec/changes/archive/2026-11-16-memory-gap-declaration/`. Re
 - **Sin cambio persistido**: schema, PRAGMAs persistentes, `ruleVersion` y la forma del
   export/snapshot quedan intactos. `CH-01/T27` se cierra por su mitad viva: el `reindex` desde
   `proposals` sigue refutado (el contenido almacenado es una composición, no el bloque verbatim).
+- **Release publicada (0.38.0)**: tag anotado `v0.38.0` → merge `ab751cc`, publish run
+  `43889435565` (success) y `@ancleto/spec@0.38.0` como `latest` en npm (`gitHead` `ab751cc`);
+  tarball HTTP 200 (238.493 bytes). El canary del workflow devolvió 404 por propagación de CDN y es
+  no bloqueante. `aspec/backlog.md` registra el dato; el bump ya estaba aplicado en
+  `package.json`/`package-lock.json`/`CHANGELOG.md`.
 - **Oráculo**: `test/memory-status.test.js` cubre estados, evidencia, gap, raíz única, read-only y
   `--json`; `test/memory-doctor-uninitialized.test.js` cubre el path de doctor sin esquema y
   `test/cli.test.js` el dispatch. No se ejecutó la suite en esta generación.

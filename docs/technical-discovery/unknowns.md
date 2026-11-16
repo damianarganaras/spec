@@ -2,7 +2,7 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-16T14:32:06Z
+generatedAt: 2026-11-16T14:59:46Z
 pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---
@@ -405,12 +405,18 @@ skillVersion: '2.3'
   así que `test/repair-refs.test.js`, `test/memory-engine.test.js`, `test/cli.test.js`, la spec
   canónica y los artifacts archivados se leyeron directamente fuera del pack; el cuerpo cubre
   `src/` (incluidos `engine.js` y `curation.js`), `scripts/` y la configuración versionada.
-- **Estado del chequeo (0.38.0)**: el `discovery --check` previo devolvió `STALE`/`impact: minor`
-  con `changedAreas: ["CHANGELOG.md", "aspec", "src", "test"]`, `materialReasons: []`,
-  `seedMapPresent: true` y `affectedDocs` con los once documentos. Esta materialización consumió el
-  pack único de 890 fuentes (177.910 B, ~44.059 tokens) y reescribió `.discovery-state.json`; el
-  delta 0.37.0→0.38.0 es `memory status` advisory y el fix de `memory doctor` sobre una base sin
-  esquema, más `test/memory-status.test.js` y `test/memory-doctor-uninitialized.test.js`.
+- **Estado del chequeo (0.38.0)**: la primera materialización partió de `STALE`/`impact: minor`
+  con `changedAreas: ["CHANGELOG.md", "aspec", "src", "test"]`. Tras `380df63` (registro verificado
+  de la publicación) el re-chequeo devolvió `STALE`/`impact: minor` con `changedAreas: ["aspec"]`,
+  `materialReasons: []`, `seedMapPresent: true` y los once documentos en `affectedDocs`; esta
+  regeneración reutilizó el pack único de 890 fuentes (177.910 B, ~44.059 tokens) —sin cambios de
+  cuerpo, porque el tier `minimo` excluye `**/*.md`— y reescribió `.discovery-state.json`.
+- **Delta y publicación (0.37.0→0.38.0)**: el cambio funcional es `memory status` advisory y el fix
+  de `memory doctor` sobre una base sin esquema, más `test/memory-status.test.js` y
+  `test/memory-doctor-uninitialized.test.js`. La release quedó publicada y verificada: tag anotado
+  `v0.38.0` → merge `ab751cc`, publish run `43889435565` (success), npm `0.38.0` como `latest`
+  (`gitHead` `ab751cc`) y tarball HTTP 200 (238.493 bytes); el canary del workflow devolvió 404 por
+  propagación de CDN (no bloqueante).
 - **Evidencia de 0.38.0**: se verificó leyendo `src/core/memory/status.js` (`inspectMemoryStatus`,
   `inspectExpected`, `inspectDatabase`, `RECOVERY_COMMANDS`), `src/core/memory/doctor.js`
   (`SCHEMA_UNINITIALIZED_DETAIL` y el early-path de cinco checks), `src/cli/index.js`

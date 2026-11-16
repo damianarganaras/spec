@@ -2,7 +2,7 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-16T14:32:06Z
+generatedAt: 2026-11-16T14:59:46Z
 pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---
@@ -91,7 +91,10 @@ paths citados (ver `unknowns.md`).
   reserva 1 a errores de E/S o flags desconocidas. Además, `memory doctor` ya no aborta con una base
   sin esquema: reporta los cinco checks con `ok: false` y sale ≠ 0 sin excepción ni stack trace. Sin
   cambios de schema, PRAGMAs persistentes ni forma del export/snapshot; cierra `CH-01/T27` por su
-  mitad viva (el reindex desde `proposals` sigue refutado).
+  mitad viva (el reindex desde `proposals` sigue refutado). **Publicada y verificada el 2026-11-16**:
+  tag anotado `v0.38.0` → merge `ab751cc`, publish run `43889435565` (success), `@ancleto/spec@0.38.0`
+  como `latest` en npm (`gitHead` `ab751cc`) y tarball HTTP 200 (238.493 bytes); el canary del
+  workflow devolvió 404 por propagación de CDN, no bloqueante (`aspec/backlog.md`).
 - **Release 0.37.0**: `memory repair refs` repara de forma explícita las refs no resueltas de un
   único nodo activo. Remueve solo las refs verificables con motivo exactamente `inexistente` y
   preserva byte a byte el resto del `content` (prosa, separadores, indentación y demás refs); el

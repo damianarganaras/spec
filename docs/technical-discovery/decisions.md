@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-16T04:14:46Z
-pluginVersion: 0.37.0
+generatedAt: 2026-11-16T14:32:06Z
+pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.37.0)
+## Modelos y tiers (estado 0.38.0)
 
 ### Tabla y cadenas
 
@@ -968,7 +968,7 @@ sin `--tier` es `normal`.
   topología en día-cero; el refresh on-write es compare-based y no crea archivos vacíos. Desde
   0.31.0 el renderer suma el conjunto crítico declarado en `.ancletorc` → `memory.criticalKeys` y
   lo pasa como `required` (ver más abajo).
-- **Ops read-only por defecto**: `memory doctor`, `memory curate`, `memory list` y
+- **Ops read-only por defecto**: `memory doctor`, `memory status`, `memory curate`, `memory list` y
   `memory consolidate` (sin `--apply`) no migran ni escriben. `snapshot` usa conexión read-only y
   `VACUUM INTO`, con reemplazo seguro en Windows.
 - **0.21.0**: el archive de conformidad promovió cuatro decisiones a `.ancleto/memory.db`
@@ -1399,6 +1399,46 @@ subcomando ``ancleto memory repair refs`` y reparación de refs no resueltas en
 - **Oráculo**: `test/repair-refs.test.js` y `test/memory-engine.test.js`; no se ejecutó la suite en
   esta generación.
 
+## Estado advisory de memoria y doctor sin esquema (0.38.0)
+
+Change archivado: `aspec/changes/archive/2026-11-16-memory-gap-declaration/`. Requirements canónicos:
+``Comando CLI `ancleto memory status` `` y el fix del path sin esquema de `memory doctor` en
+`aspec/specs/memory-ops/spec.md`.
+
+- **Regla**: `ancleto memory status [--json]` declara el gap de memoria de producto tras
+  clone/worktree. Es un wrapper fino sobre `src/core/memory/status.js` (`inspectMemoryStatus`) y no
+  agrega una tool MCP ni un segundo gate de archive/promoción.
+- **Estados** (`memory-status-states`): `ok` (base con esquema y ≥1 nodo activo), `empty` (base con
+  esquema y 0 activos), `no-db` (archivo ausente) y `uninitialized` (archivo presente sin
+  `memory_nodes`, por ejemplo 0 bytes).
+- **Memoria esperable** (`memory-status-expected-evidence`): `expected` es `true` si algún
+  `aspec/changes/archive/*/proposal.md` contiene una línea que empieza con `## Decisiones` y otra
+  cuyo contenido, tras quitar indentación y un bullet `- `/`* `, empieza con `**memory_key:**`. El
+  escaneo es acotado con corte temprano; un archivo ilegible no declara evidencia. No cuentan
+  `.ancletorc`, `aspec/specs/**` ni `CHANGELOG.md`.
+- **Gap y recuperación** (`memory-status-gap`): `gap = expected && status !== 'ok'`; cuando es
+  `true`, la salida humana y el campo `recovery` del JSON nombran los caminos existentes
+  `memory export`, `memory import` y `memory snapshot`. Sin gap no se agrega advertencia.
+- **Raíz única** (`memory-status-single-root`): la base y la evidencia se derivan del mismo `cwd`;
+  un subdirectorio sin `aspec/changes/archive` propio no declara gap. Esto evita mezclar raíces y
+  un gap falso.
+- **Read-only y exit codes** (`memory-status-readonly`): verifica la existencia antes de abrir,
+  abre con `migrate: false, readonly: true`, no crea `.ancleto/`/`memory.db`, no ejecuta DDL ni
+  refresh del working-context. Sale con 0 en los cuatro estados; el 1 queda reservado a errores
+  inesperados de E/S/apertura y a flags desconocidas (sin stack trace).
+- **Contrato JSON**: `status`, `expected`, `gap`, `dbPresent`, `activeNodes`, `evidence` y
+  `recovery`; `evidence` es 1/0 por corte temprano y `recovery` es `[]` sin gap.
+- **Doctor sin esquema** (`memory-doctor-schema-less`): `memory doctor` ya no aborta cuando la base
+  existe sin `memory_nodes`. Reporta los cinco checks con `ok: false` y `detail`
+  `no verificable: esquema no inicializado`, sale ≠ 0 sin excepción capturada ni stack trace y no
+  construye un engine read-only que prepare statements contra `memory_nodes`.
+- **Sin cambio persistido**: schema, PRAGMAs persistentes, `ruleVersion` y la forma del
+  export/snapshot quedan intactos. `CH-01/T27` se cierra por su mitad viva: el `reindex` desde
+  `proposals` sigue refutado (el contenido almacenado es una composición, no el bloque verbatim).
+- **Oráculo**: `test/memory-status.test.js` cubre estados, evidencia, gap, raíz única, read-only y
+  `--json`; `test/memory-doctor-uninitialized.test.js` cubre el path de doctor sin esquema y
+  `test/cli.test.js` el dispatch. No se ejecutó la suite en esta generación.
+
 ## Lint y publicación
 
 - `npm run lint` ejecuta `eslint src/ test/ scripts/` con flat config y cuatro reglas
@@ -1460,7 +1500,7 @@ subcomando ``ancleto memory repair refs`` y reparación de refs no resueltas en
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.37.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.38.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +

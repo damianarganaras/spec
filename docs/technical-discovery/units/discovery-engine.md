@@ -4,8 +4,8 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set por grafo de imports, la selección de tests afectados, la resolución de modelos por tier y el descubrimiento dev-only del catálogo"
 covers: [topologia, empaquetado, tiers, tokens, affected-set, seleccion-de-tests, estado del seed, catalogo de modelos, integridad de IDs, aviso free-on-primary, descubrimiento dev-only]
 sources: ["src/core/discovery.js", "src/core/repomix-tier.js", "src/core/tier-models.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/discovery-glob.js", "src/core/discovery-state.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection"]
-generatedAt: 2026-11-16T04:14:46Z
-pluginVersion: 0.37.0
+generatedAt: 2026-11-16T14:32:06Z
+pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---
 
@@ -61,7 +61,9 @@ la puerta de criticidad de `merge`/`consolidate --apply` vive en `src/core/memor
 `src/cli/index.js`, sin cambios en el discovery, el pack, la frescura ni el estado. **0.37.0**
 tampoco la toca: `memory repair refs` y `repairRefs` viven en `src/cli/index.js` y
 `src/core/memory/engine.js`, sin cambios en la topología, el empaquetado, el affected-set ni el
-catálogo.
+catálogo. **0.38.0** tampoco la toca: `memory status` y el fix de `memory doctor` viven en
+`src/core/memory/status.js`/`doctor.js` y `src/cli/index.js`, sin cambios en la topología, el pack,
+la frescura ni el estado.
 
 ## Recorrido relevante
 
@@ -347,11 +349,11 @@ vacía; en cualquier otro caso imprime las razones y corre la suite completa dec
   filtro a `documentation/**` y `audit logs/**`; un estado legacy sin `fileHashes` sigue
   `STALE`/`minor`.
 - **El outputDir del seed se excluye** del hash de fuentes; escribir el seed no invalida el estado.
-- **Pack actual**: 886 fuentes, 175.342 B y ~43.421 tokens, tier `minimo` (comprimido), con 33
-  entradas de archivo en el cuerpo. El `.discovery-map.json` observado reporta 921 archivos (aspec
-  340, `.opencode` 66, src 22, test 34, scripts 2, docs 21, documentation 340, audit logs 9); el
-  estado `.discovery-state.json` lista 886 fuentes e incluye 674 entradas `documentation/` + 18
-  `audit logs/` entre `sources` y `fileHashes`, efímeras desde 0.29.0. Las 25 rutas
+- **Pack actual**: 890 fuentes, 177.910 B y ~44.059 tokens, tier `minimo` (comprimido), con 33
+  entradas de archivo en el cuerpo. El `.discovery-map.json` observado reporta 927 archivos (aspec
+  343, `.opencode` 66, src 23, test 36, scripts 2, docs 21, documentation 340, audit logs 9); el
+  estado `.discovery-state.json` lista 890 fuentes e incluye 674 entradas `documentation/` + 18
+  `audit logs/` entre `sources` y `fileHashes`, efímeras desde 0.29.0. Las rutas
   `test/*.test.js` ya no figuran en `sources` por `discovery.exclude` (0.30.1); los 8 fixtures de
   `test/fixtures/**` siguen incluidos.
 - **Un solo dueño del spawn**: mover el descubrimiento a `src/` rompería el contrato de "cero red en

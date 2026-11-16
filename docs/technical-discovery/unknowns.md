@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-16T04:14:46Z
-pluginVersion: 0.37.0
+generatedAt: 2026-11-16T14:32:06Z
+pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---
 
@@ -22,8 +22,9 @@ skillVersion: '2.3'
    `src/core/memory/engine.js` → `recordNode`, `gcSuperseded`, `REF_GRAMMAR`, `repairRefs`;
    `src/core/specs-merge.js`;
    `src/core/tier-models.js`, `src/core/test-selection.js`, `src/core/memory/database.js` →
-   `runImmediateTransaction`, `runReadTransaction`), no en el pack solo. El estado del pack
-   registra 886 fuentes (175.342 B, ~43.421 tokens) y su cuerpo contiene 33 entradas de archivo, porque
+   `runImmediateTransaction`, `runReadTransaction`, `src/core/memory/status.js` → `inspectMemoryStatus`;
+   `src/core/memory/doctor.js` → `SCHEMA_UNINITIALIZED_DETAIL`), no en el pack solo. El estado del pack
+   registra 890 fuentes (177.910 B, ~44.059 tokens) y su cuerpo contiene 33 entradas de archivo, porque
    `**/*.md`, `test/**`, `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y
    los Markdown excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
@@ -183,11 +184,11 @@ skillVersion: '2.3'
 
 ## Discrepancias y observaciones
 
-- **`.discovery-map.json` observado**: el generador reporta **917 archivos** (aspec 337,
-  `.opencode` 66, docs 21, test 33, src 22, scripts 2, documentation 340, audit logs 9, etc.). El pack
-  registra **886 fuentes** (175.342 B, ~43.421 tokens) y 33 entradas de archivo porque los globs de
+- **`.discovery-map.json` observado**: el generador reporta **927 archivos** (aspec 343,
+  `.opencode` 66, docs 21, test 36, src 23, scripts 2, documentation 340, audit logs 9, etc.). El pack
+  registra **890 fuentes** (177.910 B, ~44.059 tokens) y 33 entradas de archivo porque los globs de
   `discovery.exclude` omiten tests, lockfiles, imágenes y `public`; además Repomix filtra por sus
-  propios ignores. Desde 0.30.0 `**/*.test.*`/`**/*.spec.*` vuelven a aplicar; desde 0.30.1 las 24
+  propios ignores. Desde 0.30.0 `**/*.test.*`/`**/*.spec.*` vuelven a aplicar; desde 0.30.1 las
   rutas `test/*.test.js` dejan de figurar en `sources`; los 8 fixtures bajo `test/fixtures/**`
   (7 en `test/fixtures/memory/` y `memory-writer-child.mjs`) siguen incluidos.
   `.ancleto/**` y `.discovery-map.json` raíz siguen en `sources`/`fileHashes` del estado, pero desde
@@ -199,7 +200,7 @@ skillVersion: '2.3'
   discovery registra **337** porque su `config.exclude` omite 3 archivos bajo `__tests__/`. No es
   una inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.37.0`). No se usan como fuente de contenido;
+  gitignored; deben alinearse con `package.json` (`0.38.0`). No se usan como fuente de contenido;
   `memory.criticalKeys` se describe como seam de configuración, no como evidencia de la DB.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
@@ -404,10 +405,29 @@ skillVersion: '2.3'
   así que `test/repair-refs.test.js`, `test/memory-engine.test.js`, `test/cli.test.js`, la spec
   canónica y los artifacts archivados se leyeron directamente fuera del pack; el cuerpo cubre
   `src/` (incluidos `engine.js` y `curation.js`), `scripts/` y la configuración versionada.
+- **Estado del chequeo (0.38.0)**: el `discovery --check` previo devolvió `STALE`/`impact: minor`
+  con `changedAreas: ["CHANGELOG.md", "aspec", "src", "test"]`, `materialReasons: []`,
+  `seedMapPresent: true` y `affectedDocs` con los once documentos. Esta materialización consumió el
+  pack único de 890 fuentes (177.910 B, ~44.059 tokens) y reescribió `.discovery-state.json`; el
+  delta 0.37.0→0.38.0 es `memory status` advisory y el fix de `memory doctor` sobre una base sin
+  esquema, más `test/memory-status.test.js` y `test/memory-doctor-uninitialized.test.js`.
+- **Evidencia de 0.38.0**: se verificó leyendo `src/core/memory/status.js` (`inspectMemoryStatus`,
+  `inspectExpected`, `inspectDatabase`, `RECOVERY_COMMANDS`), `src/core/memory/doctor.js`
+  (`SCHEMA_UNINITIALIZED_DETAIL` y el early-path de cinco checks), `src/cli/index.js`
+  (`memoryStatusCmd`, `MEMORY_STATUS_FLAGS`, `memoryDoctorCmd` y la rama `status` de `memoryCmd`),
+  el delta archivado `aspec/changes/archive/2026-11-16-memory-gap-declaration/` (fuera del pack por
+  el tier), `aspec/specs/memory-ops/spec.md` y `CHANGELOG.md`. No se ejecutó la suite ni un
+  `memory status`/`doctor` real contra `.ancleto/memory.db`; el comportamiento se describió desde el
+  código y el contrato.
+- **Límite de evidencia del pack 0.38.0**: el tier `minimo` excluye `test/**`, `docs/**` y `**/*.md`,
+  así que `test/memory-status.test.js`, `test/memory-doctor-uninitialized.test.js`,
+  `test/memory-engine.test.js`, `test/cli.test.js`, la spec canónica y los artifacts archivados se
+  leyeron directamente fuera del pack; el cuerpo cubre `src/` (incluidos `status.js` y `doctor.js`),
+  `scripts/` y la configuración versionada.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.37.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.38.0`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -443,8 +463,10 @@ skillVersion: '2.3'
   879 fuentes / 24 tests en 0.35.0 (con `memory-engine.test.js`, `curation.test.js` y
   `memory-writers.test.js` cubriendo GC por instante, fechas no parseables, `deleted` reservado y
   snapshot único), 883 fuentes / 24 tests en 0.36.0 (con la puerta de criticidad cubierta por
-  `memory-engine.test.js` y `cli.test.js`) y 886 fuentes / 25 tests en 0.37.0 (con
-  `repair-refs.test.js` cubriendo la reparación explícita de refs);
+  `memory-engine.test.js` y `cli.test.js`), 886 fuentes / 25 tests en 0.37.0 (con
+  `repair-refs.test.js` cubriendo la reparación explícita de refs) y 890 fuentes / 27 tests en
+  0.38.0 (con `memory-status.test.js` y `memory-doctor-uninitialized.test.js` cubriendo el estado
+  advisory y el doctor sin esquema);
   `planTestSelection`, el flag aditivo
   `--tests`, el manifiesto `test/affected-tests.json` y el consumidor `scripts/test-affected.mjs`
   (0.32.0); `MEMORY_WRITE_RETRY_POLICY`, `MemoryDatabaseBusyError`, `runImmediateTransaction` y
@@ -463,8 +485,10 @@ skillVersion: '2.3'
    `criticalKeyError`, la puerta dentro de `merge`/`consolidate` y `criticalGateExit` en
    `src/core/memory/engine.js`/`src/cli/index.js`; desde 0.37.0 `planRefRepair` y `repairRefs`
    (allowlist por motivo `inexistente`, preservación byte a byte, cardinalidad fail-closed,
-   dry-run read-only y `--apply` por supersede) más `memoryRepairRefs` y su gate crítico en
-   `src/cli/index.js`.
+    dry-run read-only y `--apply` por supersede) más `memoryRepairRefs` y su gate crítico en
+    `src/cli/index.js`; desde 0.38.0 `inspectMemoryStatus` (`status.js`) con `expected`/`gap`/
+    `recovery` y raíz única, `memoryStatusCmd` en el dispatch y el early-path de cinco checks de
+    `doctor.js` para bases sin `memory_nodes`.
 - **Media (inferido)**: comportamiento de hosts no probados, efecto exacto de cada adaptador en
   cada IDE, resultados del workflow, ausencia real del 403 en configuraciones
   concretas, materialización/saneamiento de la nota de compresión sin ejecución real, no-escritura

@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-16T04:14:46Z
-pluginVersion: 0.37.0
+generatedAt: 2026-11-16T14:32:06Z
+pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---
 
@@ -84,7 +84,7 @@ test/                   suite node --test (content guards incluidos)
 | Discovery | Topología, fuentes, hashes, impacto y estado del seed | `src/core/discovery.js`, `src/cli/index.js` |
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
 | Selección de tests | Plan determinístico sobre el affected-set; manifiesto cerrado y gate fail-closed para `npm run test:affected` | `src/core/test-selection.js`, `test/affected-tests.json`, `scripts/test-affected.mjs` |
-| Memoria | Nodos, supersesión, refs, recall, working-context, conjunto crítico (`memory.criticalKeys`) y reparación explícita de refs (`memory repair refs`) | `src/core/memory/*` |
+| Memoria | Nodos, supersesión, refs, recall, working-context, conjunto crítico (`memory.criticalKeys`), reparación explícita de refs (`memory repair refs`) y estado advisory (`memory status`) | `src/core/memory/*` |
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
@@ -108,7 +108,9 @@ test/                   suite node --test (content guards incluidos)
    motor supersede por `memory_key`, valida refs y secretos, y materializa
    `.ancleto/working-context.md` para el arranque de sesión. Desde 0.31.0 el renderer inyecta
    primero las claves curadas de `.ancletorc` → `memory.criticalKeys` y falla visiblemente si una
-   clave crítica no existe, está inactiva o no entra en el presupuesto.
+   clave crítica no existe, está inactiva o no entra en el presupuesto. Desde 0.38.0
+   `ancleto memory status [--json]` es una lectura advisory del gap de memoria esperable
+   (`expected`/`gap`/`recovery`) que nunca crea la base ni actúa como gate.
 5. **Tiers**: `normal` usa modelos de `opencode-go`; `minimo` resuelve por cadena contra el catálogo;
    `gratis` usa únicamente `opencode/big-pickle`. El catálogo se refresca a mano con
    `scripts/refresh-model-catalog.mjs`; ni el runtime ni CI descubren modelos ni acceden a la red.
@@ -342,7 +344,18 @@ test/                   suite node --test (content guards incluidos)
     fail-closed que la escritura. `--apply` sobre una clave de `memory.criticalKeys` sin
     `--force-critical` sale con exit 2 y cero escrituras. Salida `--json` determinística: `status`,
     `memory_key`, `dry_run`, `applied`, `critical`, `removed[]` y `remaining`. Sin schema, PRAGMAs
-    persistentes ni `ruleVersion` nuevos; release minor de `memory-repair-refs` (CH-09b).
+     persistentes ni `ruleVersion` nuevos; release minor de `memory-repair-refs` (CH-09b).
+39. **Estado advisory de memoria (0.38.0)**: `ancleto memory status [--json]` es un wrapper fino
+     sobre `src/core/memory/status.js` (`inspectMemoryStatus`) que no introduce tools MCP nuevas.
+     Clasifica la base en `ok`, `empty`, `no-db` o `uninitialized`; `expected` es `true` si algún
+     `aspec/changes/archive/*/proposal.md` contiene `## Decisiones` y una línea `**memory_key:**`,
+     y `gap` sólo si `expected` y el estado no es `ok`. La raíz de la base y de la evidencia es el
+     `cwd`; desde un subdirectorio sin archive propio no hay gap. Es estrictamente read-only (no
+     crea `.ancleto/`, no migra, no refresca el working-context), sale 0 en los cuatro estados y
+     sugiere `memory export`/`import`/`snapshot` cuando hay gap. En paralelo, `memory doctor`
+     completa sus cinco checks con `ok: false` sobre una base sin esquema y sale ≠ 0 sin excepción
+     no capturada. Sin schema, PRAGMAs ni `ruleVersion` nuevos; release minor de
+     `memory-gap-declaration` (CH-01/T27).
 
 ## Recorrido de una instalación con tier `minimo`
 

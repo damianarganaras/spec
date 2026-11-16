@@ -603,3 +603,18 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Validación:** `test/repair-refs.test.js` (19/19); suites de memoria 288/288; `test/cli.test.js` 529/0; lint OK; `npm test` 1405/0/5 skipped.
 - **Memoria:** 11 decisiones promovidas; DB 400 nodos / 285 activos / 115 superseded / 870 refs / 0 sin resolver; FTS 400=400.
 - **Commits:** `30a77a7`, `8e1fe83`, `2ae4218`, `9fb440e`, `c1b72bd`, `2c644e8`.
+
+## Relación con 0.37.0
+
+0.37.0 (2026-11-16) contiene un change archivado. Release MINOR (runtime + spec + test): entrega CH-09b (`ancleto memory repair refs`); el bump ya está aplicado y el tag/push/publish se ejecutan después.
+
+**Hecho:**
+
+- **`memory-repair-refs` (delta `## ADDED Requirements` en `memory-ops`), archivado en `aspec/changes/archive/2026-11-16-memory-repair-refs/`:** `ancleto memory repair refs` repara explícitamente refs no resueltas; dry-run por defecto, allowlist del motivo `inexistente`, gate de criticidad con exit `2`, y rollback por snapshot + restore documentado y probado. Detalle en `## Cierre de deuda — CH-09b auto-reparación de refs (2026-11-16, release 0.37.0 pendiente)`.
+- **Delta `ADDED` mergeado** en `aspec/specs/memory-ops/spec.md` (19 → 20 requirements).
+- **Refutadas y no entregadas:** redirección de refs a otra `memory_key`, reescritura de bloque `refs:` malformado y reactivación de nodos superseded.
+- **Compatibilidad:** sin cambio de schema, PRAGMAs persistentes ni `ruleVersion`; un binario `0.36.0` lee el mismo estado.
+
+**Release:**
+
+- **Estado al momento de escribir:** bump `0.37.0` ya aplicado (`package.json`/`package-lock.json`/`CHANGELOG.md`); el tag `v0.37.0`, el push y el publish a npm se ejecutan después. Todavía no existen run de CI, id de tag ni fecha de publicación que afirmar.

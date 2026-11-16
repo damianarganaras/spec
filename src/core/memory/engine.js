@@ -725,7 +725,7 @@ function validateRefsForWrite({ memory_key, type, content, projectRoot }) {
 // existe; `commit:`/`workitem:` no se verifican y `ambiguo`/`sin raiz` no son
 // ausencia demostrada. El content reparado se obtiene quitando lineas completas
 // (texto + EOL), sin re-render desde `parsed.refs`: el resto queda byte-identico.
-function planRefRepair({ memory_key, content, projectRoot }) {
+function planRefRepair({ memory_key, type, content, projectRoot }) {
   const parsed = parseRefsBlock(content)
   if (!parsed) return { removed: [], remaining: 0, content }
   if (parsed.blocks) {
@@ -767,6 +767,10 @@ function planRefRepair({ memory_key, content, projectRoot }) {
     .split(/(?<=\n)/)
     .filter((_, index) => !removedLines.has(index))
     .join('')
+  // El plan y la escritura comparten la validacion fail-closed: si el content
+  // candidato no es escribible (p. ej. otra ref sigue ambigua), el dry-run falla
+  // igual que el apply, nombrando la ref ofensora, y no reporta un plan aplicable.
+  validateRefsForWrite({ memory_key, type, content: repaired, projectRoot })
   return { removed, remaining, content: repaired }
 }
 
@@ -1171,7 +1175,8 @@ function buildEngine(db, dbPath) {
     }
 
     if (dryRun) {
-      const plan = planRefRepair({ memory_key: key, content: selectActive().content, projectRoot })
+      const row = selectActive()
+      const plan = planRefRepair({ memory_key: key, type: row.type, content: row.content, projectRoot })
       return {
         status: plan.removed.length > 0 ? 'ok' : 'no-op',
         memory_key: key,
@@ -1195,20 +1200,18 @@ function buildEngine(db, dbPath) {
 
     // Un no-op se decide antes de abrir transaccion: no escribe ni la base ni el
     // WAL. La transaccion revalida por si el estado deriva antes del lock.
-    const initial = planRefRepair({ memory_key: key, content: selectActive().content, projectRoot })
+    const initialRow = selectActive()
+    const initial = planRefRepair({ memory_key: key, type: initialRow.type, content: initialRow.content, projectRoot })
     if (initial.removed.length === 0) return noop(initial)
 
     return runImmediateTransaction(db, 'repairRefs', () => {
       // La seleccion y el plan se revalidan bajo lock: una deriva entre el plan y
       // la escritura no puede superseder un nodo distinto.
       const row = selectActive()
-      const plan = planRefRepair({ memory_key: key, content: row.content, projectRoot })
+      const plan = planRefRepair({ memory_key: key, type: row.type, content: row.content, projectRoot })
       if (plan.removed.length === 0) return noop(plan)
       const criticalAffected = affectedCriticalKeys(criticalKeys, [key])
       if (criticalAffected.length > 0 && !forceCritical) throw criticalKeyError(criticalAffected)
-      // La procedencia 'cli:repair' corre la misma validacion fail-closed que
-      // cualquier escritura no-runtime.
-      validateRefsForWrite({ memory_key: key, type: row.type, content: plan.content, projectRoot })
       const id = randomUUID()
       const superseded = Number(getSupersede().run(id, new Date().toISOString(), row.id).changes || 0)
       if (superseded !== 1) {

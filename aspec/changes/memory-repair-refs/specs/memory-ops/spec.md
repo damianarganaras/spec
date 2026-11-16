@@ -25,6 +25,10 @@ nodos activos SHALL salir con código `1` sin escribir la base ni el working-con
 **Dry-run y aplicación.** Sin `--apply`, el comando SHALL operar en dry-run, SHALL abrir la base en
 modo read-only con `migrate: false` y NO SHALL escribir la base, sus sidecars ni el
 working-context; SHALL reportar el plan de remoción. Con `--apply`, SHALL aplicar la reparación.
+El dry-run SHALL validar el `content` candidato con la misma validación que usa la escritura, de
+modo que un plan que `--apply` rechazaría NO SHALL reportarse como aplicable; en ese caso la salida
+SHALL ser `status: "error"` con código `1` y cero escrituras, nombrando la ref que impide la
+escritura.
 
 **Camino de escritura.** La escritura SHALL realizarse mediante un método del engine que supersede
 el nodo activo por el mismo writer transaccional `BEGIN IMMEDIATE` y las mismas primitivas de
@@ -153,3 +157,13 @@ su `content` original, recuperable por export/import.
 - **WHEN** se compara `sqlite_master` antes y después de `--apply`
 - **THEN** no aparecen tablas, columnas ni índices nuevos
 - **AND** un lector del estado persistido previo, como el binario `0.36.0`, sigue leyendo la base
+
+#### Scenario: El plan no aplicable se rechaza antes de escribir
+
+- **WHEN** un nodo activo declara una ref con motivo `inexistente` y otra con motivo
+  `ambiguo (2 coincidencias)`
+- **THEN** `memory repair refs --memory-key <k> --json` (dry-run) sale con código `1`,
+  `status: "error"` y sin `removed`
+- **AND** `--apply` sale con código `1` y no modifica bytes de la base ni el `working-context`
+- **AND** el motivo nombra la ref no removible
+- **AND** las refs `ambiguo` no se eliminan ni se reportan como removibles.

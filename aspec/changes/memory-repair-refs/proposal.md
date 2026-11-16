@@ -66,7 +66,7 @@ Se agrega un requirement en el delta de `memory-ops`:
 
 ### Requirement: Reparación explícita de refs no resueltas con `memory repair refs`
 
-El contrato completo, con sus doce escenarios, vive en
+El contrato completo, con sus trece escenarios, vive en
 `aspec/changes/memory-repair-refs/specs/memory-ops/spec.md`.
 
 ## Decisión de arquitectura
@@ -248,5 +248,15 @@ Además, el nodo superseded conserva su `content` original, recuperable por expo
 **Refs:**
 - change:memory-repair-refs
 - spec:memory-ops#Diagnóstico de refs no resueltas en nodos activos
+
+**Estado:** aprobado
+
+- **memory_key:** memory-repair-refs-plan-parity
+  **Elección:** el dry-run valida el `content` candidato con la misma validación que usa la escritura y rechaza el plan que `--apply` rechazaría.
+  **Descartado:** reportar como aplicable un plan que `--apply` rechaza; remover también las refs ambiguas.
+  **Justificación:** el dry-run debe predecir el `--apply` y fallar cerrado; remover una ref `ambiguo (<n> coincidencias)` destruye provenance que un humano puede desambiguar.
+**Refs:**
+- spec:memory-ops#Diagnóstico de refs no resueltas en nodos activos
+- change:memory-repair-refs
 
 **Estado:** aprobado

@@ -2773,14 +2773,13 @@ async function memoryStatusCmd(flags) {
   }
   const asJson = flags.includes('--json')
   // La memoria es cwd-scoped por contrato (`<cwd>/.ancleto/memory.db`), asi que la
-  // evidencia se ancla a la MISMA raiz: el archive se busca en `<cwd>/aspec/changes/archive`.
-  // Resolverla subiendo hasta el primer `.ancletorc` mezclaba raices y declaraba un gap
-  // falso desde un subdirectorio con el repo sano.
+  // evidencia se ancla a la MISMA raiz. `inspectMemoryStatus` deriva la base y el
+  // archive de una unica raiz: el llamador no puede mezclarlas.
   const projectRoot = process.cwd()
   const dbPath = defaultMemoryDbPath(projectRoot)
   let result
   try {
-    result = inspectMemoryStatus({ projectRoot, dbPath })
+    result = inspectMemoryStatus({ cwd: projectRoot })
   } catch (err) {
     console.error(`ancleto: ${err.message}`)
     process.exitCode = 1

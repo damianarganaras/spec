@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { openDatabase } from './database.js'
+import { defaultMemoryDbPath } from './engine.js'
 
 // Caminos de recuperacion EXISTENTES que la senal advisory nombra cuando hay gap.
 // El orden es el del contrato del requirement: export, import, snapshot.
@@ -36,8 +37,8 @@ function hasDecisionEvidence(text) {
 
 // Fail-closed: un archivo ilegible o un archive ausente no declara evidencia.
 // `evidence` es presencia bajo corte temprano (1 o 0), no cantidad de archives.
-function inspectExpected(projectRoot) {
-  const archiveDir = join(projectRoot, ...ARCHIVE_SEGMENTS)
+function inspectExpected(root) {
+  const archiveDir = join(root, ...ARCHIVE_SEGMENTS)
   let entries
   try {
     entries = readdirSync(archiveDir, { withFileTypes: true })
@@ -83,9 +84,12 @@ function inspectDatabase(dbPath) {
 
 // Estado advisory de la memoria: no escribe, no importa ni refresca el
 // working-context, y no funciona como gate de archive ni de promocion.
-export function inspectMemoryStatus({ projectRoot, dbPath }) {
-  const { expected, evidence } = inspectExpected(projectRoot)
-  const { status, dbPresent, activeNodes } = inspectDatabase(dbPath)
+// La raiz es UNA sola, el cwd: la base y el directorio de evidencia se derivan
+// de ella, de modo que un llamador no puede mezclar dos raices y declarar un gap
+// falso desde un subdirectorio.
+export function inspectMemoryStatus({ cwd }) {
+  const { expected, evidence } = inspectExpected(cwd)
+  const { status, dbPresent, activeNodes } = inspectDatabase(defaultMemoryDbPath(cwd))
   const gap = expected && status !== 'ok'
   return {
     status,

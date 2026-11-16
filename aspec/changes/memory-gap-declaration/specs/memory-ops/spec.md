@@ -14,6 +14,12 @@ archivo existe, el esquema está inicializado y hay cero nodos activos; `no-db` 
 no existe; `uninitialized` cuando el archivo existe pero no tiene el esquema (por ejemplo, 0
 bytes).
 
+**Raíz de la evidencia.** La raíz de la evidencia y la del `dbPath` SHALL ser la misma: el
+directorio de trabajo actual (`cwd`). La evidencia SHALL buscarse en `<cwd>/aspec/changes/archive` y
+NUNCA SHALL resolverse subiendo a un directorio ancestro. En consecuencia, desde un subdirectorio
+que no tiene un `aspec/changes/archive` propio, `expected` SHALL ser `false` y NO SHALL declararse
+gap.
+
 **Memoria esperable.** `expected` SHALL ser `true` cuando existe al menos un
 `aspec/changes/archive/*/proposal.md` que cumple ambas condiciones: (i) contiene al menos una
 línea que empieza con `## Decisiones`, admitiendo prefijos como `## Decisiones de producto`; y
@@ -46,7 +52,9 @@ ser un array de comandos sugeridos y SHALL ser vacío cuando `gap` sea `false`.
 **Códigos de salida.** El comando SHALL salir con código `0` en todos los estados, con y sin
 `--json`, incluidos `empty`, `no-db` y `uninitialized`. El código `1` SHALL reservarse a un error
 inesperado de E/S o de apertura de SQLite distinto de "archivo ausente"; en ese caso SHALL escribir
-un mensaje en stderr sin stack trace. El comando NUNCA SHALL funcionar como gate.
+un mensaje en stderr sin stack trace. Una invocación con flags no reconocidas SHALL ser un error de
+uso y SHALL salir con código `1`, con mensaje en stderr y sin stack trace, siguiendo el precedente de
+`memory curate`. El comando NUNCA SHALL funcionar como gate.
 
 **Read-only.** El comando SHALL verificar la existencia del archivo de la base antes de abrirlo y
 SHALL abrirlo con migraciones deshabilitadas y acceso de sólo lectura. NO SHALL crear el directorio
@@ -61,8 +69,10 @@ evidencia versionada. NO SHALL ser un segundo gate de archive ni de promoción: 
 secuencia de archive, no altera el `healthy` ni el exit de `memory doctor`, y no altera el exit de
 `ancleto check`.
 
-**Compatibilidad.** El comando NO SHALL cambiar el schema, los PRAGMAs persistentes, `ruleVersion`
-ni la forma del export o del snapshot; un binario `0.37.0` SHALL leer el mismo estado.
+**Compatibilidad.** El comando NO SHALL cambiar el schema, los PRAGMAs persistentes ni la forma del
+export o del snapshot: el conjunto de objetos de `sqlite_master` y los PRAGMAs persistentes —en
+particular `journal_mode`— SHALL ser idénticos antes y después, y las claves y los tipos de los
+campos del JSON de `ancleto memory export` NO SHALL cambiar.
 
 #### Scenario: Base con nodos activos reporta `ok` sin gap
 
@@ -167,6 +177,16 @@ ni la forma del export o del snapshot; un binario `0.37.0` SHALL leer el mismo e
 - **THEN** `expected` es `false` y `gap` es `false`
 - **AND** el comando sale con código `0`
 
+#### Scenario: Desde un subdirectorio sin archive propio no declara gap
+
+- **WHEN** se ejecuta `ancleto memory status --json` desde un subdirectorio del repo
+- **AND** ese subdirectorio no tiene `aspec/changes/archive`
+- **AND** el repo padre sí tiene `aspec/changes/archive` con evidencia
+- **AND** la base bajo el `cwd` no existe
+- **THEN** `expected` es `false` y `gap` es `false`
+- **AND** la evidencia no se busca subiendo a un directorio ancestro
+- **AND** el comando sale con código `0`
+
 #### Scenario: No crea `.ancleto/` ni el archivo de base
 
 - **WHEN** se ejecuta `ancleto memory status` en un repo sin `.ancleto/`
@@ -220,12 +240,20 @@ ni la forma del export o del snapshot; un binario `0.37.0` SHALL leer el mismo e
 - **AND** escribe un mensaje en stderr
 - **AND** no imprime stack trace
 
+#### Scenario: Una flag no reconocida es un error de uso
+
+- **WHEN** se ejecuta `ancleto memory status` con una flag no reconocida
+- **THEN** el comando sale con código `1`
+- **AND** escribe un mensaje en stderr
+- **AND** no imprime stack trace
+- **AND** no crea ni escribe la base
+
 #### Scenario: Compatibilidad del estado persistido
 
 - **WHEN** se ejecuta `ancleto memory status` sobre una base existente
-- **THEN** el schema, los PRAGMAs persistentes, `ruleVersion` y la forma del export y del snapshot
-  quedan sin cambios
-- **AND** un lector que sigue el contrato de `0.37.0` lee el mismo estado
+- **THEN** el conjunto de objetos de `sqlite_master` es idéntico antes y después
+- **AND** los PRAGMAs persistentes, en particular `journal_mode`, son idénticos antes y después
+- **AND** las claves y los tipos de los campos del JSON de `ancleto memory export` no cambian
 
 _No-testeable-por-construcción: que el comando no se invoque desde la secuencia de archive ni desde
 la promoción es una propiedad de composición sin salida observable directa. Se ancla en el contrato

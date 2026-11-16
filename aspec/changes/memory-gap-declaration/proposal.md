@@ -57,7 +57,7 @@ de las decisiones que hacen esperable la memoria).
 
 ### Excluido
 
-- Cambios de schema, PRAGMAs persistentes, `ruleVersion` o de la forma del export/snapshot.
+- Cambios de schema, PRAGMAs persistentes o de la forma del export/snapshot.
 - Crear `.ancleto/`, `memory.db` o el bloque de working-context desde `memory status`.
 - Importar nodos automáticamente o reparar el gap.
 - Convertir la señal en gate de archive, de promoción, de `memory doctor` o de `ancleto check`.
@@ -72,7 +72,7 @@ Se agrega en el delta de `memory-ops`:
 
 ### Requirement: Estado de memoria con `ancleto memory status`
 
-El contrato completo, con sus veinte escenarios —incluidos los invariantes negativos—, vive en
+El contrato completo, con sus veintitrés escenarios —incluidos los invariantes negativos—, vive en
 `aspec/changes/memory-gap-declaration/specs/memory-ops/spec.md`.
 
 ## Requirement modificado
@@ -102,8 +102,7 @@ cinco checks, sus nombres y su orden no cambian.
 
 ## Release
 
-- MINOR `0.38.0` (superficie observable nueva). Sin cambios de schema, PRAGMAs persistentes ni
-  `ruleVersion`.
+- MINOR `0.38.0` (superficie observable nueva). Sin cambios de schema ni de PRAGMAs persistentes.
 - Rollback: revert del commit de release. No hay rollback de datos porque la señal no escribe.
 
 ## Trazabilidad

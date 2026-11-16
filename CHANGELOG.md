@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.38.0] - 2026-11-16
+
+### Added
+- **`ancleto memory status` declara el gap de memoria de producto tras clone/worktree**: subcomando nuevo, read-only y advisory, con exit `0` siempre y salida `--json`. Distingue los estados `ok`, `empty`, `no-db` y `uninitialized`, deriva `expected` de los `proposal.md` archivados que declaran decisiones, calcula `gap = expected && status !== 'ok'` y sugiere `recovery` vía `memory export`/`memory import`/`memory snapshot`. Raíz única = `cwd` para la DB y la evidencia, así que un subdirectorio sin archive propio no declara gap.
+- **Entrega CH-01/T27 por su mitad viva**: el reindex desde `proposals` sigue refutado; el ítem se cierra con la declaración explícita del gap en lugar de reindexar.
+
+### Fixed
+- **`ancleto memory doctor` ya no aborta con una base sin esquema**: el caso de DB existente sin tablas deja de lanzar una excepción no capturada y completa sus 5 checks en orden, saliendo con código distinto de cero.
+
+### Notas
+- **Sin cambios** de schema, PRAGMAs persistentes ni forma del export/snapshot.
+
 ## [0.37.0] - 2026-11-16
 
 ### Added

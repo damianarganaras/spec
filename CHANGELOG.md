@@ -2,6 +2,18 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.37.0] - 2026-11-16
+
+### Added
+- **`ancleto memory repair refs` repara de forma explícita las refs no resueltas**: el subcomando opera sobre un único nodo activo y remueve sólo las refs verificables cuyo motivo es exactamente `inexistente`, preservando byte a byte el resto del `content` (prosa, separadores, indentación y demás refs). Dry-run por defecto sobre la conexión read-only y `--apply` como única vía de escritura, por supersede y con el writer transaccional del motor. La salida `--json` es determinística: `status`, `memory_key`, `dry_run`, `applied`, `critical`, `removed[]` y `remaining`.
+- **Allowlist del motivo de remoción**: `commit:` y `workitem:` no se remueven nunca porque no son verificables localmente, y cualquier motivo distinto de `inexistente` (incluidos `ambiguo (<n> coincidencias)` y los futuros) se conserva. El dry-run valida el `content` candidato con la misma validación que la escritura, así que rechaza el plan que el apply rechazaría y nombra la ref ofensora.
+- **Gate de criticidad con exit 2**: `--apply` sobre una `memory_key` de `memory.criticalKeys` sin `--force-critical` no escribe y sale con código 2; con `--json` emite `{"error":"critical-key-gate","criticalAffected":[...]}`. El dry-run reporta `critical: true` y sale con código 0.
+- **Rollback documentado y probado por snapshot más restore**: snapshot previo con `memory snapshot --out`, copia sobre `.ancleto/memory.db`, borrado de los sidecars `-wal`/`-shm` y verificación de `quick_check`, de la igualdad entre `memory_fts_docsize` y `memory_nodes` y del `content` restaurado.
+
+### Notas
+- **Refutado con evidencia**: redirigir refs entre `memory_key`, reescribir un bloque `refs:` malformado y reactivar un nodo `superseded`.
+- **Sin cambios** de schema, PRAGMAs persistentes ni `ruleVersion`; un binario `0.36.0` lee el mismo estado persistido.
+
 ## [0.36.0] - 2026-11-15
 
 ### Added

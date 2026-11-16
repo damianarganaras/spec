@@ -3294,14 +3294,19 @@ async function memoryRepairRefs(flags) {
   // En dry-run el flag no tiene efecto: el engine nunca bloquea por criticidad.
   const forceCritical = apply && flags.includes('--force-critical')
   const dbPath = defaultMemoryDbPath()
-  const empty = { memory_key: memoryKey, dry_run: dryRun, applied: false, critical: false, removed: [], remaining: 0 }
+  // El conjunto critico se resuelve antes del engine: toda salida JSON, incluidas
+  // las de rechazo, reporta la pertenencia real de la key y no un `critical:false`
+  // fijo. No depende de que la base exista.
+  const projectRoot = resolveMemoryProjectRoot(dbPath)
+  const criticalKeys = readCriticalMemoryKeys(projectRoot)
+  const critical = criticalKeys.includes(memoryKey)
+  const empty = { memory_key: memoryKey, dry_run: dryRun, applied: false, critical, removed: [], remaining: 0 }
   if (!(await exists(dbPath))) {
     if (asJson) console.log(JSON.stringify({ status: 'no-db', ...empty }))
     else console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
     process.exitCode = 1
     return
   }
-  const projectRoot = resolveMemoryProjectRoot(dbPath)
   const engine = dryRun ? createReadonlyMemoryEngine(dbPath) : createMemoryEngine(dbPath)
   try {
     let result
@@ -3310,7 +3315,7 @@ async function memoryRepairRefs(flags) {
         memoryKey,
         dryRun,
         projectRoot,
-        criticalKeys: readCriticalMemoryKeys(projectRoot),
+        criticalKeys,
         forceCritical
       })
     } catch (err) {
@@ -3318,7 +3323,7 @@ async function memoryRepairRefs(flags) {
         criticalGateExit(err, asJson)
         return
       }
-      if (asJson) console.log(JSON.stringify({ status: 'error', ...empty }))
+      if (asJson) console.log(JSON.stringify({ status: 'error', ...empty, reason: err.message }))
       console.error(`ancleto: repair refs rechazado: ${err.message}`)
       process.exitCode = 1
       return

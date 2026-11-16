@@ -721,10 +721,13 @@ function validateRefsForWrite({ memory_key, type, content, projectRoot }) {
 }
 
 // Plan de reparacion de refs: unico parser (`parseRefsBlock`) y unica resolucion
-// (`resolveRefResult`). Solo son removibles las refs verificables cuyo target no
-// existe; `commit:`/`workitem:` no se verifican y `ambiguo`/`sin raiz` no son
-// ausencia demostrada. El content reparado se obtiene quitando lineas completas
-// (texto + EOL), sin re-render desde `parsed.refs`: el resto queda byte-identico.
+// (`resolveRefResult`). Allowlist estricta: solo se remueve una ref verificable
+// con `ok: false` y motivo exactamente `inexistente`; cualquier otro motivo
+// (presente o futuro) y las refs no verificables (`commit:`/`workitem:`) se
+// conservan. `repairRefs` exige `projectRoot` antes de planificar, asi que el
+// plan nunca resuelve sin raiz. El content reparado se obtiene quitando lineas
+// completas (texto + EOL), sin re-render desde `parsed.refs`: el resto queda
+// byte-identico.
 function planRefRepair({ memory_key, type, content, projectRoot }) {
   const parsed = parseRefsBlock(content)
   if (!parsed) return { removed: [], remaining: 0, content }
@@ -744,16 +747,13 @@ function planRefRepair({ memory_key, type, content, projectRoot }) {
       continue
     }
     const result = resolveRefResult(ref, projectRoot)
-    if (result.ok) {
+    // Allowlist: sin default. Un motivo distinto de `inexistente` nunca se remueve,
+    // aunque sea desconocido para este filtro.
+    if (result.ok !== false || result.verifiable === false || result.reason !== 'inexistente') {
       remaining++
       continue
     }
-    const reason = refFailureReason(result)
-    if (reason !== 'inexistente') {
-      remaining++
-      continue
-    }
-    removed.push({ kind: ref.kind, ref: ref.raw, reason })
+    removed.push({ kind: ref.kind, ref: ref.raw, reason: result.reason })
     removedLines.add(ref.line)
   }
 

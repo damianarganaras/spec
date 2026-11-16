@@ -3300,7 +3300,9 @@ async function memoryRepairRefs(flags) {
   const projectRoot = resolveMemoryProjectRoot(dbPath)
   const criticalKeys = readCriticalMemoryKeys(projectRoot)
   const critical = criticalKeys.includes(memoryKey)
-  const empty = { memory_key: memoryKey, dry_run: dryRun, applied: false, critical, removed: [], remaining: 0 }
+  // `remaining` solo tiene sentido en un plan resuelto (ok/no-op): en `no-db` y
+  // `error` se omite para no afirmar cero refs cuando el nodo conserva las suyas.
+  const empty = { memory_key: memoryKey, dry_run: dryRun, applied: false, critical, removed: [] }
   if (!(await exists(dbPath))) {
     if (asJson) console.log(JSON.stringify({ status: 'no-db', ...empty }))
     else console.error(`ancleto: no hay memoria en este repo (${dbPath})`)

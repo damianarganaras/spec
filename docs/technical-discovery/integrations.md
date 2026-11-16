@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-15T23:32:12Z
-pluginVersion: 0.36.0
+generatedAt: 2026-11-16T03:54:08Z
+pluginVersion: 0.37.0
 skillVersion: '2.3'
 ---
 
@@ -47,7 +47,7 @@ skillVersion: '2.3'
 - `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
   `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
 - No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
-  esta generación quedó comprimido (883 fuentes, 172.073 B, ~42.614 tokens); los cuerpos de funciones
+  esta generación quedó comprimido (886 fuentes, 175.342 B, ~43.421 tokens); los cuerpos de funciones
   se eliden y Repomix aplica además sus ignores por defecto
    (incluye `**/*.md`), por eso el pack no contiene Markdown (ver `unknowns.md`).
 
@@ -142,7 +142,7 @@ skillVersion: '2.3'
   secuencia de contratos de prompt (`skills/ancleto-archive`, `skills/ancleto-bulk-archive`,
   `agents/documenter.md`) sobre archivos locales, y el guard de `--help`/`-h` es un `console.log`
   del uso antes del dispatch, sin escritura de archivos. Sin red, procesos externos ni servicios.
-- **0.26.0–0.36.0 no agregan integraciones**: `discovery --check` ya era una lectura local de
+- **0.26.0–0.37.0 no agregan integraciones**: `discovery --check` ya era una lectura local de
   `.config`/estado/hashes, el detector de frescura de 0.26.1 sólo se documenta y pinea en tests,
   0.26.2 sólo consolida walkers de snapshot read-only y pines de frescura en tests, 0.26.4 agrega un
   guard estructural de delta specs a la suite y documenta el Requirement en `spec-sync`, 0.27.0
@@ -163,7 +163,10 @@ skillVersion: '2.3'
    (`memory import --dry-run`) y 0.35.0 (`memory gc` por instante y snapshot de lectura en `curate`)
    siguen siendo operaciones locales de SQLite y filesystem, sin red, servicios ni procesos nuevos.
    0.36.0 (puerta de criticidad de `merge`/`consolidate --apply`) tampoco suma integraciones: lee
-   `.ancletorc` y opera en la misma transacción SQLite local, sin red ni procesos.
+   `.ancletorc` y opera en la misma transacción SQLite local, sin red ni procesos. 0.37.0
+   (`memory repair refs`) también es local: parsea el `content` del nodo, resuelve refs contra el
+   filesystem del repo y, con `--apply`, usa el writer transaccional de SQLite; no hay red,
+   servicios ni procesos nuevos.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee

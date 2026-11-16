@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-15T23:32:12Z
-pluginVersion: 0.36.0
+generatedAt: 2026-11-16T03:54:08Z
+pluginVersion: 0.37.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (883 fuentes, ~42.614 tokens), `package.json` (`0.36.0`), `src/core/model-catalog.json` y
+`minimo` (886 fuentes, ~43.421 tokens), `package.json` (`0.37.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
@@ -57,6 +57,7 @@ paths citados (ver `unknowns.md`).
 | **Import con dry-run clasificado (0.34.0)**: `memory import --dry-run [--json]` predice `insert`/`supersede`/`skip` por `memory_key` con buckets `nuevo`/`identico`/`divergente`/`tombstone`, comparte `decideImportEntry` con el import real, abre read-only, reporta `databasePresent` y no escribe ni refresca el working-context | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **GC por instante y snapshot de curaduría (0.35.0)**: `memory gc` compara `julianday(COALESCE(superseded_at, created_at))` contra un cutoff único y retiene fechas no parseables; `status='deleted'` es un estado reservado que no se purga ni cuenta; `memory curate` compone su reporte bajo un único snapshot `BEGIN DEFERRED` (`runReadTransaction`) y resuelve refs después del commit; el literal de gramática de refs tiene fuente única (`REF_GRAMMAR`) | `decisions.md`, `units/memory-engine.md` |
 | **Puerta de criticidad de memoria (0.36.0)**: `memory merge` y `memory consolidate --apply` rechazan antes de escribir cuando supersederían una `memory_key` declarada en `.ancletorc` → `memory.criticalKeys`; dry-run y apply reportan `criticalAffected`, `--force-critical` autoriza de forma explícita, el rechazo sale con exit 2 y `{"error":"critical-key-gate","criticalAffected":[...]}` con `--json`; `consolidate` sin base sale con código 1 | `decisions.md`, `units/memory-engine.md`, `setup.md` |
+| **Reparación de refs (0.37.0)**: `memory repair refs --memory-key <key> [--apply] [--json] [--force-critical]` opera sobre un único nodo activo y remueve solo refs verificables con motivo exactamente `inexistente`; dry-run por defecto en read-only, `--apply` supersede con el writer transaccional, allowlist conserva `commit:`/`workitem:` y cualquier otro motivo, el candidato se valida con el mismo fail-closed que la escritura y el gate crítico sale con exit 2 sin `--force-critical` | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -77,9 +78,21 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.36.0` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.37.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
+- **Release 0.37.0**: `memory repair refs` repara de forma explícita las refs no resueltas de un
+  único nodo activo. Remueve solo las refs verificables con motivo exactamente `inexistente` y
+  preserva byte a byte el resto del `content` (prosa, separadores, indentación y demás refs); el
+  dry-run por defecto usa la conexión read-only y `--apply` es la única vía de escritura, por
+  supersede con el writer transaccional del motor. La salida `--json` es determinística
+  (`status`, `memory_key`, `dry_run`, `applied`, `critical`, `removed[]`, `remaining`). La allowlist
+  nunca remueve `commit:`/`workitem:` (no verificables localmente) ni motivos distintos de
+  `inexistente` (`ambiguo (<n> coincidencias)` y futuros se conservan); el dry-run valida el
+  `content` candidato con la misma validación fail-closed que la escritura y nombra la ref ofensora.
+  `--apply` sobre una clave de `memory.criticalKeys` sin `--force-critical` no escribe y sale con
+  código 2 (`{"error":"critical-key-gate","criticalAffected":[...]}` con `--json`); el dry-run
+  reporta `critical: true` y sale 0. Sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`.
 - **Release 0.36.0**: `memory merge` y `memory consolidate --apply` incorporan una **puerta de
   criticidad** atómica dentro de la misma `BEGIN IMMEDIATE` que la escritura. El conjunto crítico es
   el ya existente `.ancletorc` → `memory.criticalKeys` (lectura tolerante: ausente, no-array o
@@ -111,6 +124,10 @@ paths citados (ver `unknowns.md`).
   schema persistido, PRAGMAs ni `ruleVersion`. El requirement de `memory-engine` se actualizó en el
   lugar.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-16-memory-repair-refs/` (0.37.0: `ADDED` del subcomando
+  `memory repair refs` y de los Requirements de reparación en `memory-ops`; allowlist por motivo
+  `inexistente`, preservación byte a byte, dry-run read-only y `--apply` por supersede con gate
+  crítico; sin cambio de schema ni `ruleVersion`; cierra `CH-09b`),
   `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/` (0.36.0: `MODIFIED` de los
   Requirements de merge, consolidación y comando `memory merge` en `memory-ops`; puerta de
   criticidad pre-write con `criticalKeys`/`forceCritical`, `criticalAffected` en dry-run y apply,
@@ -219,12 +236,12 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-   archivos) mantienen el conteo; en 0.22.1-0.35.0 no cambió su cantidad.
-- **Pack actual**: 883 fuentes y ~42.614 tokens (172.073 B, comprimido, tier `minimo`), con 33
+    archivos) mantienen el conteo; en 0.22.1-0.37.0 no cambió su cantidad.
+- **Pack actual**: 886 fuentes y ~43.421 tokens (175.342 B, comprimido, tier `minimo`), con 33
    entradas de archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del
-   pack. El `.discovery-map.json` de la corrida reporta 917 archivos (aspec 337, `.opencode` 66,
-   docs 21, test 33, src 22, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye
-   24 `test/*.test.js` por `discovery.exclude` desde 0.30.1; los 8 fixtures de
+   pack. El `.discovery-map.json` de la corrida reporta 921 archivos (aspec 340, `.opencode` 66,
+   docs 21, test 34, src 22, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye
+   25 `test/*.test.js` por `discovery.exclude` desde 0.30.1; los 8 fixtures de
    `test/fixtures/**` siguen incluidos.
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
    citadas para reflejar 0.36.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
@@ -275,7 +292,10 @@ paths citados (ver `unknowns.md`).
     cambia schema, PRAGMAs, comandos sin flags ni `ruleVersion`. En 0.36.0 `memory merge` y
     `memory consolidate --apply` agregan la puerta de criticidad pre-write sobre
     `memory.criticalKeys` (`criticalAffected`, `--force-critical`, exit 2) y `consolidate` sin base
-    sale con código 1; no cambian schema, PRAGMAs ni `ruleVersion`. El
-    `ancleto discovery --check` de validación, tras regenerar el estado con el pack de 883 fuentes
-    (172.073 B, ~42.614 tokens), reportó `READY`/`impact: none` con `changedAreas: []`,
+    sale con código 1; no cambian schema, PRAGMAs ni `ruleVersion`. En 0.37.0 `memory repair refs`
+    agrega la reparación explícita de refs de un único nodo activo, con allowlist por motivo
+    `inexistente`, preservación byte a byte, dry-run read-only y `--apply` por supersede bajo el
+    gate crítico; tampoco cambian schema, PRAGMAs ni `ruleVersion`. El
+    `ancleto discovery --check` de validación, tras regenerar el estado con el pack de 886 fuentes
+    (175.342 B, ~43.421 tokens), reportó `READY`/`impact: none` con `changedAreas: []`,
     `seedMapPresent: true` y `affectedDocs: []`.

@@ -47,8 +47,8 @@ covers:
   - test:affected
   - machine-env
 sources: ["src/cli/index.js", "src/core/discovery-glob.js", "src/core/test-selection.js", "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection", "aspec/changes/archive/2026-11-10-spec-seed-freshness-detector", "aspec/changes/archive/2026-11-11-active-delta-structure-guard", "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material", "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths", "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-08-archive-sync-via-specs-merge", "aspec/changes/archive/2026-11-08-cli-subcommand-help-guards", "aspec/changes/archive/2026-11-08-agent-model-minimo-migration", "aspec/changes/archive/2026-11-08-specs-merge-canonical-guard", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-15T23:32:12Z
-pluginVersion: 0.36.0
+generatedAt: 2026-11-16T03:54:08Z
+pluginVersion: 0.37.0
 skillVersion: '2.3'
 ---
 
@@ -584,7 +584,7 @@ tier puede quedar dormido en `check`.
   `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
   resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; deben
-  alinearse con `package.json` (`0.36.0`). No son fuentes del seed. Desde 0.28.0, `.ancleto/**` y
+  alinearse con `package.json` (`0.37.0`). No son fuentes del seed. Desde 0.28.0, `.ancleto/**` y
   `.discovery-map.json` raíz tampoco cuentan para la frescura del seed; desde 0.29.0, tampoco
   `documentation/**` y `audit logs/**` (gitignored, 0 tracked).
 - **Conjunto crítico (0.31.0)**: `ancleto memory context` es la superficie explícita y falla con
@@ -592,6 +592,11 @@ tier puede quedar dormido en `check`.
   (`init`/`install`/`upgrade`) y el on-write advierten sin escribir un bloque degradado, y
   `memory merge`/`memory consolidate --apply` salen ≠ 0 si el refresh falla. La lectura de
   `memory.criticalKeys` es tolerante (ausente/inválida → `[]`).
+- **Reparación de refs (0.37.0)**: `memory repair refs` vive en el dispatch de `memory`
+  (`memoryRepairCmd`/`memoryRepairRefs`). El dry-run es el default, usa la conexión read-only y
+  nunca refresca el working-context; `--apply` es la única vía de escritura y refresca el bloque con
+  la guarda de `import`/`merge`/`consolidate`. El gate crítico reutiliza
+  `criticalGateExit` (exit 2). No cambia comandos existentes ni el contrato de `memory` sin flags.
 - **Merge de specs 0.22.0–0.22.1**: el fail-closed es por plan, no transaccional ante una caída de
   I/O a mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs
   traducidos ni crea capabilities. El contenedor `archive` ya no se trata como change. Desde 0.25.0
@@ -642,6 +647,7 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-12-discovery-state-schema-wording/` | Change archivado de 0.30.2: delta `MODIFIED` de `cli-diagnostics` que documenta el estado persistido `version: 1` + `ruleVersion: 2` frente a `schemaVersion: 2` de la salida de `--check`, con pin de test no conductual (sin cambio de runtime) |
 | `aspec/changes/archive/2026-11-12-pin-offline-discovery-state/` | Change archivado de conformidad (sin delta ni bump): extrae `buildDiscoveryState`/`renderDiscoveryState` a `src/core/discovery-state.js`, usados por `packDiscovery`, con golden byte-idéntico en `test/cli.test.js` |
 | `aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/` | Change archivado de 0.32.0: `ancleto affected --tests`, módulo `src/core/test-selection.js`, manifiesto `test/affected-tests.json` y consumidor `scripts/test-affected.mjs`; delta `ADDED` de `prompt-contracts` y cierre de `CH-06b` |
+| `aspec/changes/archive/2026-11-16-memory-repair-refs/` | Change archivado de 0.37.0: subcomando `memory repair refs` en el dispatch de `memory`, allowlist `inexistente`, dry-run read-only, `--apply` por supersede y gate crítico; delta de `memory-ops` y cierre de `CH-09b` |
 | `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` | Change archivado de 0.31.0: `memory.criticalKeys` en `.ancletorc`, inyección primero de las claves críticas y política de fallo (CLI explícita ≠ 0 sin sobrescribir; lifecycle/on-write con `console.warn`; `merge`/`consolidate --apply` ≠ 0); delta `ADDED` de `memory-engine` y `MODIFIED` del orden determinístico |
 | `aspec/changes/archive/2026-11-06-specs-merge-hardening/` | Change archivado del endurecimiento de `specs merge` (0.22.1): contenedor `archive`, H1 estructural, `ADDED` y atomicidad acotada |
 | `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` | Change archivado del merge determinístico de specs y la capability `spec-sync` (0.22.0) |

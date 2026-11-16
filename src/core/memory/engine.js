@@ -348,7 +348,9 @@ function parseRefsBlock(content) {
       const raw = item[1].trim()
       const ref = raw ? parseRef(raw) : null
       if (!ref) return { refs, error: line.trim(), start, end }
-      refs.push(ref)
+      // Extension aditiva para la reparacion: indice de linea y texto crudo del
+      // item. `raw` y el resto de los campos de `parseRef` no cambian.
+      refs.push({ ...ref, line: i, lineText: line })
       continue
     }
     return { refs, error: line.trim(), start, end }
@@ -718,6 +720,56 @@ function validateRefsForWrite({ memory_key, type, content, projectRoot }) {
   }
 }
 
+// Plan de reparacion de refs: unico parser (`parseRefsBlock`) y unica resolucion
+// (`resolveRefResult`). Solo son removibles las refs verificables cuyo target no
+// existe; `commit:`/`workitem:` no se verifican y `ambiguo`/`sin raiz` no son
+// ausencia demostrada. El content reparado se obtiene quitando lineas completas
+// (texto + EOL), sin re-render desde `parsed.refs`: el resto queda byte-identico.
+function planRefRepair({ memory_key, content, projectRoot }) {
+  const parsed = parseRefsBlock(content)
+  if (!parsed) return { removed: [], remaining: 0, content }
+  if (parsed.blocks) {
+    throw new Error(`repairRefs: la memory_key "${memory_key}" declara ${parsed.blocks} bloques refs: y se permite exactamente uno`)
+  }
+  if (parsed.error) {
+    throw new Error(`repairRefs: la memory_key "${memory_key}" tiene una ref invalida en el bloque refs: "${parsed.error}"`)
+  }
+
+  const removed = []
+  const removedLines = new Set()
+  let remaining = 0
+  for (const ref of parsed.refs) {
+    if (ref.kind === 'commit' || ref.kind === 'workitem') {
+      remaining++
+      continue
+    }
+    const result = resolveRefResult(ref, projectRoot)
+    if (result.ok) {
+      remaining++
+      continue
+    }
+    const reason = refFailureReason(result)
+    if (reason !== 'inexistente') {
+      remaining++
+      continue
+    }
+    removed.push({ kind: ref.kind, ref: ref.raw, reason })
+    removedLines.add(ref.line)
+  }
+
+  if (removed.length === 0) return { removed, remaining, content }
+  if (remaining === 0) {
+    throw new Error(`repairRefs: la memory_key "${memory_key}" quedaria con cero refs; usa "memory export" y "memory import" para reconstruir el nodo`)
+  }
+  // Cada elemento conserva su EOL: quitar una linea no altera las demas ni el
+  // separador final del content.
+  const repaired = String(content)
+    .split(/(?<=\n)/)
+    .filter((_, index) => !removedLines.has(index))
+    .join('')
+  return { removed, remaining, content: repaired }
+}
+
 // Auditoria read-only y pura de refs para `memory doctor`: no abre conexiones ni
 // escribe. Recibe los nodos activos (`memory_key`, `content`) y la raiz del
 // proyecto. Con raiz nula no resuelve, pero informa `needsRoot` para que el doctor
@@ -801,6 +853,10 @@ function buildReadonlyEngine(db, dbPath) {
     consolidate({ dryRun = true, includeNearDuplicates = true, criticalKeys = [], forceCritical = false } = {}) {
       if (dryRun === false) throw new Error('consolidate: la conexion es read-only')
       return engine.consolidate({ dryRun: true, includeNearDuplicates, criticalKeys, forceCritical })
+    },
+    repairRefs({ memoryKey, dryRun = true, projectRoot = null, criticalKeys = [], forceCritical = false } = {}) {
+      if (dryRun === false) throw new Error('repairRefs: la conexion es read-only')
+      return engine.repairRefs({ memoryKey, dryRun: true, projectRoot, criticalKeys, forceCritical })
     }
   }
 }
@@ -812,6 +868,12 @@ function buildEngine(db, dbPath) {
   // activo. No se muta `findActive` porque otros consumidores esperan solo `id, type`.
   const findActiveIdentity = db.prepare(
     `SELECT id, memory_key, type, scope, content, justification, created_at FROM memory_nodes WHERE memory_key = ? AND status = 'active'`
+  )
+  // Lookup propio de `repairRefs`: la reparacion necesita la cardinalidad real de
+  // activos (fail-closed) y el `confidence` para no perder metadata al superseder.
+  const findActiveIdentityAll = db.prepare(
+    `SELECT id, memory_key, type, scope, content, justification, confidence, created_at
+     FROM memory_nodes WHERE memory_key = ? AND status = 'active' ORDER BY rowid`
   )
   const findActivePublic = db.prepare(`SELECT ${PUBLIC_COLUMNS} FROM memory_nodes n WHERE n.memory_key = ? AND n.status = 'active'`)
   const findLatestStatus = db.prepare(`SELECT status FROM memory_nodes WHERE memory_key = ? ORDER BY rowid DESC LIMIT 1`)
@@ -1083,6 +1145,84 @@ function buildEngine(db, dbPath) {
       return {
         node: { memory_key, type, scope, content, justification, created_at },
         superseded: prev ? 1 : 0
+      }
+    })
+  }
+
+  // Reparacion explicita de refs no resueltas: selecciona un unico nodo activo
+  // (fail-closed por cardinalidad), quita solo las refs `inexistente` y supersede
+  // con el mismo writer transaccional que `recordNode`. El nodo anterior conserva
+  // su `content` original. `dryRun` no abre transaccion ni escribe.
+  function repairRefs({ memoryKey, dryRun = true, projectRoot = null, criticalKeys = [], forceCritical = false } = {}) {
+    const key = String(memoryKey || '').trim()
+    if (!key) throw new Error('repairRefs: --memory-key es obligatoria')
+    if (!projectRoot) {
+      throw new Error(`repairRefs: no se puede verificar la memory_key "${key}" sin la raiz del proyecto`)
+    }
+    const critical = affectedCriticalKeys(criticalKeys, [key]).length > 0
+
+    const selectActive = () => {
+      const rows = findActiveIdentityAll.all(key)
+      if (rows.length === 0) throw new Error(`repairRefs: la memory_key "${key}" no tiene un nodo activo`)
+      if (rows.length > 1) {
+        throw new Error(`repairRefs: la memory_key "${key}" tiene ${rows.length} nodos activos; se requiere exactamente uno`)
+      }
+      return rows[0]
+    }
+
+    if (dryRun) {
+      const plan = planRefRepair({ memory_key: key, content: selectActive().content, projectRoot })
+      return {
+        status: plan.removed.length > 0 ? 'ok' : 'no-op',
+        memory_key: key,
+        dry_run: true,
+        applied: false,
+        critical,
+        removed: plan.removed,
+        remaining: plan.remaining
+      }
+    }
+
+    const noop = (plan) => ({
+      status: 'no-op',
+      memory_key: key,
+      dry_run: false,
+      applied: false,
+      critical,
+      removed: [],
+      remaining: plan.remaining
+    })
+
+    // Un no-op se decide antes de abrir transaccion: no escribe ni la base ni el
+    // WAL. La transaccion revalida por si el estado deriva antes del lock.
+    const initial = planRefRepair({ memory_key: key, content: selectActive().content, projectRoot })
+    if (initial.removed.length === 0) return noop(initial)
+
+    return runImmediateTransaction(db, 'repairRefs', () => {
+      // La seleccion y el plan se revalidan bajo lock: una deriva entre el plan y
+      // la escritura no puede superseder un nodo distinto.
+      const row = selectActive()
+      const plan = planRefRepair({ memory_key: key, content: row.content, projectRoot })
+      if (plan.removed.length === 0) return noop(plan)
+      const criticalAffected = affectedCriticalKeys(criticalKeys, [key])
+      if (criticalAffected.length > 0 && !forceCritical) throw criticalKeyError(criticalAffected)
+      // La procedencia 'cli:repair' corre la misma validacion fail-closed que
+      // cualquier escritura no-runtime.
+      validateRefsForWrite({ memory_key: key, type: row.type, content: plan.content, projectRoot })
+      const id = randomUUID()
+      const superseded = Number(getSupersede().run(id, new Date().toISOString(), row.id).changes || 0)
+      if (superseded !== 1) {
+        throw new Error(`repairRefs: el nodo "${key}" dejo de estar activo durante la transaccion`)
+      }
+      insertNode.run(id, key, row.type, row.scope, plan.content, row.justification, 'cli:repair', row.confidence, row.created_at)
+      return {
+        status: 'ok',
+        memory_key: key,
+        dry_run: false,
+        applied: true,
+        critical,
+        removed: plan.removed,
+        remaining: plan.remaining
       }
     })
   }
@@ -1394,5 +1534,5 @@ function buildEngine(db, dbPath) {
     db.close()
   }
 
-  return { buildWorkingContext, searchMemory, recordNode, listNodes, exportActive, importNodes, classifyImport, gcSuperseded, merge, consolidate, checkpoint, readTransaction, close }
+  return { buildWorkingContext, searchMemory, recordNode, listNodes, exportActive, importNodes, classifyImport, gcSuperseded, merge, consolidate, repairRefs, checkpoint, readTransaction, close }
 }

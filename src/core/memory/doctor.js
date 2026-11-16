@@ -10,6 +10,12 @@ const REFS_CHECK_NAME = 'Refs de nodos activos'
 // sus statements abortarian), asi que el literal no se duplica.
 export const SCHEMA_UNINITIALIZED_DETAIL = 'esquema no inicializado'
 
+// Unica fuente del `detail` del path de base ilegible (archivo que no es SQLite o
+// esta corrupto). Es un estado distinto de "sin esquema": el probe ni siquiera
+// puede leer `sqlite_master`, y el CLI lo usa para no construir el engine de
+// frescura contra una base que no se puede leer.
+export const UNREADABLE_DETAIL = 'base de memoria ilegible'
+
 // Estado observable del WAL sin ejecutar checkpoint ni ningun pragma mutante:
 // solo se mira el tamano del archivo `-wal` que ya existe en disco.
 function observeWal(dbPath) {
@@ -28,7 +34,26 @@ export function memoryDoctor(dbPath, { rebuild = false } = {}) {
   try {
     const checks = []
 
-    const hasSchema = hasMemorySchema(db)
+    let hasSchema
+    try {
+      hasSchema = hasMemorySchema(db)
+    } catch {
+      // Archivo no-SQLite o corrupto: el probe no puede leer `sqlite_master`. Se
+      // reporta como falla con un detalle propio de base ilegible (distinto de
+      // "sin esquema") y sin propagar el error crudo de SQLite.
+      const notVerifiable = { ok: false, detail: `no verificable: ${UNREADABLE_DETAIL}` }
+      return {
+        checks: [
+          { name: 'Integridad DB', ok: false, detail: UNREADABLE_DETAIL },
+          { name: 'Indice FTS5', ...notVerifiable },
+          { name: 'Reglas activas (unicidad)', ...notVerifiable },
+          { name: REFS_CHECK_NAME, ...notVerifiable },
+          { name: 'Checkpoint WAL', ...notVerifiable }
+        ],
+        healthy: false,
+        rebuilt: false
+      }
+    }
     if (!hasSchema) {
       // Error path: los cinco nombres se conservan y cada check no ejecutable
       // se reporta como falla con su motivo (nunca se omite del array).

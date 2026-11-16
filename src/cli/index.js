@@ -14,7 +14,7 @@ import { snapshotDatabase } from '../core/memory/snapshot.js'
 import { adaptFrontmatter, parseFrontmatter, frontmatterValue } from '../core/adapters/frontmatter.js'
 import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite, readCriticalMemoryKeys } from '../core/memory/working-context.js'
 import { materializeMachineEnv, checkMachineEnvTracked } from '../core/machine-env.js'
-import { memoryDoctor, SCHEMA_UNINITIALIZED_DETAIL } from '../core/memory/doctor.js'
+import { memoryDoctor, SCHEMA_UNINITIALIZED_DETAIL, UNREADABLE_DETAIL } from '../core/memory/doctor.js'
 import { curateMemory } from '../core/memory/curation.js'
 import { inspectMemoryStatus, hasMemorySchema } from '../core/memory/status.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
@@ -2845,7 +2845,17 @@ async function memoryDoctorCmd(flags) {
     console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
     process.exit(0)
   }
-  const { checks, healthy, rebuilt } = memoryDoctor(dbPath, { rebuild })
+  // `memoryDoctor` abre y cierra la DB dentro de su `try/finally`; el manejo aca
+  // cubre tambien un fallo de apertura o de cierre (p. ej. `--rebuild` sobre un
+  // archivo que no es SQLite) para que ningun throw llegue al proceso como stack.
+  let report
+  try {
+    report = memoryDoctor(dbPath, { rebuild })
+  } catch (err) {
+    console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${err.message}`)
+    process.exit(1)
+  }
+  const { checks, healthy, rebuilt } = report
   if (rebuilt) console.log('ancleto: indice FTS5 reconstruido')
   for (const c of checks) {
     console.log(`  ${c.skipped ? '−' : c.ok ? '✔' : '✖'} ${c.name}: ${c.detail}`)
@@ -2857,8 +2867,14 @@ async function memoryDoctorCmd(flags) {
   // construye el engine read-only de frescura, porque prepara statements contra esa
   // tabla y abortaria con `no such table` fuera del `try`.
   const schemaUninitialized = checks.some((c) => c.detail === SCHEMA_UNINITIALIZED_DETAIL)
+  // Base ilegible: distinto de "sin esquema". El engine read-only de frescura
+  // prepara statements contra `memory_nodes` y abortaria igual, asi que se omite.
+  const dbUnreadable = checks.some((c) => c.detail === UNREADABLE_DETAIL)
+  if (dbUnreadable) {
+    console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${UNREADABLE_DETAIL}`)
+  }
   let staleness = null
-  if (!schemaUninitialized) {
+  if (!schemaUninitialized && !dbUnreadable) {
     const projectRoot = resolveMemoryProjectRoot(dbPath) || process.cwd()
     let engine
     try {

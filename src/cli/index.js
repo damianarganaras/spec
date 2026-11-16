@@ -15,6 +15,7 @@ import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, rend
 import { materializeMachineEnv, checkMachineEnvTracked } from '../core/machine-env.js'
 import { memoryDoctor } from '../core/memory/doctor.js'
 import { curateMemory } from '../core/memory/curation.js'
+import { inspectMemoryStatus } from '../core/memory/status.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
 import { buildDiscoveryState, renderDiscoveryState } from '../core/discovery-state.js'
@@ -104,6 +105,9 @@ ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FT
                                      refs de nodos activos, checkpoint WAL)
                                      y reconstruye el indice FTS5 con --rebuild
   ancleto memory curate [--json] [--strict]  Curaduria read-only: refs rotas y duplicados exactos
+  ancleto memory status [--json]  Estado advisory de la memoria (ok/empty/no-db/uninitialized;
+                                     read-only, no crea la base); declara el gap cuando hay
+                                     evidencia versionada de memoria esperable
   ancleto memory export [--out <archivo>]  Exporta nodos activos a JSON (stdout o archivo)
   ancleto memory import <archivo> [--dry-run] [--json]  Importa nodos desde JSON (upsert por memory_key, idempotente)
   ancleto memory gc [--dry-run] [--days N] Purga superseded con antiguedad > N dias (default 30)
@@ -139,7 +143,8 @@ const MEMORY_USAGE = [
   'ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--force-critical] [--json]',
   'ancleto memory consolidate [--dry-run] [--apply] [--force-critical] [--json]',
   'ancleto memory repair refs --memory-key <key> [--apply] [--force-critical] [--json]',
-  'ancleto memory curate [--json] [--strict]'
+  'ancleto memory curate [--json] [--strict]',
+  'ancleto memory status [--json]'
 ]
 
 const INSTALL_USAGE = `ancleto install|update [--project <dir>] [--global]
@@ -2754,6 +2759,45 @@ async function memoryContext(flags) {
   }
 }
 
+const MEMORY_STATUS_FLAGS = new Set(['--json'])
+
+// Estado advisory de la memoria: exit 0 en los cuatro estados; el 1 queda
+// reservado a un error inesperado de E/S o de apertura. No es un gate.
+async function memoryStatusCmd(flags) {
+  const unknown = flags.filter((flag) => !MEMORY_STATUS_FLAGS.has(flag))
+  if (unknown.length > 0) {
+    console.error(`ancleto: flag desconocido: ${unknown[0]}`)
+    console.error('ancleto: uso: ancleto memory status [--json]')
+    process.exitCode = 1
+    return
+  }
+  const asJson = flags.includes('--json')
+  const dbPath = defaultMemoryDbPath()
+  const projectRoot = resolveMemoryProjectRoot(dbPath) || process.cwd()
+  let result
+  try {
+    result = inspectMemoryStatus({ projectRoot, dbPath })
+  } catch (err) {
+    console.error(`ancleto: ${err.message}`)
+    process.exitCode = 1
+    return
+  }
+  if (asJson) {
+    console.log(JSON.stringify(result))
+    return
+  }
+  const statusLines = {
+    ok: `ancleto: memoria ok (${result.activeNodes} nodo(s) activo(s))`,
+    empty: 'ancleto: memoria sin nodos activos',
+    'no-db': `ancleto: sin base de memoria (${dbPath})`,
+    uninitialized: `ancleto: base de memoria sin esquema inicializado (${dbPath})`
+  }
+  console.log(statusLines[result.status])
+  if (result.gap) {
+    console.log(`ancleto: gap de memoria: hay evidencia versionada de memoria esperable; recupera con ${result.recovery.map((cmd) => `"${cmd}"`).join(', ')}`)
+  }
+}
+
 async function memoryDoctorCmd(flags) {
   const rebuild = flags.includes('--rebuild')
   const dbPath = defaultMemoryDbPath()
@@ -2768,18 +2812,26 @@ async function memoryDoctorCmd(flags) {
   }
   // Frescura del working-context: advisory, no afecta el exit code (que sigue midiendo
   // la integridad de la DB). Read-only: no reescribe el artefacto.
-  const projectRoot = resolveMemoryProjectRoot(dbPath) || process.cwd()
-  const engine = createReadonlyMemoryEngine(dbPath)
-  let staleness
-  try {
-    staleness = checkWorkingContextFreshness(engine, projectRoot)
-  } catch (err) {
-    // Advisory best-effort: una clave critica invalida no debe tumbar el doctor ni
-    // cambiar su exit code (que sigue midiendo la integridad de la DB).
-    console.warn(`ancleto: no se pudo verificar el working-context: ${err.message}`)
-    staleness = null
-  } finally {
-    engine.close()
+  // `memoryDoctor` reporta el path temprano de esquema no inicializado con este
+  // `detail` (contrato de `src/core/memory/doctor.js`): sin `memory_nodes` no se
+  // construye el engine read-only de frescura, porque prepara statements contra esa
+  // tabla y abortaria con `no such table` fuera del `try`.
+  const schemaUninitialized = checks.some((c) => c.detail === 'esquema no inicializado')
+  let staleness = null
+  if (!schemaUninitialized) {
+    const projectRoot = resolveMemoryProjectRoot(dbPath) || process.cwd()
+    let engine
+    try {
+      engine = createReadonlyMemoryEngine(dbPath)
+      staleness = checkWorkingContextFreshness(engine, projectRoot)
+    } catch (err) {
+      // Advisory best-effort: una clave critica invalida no debe tumbar el doctor ni
+      // cambiar su exit code (que sigue midiendo la integridad de la DB).
+      console.warn(`ancleto: no se pudo verificar el working-context: ${err.message}`)
+      staleness = null
+    } finally {
+      if (engine) engine.close()
+    }
   }
   if (staleness === null) {
     console.log('  ⚠ Working-context: no verificable')
@@ -3411,6 +3463,10 @@ async function memoryCmd(args) {
   }
   if (sub === 'curate') {
     await memoryCurateCmd(flags)
+    return
+  }
+  if (sub === 'status') {
+    await memoryStatusCmd(flags)
     return
   }
   if (sub === 'repair') {

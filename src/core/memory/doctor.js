@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs'
 import { openDatabase, checkpointDatabase, runImmediateTransaction } from './database.js'
 import { inspectRefs, resolveProjectRoot } from './engine.js'
+import { hasMemorySchema } from './status.js'
 
 const REFS_CHECK_NAME = 'Refs de nodos activos'
 
@@ -27,7 +28,7 @@ export function memoryDoctor(dbPath, { rebuild = false } = {}) {
   try {
     const checks = []
 
-    const hasSchema = db.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE name = 'memory_nodes'`).get().n > 0
+    const hasSchema = hasMemorySchema(db)
     if (!hasSchema) {
       // Error path: los cinco nombres se conservan y cada check no ejecutable
       // se reporta como falla con su motivo (nunca se omite del array).

@@ -2,7 +2,7 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-16T03:54:08Z
+generatedAt: 2026-11-16T04:14:46Z
 pluginVersion: 0.37.0
 skillVersion: '2.3'
 ---
@@ -1050,9 +1050,9 @@ sin `--tier` es `normal`.
   exacto de glob. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al cuerpo del pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 873 fuentes, 166.322 B (~41.187 tokens, comprimido, 33 entradas de
-  archivo). El `.discovery-map.json` regenerado reporta 907 archivos (aspec 327, `.opencode` 66,
-  docs 21, test 33, src 22, scripts 2, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
+- **Pack actual**: tier `minimo`, 886 fuentes, 175.342 B (~43.421 tokens, comprimido, 33 entradas de
+  archivo). El `.discovery-map.json` regenerado reporta 921 archivos (aspec 340, `.opencode` 66,
+  docs 21, test 34, src 22, scripts 2, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
   el hash semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados
   bajo changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
   writer ni `ruleVersion`; 0.29.0 extiende ese filtro a `documentation/**` y `audit logs/**`
@@ -1392,6 +1392,10 @@ subcomando ``ancleto memory repair refs`` y reparación de refs no resueltas en
   malformado y reactivar un nodo `superseded`.
 - **Sin cambio persistido**: schema, PRAGMAs y `ruleVersion` intactos; un binario 0.36.0 lee el
   mismo estado.
+- **Release publicada (0.37.0)**: tag anotado `v0.37.0` → `da10910`, publish run `43801796586`
+  (success) y `@ancleto/spec@0.37.0` como `latest` en npm (gitHead
+  `da109106c878ab4cb1980269c0a30fd74303d865`); `aspec/backlog.md` registra el dato. El bump ya
+  estaba aplicado en `package.json`/`package-lock.json`/`CHANGELOG.md`.
 - **Oráculo**: `test/repair-refs.test.js` y `test/memory-engine.test.js`; no se ejecutó la suite en
   esta generación.
 

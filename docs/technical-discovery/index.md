@@ -2,7 +2,7 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-16T03:54:08Z
+generatedAt: 2026-11-16T04:14:46Z
 pluginVersion: 0.37.0
 skillVersion: '2.3'
 ---
@@ -93,6 +93,8 @@ paths citados (ver `unknowns.md`).
   `--apply` sobre una clave de `memory.criticalKeys` sin `--force-critical` no escribe y sale con
   código 2 (`{"error":"critical-key-gate","criticalAffected":[...]}` con `--json`); el dry-run
   reporta `critical: true` y sale 0. Sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`.
+  Publicada el 2026-11-16: tag anotado `v0.37.0` → `da10910`, publish run `43801796586` (success) y
+  `@ancleto/spec@0.37.0` como `latest` en npm (`aspec/backlog.md`).
 - **Release 0.36.0**: `memory merge` y `memory consolidate --apply` incorporan una **puerta de
   criticidad** atómica dentro de la misma `BEGIN IMMEDIATE` que la escritura. El conjunto crítico es
   el ya existente `.ancletorc` → `memory.criticalKeys` (lectura tolerante: ausente, no-array o

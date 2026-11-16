@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-15T23:32:12Z
-pluginVersion: 0.36.0
+generatedAt: 2026-11-16T03:54:08Z
+pluginVersion: 0.37.0
 skillVersion: '2.3'
 ---
 
@@ -144,13 +144,20 @@ del paquete instalado.
 - **Instalación**: `install`, `update`, `init`, `upgrade`, `check`, `doctor`, `export`, `import`.
 - **Descubrimiento y análisis**: `discovery`, `affected`, `specs check`, `specs merge`, `stats`,
   `stats failures`, `projects`.
-- **Memoria**: `memory context|list|doctor|curate|export|import|gc|snapshot|merge|consolidate`,
+- **Memoria**: `memory context|list|doctor|curate|export|import|gc|snapshot|merge|consolidate|repair`,
   `mcp`. Desde 0.31.0 `memory context` (con o sin `--out`) falla con exit ≠ 0 y no sobrescribe el
   archivo previo si una clave de `memory.criticalKeys` no existe, está inactiva o no entra en el
   presupuesto; el lifecycle y el on-write del MCP advierten sin escribir un bloque degradado.
   Desde 0.36.0 `memory merge` y `memory consolidate --apply` aceptan `--force-critical` y
   reportan `criticalAffected`; sin el flag, superseder una clave crítica sale con exit 2 (con
   `--json`, `{"error":"critical-key-gate","criticalAffected":[...]}`) sin escribir.
+- **Reparación de refs (0.37.0)**: `ancleto memory repair refs --memory-key <key> [--apply] [--json]
+  [--force-critical]`. Dry-run por defecto (conexión read-only): reporta las refs removibles y el
+  `remaining`; `--apply` es la única vía de escritura y supersede el nodo con el writer transaccional.
+  Solo remueve refs verificables con motivo exactamente `inexistente`; `commit:`/`workitem:` y los
+  demás motivos se conservan. Sobre una clave de `memory.criticalKeys`, `--apply` sin
+  `--force-critical` sale con exit 2 sin escribir. `--json` emite `status`, `memory_key`, `dry_run`,
+  `applied`, `critical`, `removed[]` y `remaining`; sin cambios de schema ni `ruleVersion`.
 - **Selección de tests afectados (0.32.0)**: `ancleto affected --tests <archivos...>` implica salida
   JSON y suma `tests` (`complete`, `reasons`, `selected`, `excluded`) a los cuatro campos
   existentes; sin `--tests` el JSON y los exit codes no cambian. El consumo canónico es
@@ -257,9 +264,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.36.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.37.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.36.0`.
+  la fija `package.json` = `0.37.0`.
 
 ## Entorno de máquina
 

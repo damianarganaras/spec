@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-15T23:32:12Z
-pluginVersion: 0.36.0
+generatedAt: 2026-11-16T03:54:08Z
+pluginVersion: 0.37.0
 skillVersion: '2.3'
 ---
 
@@ -84,7 +84,7 @@ test/                   suite node --test (content guards incluidos)
 | Discovery | Topología, fuentes, hashes, impacto y estado del seed | `src/core/discovery.js`, `src/cli/index.js` |
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
 | Selección de tests | Plan determinístico sobre el affected-set; manifiesto cerrado y gate fail-closed para `npm run test:affected` | `src/core/test-selection.js`, `test/affected-tests.json`, `scripts/test-affected.mjs` |
-| Memoria | Nodos, supersesión, refs, recall, working-context y conjunto crítico (`memory.criticalKeys`) | `src/core/memory/*` |
+| Memoria | Nodos, supersesión, refs, recall, working-context, conjunto crítico (`memory.criticalKeys`) y reparación explícita de refs (`memory repair refs`) | `src/core/memory/*` |
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
@@ -331,6 +331,18 @@ test/                   suite node --test (content guards incluidos)
     apply pero no suprime el fallo posterior del refresh; `memory consolidate` sin base sale con
     código 1. Sin schema, PRAGMAs, flags ajenos ni `ruleVersion` nuevos; release minor de
     `ch-09a-criticality-gate`.
+38. **Reparación de refs (0.37.0)**: `ancleto memory repair refs --memory-key <key> [--apply]
+    [--json] [--force-critical]` selecciona un único nodo activo (fail-closed por cardinalidad),
+    parsea su bloque `refs:` con el parser compartido y remueve solo las refs verificables cuyo
+    motivo es exactamente `inexistente`. `commit:`/`workitem:` y cualquier otro motivo —incluido
+    `ambiguo (<n> coincidencias)`— se conservan. El `content` reparado se obtiene quitando líneas
+    completas (texto + EOL), así que prosa, separadores e indentación quedan byte-idénticos. Dry-run
+    por defecto sobre `createReadonlyMemoryEngine`; `--apply` supersede con el writer transaccional
+    del motor y refresca el working-context; el candidato se valida con la misma validación
+    fail-closed que la escritura. `--apply` sobre una clave de `memory.criticalKeys` sin
+    `--force-critical` sale con exit 2 y cero escrituras. Salida `--json` determinística: `status`,
+    `memory_key`, `dry_run`, `applied`, `critical`, `removed[]` y `remaining`. Sin schema, PRAGMAs
+    persistentes ni `ruleVersion` nuevos; release minor de `memory-repair-refs` (CH-09b).
 
 ## Recorrido de una instalación con tier `minimo`
 

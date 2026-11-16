@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-15 (CH-09a **cerrado y archivado**: puerta de criticidad en `memory consolidate --apply` y `memory merge` con `criticalAffected`, `--force-critical`, rechazo atómico exit `2` y fuente en `.ancletorc` → `memory.criticalKeys`; CH-09e **diferido sin consumidor**; **pendiente de publicar 0.36.0** — sin tag ni run todavía; ver `## Cierre de deuda — CH-09a puerta de criticidad`). Antes, 2026-11-15 (cierre de MEM-05c/d/e y CH-09f/g: GC por instantes con `julianday` — defecto de frontera de segundo corregido —, limitación de plan y `status='deleted'` documentados, `memory curate` bajo un snapshot único de lectura y gramática de refs con fuente única; M-1 «integridad del motor de memoria» cerrado; sin versión, tag ni run todavía; propuesta `jev-spec-advisory-judge` agregada para review — juez semántico opcional JEV, **sin implementar**, ver "Propuestas en revisión"; evaluación del proposal JEV registrada: no se implementa ahora, reservado para Lucas). Antes, 2026-11-13 (0.34.0: CH-08/MEM-06 entregó su única pieza sound — `memory import --dry-run [--json]` con clasificación read-only por memory_key (nuevo/identico/divergente/tombstone) y acción predicha (insert/supersede/skip) compartiendo una única función de decisión con el import real; reindex desde proposals y gate fail-closed refutados con evidencia; 0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
+> Última actualización: 2026-11-16 (CH-09b **cerrado y archivado**: auto-reparación de refs con `memory repair refs` — dry-run por defecto, selección fail-closed, allowlist del motivo `inexistente`, gate de criticidad reusado y rollback probado; release MINOR 0.37.0 pendiente; ver `## Cierre de deuda — CH-09b auto-reparación de refs`). Antes, 2026-11-15 (CH-09a **cerrado y archivado**: puerta de criticidad en `memory consolidate --apply` y `memory merge` con `criticalAffected`, `--force-critical`, rechazo atómico exit `2` y fuente en `.ancletorc` → `memory.criticalKeys`; CH-09e **diferido sin consumidor**; **publicado en 0.36.0** — tag anotado `v0.36.0` → `2fe4f4e`, publish run `43776309490` (success), npm `latest` 0.36.0 (gitHead `2fe4f4e`); ver `## Cierre de deuda — CH-09a puerta de criticidad` y `## Relación con 0.36.0`). Antes, 2026-11-15 (cierre de MEM-05c/d/e y CH-09f/g: GC por instantes con `julianday` — defecto de frontera de segundo corregido —, limitación de plan y `status='deleted'` documentados, `memory curate` bajo un snapshot único de lectura y gramática de refs con fuente única; M-1 «integridad del motor de memoria» cerrado; sin versión, tag ni run todavía; propuesta `jev-spec-advisory-judge` agregada para review — juez semántico opcional JEV, **sin implementar**, ver "Propuestas en revisión"; evaluación del proposal JEV registrada: no se implementa ahora, reservado para Lucas). Antes, 2026-11-13 (0.34.0: CH-08/MEM-06 entregó su única pieza sound — `memory import --dry-run [--json]` con clasificación read-only por memory_key (nuevo/identico/divergente/tombstone) y acción predicha (insert/supersede/skip) compartiendo una única función de decisión con el import real; reindex desde proposals y gate fail-closed refutados con evidencia; 0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
 
 ## Prioridad de ejecución
 
@@ -11,7 +11,7 @@
 4. **Reingeniería P1**: CH-00 baseline (runbook, prerrequisito) → CH-06a merge determinístico de delta specs **cerrado en 0.22.0** (`ch-06a-specs-merge-deterministic`) → CH-06b selección de tests por affected-set **cerrado en 0.32.0** → CH-07 A/B de prefijos/caché/modelos (bloqueado por CH-00).
 5. **Reingeniería P2 colaboración**: CH-08/MEM-06 (slice `memory import --dry-run` cerrado en 0.34.0; reindex y gate fail-closed refutados con evidencia) → T25 `formatVersion` (**refutado en 0.23.0**) → T27 (reindex, pendiente) → T20 (idempotencia) **cerrado en 0.23.0** → T30 (V1/V2, pendiente) → CH-10 (matriz de hosts, pendiente).
 6. **Reingeniería P2 motor/host restante**: #4 (exclusión mutua de escritores) **cerrado en 0.33.0** (`ch-04-memory-writer-serialization`), #6 (tope de verificación / orden archive→merge), #18 (seed stale por diseño).
-7. **Deuda declarada**: MEM-05c–e **cerrados el 2026-11-15** (05d corregido; 05c limitación de plan documentada; 05e estado reservado documentado), MEM-05f cerrado, MEM-05g diferido, CH-09a **cerrado y archivado el 2026-11-15** (puerta de criticidad; pendiente de publicar 0.36.0), CH-09b–d pendientes, CH-09e **diferido sin consumidor**, CH-09f/g **cerrados el 2026-11-15**, CH-09h refutado.
+7. **Deuda declarada**: MEM-05c–e **cerrados el 2026-11-15** (05d corregido; 05c limitación de plan documentada; 05e estado reservado documentado), MEM-05f cerrado, MEM-05g diferido, CH-09a **cerrado y archivado el 2026-11-15** (puerta de criticidad; publicado en 0.36.0), CH-09b **cerrado y archivado el 2026-11-16** (auto-reparación de refs; release MINOR 0.37.0 pendiente), CH-09c–d pendientes, CH-09e **diferido sin consumidor**, CH-09f/g **cerrados el 2026-11-15**, CH-09h refutado.
 
 > Nota: el paso 2 (0.21.0) quedó **cerrado en 0.23.0** por `portability-legacy-bundle-advisory`; su mitad `.opencode/*` fue refutada. La nota histórica de diferirlo ya no aplica.
 
@@ -132,7 +132,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **P2 colaboración:** CH-08/MEM-06 entregó en 0.34.0 el dry-run clasificado; el reindex desde proposals y el gate fail-closed quedaron refutados con evidencia. `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10). **T25 (`formatVersion`) refutado en 0.23.0**: los exports viejos ya importan sin pérdida, `importNodes` ignora claves extra y exige `Array.isArray`, y ningún consumidor lee una versión; se reabre cuando CH-08 defina el lector.
 - **P2 motor/host:** T20 idempotencia **cerrado en 0.23.0** (`memory-record-idempotency`); #4 exclusión mutua de escritores **cerrado en 0.33.0** (`ch-04-memory-writer-serialization`); T30 V1/V2, CH-10 matriz de hosts, #6, #18 pendientes.
 - **P2 · M-1 «integridad del motor de memoria»: CERRADO el 2026-11-15** con los cinco sub-ítems MEM-05c/d/e y CH-09f/g. Sin afirmar todavía versión, tag ni run: eso corresponde a la fase de release. Detalle y evidencia en `## Cierre de deuda M-1 — integridad del motor de memoria (2026-11-15, sin release)`.
-- **Deuda:** MEM-05c–e y CH-09f/g cerrados el 2026-11-15 (ver `## Cierre de deuda M-1`); CH-09a cerrado el 2026-11-15 (pendiente de publicar 0.36.0; ver `## Cierre de deuda — CH-09a puerta de criticidad`); MEM-05f cerrado en 0.23.0; MEM-05g diferido; CH-09b–d pendientes; CH-09e diferido sin consumidor; CH-09h refutado.
+- **Deuda:** MEM-05c–e y CH-09f/g cerrados el 2026-11-15 (ver `## Cierre de deuda M-1`); CH-09a cerrado el 2026-11-15 (publicado en 0.36.0; ver `## Cierre de deuda — CH-09a puerta de criticidad`); MEM-05f cerrado en 0.23.0; MEM-05g diferido; CH-09b cerrado el 2026-11-16 (auto-reparación de refs; release MINOR 0.37.0 pendiente; ver `## Cierre de deuda — CH-09b auto-reparación de refs`); CH-09c–d pendientes; CH-09e diferido sin consumidor; CH-09h refutado.
 
 ### Deuda residual de CH-06a — cerrada en 0.22.1
 
@@ -560,9 +560,9 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Publish:** workflow `Publish` run id `43726253401`, conclusion `success` — https://github.com/damianarganaras/spec/actions/runs/43726253401
 - **npm:** `@ancleto/spec@0.35.0`, dist-tags `latest: 0.35.0`, gitHead `036311030da39cf3d8ae4ee2e27d1d229331026b`; tarball `https://registry.npmjs.org/@ancleto/spec/-/spec-0.35.0.tgz` responde HTTP 200.
 
-## Cierre de deuda — CH-09a puerta de criticidad (2026-11-15, pendiente de publicar 0.36.0)
+## Cierre de deuda — CH-09a puerta de criticidad (2026-11-15, publicado en 0.36.0)
 
-- **Change:** `ch-09a-criticality-gate`, implementado, testeado y archivado en `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/` (delta `## MODIFIED` en `memory-ops`; sin `design.md`). Release MINOR prevista `0.36.0`: **pendiente de publicar** — sin tag, run ni npm afirmados en esta edición.
+- **Change:** `ch-09a-criticality-gate`, implementado, testeado y archivado en `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/` (delta `## MODIFIED` en `memory-ops`; sin `design.md`). Release MINOR `0.36.0`: **publicado en 0.36.0** — tag anotado `v0.36.0` (objeto `e83ffb5`) → `2fe4f4e`; publish run `43776309490` (`success`); npm `@ancleto/spec@0.36.0` `latest`, gitHead `2fe4f4e`, tarball HTTP 200 (detalle en `## Relación con 0.36.0`).
 - **Qué se hizo:** puerta de criticidad en `memory consolidate --apply` y `memory merge`. `criticalAffected` se reporta tanto en dry-run como en apply; sin `--force-critical` y con claves críticas afectadas, la operación se rechaza de forma **atómica antes de escribir**, con exit `2` y, con `--json`, `{"error":"critical-key-gate","criticalAffected":[...]}`. El dry-run reporta y nunca bloquea; `--force-critical` es la única vía explícita de override.
 - **Fuente de "regla crítica":** `.ancletorc` → `memory.criticalKeys`; vacío, ausente o inválido equivale a lista vacía y la puerta no bloquea. El engine **no** lee `.ancletorc`: el CLI inyecta el set y la evaluación ocurre dentro de la misma `BEGIN IMMEDIATE` que la escritura.
 - **Fix adicional:** `memory consolidate` en un directorio sin `.ancleto/memory.db` ahora sale `1` (antes `0`), alineado con `memory merge`, sin crear la base.
@@ -573,11 +573,11 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 ## Relación con 0.36.0
 
-0.36.0 (2026-11-15) contiene un change archivado. Release MINOR (runtime + spec + test): cierra CH-09a (puerta de criticidad) y corrige el exit code de `memory consolidate` sin base; **pendiente de publicar** — sin tag, run ni npm todavía.
+0.36.0 (2026-11-15) contiene un change archivado. Release MINOR (runtime + spec + test): cierra CH-09a (puerta de criticidad) y corrige el exit code de `memory consolidate` sin base; **publicada** — tag `v0.36.0` (commits `e83ffb5` → `2fe4f4e`) y npm `latest` 0.36.0.
 
 **Hecho:**
 
-- **`ch-09a-criticality-gate`** (delta `## MODIFIED` en `memory-ops`), archivado en `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/`. Detalle en `## Cierre de deuda — CH-09a puerta de criticidad (2026-11-15, pendiente de publicar 0.36.0)`.
+- **`ch-09a-criticality-gate`** (delta `## MODIFIED` en `memory-ops`), archivado en `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/`. Detalle en `## Cierre de deuda — CH-09a puerta de criticidad (2026-11-15, publicado en 0.36.0)`.
 - **Puerta de criticidad:** `memory consolidate --apply` y `memory merge` reportan `criticalAffected` (dry-run y apply); sin `--force-critical` rechazan atómicamente antes de escribir con exit `2` y, con `--json`, `{"error":"critical-key-gate","criticalAffected":[...]}`. El dry-run reporta y nunca bloquea.
 - **Fuente del set crítico:** `.ancletorc` → `memory.criticalKeys`; vacío, ausente o inválido equivale a lista vacía; el engine no lee `.ancletorc`, el CLI inyecta el set y la evaluación ocurre dentro de la misma `BEGIN IMMEDIATE`.
 - **Fix de exit code:** `memory consolidate` sin `.ancleto/memory.db` ahora sale `1` (antes `0`), alineado con `memory merge`, sin crear la base.
@@ -588,6 +588,33 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 - **CH-09e — DIFERIDO sin consumidor:** `exactGroups` ya expone `type`; la proyección de `memory curate` no tiene consumidor real y agregarla sería especulación, además de romper el pin de forma del reporte (`test/curation.test.js:195`). Se reabre sólo cuando un consumidor real necesite desambiguar grupos por tipo.
 
-**Release pendiente de publicar:**
+**Release:**
 
-- Tag `v0.36.0`, run de publish y npm: **pendiente de publicar**; no se afirman hash de tag, id de run ni resultado de npm en esta edición; la fase posterior los completa.
+- **Tag:** **anotado** `v0.36.0` (objeto `e83ffb5`) → merge commit `2fe4f4e` (`merge: release 0.36.0`) en `main` = `origin/main`, fecha 2026-11-15; `development` = `origin/development` = `ecb383a`.
+- **Publish:** workflow `Publish` run id `43776309490`, evento `push`, headSha `2fe4f4e`, conclusion `success` (created `23:43:04Z`, updated `23:45:41Z`).
+- **npm:** `@ancleto/spec@0.36.0`, dist-tags `latest: 0.36.0`, gitHead `2fe4f4e786f1746a550e6403f0d42e218a8c5d27` (`time['0.36.0']` = `2026-11-15T23:46:52.720Z`); tarball `https://registry.npmjs.org/@ancleto/spec/-/spec-0.36.0.tgz` responde HTTP 200 (233656 bytes).
+
+## Cierre de deuda — CH-09b auto-reparación de refs (2026-11-16, release 0.37.0 pendiente)
+
+- **Change:** `memory-repair-refs`, implementado, testeado y archivado en `aspec/changes/archive/2026-11-16-memory-repair-refs/` (delta `## ADDED Requirements` en `memory-ops`, 1 requirement nuevo "Reparación explícita de refs no resueltas con `memory repair refs`" con 14 escenarios, mergeado a `aspec/specs/memory-ops/spec.md`: 19 → 20 requirements). Release MINOR `0.37.0`, **pendiente** al momento de esta edición.
+- **Superficie:** `ancleto memory repair refs --memory-key <k> [--apply] [--force-critical] [--json]`; dry-run por defecto. Selección fail-closed (0 o ≥2 activos → exit `1`). Remueve **sólo** refs con motivo exactamente `inexistente` (allowlist). Bloque `refs:` malformado, cero refs resultantes y plan no aplicable → exit `1` sin escribir. Reusa el gate de criticidad (exit `2` / `--force-critical`). Escritura por supersede con FTS por triggers; sin cambio de schema ni `ruleVersion`. Rollback probado offline (snapshot → apply → restore verificado).
+- **Operaciones refutadas con evidencia:** redirigir refs a otra `memory_key` (la gramática no tiene ese kind); reescribir bloque `refs:` malformado (intención no recuperable); reactivar superseded (sin consumidor y viola el índice parcial `UNIQUE`).
+- **No se agregó:** comando `memory restore` (procedimiento manual documentado) ni `curate --fix`.
+- **Validación:** `test/repair-refs.test.js` (19/19); suites de memoria 288/288; `test/cli.test.js` 529/0; lint OK; `npm test` 1405/0/5 skipped.
+- **Memoria:** 11 decisiones promovidas; DB 400 nodos / 285 activos / 115 superseded / 870 refs / 0 sin resolver; FTS 400=400.
+- **Commits:** `30a77a7`, `8e1fe83`, `2ae4218`, `9fb440e`, `c1b72bd`, `2c644e8`.
+
+## Relación con 0.37.0
+
+0.37.0 (2026-11-16) contiene un change archivado. Release MINOR (runtime + spec + test): entrega CH-09b (`ancleto memory repair refs`); el bump ya está aplicado y el tag/push/publish se ejecutan después.
+
+**Hecho:**
+
+- **`memory-repair-refs` (delta `## ADDED Requirements` en `memory-ops`), archivado en `aspec/changes/archive/2026-11-16-memory-repair-refs/`:** `ancleto memory repair refs` repara explícitamente refs no resueltas; dry-run por defecto, allowlist del motivo `inexistente`, gate de criticidad con exit `2`, y rollback por snapshot + restore documentado y probado. Detalle en `## Cierre de deuda — CH-09b auto-reparación de refs (2026-11-16, release 0.37.0 pendiente)`.
+- **Delta `ADDED` mergeado** en `aspec/specs/memory-ops/spec.md` (19 → 20 requirements).
+- **Refutadas y no entregadas:** redirección de refs a otra `memory_key`, reescritura de bloque `refs:` malformado y reactivación de nodos superseded.
+- **Compatibilidad:** sin cambio de schema, PRAGMAs persistentes ni `ruleVersion`; un binario `0.36.0` lee el mismo estado.
+
+**Release:**
+
+- **Estado al momento de escribir:** bump `0.37.0` ya aplicado (`package.json`/`package-lock.json`/`CHANGELOG.md`); el tag `v0.37.0`, el push y el publish a npm se ejecutan después. Todavía no existen run de CI, id de tag ni fecha de publicación que afirmar.

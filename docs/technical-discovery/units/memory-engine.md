@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor, la promoción de decisiones al archivar y la serialización de escritores concurrentes (MEMORY_DB_BUSY) y el rebuild de doctor en transacción inmediata (0.33.1), el import con dry-run clasificado (0.34.0) el GC por instante con snapshot de lectura en curate (0.35.0) y la puerta de criticidad pre-write en merge/consolidate --apply (0.36.0)"
-covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode, serialización de escritores, MEMORY_DB_BUSY, retry acotado, runImmediateTransaction, runReadTransaction, doctor-rebuild, import-dry-run, decideImportEntry, databasePresent, clasificacion-read-only, gc-julianday, fechas-no-parseables, deleted-reservado, curate-snapshot, REF_GRAMMAR, puerta-de-criticidad, criticalAffected, force-critical, MEMORY_CRITICAL_KEY, critical-key-gate]
-sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization", "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified", "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot", "aspec/changes/archive/2026-11-15-ch-09a-criticality-gate", "test/memory-writers.test.js", "test/memory-engine.test.js", "test/curation.test.js", "test/fixtures/memory-writer-child.mjs", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-15T23:32:12Z
-pluginVersion: 0.36.0
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, la reparación explícita de refs no resueltas (0.37.0), el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor, la promoción de decisiones al archivar y la serialización de escritores concurrentes (MEMORY_DB_BUSY) y el rebuild de doctor en transacción inmediata (0.33.1), el import con dry-run clasificado (0.34.0) el GC por instante con snapshot de lectura en curate (0.35.0) y la puerta de criticidad pre-write en merge/consolidate --apply (0.36.0)"
+covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, reparación de refs, repair-refs, allowlist-inexistente, preservacion-byte-a-byte, planRefRepair, repairRefs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode, serialización de escritores, MEMORY_DB_BUSY, retry acotado, runImmediateTransaction, runReadTransaction, doctor-rebuild, import-dry-run, decideImportEntry, databasePresent, clasificacion-read-only, gc-julianday, fechas-no-parseables, deleted-reservado, curate-snapshot, REF_GRAMMAR, puerta-de-criticidad, criticalAffected, force-critical, MEMORY_CRITICAL_KEY, critical-key-gate]
+sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization", "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified", "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot", "aspec/changes/archive/2026-11-15-ch-09a-criticality-gate", "aspec/changes/archive/2026-11-16-memory-repair-refs", "test/memory-writers.test.js", "test/memory-engine.test.js", "test/curation.test.js", "test/repair-refs.test.js", "test/fixtures/memory-writer-child.mjs", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
+generatedAt: 2026-11-16T03:54:08Z
+pluginVersion: 0.37.0
 skillVersion: '2.3'
 ---
 
@@ -55,7 +55,10 @@ refs pasa a una constante exportada (`REF_GRAMMAR`); sin cambio de schema ni de 
 y `consolidate` reciben `criticalKeys`/`forceCritical`, calculan `criticalAffected` y evalúan una
 puerta de criticidad dentro de la transacción inmediata, antes de superseder; el dry-run reporta sin
 bloquear y el rechazo real sale con exit 2 (ver "Puerta de criticidad pre-write"). Sin cambio de
-schema, PRAGMAs ni `ruleVersion`.
+schema, PRAGMAs ni `ruleVersion`. **0.37.0 agrega una opción de escritura reparativa**: `repairRefs`
+reutiliza el parser de `refs:` y el resolvedor de escritura para quitar solo refs `inexistente` de
+un único nodo activo, con dry-run sobre el engine read-only y `--apply` por supersede bajo el mismo
+gate crítico (ver "Reparación de refs"). Sin cambio de schema, PRAGMAs ni `ruleVersion`.
 
 ## Recorrido relevante
 
@@ -168,6 +171,45 @@ schema, PRAGMAs ni `ruleVersion`.
   (exit 2, JSON, texto humano, pin de `MEMORY_USAGE` y `consolidate` sin base). No se ejecutó la
   suite en esta generación.
 
+### Reparación de refs (0.37.0)
+
+- **Entrada**: `ancleto memory repair refs --memory-key <key> [--apply] [--json] [--force-critical]`.
+  `repairRefs({ memoryKey, dryRun, criticalKeys, forceCritical })` selecciona un **único nodo activo**
+  y falla cerrado si la cardinalidad no es exactamente 1. El `content` se parsea con el mismo
+  `parseRefsBlock` del camino de escritura y se resuelve con `resolveRefResult`; no hay parser ni
+  resolvedor paralelos.
+- **Allowlist**: solo se remueve una ref verificable con `ok: false` y motivo exactamente
+  `inexistente`. `commit:`/`workitem:` no son verificables localmente y nunca se remueven; cualquier
+  otro motivo —incluido `ambiguo (<n> coincidencias)` y los futuros— se conserva. El filtro no tiene
+  default: un motivo desconocido se retiene.
+- **Preservación byte a byte**: el `content` reparado se obtiene quitando líneas completas (texto +
+  EOL), sin re-render desde `parsed.refs`; prosa, separadores, indentación y el resto de las refs
+  quedan byte-idénticos. Cada elemento conserva su EOL, así que quitar una línea no altera las demás
+  ni el separador final.
+- **Dry-run y apply**: dry-run es el default y corre sobre `createReadonlyMemoryEngine`
+  (`migrate: false`), sin transacción ni escritura. `--apply` usa el writer transaccional
+  (`runImmediateTransaction`) y supersede el nodo anterior conservando su `content` original como
+  historial; refresca el working-context con la misma guarda que `import`/`merge`/`consolidate`. Un
+  no-op no abre transacción, no escribe ni refresca.
+- **Fail-closed compartido**: el plan y la escritura validan el `content` candidato con la misma
+  validación de refs que `recordNode`; si tras la remoción queda otra ref ambigua o inválida, el
+  dry-run falla igual que el apply y nombra la ref ofensora (no reporta un plan aplicable).
+  La selección y el plan se revalidan bajo lock para no superseder un nodo distinto si el estado
+  deriva entre el plan y la escritura.
+- **Gate crítico**: `--apply` sobre una `memory_key` de `memory.criticalKeys` sin
+  `--force-critical` no escribe y sale con código 2; con `--json`,
+  `{"error":"critical-key-gate","criticalAffected":[...]}`. El dry-run reporta `critical: true` y
+  sale 0; el flag no tiene efecto en dry-run.
+- **Salida JSON determinística**: `status`, `memory_key`, `dry_run`, `applied`, `critical`,
+  `removed[]` y `remaining`. `remaining` solo aparece en un plan resuelto (`ok`/no-op); en `no-db` y
+  `error` se omite porque el nodo conserva sus refs.
+- **Refutado con evidencia**: redirigir refs entre `memory_key`, reescribir un bloque `refs:`
+  malformado y reactivar un nodo `superseded`. Sin cambios de schema, PRAGMAs persistentes ni
+  `ruleVersion`: un binario `0.36.0` lee el mismo estado persistido.
+- **Oráculo**: `test/repair-refs.test.js` (allowlist, preservación byte a byte, dry-run/apply,
+  cardinalidad, no-op sin escritura y gate crítico) y `test/memory-engine.test.js`. No se ejecutó la
+  suite en esta generación.
+
 ### Refs y secretos
 
 - Gramática cerrada de `refs:`: `spec:`, `change:`, `path:`, `commit:`, `workitem:`. El bloque
@@ -178,6 +220,9 @@ schema, PRAGMAs ni `ruleVersion`.
 - `resolveNodeRefs` resuelve `spec:`/`change:`/`path:` contra la raíz del repo; `commit:` y
   `workitem:` se reportan como no verificables. La raíz se deriva de `context.projectRoot` o de la
   ubicación de la DB, nunca de `process.cwd()`.
+- **Reparación (0.37.0)**: `planRefRepair` usa `parseRefsBlock` + `resolveRefResult` y remueve solo
+  refs con motivo `inexistente`; el resto del `content` queda intacto. Un bloque `refs:` malformado
+  no se reescribe: sigue siendo un error fail-closed.
 - `looksLikeSecret` rechaza credenciales de forma incondicional y **nunca repite el valor**.
 
 ### Recall (`searchMemory`)
@@ -222,6 +267,7 @@ schema, PRAGMAs ni `ruleVersion`.
 | `merge` | Supersede sources activas hacia un target activo; valida todo antes de una única transacción; `--dry-run` no escribe; desde 0.36.0 una source crítica sin `--force-critical` rechaza con exit 2 antes de escribir |
 | `consolidate` | Duplicados exactos por `type` + content normalizado; canónico por orden total; `--apply` supersede; near-duplicates solo reporte; `includeNearDuplicates: false` evita O(n²); desde 0.36.0 el gate crítico reporta `criticalAffected` y bloquea el apply sin `--force-critical` |
 | `curate` | Read-only: refs rotas, no verificables (`commit:`/`workitem:`) y duplicados exactos, compuestos bajo un único snapshot `BEGIN DEFERRED`; advisory, `--strict` convierte hallazgos en exit ≠ 0 (0.35.0) |
+| `repair refs` | Dry-run read-only por defecto; `--apply` supersede un único nodo activo quitando solo refs con motivo `inexistente` y preservando el resto byte a byte; `commit:`/`workitem:` y otros motivos se conservan; gate crítico con exit 2 (0.37.0) |
 | `doctor` | Cinco checks read-only: integridad, FTS5, reglas activas, refs de nodos activos, checkpoint WAL; `--rebuild` es el único camino mutante y desde 0.33.1 ejecuta rebuild + integrity-check dentro de `runImmediateTransaction` (`doctor-rebuild`) |
 
 ### Promoción al archivar (0.22.1)
@@ -268,6 +314,10 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
   real (exit 2, `MEMORY_CRITICAL_KEY`) ocurre dentro de la transacción, antes de cualquier `UPDATE`;
   `--force-critical` no suprime el fallo posterior del refresh. Un binario 0.35.0 ignora el flag y
   puede superseder una clave crítica (riesgo de downgrade documentado).
+- **Reparación acotada (0.37.0)**: `memory repair refs` no redirige refs, no reescribe bloques
+  `refs:` malformados y no reactiva superseded; solo quita refs `inexistente` de un nodo activo. La
+  escritura es un supersede normal, así que el nodo anterior conserva su `content` original. Sin
+  schema, PRAGMAs persistentes ni `ruleVersion` nuevos.
 - **Read-only por defecto**: `list`, `doctor`, `curate` y `consolidate` sin `--apply` no migran ni
   escriben. `no-db` nunca se reporta como reporte limpio.
 - **`source` no es forjable**: un `source` en los args del caller se ignora; lo resuelve el runtime.
@@ -305,7 +355,7 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 
 | Path | Rol |
 |---|---|
-| `src/core/memory/engine.js` | Núcleo: recall, refs, supersesión, ops, consolidate; desde 0.35.0 `REF_GRAMMAR`, GC con `julianday` y `readTransaction`; desde 0.36.0 `affectedCriticalKeys` y gate `MEMORY_CRITICAL_KEY` en `merge`/`consolidate` |
+| `src/core/memory/engine.js` | Núcleo: recall, refs, supersesión, ops, consolidate; desde 0.35.0 `REF_GRAMMAR`, GC con `julianday` y `readTransaction`; desde 0.36.0 `affectedCriticalKeys` y gate `MEMORY_CRITICAL_KEY` en `merge`/`consolidate`; desde 0.37.0 `planRefRepair` y `repairRefs` |
 | `src/core/memory/database.js` | Apertura, migraciones aditivas, checkpoint WAL, `runImmediateTransaction` (0.33.0), `runReadTransaction` (`BEGIN DEFERRED`, 0.35.0), política de retry y `MemoryDatabaseBusyError` |
 | `src/core/memory/tools.js` | Handlers de `searchMemory`/`recordRule`/`recordDecision` |
 | `src/core/memory/mcp-server.js` | Servidor MCP stdio |
@@ -313,14 +363,16 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 | `src/core/memory/doctor.js` | Diagnóstico read-only y rebuild FTS5 dentro de `runImmediateTransaction` desde 0.33.1 |
 | `src/core/memory/curation.js` | Curaduría read-only de refs y duplicados; desde 0.35.0 compone bajo `engine.readTransaction` e importa `REF_GRAMMAR` |
 | `src/core/memory/snapshot.js` | Copia consistente con historial |
-| `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move; desde 0.35.0 GC y `memory curate` se reescribieron en el lugar (instante, `deleted` reservado, snapshot único) |
+| `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move; desde 0.35.0 GC y `memory curate` se reescribieron en el lugar (instante, `deleted` reservado, snapshot único); desde 0.36.0 la puerta de criticidad de merge/consolidación; desde 0.37.0 el subcomando `memory repair refs` y la allowlist `inexistente` |
 | `aspec/specs/memory-engine/spec.md` | Requirement de idempotencia de reescritura idéntica en `recordNode` (0.23.0); `Orden determinístico de inyección de reglas` con 7 escenarios y `Conjunto crítico estable del working-context` (0.31.0); desde 0.33.0 `Serialización de escritores concurrentes sobre la base de memoria`; desde 0.33.1 el requirement de doctor se actualizó en el lugar |
 | `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` | Delta `ADDED` del conjunto crítico y `MODIFIED` del orden determinístico; `MEM-05` cerrado en 0.31.0 |
 | `aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified/` | Delta `ADDED` del import con dry-run clasificado; cierra `CH-08` en 0.34.0 |
 | `aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/` | Delta `MODIFIED` de GC y curaduría (instante, `deleted` reservado, snapshot único y `REF_GRAMMAR`); cierra `MEM-05` en 0.35.0 |
 | `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/` | Delta `MODIFIED` de merge, consolidación y comando CLI en `memory-ops`; puerta de criticidad pre-write, `criticalAffected`, `--force-critical` y exit 2; cierra `CH-09a` en 0.36.0 |
+| `aspec/changes/archive/2026-11-16-memory-repair-refs/` | Delta `ADDED` del subcomando `memory repair refs` y de la reparación de refs en `memory-ops`; allowlist `inexistente`, preservación byte a byte, dry-run read-only y gate crítico; cierra `CH-09b` en 0.37.0 |
 | `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/` | Delta `ADDED` de serialización de escritores concurrentes; cierra `CH-04` en 0.33.0 |
 | `test/memory-engine.test.js`, `test/curation.test.js` | Cobertura de GC por instante, formatos mixtos, fechas no parseables, `deleted` reservado y snapshot único de `curate` (0.35.0) |
+| `test/repair-refs.test.js` | Cobertura de la reparación explícita de refs: allowlist, preservación byte a byte, dry-run/apply y gate crítico (0.37.0) |
 | `test/memory-writers.test.js`, `test/fixtures/memory-writer-child.mjs` | Oráculo offline de escritores concurrentes y fixture de proceso hijo (0.33.0–0.33.1; cubre el rebuild de doctor bajo contención desde 0.33.1) |
 | `aspec/specs/cli-diagnostics/spec.md` | Fuera de esta unidad: contrato de frescura del seed (0.26.1) que no toca el motor |
 | `agents/orchestrator.md` | Secuencia del archive y delegación de la promoción entre fase A y fase B |

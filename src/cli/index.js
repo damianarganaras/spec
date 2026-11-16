@@ -113,6 +113,8 @@ ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FT
                                    Supersede cada source activa hacia el target (sin crear nodos)
   ancleto memory consolidate [--dry-run] [--apply] [--force-critical] [--json]
                                    Agrupa duplicados exactos y supersede los no canonicos
+  ancleto memory repair refs --memory-key <key> [--apply] [--force-critical] [--json]
+                                   Remueve solo las refs inexistentes de un nodo activo (dry-run por defecto)
   ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE
                                         expone searchMemory, recordRule y recordDecision
   ancleto check                         Verifica integridad de archivos instalados vs manifiesto
@@ -136,6 +138,7 @@ const MEMORY_USAGE = [
   'ancleto memory snapshot --out <archivo.db> [--force] [--json]',
   'ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--force-critical] [--json]',
   'ancleto memory consolidate [--dry-run] [--apply] [--force-critical] [--json]',
+  'ancleto memory repair refs --memory-key <key> [--apply] [--force-critical] [--json]',
   'ancleto memory curate [--json] [--strict]'
 ]
 
@@ -3249,6 +3252,125 @@ async function memoryCurateCmd(flags) {
   }
 }
 
+const REPAIR_REFS_BOOL_FLAGS = new Set(['--apply', '--force-critical', '--json'])
+
+// `--memory-key` consume el token siguiente (su valor); el resto son booleanas.
+// Una flag desconocida se rechaza como en `curate`, sin inventar un `--strict`.
+function firstUnknownRepairRefsFlag(flags) {
+  for (let i = 0; i < flags.length; i++) {
+    if (flags[i] === '--memory-key') {
+      i += 1
+      continue
+    }
+    if (!REPAIR_REFS_BOOL_FLAGS.has(flags[i])) return flags[i]
+  }
+  return null
+}
+
+function repairRefsUsage() {
+  console.error('ancleto: uso: ancleto memory repair refs --memory-key <key> [--apply] [--force-critical] [--json]')
+}
+
+// Dry-run por defecto con la conexion read-only (sin migraciones ni escrituras);
+// `--apply` es la unica via de escritura y refresca el bloque derivado con la
+// misma guarda que import/merge/consolidate.
+async function memoryRepairRefs(flags) {
+  const unknown = firstUnknownRepairRefsFlag(flags)
+  if (unknown) {
+    console.error(`ancleto: flag desconocido: ${unknown}`)
+    repairRefsUsage()
+    process.exitCode = 1
+    return
+  }
+  const memoryKey = requiredMemoryFlag(flags, '--memory-key')
+  if (!memoryKey) {
+    repairRefsUsage()
+    process.exitCode = 1
+    return
+  }
+  const asJson = flags.includes('--json')
+  const apply = flags.includes('--apply')
+  const dryRun = !apply
+  // En dry-run el flag no tiene efecto: el engine nunca bloquea por criticidad.
+  const forceCritical = apply && flags.includes('--force-critical')
+  const dbPath = defaultMemoryDbPath()
+  // El conjunto critico se resuelve antes del engine: toda salida JSON, incluidas
+  // las de rechazo, reporta la pertenencia real de la key y no un `critical:false`
+  // fijo. No depende de que la base exista.
+  const projectRoot = resolveMemoryProjectRoot(dbPath)
+  const criticalKeys = readCriticalMemoryKeys(projectRoot)
+  const critical = criticalKeys.includes(memoryKey)
+  // `remaining` solo tiene sentido en un plan resuelto (ok/no-op): en `no-db` y
+  // `error` se omite para no afirmar cero refs cuando el nodo conserva las suyas.
+  const empty = { memory_key: memoryKey, dry_run: dryRun, applied: false, critical, removed: [] }
+  if (!(await exists(dbPath))) {
+    if (asJson) console.log(JSON.stringify({ status: 'no-db', ...empty }))
+    else console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exitCode = 1
+    return
+  }
+  const engine = dryRun ? createReadonlyMemoryEngine(dbPath) : createMemoryEngine(dbPath)
+  try {
+    let result
+    try {
+      result = engine.repairRefs({
+        memoryKey,
+        dryRun,
+        projectRoot,
+        criticalKeys,
+        forceCritical
+      })
+    } catch (err) {
+      if (apply && err.code === 'MEMORY_CRITICAL_KEY') {
+        criticalGateExit(err, asJson)
+        return
+      }
+      if (asJson) console.log(JSON.stringify({ status: 'error', ...empty, reason: err.message }))
+      console.error(`ancleto: repair refs rechazado: ${err.message}`)
+      process.exitCode = 1
+      return
+    }
+    // Un no-op no escribio nada: refrescar el bloque derivado seria una escritura
+    // que el contrato no autoriza.
+    if (result.applied) {
+      try {
+        refreshWorkingContextOnWrite(engine, projectRoot)
+      } catch (err) {
+        const ctxPath = workingContextPath(projectRoot)
+        console.error(`ancleto: la reparacion SI se aplico en la base (${result.removed.length} ref(s) removidas de ${result.memory_key}), pero el bloque derivado ${ctxPath} quedo desactualizado: ${err.message}`)
+        console.error(`ancleto: regenera el bloque con: ancleto memory context --out ${ctxPath}`)
+        process.exitCode = 1
+        return
+      }
+    }
+    if (asJson) {
+      console.log(JSON.stringify(result))
+      return
+    }
+    if (result.status === 'no-op') {
+      console.log(`ancleto: repair refs -> sin cambios (0 refs removibles en ${result.memory_key})`)
+      return
+    }
+    const action = result.dry_run ? 'a remover' : 'removida(s)'
+    console.log(`ancleto: repair refs ${result.dry_run ? '--dry-run' : 'OK'} -> ${result.removed.length} ref(s) ${action}; ${result.remaining} conservada(s)`)
+    for (const item of result.removed) console.log(`  [${item.kind}] ${item.ref} (${item.reason})`)
+    if (result.critical) console.log('  clave critica: requiere --force-critical para aplicar')
+  } finally {
+    engine.close()
+  }
+}
+
+async function memoryRepairCmd(args) {
+  const [action, ...flags] = args
+  if (action !== 'refs') {
+    console.error(`ancleto: subcomando de memory repair desconocido: ${action || '(ninguno)'}`)
+    for (const line of MEMORY_USAGE) console.error(`ancleto: uso: ${line}`)
+    process.exitCode = 1
+    return
+  }
+  await memoryRepairRefs(flags)
+}
+
 async function memoryCmd(args) {
   const [sub, ...flags] = args
   if (sub === 'context') {
@@ -3289,6 +3411,10 @@ async function memoryCmd(args) {
   }
   if (sub === 'curate') {
     await memoryCurateCmd(flags)
+    return
+  }
+  if (sub === 'repair') {
+    await memoryRepairCmd(flags)
     return
   }
   console.error(`ancleto: subcomando de memory desconocido: ${sub || '(ninguno)'}`)

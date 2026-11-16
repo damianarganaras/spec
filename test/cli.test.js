@@ -9976,6 +9976,7 @@ describe('CLI subcommand --help guards', () => {
         'ancleto: uso: ancleto memory snapshot --out <archivo.db> [--force] [--json]',
         'ancleto: uso: ancleto memory merge --target <key> --sources <k1,k2,...> [--dry-run] [--force-critical] [--json]',
         'ancleto: uso: ancleto memory consolidate [--dry-run] [--apply] [--force-critical] [--json]',
+        'ancleto: uso: ancleto memory repair refs --memory-key <key> [--apply] [--force-critical] [--json]',
         'ancleto: uso: ancleto memory curate [--json] [--strict]'
       ]
       assert.deepEqual(r.stderr.split(/\r?\n/).filter(Boolean), expected)

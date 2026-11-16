@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-15T23:32:12Z
-pluginVersion: 0.36.0
+generatedAt: 2026-11-16T03:54:08Z
+pluginVersion: 0.37.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.36.0)
+## Modelos y tiers (estado 0.37.0)
 
 ### Tabla y cadenas
 
@@ -1357,6 +1357,44 @@ con `MODIFIED`.
   `MEMORY_USAGE`, regresión de clave fantasma y `consolidate` sin base). No se ejecutó la suite en
   esta generación; el comportamiento se describe desde el código y el delta archivado.
 
+## Reparación explícita de refs (0.37.0)
+
+Change archivado: `aspec/changes/archive/2026-11-16-memory-repair-refs/`. Requirements canónicos:
+subcomando ``ancleto memory repair refs`` y reparación de refs no resueltas en
+`aspec/specs/memory-ops/spec.md`, con `ADDED`.
+
+- **Motivo**: `memory doctor` y `memory curate` reportan refs rotas pero no las reparan; la única
+  salida era reescribir el nodo a mano. El subcomando agrega una reparación acotada y auditable sin
+  abrir la puerta a redirigir refs ni a reactivar historia.
+- **Selección fail-closed**: opera sobre un único nodo activo; cardinalidad 0 o ≥2 rechaza. El
+  parser y el resolvedor son los mismos del camino de escritura (`parseRefsBlock`, `resolveRefResult`),
+  sin segunda gramática.
+- **Allowlist por motivo** (`memory-ref-repair-allowlist`): solo se remueve una ref verificable con
+  `ok: false` y motivo exactamente `inexistente`. `commit:`/`workitem:` no se remueven nunca
+  (no verificables localmente) y cualquier otro motivo —`ambiguo (<n> coincidencias)` y futuros— se
+  conserva: el filtro no tiene default. Es una allowlist, no un blacklist.
+- **Preservación byte a byte** (`memory-ref-repair-byte-preserving`): el `content` reparado se
+  obtiene quitando líneas completas (texto + EOL), sin re-render desde `parsed.refs`; prosa,
+  separadores, indentación y el resto de las refs quedan idénticos. Cada elemento conserva su EOL.
+- **Dry-run por defecto**: usa `createReadonlyMemoryEngine` (`migrate: false`), no abre transacción,
+  no escribe ni refresca el working-context. `--apply` es la única vía de escritura y usa el writer
+  transaccional (`runImmediateTransaction`); el nodo anterior conserva su `content` original como
+  historial.
+- **Validación compartida**: el dry-run valida el `content` candidato con la misma validación
+  fail-closed que la escritura; si queda otra ref ambigua, falla igual que el apply y nombra la ref
+  ofensora, en lugar de reportar un plan aplicable.
+- **Gate crítico**: `--apply` sobre una `memory_key` de `memory.criticalKeys` sin `--force-critical`
+  no escribe y sale con código 2 (`{"error":"critical-key-gate","criticalAffected":[...]}` con
+  `--json`); el dry-run reporta `critical: true` y sale 0. El flag no tiene efecto en dry-run.
+- **Contrato de salida**: `--json` emite `status`, `memory_key`, `dry_run`, `applied`, `critical`,
+  `removed[]` y `remaining`; `remaining` se omite en `no-db`/`error`.
+- **Refutado con evidencia**: redirigir refs entre `memory_key`, reescribir un bloque `refs:`
+  malformado y reactivar un nodo `superseded`.
+- **Sin cambio persistido**: schema, PRAGMAs y `ruleVersion` intactos; un binario 0.36.0 lee el
+  mismo estado.
+- **Oráculo**: `test/repair-refs.test.js` y `test/memory-engine.test.js`; no se ejecutó la suite en
+  esta generación.
+
 ## Lint y publicación
 
 - `npm run lint` ejecuta `eslint src/ test/ scripts/` con flat config y cuatro reglas
@@ -1418,7 +1456,7 @@ con `MODIFIED`.
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.33.1`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.37.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +

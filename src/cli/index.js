@@ -2729,7 +2729,10 @@ async function openReadableMemory(dbPath) {
   } catch (error) {
     return { state: 'unreadable', error }
   } finally {
-    db.close()
+    // El cierre es best-effort: un fallo de `close` no debe reemplazar el estado
+    // ya determinado del probe (el `finally` pisaria el return del catch y el
+    // stack escaparia a un call site sin try).
+    try { db.close() } catch { /* ignore */ }
   }
   if (!hasSchema) return { state: 'uninitialized' }
   try {

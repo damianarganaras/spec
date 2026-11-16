@@ -16,9 +16,12 @@ crear `.ancleto/` ni `.ancleto/memory.db` como efecto de abrir la base. Sobre un
 existente, el archivo `.db` SHALL conservar el mismo hash SHA-256 y el conjunto de objetos de
 `sqlite_master` (nombre y tipo) SHALL ser idéntico antes y después. La excepción intencional es
 `memory context --out`, que MAY escribir el working-context —y por ello crear su directorio—
-pero NO SHALL escribir el `.db`. La materialización de sidecars `-wal`/`-shm` por una apertura
-read-only sobre `journal_mode=WAL` SHALL tolerarse como artefacto de SQLite y NO SHALL contarse
-como escritura; en `journal_mode=DELETE` NO SHALL aparecer ningún sidecar nuevo.
+pero NO SHALL escribir el `.db`. `memory doctor --rebuild` es un camino de ESCRITURA y queda
+fuera de este requisito: conserva su apertura de escritura y su contrato vigente para
+reconstruir el índice FTS5, del mismo modo que `merge` y `repair` distinguen `--apply` como
+camino de escritura frente a `--dry-run`. La materialización de sidecars `-wal`/`-shm` por una
+apertura read-only sobre `journal_mode=WAL` SHALL tolerarse como artefacto de SQLite y NO SHALL
+contarse como escritura; en `journal_mode=DELETE` NO SHALL aparecer ningún sidecar nuevo.
 
 **Precheck de esquema.** Una base cuya `sqlite_master` no declare `memory_nodes` —archivo de
 0 bytes o esquema incompleto— SHALL considerarse "sin esquema" y SHALL degradar igual que "sin
@@ -31,8 +34,9 @@ trace.
 **Mapa de degradación.** El comportamiento por superficie y estado de base SHALL ser:
 
 - `context`: sin base → día-cero con exit 0; sin esquema → día-cero con exit 0 y sin migrar;
-  esquema con 0 nodos → render read-only con el conjunto `required` de `criticalKeys`; esquema
-  con nodos → render read-only.
+  esquema con 0 nodos → render read-only que evalúa el conjunto `required` de `criticalKeys` y
+  MAY salir con código distinto de 0 si una clave requerida no existe (contrato preexistente, no
+  regresión); esquema con nodos → render read-only.
 - `list`: sin base → mensaje y exit 0; sin esquema → mensaje que nombra el esquema no
   inicializado y exit 0; esquema con 0 nodos → mensaje de "sin nodos" y exit 0; esquema con
   nodos → exit 0.

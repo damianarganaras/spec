@@ -13,7 +13,7 @@ import { snapshotDatabase } from '../core/memory/snapshot.js'
 import { adaptFrontmatter, parseFrontmatter, frontmatterValue } from '../core/adapters/frontmatter.js'
 import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite, readCriticalMemoryKeys } from '../core/memory/working-context.js'
 import { materializeMachineEnv, checkMachineEnvTracked } from '../core/machine-env.js'
-import { memoryDoctor } from '../core/memory/doctor.js'
+import { memoryDoctor, SCHEMA_UNINITIALIZED_DETAIL } from '../core/memory/doctor.js'
 import { curateMemory } from '../core/memory/curation.js'
 import { inspectMemoryStatus } from '../core/memory/status.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
@@ -2772,8 +2772,12 @@ async function memoryStatusCmd(flags) {
     return
   }
   const asJson = flags.includes('--json')
-  const dbPath = defaultMemoryDbPath()
-  const projectRoot = resolveMemoryProjectRoot(dbPath) || process.cwd()
+  // La memoria es cwd-scoped por contrato (`<cwd>/.ancleto/memory.db`), asi que la
+  // evidencia se ancla a la MISMA raiz: el archive se busca en `<cwd>/aspec/changes/archive`.
+  // Resolverla subiendo hasta el primer `.ancletorc` mezclaba raices y declaraba un gap
+  // falso desde un subdirectorio con el repo sano.
+  const projectRoot = process.cwd()
+  const dbPath = defaultMemoryDbPath(projectRoot)
   let result
   try {
     result = inspectMemoryStatus({ projectRoot, dbPath })
@@ -2816,7 +2820,7 @@ async function memoryDoctorCmd(flags) {
   // `detail` (contrato de `src/core/memory/doctor.js`): sin `memory_nodes` no se
   // construye el engine read-only de frescura, porque prepara statements contra esa
   // tabla y abortaria con `no such table` fuera del `try`.
-  const schemaUninitialized = checks.some((c) => c.detail === 'esquema no inicializado')
+  const schemaUninitialized = checks.some((c) => c.detail === SCHEMA_UNINITIALIZED_DETAIL)
   let staleness = null
   if (!schemaUninitialized) {
     const projectRoot = resolveMemoryProjectRoot(dbPath) || process.cwd()

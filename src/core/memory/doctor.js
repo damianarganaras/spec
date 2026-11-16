@@ -4,6 +4,11 @@ import { inspectRefs, resolveProjectRoot } from './engine.js'
 
 const REFS_CHECK_NAME = 'Refs de nodos activos'
 
+// Unica fuente del `detail` del early-path sin esquema: el CLI decide con esta
+// constante si puede construir el engine read-only de frescura (sin `memory_nodes`
+// sus statements abortarian), asi que el literal no se duplica.
+export const SCHEMA_UNINITIALIZED_DETAIL = 'esquema no inicializado'
+
 // Estado observable del WAL sin ejecutar checkpoint ni ningun pragma mutante:
 // solo se mira el tamano del archivo `-wal` que ya existe en disco.
 function observeWal(dbPath) {
@@ -26,7 +31,7 @@ export function memoryDoctor(dbPath, { rebuild = false } = {}) {
     if (!hasSchema) {
       // Error path: los cinco nombres se conservan y cada check no ejecutable
       // se reporta como falla con su motivo (nunca se omite del array).
-      const detail = 'esquema no inicializado'
+      const detail = SCHEMA_UNINITIALIZED_DETAIL
       const notVerifiable = { ok: false, detail: `no verificable: ${detail}` }
       return {
         checks: [

@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, la reparación explícita de refs no resueltas (0.37.0), el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor, la promoción de decisiones al archivar y la serialización de escritores concurrentes (MEMORY_DB_BUSY) y el rebuild de doctor en transacción inmediata (0.33.1), el import con dry-run clasificado (0.34.0) el GC por instante con snapshot de lectura en curate (0.35.0) y la puerta de criticidad pre-write en merge/consolidate --apply (0.36.0)"
-covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, reparación de refs, repair-refs, allowlist-inexistente, preservacion-byte-a-byte, planRefRepair, repairRefs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode, serialización de escritores, MEMORY_DB_BUSY, retry acotado, runImmediateTransaction, runReadTransaction, doctor-rebuild, import-dry-run, decideImportEntry, databasePresent, clasificacion-read-only, gc-julianday, fechas-no-parseables, deleted-reservado, curate-snapshot, REF_GRAMMAR, puerta-de-criticidad, criticalAffected, force-critical, MEMORY_CRITICAL_KEY, critical-key-gate]
-sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization", "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified", "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot", "aspec/changes/archive/2026-11-15-ch-09a-criticality-gate", "aspec/changes/archive/2026-11-16-memory-repair-refs", "test/memory-writers.test.js", "test/memory-engine.test.js", "test/curation.test.js", "test/repair-refs.test.js", "test/fixtures/memory-writer-child.mjs", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
-generatedAt: 2026-11-16T03:54:08Z
-pluginVersion: 0.37.0
+read_when: "cómo funciona la memoria persistente, las tools del LLM, el recall task-aware, la validación de refs, la reparación explícita de refs no resueltas (0.37.0), el working-context, las ops export/import/gc, snapshot, merge, consolidate, curate, doctor, la promoción de decisiones al archivar y la serialización de escritores concurrentes (MEMORY_DB_BUSY) y el rebuild de doctor en transacción inmediata (0.33.1), el import con dry-run clasificado (0.34.0) el GC por instante con snapshot de lectura en curate (0.35.0), la puerta de criticidad pre-write en merge/consolidate --apply (0.36.0), el estado advisory de memoria (0.38.0) y el doctor sobre base sin esquema (0.38.0)"
+covers: [motor de memoria, tools MCP, recall, preview, expand, keys, required, conjunto crítico, memory.criticalKeys, política de fallo, refs, reparación de refs, repair-refs, allowlist-inexistente, preservacion-byte-a-byte, planRefRepair, repairRefs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, promoción al archivar, orden del archive, idempotencia de recordNode, serialización de escritores, MEMORY_DB_BUSY, retry acotado, runImmediateTransaction, runReadTransaction, doctor-rebuild, import-dry-run, decideImportEntry, databasePresent, clasificacion-read-only, gc-julianday, fechas-no-parseables, deleted-reservado, curate-snapshot, REF_GRAMMAR, puerta-de-criticidad, criticalAffected, force-critical, MEMORY_CRITICAL_KEY, critical-key-gate, memory-status, estado-advisory, inspectMemoryStatus, expected, gap, recovery, no-db, uninitialized, doctor-sin-esquema]
+sources: ["src/core/memory/**", "aspec/specs/memory-ops/spec.md", "aspec/specs/memory-engine/spec.md", "aspec/changes/archive/2026-11-07-memory-record-idempotency", "aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set", "aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization", "aspec/changes/archive/2026-11-13-ch-08-memory-import-dry-run-classified", "aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot", "aspec/changes/archive/2026-11-15-ch-09a-criticality-gate", "aspec/changes/archive/2026-11-16-memory-repair-refs", "aspec/changes/archive/2026-11-16-memory-gap-declaration", "test/memory-writers.test.js", "test/memory-engine.test.js", "test/curation.test.js", "test/repair-refs.test.js", "test/memory-status.test.js", "test/memory-doctor-uninitialized.test.js", "test/fixtures/memory-writer-child.mjs", "agents/orchestrator.md", "agents/documenter.md", "skills/ancleto-archive/SKILL.md", "skills/ancleto-bulk-archive/SKILL.md", "skills/ancleto-onboard/SKILL.md"]
+generatedAt: 2026-11-16T14:32:06Z
+pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---
 
@@ -58,7 +58,12 @@ bloquear y el rechazo real sale con exit 2 (ver "Puerta de criticidad pre-write"
 schema, PRAGMAs ni `ruleVersion`. **0.37.0 agrega una opción de escritura reparativa**: `repairRefs`
 reutiliza el parser de `refs:` y el resolvedor de escritura para quitar solo refs `inexistente` de
 un único nodo activo, con dry-run sobre el engine read-only y `--apply` por supersede bajo el mismo
-gate crítico (ver "Reparación de refs"). Sin cambio de schema, PRAGMAs ni `ruleVersion`.
+gate crítico (ver "Reparación de refs"). Sin cambio de schema, PRAGMAs ni `ruleVersion`. **0.38.0
+agrega una superficie de sólo lectura**: `inspectMemoryStatus` (`src/core/memory/status.js`)
+clasifica la base en `ok`/`empty`/`no-db`/`uninitialized`, deriva `expected` de los `proposal.md`
+archivados y calcula `gap` con recuperación por export/import/snapshot; además `memory doctor` ya no
+aborta sobre una base sin esquema y completa sus cinco checks (ver "Estado advisory de memoria").
+Sin cambio de schema, PRAGMAs persistentes ni `ruleVersion`.
 
 ## Recorrido relevante
 
@@ -210,6 +215,44 @@ gate crítico (ver "Reparación de refs"). Sin cambio de schema, PRAGMAs ni `rul
   cardinalidad, no-op sin escritura y gate crítico) y `test/memory-engine.test.js`. No se ejecutó la
   suite en esta generación.
 
+### Estado advisory de memoria (0.38.0)
+
+- **Entrada**: `ancleto memory status [--json]`, wrapper fino sobre `inspectMemoryStatus({ cwd })`
+  en `src/core/memory/status.js`. No agrega tools MCP, no escribe y no funciona como gate de archive
+  ni de promoción.
+- **Estados de la base**: `ok` (archivo con esquema y ≥1 nodo activo), `empty` (archivo con esquema
+  y 0 activos), `no-db` (archivo ausente) y `uninitialized` (archivo presente sin `memory_nodes`,
+  por ejemplo 0 bytes).
+- **Memoria esperable**: `inspectExpected(cwd)` recorre `aspec/changes/archive/*/proposal.md` con
+  corte temprano. Un proposal aporta evidencia si contiene una línea que empieza con
+  `## Decisiones` y otra que, tras quitar indentación y un bullet `- `/`* `, empieza con
+  `**memory_key:**`. Un error de lectura cuenta como no-match y nunca declara gap; `.ancletorc`,
+  `aspec/specs/**` y `CHANGELOG.md` no son evidencia.
+- **Gap**: `gap = expected && status !== 'ok'`. `evidence` es 1/0 por corte temprano. Cuando hay
+  gap, `recovery` nombra los caminos existentes `ancleto memory export`, `ancleto memory import` y
+  `ancleto memory snapshot`; sin gap es `[]` y no se agrega advertencia.
+- **Raíz única**: la DB (`defaultMemoryDbPath(cwd)`) y la evidencia se derivan del mismo `cwd`; un
+  subdirectorio sin `aspec/changes/archive` propio no declara gap. Esto impide mezclar raíces y
+  declarar un gap falso.
+- **Read-only**: pre-check de existencia y apertura con `{ migrate: false, readonly: true }`; no
+  crea `.ancleto/` ni `memory.db`, no ejecuta DDL, `INSERT`/`UPDATE`/`DELETE`, checkpoint ni refresh
+  del working-context. La materialización de `-shm`/`-wal` vacío por SQLite no cuenta como escritura.
+- **Salida y exit codes**: sin `--json`, una línea con el estado y, si hay gap, una línea accionable;
+  con `--json`, `{ status, expected, gap, dbPresent, activeNodes, evidence, recovery }`. Sale 0 en
+  los cuatro estados; 1 sólo por error inesperado de E/S/apertura o flag desconocida, con mensaje en
+  stderr y sin stack trace.
+- **Doctor sin esquema**: `memoryDoctor` detecta la ausencia de `memory_nodes` antes de cualquier
+  statement y devuelve los cinco checks (`Integridad DB`, `Indice FTS5`, `Reglas activas
+  (unicidad)`, `Refs de nodos activos`, `Checkpoint WAL`) con `ok: false` y `detail`
+  `no verificable: esquema no inicializado`; el CLI sale ≠ 0 sin excepción no capturada ni stack
+  trace y no construye el engine read-only de frescura.
+- **Invariantes**: sin cambios de schema, PRAGMAs persistentes, `ruleVersion` ni forma del
+  export/snapshot. `CH-01/T27` se cierra por la declaración explícita del gap; el reindex desde
+  `proposals` sigue refutado.
+- **Oráculo**: `test/memory-status.test.js` (estados, evidencia, gap, raíz única, read-only y JSON),
+  `test/memory-doctor-uninitialized.test.js` (path sin esquema) y `test/cli.test.js` (dispatch y
+  salida). No se ejecutó la suite en esta generación.
+
 ### Refs y secretos
 
 - Gramática cerrada de `refs:`: `spec:`, `change:`, `path:`, `commit:`, `workitem:`. El bloque
@@ -268,7 +311,8 @@ gate crítico (ver "Reparación de refs"). Sin cambio de schema, PRAGMAs ni `rul
 | `consolidate` | Duplicados exactos por `type` + content normalizado; canónico por orden total; `--apply` supersede; near-duplicates solo reporte; `includeNearDuplicates: false` evita O(n²); desde 0.36.0 el gate crítico reporta `criticalAffected` y bloquea el apply sin `--force-critical` |
 | `curate` | Read-only: refs rotas, no verificables (`commit:`/`workitem:`) y duplicados exactos, compuestos bajo un único snapshot `BEGIN DEFERRED`; advisory, `--strict` convierte hallazgos en exit ≠ 0 (0.35.0) |
 | `repair refs` | Dry-run read-only por defecto; `--apply` supersede un único nodo activo quitando solo refs con motivo `inexistente` y preservando el resto byte a byte; `commit:`/`workitem:` y otros motivos se conservan; gate crítico con exit 2 (0.37.0) |
-| `doctor` | Cinco checks read-only: integridad, FTS5, reglas activas, refs de nodos activos, checkpoint WAL; `--rebuild` es el único camino mutante y desde 0.33.1 ejecuta rebuild + integrity-check dentro de `runImmediateTransaction` (`doctor-rebuild`) |
+| `status` | Read-only y advisory: `ok`/`empty`/`no-db`/`uninitialized`, `expected` de proposals archivados, `gap = expected && status !== 'ok'` y `recovery` export/import/snapshot; exit 0 en los cuatro estados y `--json` con siete campos (0.38.0) |
+| `doctor` | Cinco checks read-only: integridad, FTS5, reglas activas, refs de nodos activos, checkpoint WAL; sobre una base sin esquema completa los cinco con `ok: false` y sale ≠ 0 sin abortar (0.38.0); `--rebuild` es el único camino mutante y desde 0.33.1 ejecuta rebuild + integrity-check dentro de `runImmediateTransaction` (`doctor-rebuild`) |
 
 ### Promoción al archivar (0.22.1)
 
@@ -318,8 +362,14 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
   `refs:` malformados y no reactiva superseded; solo quita refs `inexistente` de un nodo activo. La
   escritura es un supersede normal, así que el nodo anterior conserva su `content` original. Sin
   schema, PRAGMAs persistentes ni `ruleVersion` nuevos.
-- **Read-only por defecto**: `list`, `doctor`, `curate` y `consolidate` sin `--apply` no migran ni
-  escriben. `no-db` nunca se reporta como reporte limpio.
+- **Estado advisory (0.38.0)**: `memory status` es sólo lectura y nunca un gate: no crea la base,
+  no importa, no refresca el working-context y no altera el `healthy`/exit de `memory doctor`. La
+  evidencia y la DB comparten la raíz `cwd`, y `gap` sólo se declara con evidencia versionada.
+- **Doctor robusto (0.38.0)**: una base existente sin `memory_nodes` no lanza una excepción; el
+  reporte conserva los cinco checks y el comando sale ≠ 0. Un binario anterior podía abortar en ese
+  caso.
+- **Read-only por defecto**: `list`, `status`, `doctor`, `curate` y `consolidate` sin `--apply` no
+  migran ni escriben. `no-db` nunca se reporta como reporte limpio.
 - **`source` no es forjable**: un `source` en los args del caller se ignora; lo resuelve el runtime.
 - **Riesgo de presupuesto**: una requerida no se trunca ni se degrada al aviso; si no entra, falla
   con diagnóstico (key + ruta de refs resueltas). Desde 0.31.0 el conjunto requerido se declara en
@@ -360,7 +410,8 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 | `src/core/memory/tools.js` | Handlers de `searchMemory`/`recordRule`/`recordDecision` |
 | `src/core/memory/mcp-server.js` | Servidor MCP stdio |
 | `src/core/memory/working-context.js` | Render, refresh, frescura y lectura de `memory.criticalKeys` |
-| `src/core/memory/doctor.js` | Diagnóstico read-only y rebuild FTS5 dentro de `runImmediateTransaction` desde 0.33.1 |
+| `src/core/memory/status.js` | Estado advisory `ok`/`empty`/`no-db`/`uninitialized`, `expected`, `gap` y `recovery`; `inspectMemoryStatus` es el único camino y deriva DB y evidencia del mismo `cwd` (0.38.0) |
+| `src/core/memory/doctor.js` | Diagnóstico read-only, path sin esquema con cinco checks fallidos (0.38.0) y rebuild FTS5 dentro de `runImmediateTransaction` desde 0.33.1; exporta `SCHEMA_UNINITIALIZED_DETAIL` |
 | `src/core/memory/curation.js` | Curaduría read-only de refs y duplicados; desde 0.35.0 compone bajo `engine.readTransaction` e importa `REF_GRAMMAR` |
 | `src/core/memory/snapshot.js` | Copia consistente con historial |
 | `aspec/specs/memory-ops/spec.md` | Requirements de ops y de la promoción al archivar antes del move; desde 0.35.0 GC y `memory curate` se reescribieron en el lugar (instante, `deleted` reservado, snapshot único); desde 0.36.0 la puerta de criticidad de merge/consolidación; desde 0.37.0 el subcomando `memory repair refs` y la allowlist `inexistente` |
@@ -370,9 +421,11 @@ fase A, luego la promoción, luego la fase B. La secuencia se replica en
 | `aspec/changes/archive/2026-11-15-mem-05-gc-eligibility-curate-snapshot/` | Delta `MODIFIED` de GC y curaduría (instante, `deleted` reservado, snapshot único y `REF_GRAMMAR`); cierra `MEM-05` en 0.35.0 |
 | `aspec/changes/archive/2026-11-15-ch-09a-criticality-gate/` | Delta `MODIFIED` de merge, consolidación y comando CLI en `memory-ops`; puerta de criticidad pre-write, `criticalAffected`, `--force-critical` y exit 2; cierra `CH-09a` en 0.36.0 |
 | `aspec/changes/archive/2026-11-16-memory-repair-refs/` | Delta `ADDED` del subcomando `memory repair refs` y de la reparación de refs en `memory-ops`; allowlist `inexistente`, preservación byte a byte, dry-run read-only y gate crítico; cierra `CH-09b` en 0.37.0 |
+| `aspec/changes/archive/2026-11-16-memory-gap-declaration/` | Delta `ADDED` del subcomando `memory status` y del estado advisory en `memory-ops`; `expected`/`gap`/`recovery`, raíz única en `cwd`, read-only y fix de `memory doctor` sin esquema; cierra `CH-01/T27` en 0.38.0 |
 | `aspec/changes/archive/2026-11-13-ch-04-memory-writer-serialization/` | Delta `ADDED` de serialización de escritores concurrentes; cierra `CH-04` en 0.33.0 |
 | `test/memory-engine.test.js`, `test/curation.test.js` | Cobertura de GC por instante, formatos mixtos, fechas no parseables, `deleted` reservado y snapshot único de `curate` (0.35.0) |
 | `test/repair-refs.test.js` | Cobertura de la reparación explícita de refs: allowlist, preservación byte a byte, dry-run/apply y gate crítico (0.37.0) |
+| `test/memory-status.test.js`, `test/memory-doctor-uninitialized.test.js` | Cobertura del estado advisory (estados, evidencia, gap, raíz única, read-only, `--json`) y del doctor sobre base sin esquema (0.38.0) |
 | `test/memory-writers.test.js`, `test/fixtures/memory-writer-child.mjs` | Oráculo offline de escritores concurrentes y fixture de proceso hijo (0.33.0–0.33.1; cubre el rebuild de doctor bajo contención desde 0.33.1) |
 | `aspec/specs/cli-diagnostics/spec.md` | Fuera de esta unidad: contrato de frescura del seed (0.26.1) que no toca el motor |
 | `agents/orchestrator.md` | Secuencia del archive y delegación de la promoción entre fase A y fase B |

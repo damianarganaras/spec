@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-16T03:54:08Z
-pluginVersion: 0.37.0
+generatedAt: 2026-11-16T14:32:06Z
+pluginVersion: 0.38.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (886 fuentes, ~43.421 tokens), `package.json` (`0.37.0`), `src/core/model-catalog.json` y
+`minimo` (890 fuentes, ~44.059 tokens), `package.json` (`0.38.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
@@ -50,7 +50,7 @@ paths citados (ver `unknowns.md`).
 | **Reparación MCP sin escritura (0.20.1)**: `repairProjectMcp` escribe sólo ante error de parseo, normalización estructural o entradas reparadas/agregadas; destino sano intacto | `decisions.md`, `units/cli-install.md` |
 | Portabilidad `export`/`import`: bundle, `--repair`, `installedPaths` acumulativo | `units/cli-install.md`, `decisions.md` |
 | Discovery: mapa topológico, pack Repomix, estado del seed, `affectedDocs`, affected-set | `units/discovery-engine.md` |
-| Memoria persistente: SQLite+FTS5, tools MCP, recall, refs, working-context, ops, doctor, curate | `units/memory-engine.md` |
+| Memoria persistente: SQLite+FTS5, tools MCP, recall, refs, working-context, ops, doctor, curate, `memory status` advisory y `memory doctor` sobre base sin esquema | `units/memory-engine.md` |
 | **Conjunto crítico del working-context (0.31.0)**: `memory.criticalKeys` en `.ancletorc` (seam de configuración), claves inyectadas primero en orden declarado, lectura tolerante (ausente/no-array/entradas no-string → `[]`), fallo duro en `ancleto memory context` con `--out` sin sobrescribir, `console.warn` best-effort en lifecycle/on-write/MCP y exit ≠ 0 en `memory merge`/`consolidate --apply`; `<ContextOverflowWarning>` intacto | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **Selección de tests afectados (0.32.0)**: `ancleto affected --tests` agrega el objeto `tests` (`complete`, `reasons`, `selected`, `excluded`) al JSON existente, con el manifiesto cerrado `test/affected-tests.json` y el consumidor `npm run test:affected` que cae fail-closed a la suite completa | `decisions.md`, `setup.md`, `units/discovery-engine.md`, `units/cli-install.md` |
 | **Serialización de escritores y doctor (0.33.0–0.33.1)**: `runImmediateTransaction` (`BEGIN IMMEDIATE` + retry 3/200-600 ms), `MEMORY_DB_BUSY` y oráculo `test/memory-writers.test.js`; desde 0.33.1 `memory doctor --rebuild` corre rebuild FTS5 + integrity-check dentro del helper y reporta `MEMORY_DB_BUSY` en el detalle, mientras el `doctor` por defecto sigue read-only; sin cambio de schema, PRAGMAs, comandos ni `ruleVersion` | `decisions.md`, `units/memory-engine.md` |
@@ -58,6 +58,7 @@ paths citados (ver `unknowns.md`).
 | **GC por instante y snapshot de curaduría (0.35.0)**: `memory gc` compara `julianday(COALESCE(superseded_at, created_at))` contra un cutoff único y retiene fechas no parseables; `status='deleted'` es un estado reservado que no se purga ni cuenta; `memory curate` compone su reporte bajo un único snapshot `BEGIN DEFERRED` (`runReadTransaction`) y resuelve refs después del commit; el literal de gramática de refs tiene fuente única (`REF_GRAMMAR`) | `decisions.md`, `units/memory-engine.md` |
 | **Puerta de criticidad de memoria (0.36.0)**: `memory merge` y `memory consolidate --apply` rechazan antes de escribir cuando supersederían una `memory_key` declarada en `.ancletorc` → `memory.criticalKeys`; dry-run y apply reportan `criticalAffected`, `--force-critical` autoriza de forma explícita, el rechazo sale con exit 2 y `{"error":"critical-key-gate","criticalAffected":[...]}` con `--json`; `consolidate` sin base sale con código 1 | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **Reparación de refs (0.37.0)**: `memory repair refs --memory-key <key> [--apply] [--json] [--force-critical]` opera sobre un único nodo activo y remueve solo refs verificables con motivo exactamente `inexistente`; dry-run por defecto en read-only, `--apply` supersede con el writer transaccional, allowlist conserva `commit:`/`workitem:` y cualquier otro motivo, el candidato se valida con el mismo fail-closed que la escritura y el gate crítico sale con exit 2 sin `--force-critical` | `decisions.md`, `units/memory-engine.md`, `setup.md` |
+| **Estado advisory de memoria (0.38.0)**: `ancleto memory status [--json]` read-only y advisory con exit 0 en `ok`/`empty`/`no-db`/`uninitialized`, `expected` derivado de `aspec/changes/archive/*/proposal.md`, `gap = expected && status !== 'ok'`, recuperación por `memory export`/`import`/`snapshot`; `memory doctor` completa sus 5 checks y sale ≠ 0 sobre una base sin esquema, sin excepción no capturada | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -78,9 +79,19 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.37.0` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.38.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
+- **Release 0.38.0**: `ancleto memory status [--json]` es un subcomando read-only y advisory que
+  declara el **gap de memoria de producto** tras clone/worktree. Distingue `ok`, `empty`, `no-db` y
+  `uninitialized`; deriva `expected` de los `proposal.md` archivados que declaran decisiones
+  (`## Decisiones` + `**memory_key:**`) y calcula `gap = expected && status !== 'ok'`; con `gap`
+  sugiere `memory export`/`memory import`/`memory snapshot`. La raíz de la DB y de la evidencia es
+  el `cwd` (un subdirectorio sin archive propio no declara gap). Sale con 0 en todos los estados y
+  reserva 1 a errores de E/S o flags desconocidas. Además, `memory doctor` ya no aborta con una base
+  sin esquema: reporta los cinco checks con `ok: false` y sale ≠ 0 sin excepción ni stack trace. Sin
+  cambios de schema, PRAGMAs persistentes ni forma del export/snapshot; cierra `CH-01/T27` por su
+  mitad viva (el reindex desde `proposals` sigue refutado).
 - **Release 0.37.0**: `memory repair refs` repara de forma explícita las refs no resueltas de un
   único nodo activo. Remueve solo las refs verificables con motivo exactamente `inexistente` y
   preserva byte a byte el resto del `content` (prosa, separadores, indentación y demás refs); el
@@ -93,6 +104,8 @@ paths citados (ver `unknowns.md`).
   `--apply` sobre una clave de `memory.criticalKeys` sin `--force-critical` no escribe y sale con
   código 2 (`{"error":"critical-key-gate","criticalAffected":[...]}` con `--json`); el dry-run
   reporta `critical: true` y sale 0. Sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`.
+  Publicada el 2026-11-16: tag anotado `v0.37.0` → `da10910`, publish run `43801796586` (success) y
+  `@ancleto/spec@0.37.0` como `latest` en npm (`aspec/backlog.md`).
 - **Release 0.36.0**: `memory merge` y `memory consolidate --apply` incorporan una **puerta de
   criticidad** atómica dentro de la misma `BEGIN IMMEDIATE` que la escritura. El conjunto crítico es
   el ya existente `.ancletorc` → `memory.criticalKeys` (lectura tolerante: ausente, no-array o
@@ -124,6 +137,11 @@ paths citados (ver `unknowns.md`).
   schema persistido, PRAGMAs ni `ruleVersion`. El requirement de `memory-engine` se actualizó en el
   lugar.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-16-memory-gap-declaration/` (0.38.0: `ADDED` del subcomando
+  `memory status` y de los Requirements de estado advisory en `memory-ops`; `expected`/`gap`,
+  recuperación por export/import/snapshot, raíz única en `cwd` y read-only estricto; el fix de
+  `memory doctor` sobre base sin esquema cierra los cinco checks sin abortar; sin cambio de schema
+  ni `ruleVersion`; cierra `CH-01/T27`),
   `aspec/changes/archive/2026-11-16-memory-repair-refs/` (0.37.0: `ADDED` del subcomando
   `memory repair refs` y de los Requirements de reparación en `memory-ops`; allowlist por motivo
   `inexistente`, preservación byte a byte, dry-run read-only y `--apply` por supersede con gate
@@ -236,15 +254,15 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-    archivos) mantienen el conteo; en 0.22.1-0.37.0 no cambió su cantidad.
-- **Pack actual**: 886 fuentes y ~43.421 tokens (175.342 B, comprimido, tier `minimo`), con 33
+    archivos) mantienen el conteo; en 0.22.1-0.38.0 no cambió su cantidad.
+- **Pack actual**: 890 fuentes y ~44.059 tokens (177.910 B, comprimido, tier `minimo`), con 33
    entradas de archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del
-   pack. El `.discovery-map.json` de la corrida reporta 921 archivos (aspec 340, `.opencode` 66,
-   docs 21, test 34, src 22, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye
-   25 `test/*.test.js` por `discovery.exclude` desde 0.30.1; los 8 fixtures de
+   pack. El `.discovery-map.json` de la corrida reporta 927 archivos (aspec 343, `.opencode` 66,
+   docs 21, test 36, src 23, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye
+   los `test/*.test.js` por `discovery.exclude`; los 8 fixtures de
    `test/fixtures/**` siguen incluidos.
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
-   citadas para reflejar 0.36.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
+   citadas para reflejar 0.38.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
    pasó a calcular `seedMapPresent` antes de clasificar el estado (vale en
    `READY`/`STALE`/`PARTIAL`/`MISSING`); en 0.26.1 el detector de frescura quedó documentado y
    pineado en `cli-diagnostics`; en 0.26.4 la suite declarada sumó el guard estructural de los delta
@@ -295,7 +313,10 @@ paths citados (ver `unknowns.md`).
     sale con código 1; no cambian schema, PRAGMAs ni `ruleVersion`. En 0.37.0 `memory repair refs`
     agrega la reparación explícita de refs de un único nodo activo, con allowlist por motivo
     `inexistente`, preservación byte a byte, dry-run read-only y `--apply` por supersede bajo el
-    gate crítico; tampoco cambian schema, PRAGMAs ni `ruleVersion`. El
-    `ancleto discovery --check` de validación, tras regenerar el estado con el pack de 886 fuentes
-    (175.342 B, ~43.421 tokens), reportó `READY`/`impact: none` con `changedAreas: []`,
-    `seedMapPresent: true` y `affectedDocs: []`.
+     gate crítico; tampoco cambian schema, PRAGMAs ni `ruleVersion`. En 0.38.0 `memory status`
+     declara el gap de memoria de producto con `expected`/`gap`/`recovery` y raíz única en `cwd`,
+     y `memory doctor` completa sus cinco checks sobre una base sin esquema sin abortar; no cambian
+     schema, PRAGMAs persistentes, `ruleVersion` ni la forma del export/snapshot. El
+     `ancleto discovery --check` de validación, tras regenerar el estado con el pack de 890 fuentes
+     (177.910 B, ~44.059 tokens), reportó `READY`/`impact: none` con `changedAreas: []`,
+     `seedMapPresent: true` y `affectedDocs: []`.

@@ -22,17 +22,17 @@
 
 ## Fase 3 — Tests
 
-- [ ] 3.1 Crear `test/memory-readonly-surfaces.test.js` con la matriz de 4 estados de base (sin `.ancleto/`, 0 bytes o sin `memory_nodes`, esquema con 0 nodos, esquema con nodos) × superficies: código de salida, mensaje, SHA-256 del `.db` y `sqlite_master`.
-- [ ] 3.2 Cubrir en el mismo test que ninguna superficie crea `.ancleto/` ni `memory.db`, y que `context --out` escribe el working-context sin tocar el `.db`.
-- [ ] 3.3 Cubrir sidecars: tolerados en `journal_mode=WAL` y ausentes en `journal_mode=DELETE`.
-- [ ] 3.4 Cubrir base ilegible: mensaje distinguible de "sin esquema" y salida distinta de 0 sin stack.
-- [ ] 3.5 Declarar `test/memory-readonly-surfaces.test.js` en `test/affected-tests.json` bajo los couplings `src/cli/**` y `src/core/memory/**`, porque spawnea el CLI sin importarlo.
-- [ ] 3.6 Confirmar sin editarlos que siguen verdes los tests pinneados: `memory-status.test.js`, `memory-doctor-uninitialized.test.js`, `curation.test.js`, `cli.test.js:3779-3880`, `mcp.test.js:239-244` y `cli.test.js:4093-4130`.
+- [x] 3.1 Crear `test/memory-readonly-surfaces.test.js` con la matriz de 4 estados de base (sin `.ancleto/`, 0 bytes o sin `memory_nodes`, esquema con 0 nodos, esquema con nodos) × superficies: código de salida, mensaje, SHA-256 del `.db` y `sqlite_master`.
+- [x] 3.2 Cubrir en el mismo test que ninguna superficie crea `.ancleto/` ni `memory.db`, y que `context --out` escribe el working-context sin tocar el `.db`.
+- [x] 3.3 Cubrir sidecars: tolerados en `journal_mode=WAL` y ausentes en `journal_mode=DELETE`.
+- [x] 3.4 Cubrir base ilegible: mensaje distinguible de "sin esquema" y salida distinta de 0 sin stack.
+- [x] 3.5 Declarar `test/memory-readonly-surfaces.test.js` en `test/affected-tests.json` bajo los couplings `src/cli/**` y `src/core/memory/**`, porque spawnea el CLI sin importarlo.
+- [x] 3.6 Confirmar sin editarlos que siguen verdes los tests pinneados: `memory-status.test.js`, `memory-doctor-uninitialized.test.js`, `curation.test.js`, `cli.test.js:3779-3880`, `mcp.test.js:239-244` y `cli.test.js:4093-4130`.
 
 ## Fase 4 — Validación
 
 - [x] 4.1 Ejecutar `npm run lint`.
-- [ ] 4.2 Ejecutar `npm test` (suite declarada) y la corrida acotada `node --test test/memory-readonly-surfaces.test.js`.
+- [x] 4.2 Ejecutar `npm test` (suite declarada) y la corrida acotada `node --test test/memory-readonly-surfaces.test.js`.
 
 ## Fase 5 — Release y seed
 

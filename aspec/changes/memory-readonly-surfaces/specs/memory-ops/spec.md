@@ -18,8 +18,8 @@ existente, el archivo `.db` SHALL conservar el mismo hash SHA-256 y el conjunto 
 `memory context --out`, que MAY escribir el working-context —y por ello crear su directorio—
 pero NO SHALL escribir el `.db`. `memory doctor --rebuild` es un camino de ESCRITURA y queda
 fuera de este requisito: conserva su apertura de escritura y su contrato vigente para
-reconstruir el índice FTS5, del mismo modo que `merge` y `repair` distinguen `--apply` como
-camino de escritura frente a `--dry-run`. La materialización de sidecars `-wal`/`-shm` por una
+reconstruir el índice FTS5, del mismo modo que `merge` sin `--dry-run` y `repair --apply` son
+caminos de escritura frente a sus dry-runs. La materialización de sidecars `-wal`/`-shm` por una
 apertura read-only sobre `journal_mode=WAL` SHALL tolerarse como artefacto de SQLite y NO SHALL
 contarse como escritura; en `journal_mode=DELETE` NO SHALL aparecer ningún sidecar nuevo.
 
@@ -115,7 +115,8 @@ gate de archive ni de promoción, ni SHALL alterar los códigos de salida propio
 #### Scenario: La ausencia de `.ancleto/` no se materializa por una lectura
 
 - **WHEN** se ejecutan las superficies de lectura en un directorio sin `.ancleto/`
-- **THEN** ninguna crea el directorio `.ancleto/` ni el archivo `.ancleto/memory.db`
+- **THEN** ninguna crea el directorio `.ancleto/` ni el archivo `.ancleto/memory.db`, salvo la
+  ruta de salida explícita de `memory context --out`
 - **AND** los mensajes y códigos de salida corresponden al estado "sin base"
 
 #### Scenario: `context --out` escribe sólo el working-context

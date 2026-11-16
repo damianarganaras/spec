@@ -91,6 +91,10 @@ idéntico. Un mapa único de degradación por estado de base, con status y docto
   advisory; no se agrega un segundo gate.
 - **Prohibir sidecars WAL.** Son un artefacto de la apertura read-only; se toleran y se
   verifican, no se promete "cero bytes en los tres archivos".
+- **`memory gc --dry-run`.** Este ítem enumeró 9 superficies y agregarla excedería el alcance
+  aprobado; se verificó que hoy abre con `createMemoryEngine` (`src/cli/index.js:3110`) y migra
+  un `.db` de 0 bytes, así que se registra como follow-up (misma clase de defecto). `consolidate
+  --dry-run` ya abre read-only y no requiere cambio.
 
 ## Decisiones
 

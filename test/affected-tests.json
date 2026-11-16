@@ -13,6 +13,7 @@
         "test/memory-doctor-uninitialized.test.js",
         "test/memory-engine.test.js",
         "test/memory-pr1-contract.test.js",
+        "test/memory-readonly-surfaces.test.js",
         "test/memory-status.test.js",
         "test/repair-refs.test.js",
         "test/specs-merge.test.js",
@@ -23,7 +24,12 @@
     },
     {
       "trigger": ["src/core/memory/**"],
-      "tests": ["test/memory-writers.test.js", "test/repair-refs.test.js", "test/stats-failures.test.js"],
+      "tests": [
+        "test/memory-readonly-surfaces.test.js",
+        "test/memory-writers.test.js",
+        "test/repair-refs.test.js",
+        "test/stats-failures.test.js"
+      ],
       "reason": "stats-failures, memory-writers and repair-refs use DatabaseSync directly against the memory schema; memory-writers is also declared here per ch-04 task 5.1, and repair-refs seeds invalid states and reads the schema without the engine API"
     },
     {

@@ -4178,7 +4178,7 @@ describe('CLI memory import --dry-run (ch-08)', () => {
 
       const r = run(['memory', 'import', '--dry-run', '--json', 'dry.json'], dir)
       assert.equal(r.status, 1)
-      assert.match(r.stderr, /no se pudo abrir la memoria en solo lectura/)
+      assert.match(r.stderr, /no se pudo leer la base de memoria/)
       assert.doesNotMatch(r.stderr, /^\s+at /m, 'no se filtra un stack trace')
       assert.equal(r.stdout.trim(), '', 'no se emite clasificacion')
       assert.equal(readFileSync(dbPath, 'utf8'), 'esto no es una base sqlite', 'el archivo invalido no se toca')

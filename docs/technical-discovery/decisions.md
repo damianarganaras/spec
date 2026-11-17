@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-16T14:59:46Z
-pluginVersion: 0.38.0
+generatedAt: 2026-11-17T01:18:47Z
+pluginVersion: 0.39.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.38.0)
+## Modelos y tiers (estado 0.39.0)
 
 ### Tabla y cadenas
 
@@ -968,9 +968,12 @@ sin `--tier` es `normal`.
   topología en día-cero; el refresh on-write es compare-based y no crea archivos vacíos. Desde
   0.31.0 el renderer suma el conjunto crítico declarado en `.ancletorc` → `memory.criticalKeys` y
   lo pasa como `required` (ver más abajo).
-- **Ops read-only por defecto**: `memory doctor`, `memory status`, `memory curate`, `memory list` y
-  `memory consolidate` (sin `--apply`) no migran ni escriben. `snapshot` usa conexión read-only y
-  `VACUUM INTO`, con reemplazo seguro en Windows.
+- **Ops read-only por defecto**: desde 0.39.0 `memory context`, `list`, `export`, `curate`, `status`,
+  `doctor`, `merge --dry-run`, `repair refs` sin `--apply` e `import --dry-run` abren con
+  `{ readonly: true, migrate: false }` y un precheck de `sqlite_master`, así que no migran ni crean
+  `.ancleto/memory.db` al leer; `memory consolidate` (sin `--apply`) tampoco escribe. `snapshot` usa
+  conexión read-only y `VACUUM INTO`, con reemplazo seguro en Windows. La única excepción de lectura
+  que escribe es `memory context --out` (working-context, nunca la DB).
 - **0.21.0**: el archive de conformidad promovió cuatro decisiones a `.ancleto/memory.db`
   (`archive-conformity-discriminator`, `archive-noop-does-not-write-canonical-specs`,
   `conformity-verification-reuses-closed-ledger`, `triage-routing-single-contract`); el motor no
@@ -1444,6 +1447,48 @@ Change archivado: `aspec/changes/archive/2026-11-16-memory-gap-declaration/`. Re
   `--json`; `test/memory-doctor-uninitialized.test.js` cubre el path de doctor sin esquema y
   `test/cli.test.js` el dispatch. No se ejecutó la suite en esta generación.
 
+## Superficies de lectura estrictamente read-only (0.39.0)
+
+Change archivado: `aspec/changes/archive/2026-11-16-memory-readonly-surfaces/`. Requirement canónico:
+`Superficies de lectura de memoria estrictamente read-only` en `aspec/specs/memory-ops/spec.md`
+(delta `ADDED`).
+
+- **Regla** (`memory-readonly-surfaces-no-migrate`): `memory context`, `list`, `export`, `curate`,
+  `status`, `doctor`, `merge --dry-run`, `repair refs` sin `--apply` e `import --dry-run` abren la
+  base exclusivamente con `{ readonly: true, migrate: false }`. Ninguna ejecuta DDL, migraciones,
+  `VACUUM`, checkpoint, `PRAGMA` mutante ni escribe nodos, reglas o refs, y ninguna crea `.ancleto/`
+  ni `.ancleto/memory.db` como efecto de leer. La excepción intencional es `memory context --out`, que
+  escribe el working-context (y crea su directorio) pero nunca el `.db`.
+- **Invariante verificable**: sobre una base existente, el archivo `.db` conserva su hash SHA-256 y
+  el conjunto de objetos de `sqlite_master` (nombre y tipo) es idéntico antes y después. Los sidecars
+  `-wal`/`-shm` que materializa una apertura read-only sobre `journal_mode=WAL` se toleran como
+  artefacto de SQLite y no se cuentan como escritura; en `journal_mode=DELETE` no aparece ningún
+  sidecar nuevo.
+- **Precheck de esquema**: una base cuya `sqlite_master` no declara `memory_nodes` (0 bytes o esquema
+  incompleto) se considera "sin esquema" y degrada igual que "sin base", salvo los contratos propios
+  de `status` y `doctor`. La detección reutiliza `hasMemorySchema` de `src/core/memory/status.js`
+  (única consulta del literal) y el engine se construye **después** del precheck y dentro del manejo
+  de error, de modo que un esquema ausente produzca un mensaje acotado y nunca un stack trace.
+- **Mapa de degradación** (`memory-schemaless-degrades-as-no-db`): `context` sin base/sin esquema →
+  día-cero exit 0; `list` sin esquema → exit 0 nombrando el esquema no inicializado;
+  `export` sin esquema → exit 1; `curate` sin esquema → exit 1 sin stack; `merge --dry-run` y
+  `repair refs` sin esquema → exit 1 sin stack; `import --dry-run` sin esquema → simulacro sobre
+  estado vacío con exit 0 y `databasePresent: true`. Una base con esquema y 0 nodos es **vacía
+  legítima** (`list` avisa "sin nodos", `export` devuelve `[]`, `curate` sale 0), no un error. Una
+  base ilegible se distingue de "sin esquema" con mensaje y código ≠ 0, sin stack.
+- **Frontera de escritura**: `memory doctor --rebuild`, `merge` sin `--dry-run`, `repair refs
+  --apply` y `import` real son caminos de escritura y conservan su contrato. `memory gc --dry-run`
+  fue enumerado fuera del alcance y queda como follow-up: hoy abre con `createMemoryEngine` y migra
+  una base de 0 bytes.
+- **No es un segundo gate**: ninguna superficie de lectura bloquea el archive ni la promoción, ni
+  altera los códigos de salida propios de `status` y `doctor`.
+- **Sin cambio persistido**: schema, PRAGMAs persistentes y `ruleVersion` quedan intactos; un
+  binario 0.38.0 lee el mismo estado persistido.
+- **Oráculo**: `test/memory-readonly-surfaces.test.js` (matriz de 4 estados de base × superficies:
+  exit, mensaje, SHA-256 del `.db`, `sqlite_master`, sidecars, `journal_mode=DELETE`, base ilegible
+  y `context --out`), con couplings `src/cli/**` y `src/core/memory/**` en
+  `test/affected-tests.json`. No se ejecutó la suite en esta generación.
+
 ## Lint y publicación
 
 - `npm run lint` ejecuta `eslint src/ test/ scripts/` con flat config y cuatro reglas
@@ -1505,7 +1550,7 @@ Change archivado: `aspec/changes/archive/2026-11-16-memory-gap-declaration/`. Re
   absoluto ausente en esta máquina; un comando simple se presume sano sin resolver `PATH`. Son
   avisos, no fallos.
 - **Artefactos locales**: `.ancletorc` y `.ancleto/machine-env.md` son derivados gitignored; en este
-  checkout deben alinearse con `package.json` (`0.38.0`). Si se regeneran con otra versión, el seed
+  checkout deben alinearse con `package.json` (`0.39.0`). Si se regeneran con otra versión, el seed
   no cambia porque no los usa como fuente.
 - **Detector de frescura**: sus reglas son contrato observable; tocarlas sin delta `MODIFIED` cambia
   el comportamiento del comando. Desde 0.27.0 el estado declara la regla (`ruleVersion: 2` +

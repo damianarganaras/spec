@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-16T14:59:46Z
-pluginVersion: 0.38.0
+generatedAt: 2026-11-17T01:18:47Z
+pluginVersion: 0.39.0
 skillVersion: '2.3'
 ---
 
@@ -84,7 +84,7 @@ test/                   suite node --test (content guards incluidos)
 | Discovery | Topología, fuentes, hashes, impacto y estado del seed | `src/core/discovery.js`, `src/cli/index.js` |
 | Empaquetado | Args de Repomix y presupuesto por tier | `src/core/repomix-tier.js` |
 | Selección de tests | Plan determinístico sobre el affected-set; manifiesto cerrado y gate fail-closed para `npm run test:affected` | `src/core/test-selection.js`, `test/affected-tests.json`, `scripts/test-affected.mjs` |
-| Memoria | Nodos, supersesión, refs, recall, working-context, conjunto crítico (`memory.criticalKeys`), reparación explícita de refs (`memory repair refs`) y estado advisory (`memory status`) | `src/core/memory/*` |
+| Memoria | Nodos, supersesión, refs, recall, working-context, conjunto crítico (`memory.criticalKeys`), reparación explícita de refs (`memory repair refs`), estado advisory (`memory status`) y superficies de lectura estrictamente read-only (0.39.0) | `src/core/memory/*` |
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
@@ -110,7 +110,9 @@ test/                   suite node --test (content guards incluidos)
    primero las claves curadas de `.ancletorc` → `memory.criticalKeys` y falla visiblemente si una
    clave crítica no existe, está inactiva o no entra en el presupuesto. Desde 0.38.0
    `ancleto memory status [--json]` es una lectura advisory del gap de memoria esperable
-   (`expected`/`gap`/`recovery`) que nunca crea la base ni actúa como gate.
+   (`expected`/`gap`/`recovery`) que nunca crea la base ni actúa como gate. Desde 0.39.0 todas las
+   superficies de lectura abren `readonly: true` + `migrate: false` con precheck de esquema: leer
+   nunca migra una base de 0 bytes, no crea `.ancleto/` (salvo `context --out`) y no ejecuta DDL.
 5. **Tiers**: `normal` usa modelos de `opencode-go`; `minimo` resuelve por cadena contra el catálogo;
    `gratis` usa únicamente `opencode/big-pickle`. El catálogo se refresca a mano con
    `scripts/refresh-model-catalog.mjs`; ni el runtime ni CI descubren modelos ni acceden a la red.
@@ -356,6 +358,17 @@ test/                   suite node --test (content guards incluidos)
      completa sus cinco checks con `ok: false` sobre una base sin esquema y sale ≠ 0 sin excepción
      no capturada. Sin schema, PRAGMAs ni `ruleVersion` nuevos; release minor de
      `memory-gap-declaration` (CH-01/T27).
+40. **Superficies de lectura read-only (0.39.0)**: `context`, `list`, `export`, `curate`, `status`,
+     `doctor`, `merge --dry-run`, `repair refs` sin `--apply` e `import --dry-run` abren la base con
+     `{ readonly: true, migrate: false }` y un precheck de `sqlite_master` compartido
+     (`hasMemorySchema`); el engine se construye después del precheck y dentro del manejo de error.
+     Una base de 0 bytes ya no se migra al leerla: `context` emite día-cero con exit 0, `export` sale
+     1 nombrando el esquema no inicializado, `list` sale 0 con el mismo aviso y `merge --dry-run`/
+     `repair refs` salen 1 sin stack. Sobre una base existente el `.db` conserva su SHA-256 y su
+     `sqlite_master`; una base vacía legítima (esquema con 0 nodos) no es error. Los sidecars
+     `-wal`/`-shm` de una apertura WAL read-only se toleran y no se cuentan como escritura. Sin
+     schema, PRAGMAs persistentes ni `ruleVersion` nuevos; `memory gc --dry-run` es un follow-up
+     declarado fuera de alcance. Release minor de `memory-readonly-surfaces`.
 
 ## Recorrido de una instalación con tier `minimo`
 

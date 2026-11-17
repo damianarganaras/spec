@@ -9,13 +9,14 @@ import { join, dirname, resolve, basename, relative, isAbsolute } from 'node:pat
 import { fileURLToPath } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 import { createMemoryEngine, createReadonlyMemoryEngine, defaultMemoryDbPath, validateImportEntries, simulateImportClassification } from '../core/memory/engine.js'
+import { openDatabase } from '../core/memory/database.js'
 import { snapshotDatabase } from '../core/memory/snapshot.js'
 import { adaptFrontmatter, parseFrontmatter, frontmatterValue } from '../core/adapters/frontmatter.js'
 import { writeWorkingContext, writeWorkingContextBlock, workingContextPath, renderWorkingContextBlock, resolveMemoryProjectRoot, checkWorkingContextFreshness, refreshWorkingContextOnWrite, readCriticalMemoryKeys } from '../core/memory/working-context.js'
 import { materializeMachineEnv, checkMachineEnvTracked } from '../core/machine-env.js'
-import { memoryDoctor, SCHEMA_UNINITIALIZED_DETAIL } from '../core/memory/doctor.js'
+import { memoryDoctor, SCHEMA_UNINITIALIZED_DETAIL, UNREADABLE_DETAIL } from '../core/memory/doctor.js'
 import { curateMemory } from '../core/memory/curation.js'
-import { inspectMemoryStatus } from '../core/memory/status.js'
+import { inspectMemoryStatus, hasMemorySchema } from '../core/memory/status.js'
 import { serveMemoryMcp } from '../core/memory/mcp-server.js'
 import { writeDiscoveryMap } from '../core/discovery.js'
 import { buildDiscoveryState, renderDiscoveryState } from '../core/discovery-state.js'
@@ -2709,6 +2710,38 @@ async function refreshMachineEnv(projectDir) {
   return { written: result.written, ignored: result.ignored, updated: result.updated, warnings: result.warnings }
 }
 
+// Apertura read-only compartida por las superficies de lectura de memoria:
+// precheck de existencia y de esquema antes de construir el engine, que se arma
+// dentro del manejo de error. `openDatabase` con `readonly: true` no ejecuta
+// `mkdirSync` y `createReadonlyMemoryEngine` no migra, asi que ni el directorio
+// ni el archivo se crean como efecto de leer.
+async function openReadableMemory(dbPath) {
+  if (!(await exists(dbPath))) return { state: 'no-db' }
+  let db
+  try {
+    db = openDatabase(dbPath, { readonly: true, migrate: false })
+  } catch (error) {
+    return { state: 'unreadable', error }
+  }
+  let hasSchema
+  try {
+    hasSchema = hasMemorySchema(db)
+  } catch (error) {
+    return { state: 'unreadable', error }
+  } finally {
+    // El cierre es best-effort: un fallo de `close` no debe reemplazar el estado
+    // ya determinado del probe (el `finally` pisaria el return del catch y el
+    // stack escaparia a un call site sin try).
+    try { db.close() } catch { /* ignore */ }
+  }
+  if (!hasSchema) return { state: 'uninitialized' }
+  try {
+    return { state: 'ok', engine: createReadonlyMemoryEngine(dbPath) }
+  } catch (error) {
+    return { state: 'unreadable', error }
+  }
+}
+
 async function memoryContext(flags) {
   // `--scope` es opcional, pero si aparece sin valor es error de uso: `flagValue`
   // devolveria null y caeria en el default `project` en silencio.
@@ -2729,10 +2762,17 @@ async function memoryContext(flags) {
   const out = flagValue(flags, '--out')
   const projectDir = process.cwd()
   const dbPath = defaultMemoryDbPath(projectDir)
-  // Dia-cero: sin base de memoria se renderiza igual la topologia (sin abrir el motor),
-  // por el mismo camino que el refresh de lifecycle. Sin topologia ni reglas no se
-  // fabrica contenido: el bloque es null.
-  const engine = (await exists(dbPath)) ? createMemoryEngine(dbPath) : null
+  // Dia-cero: sin base de memoria o sin esquema se renderiza igual la topologia
+  // (sin abrir el motor), por el mismo camino que el refresh de lifecycle. Sin
+  // topologia ni reglas no se fabrica contenido: el bloque es null. Con esquema,
+  // el engine es read-only: leer nunca migra ni crea la base.
+  const opened = await openReadableMemory(dbPath)
+  if (opened.state === 'unreadable') {
+    console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${opened.error.message}`)
+    process.exitCode = 1
+    return
+  }
+  const engine = opened.state === 'ok' ? opened.engine : null
   // Paridad con `writeWorkingContextBlock`: el archivo destino se materializa aunque
   // falte su directorio (dia-cero crea `.ancleto/` si no existia).
   if (out) await mkdir(dirname(resolve(out)), { recursive: true })
@@ -2808,7 +2848,17 @@ async function memoryDoctorCmd(flags) {
     console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
     process.exit(0)
   }
-  const { checks, healthy, rebuilt } = memoryDoctor(dbPath, { rebuild })
+  // `memoryDoctor` abre y cierra la DB dentro de su `try/finally`; el manejo aca
+  // cubre tambien un fallo de apertura o de cierre (p. ej. `--rebuild` sobre un
+  // archivo que no es SQLite) para que ningun throw llegue al proceso como stack.
+  let report
+  try {
+    report = memoryDoctor(dbPath, { rebuild })
+  } catch (err) {
+    console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${err.message}`)
+    process.exit(1)
+  }
+  const { checks, healthy, rebuilt } = report
   if (rebuilt) console.log('ancleto: indice FTS5 reconstruido')
   for (const c of checks) {
     console.log(`  ${c.skipped ? '−' : c.ok ? '✔' : '✖'} ${c.name}: ${c.detail}`)
@@ -2820,8 +2870,14 @@ async function memoryDoctorCmd(flags) {
   // construye el engine read-only de frescura, porque prepara statements contra esa
   // tabla y abortaria con `no such table` fuera del `try`.
   const schemaUninitialized = checks.some((c) => c.detail === SCHEMA_UNINITIALIZED_DETAIL)
+  // Base ilegible: distinto de "sin esquema". El engine read-only de frescura
+  // prepara statements contra `memory_nodes` y abortaria igual, asi que se omite.
+  const dbUnreadable = checks.some((c) => c.detail === UNREADABLE_DETAIL)
+  if (dbUnreadable) {
+    console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${UNREADABLE_DETAIL}`)
+  }
   let staleness = null
-  if (!schemaUninitialized) {
+  if (!schemaUninitialized && !dbUnreadable) {
     const projectRoot = resolveMemoryProjectRoot(dbPath) || process.cwd()
     let engine
     try {
@@ -2864,8 +2920,23 @@ async function memoryListCmd(flags) {
     process.exit(1)
   }
 
-  // read-only: el engine abre la DB sin migrar y sin escribir (no toca el WAL)
-  const engine = createReadonlyMemoryEngine(dbPath)
+  // read-only: el engine abre la DB sin migrar y sin escribir (no toca el WAL).
+  // Se construye despues del precheck y dentro del manejo de error para que un
+  // esquema ausente no termine en un stack trace.
+  const opened = await openReadableMemory(dbPath)
+  if (opened.state === 'no-db') {
+    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+    process.exit(0)
+  }
+  if (opened.state === 'uninitialized') {
+    console.error(`ancleto: base de memoria sin esquema inicializado (${dbPath})`)
+    process.exit(0)
+  }
+  if (opened.state === 'unreadable') {
+    console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${opened.error.message}`)
+    process.exit(1)
+  }
+  const engine = opened.engine
   let nodes
   try {
     nodes = engine.listNodes({ type, scope, status })
@@ -2894,11 +2965,20 @@ async function memoryListCmd(flags) {
 async function memoryExport(flags) {
   const out = flagValue(flags, '--out')
   const dbPath = defaultMemoryDbPath()
-  if (!(await exists(dbPath))) {
+  const opened = await openReadableMemory(dbPath)
+  if (opened.state === 'no-db') {
     console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
     process.exit(1)
   }
-  const engine = createMemoryEngine(dbPath)
+  if (opened.state === 'uninitialized') {
+    console.error(`ancleto: base de memoria sin esquema inicializado (${dbPath})`)
+    process.exit(1)
+  }
+  if (opened.state === 'unreadable') {
+    console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${opened.error.message}`)
+    process.exit(1)
+  }
+  const engine = opened.engine
   try {
     const nodes = engine.exportActive()
     const json = JSON.stringify(nodes, null, 2)
@@ -2962,17 +3042,18 @@ async function memoryImport(flags) {
 // predicen el mismo `inserted`/`updated` que el import real.
 async function memoryImportDryRun(json, asJson) {
   const dbPath = defaultMemoryDbPath()
-  const databasePresent = await exists(dbPath)
+  const opened = await openReadableMemory(dbPath)
+  if (opened.state === 'unreadable') {
+    console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${opened.error.message}`)
+    process.exitCode = 1
+    return
+  }
+  // Un archivo con esquema ausente es una base vacia legitima para el simulacro:
+  // se clasifica sobre estado vacio sin migrar, conservando `databasePresent`.
+  const databasePresent = opened.state !== 'no-db'
   let report
-  if (databasePresent) {
-    let engine
-    try {
-      engine = createReadonlyMemoryEngine(dbPath)
-    } catch (err) {
-      console.error(`ancleto: no se pudo abrir la memoria en solo lectura (${dbPath}): ${err.message}`)
-      process.exitCode = 1
-      return
-    }
+  if (opened.state === 'ok') {
+    const engine = opened.engine
     try {
       report = engine.classifyImport(json)
     } catch (err) {
@@ -3118,8 +3199,30 @@ async function memoryMerge(flags) {
   const projectRoot = resolveMemoryProjectRoot(dbPath)
   // `createMemoryEngine` aplica `PRAGMA journal_mode=WAL` y migraciones al abrir;
   // un dry-run no debe escribir ni la base ni sus sidecars, asi que usa la
-  // conexion read-only (su `merge` solo acepta `dryRun: true`).
-  const engine = dryRun ? createReadonlyMemoryEngine(dbPath) : createMemoryEngine(dbPath)
+  // conexion read-only (su `merge` solo acepta `dryRun: true`), construida tras
+  // el precheck de esquema.
+  let engine
+  if (dryRun) {
+    const opened = await openReadableMemory(dbPath)
+    if (opened.state === 'no-db') {
+      console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+      process.exitCode = 1
+      return
+    }
+    if (opened.state === 'uninitialized') {
+      console.error(`ancleto: base de memoria sin esquema inicializado (${dbPath})`)
+      process.exitCode = 1
+      return
+    }
+    if (opened.state === 'unreadable') {
+      console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${opened.error.message}`)
+      process.exitCode = 1
+      return
+    }
+    engine = opened.engine
+  } else {
+    engine = createMemoryEngine(dbPath)
+  }
   try {
     let result
     try {
@@ -3261,7 +3364,8 @@ async function memoryCurateCmd(flags) {
   const asJson = flags.includes('--json')
   const strict = flags.includes('--strict')
   const dbPath = defaultMemoryDbPath()
-  if (!(await exists(dbPath))) {
+  const opened = await openReadableMemory(dbPath)
+  if (opened.state === 'no-db') {
     if (asJson) {
       console.log(JSON.stringify({ status: 'no-db', brokenRefs: null, unverifiable: null, exactDuplicates: null }))
     } else {
@@ -3270,13 +3374,15 @@ async function memoryCurateCmd(flags) {
     process.exitCode = 1
     return
   }
-  let engine
-  try {
-    engine = createReadonlyMemoryEngine(dbPath)
-  } catch (err) {
-    curateFailure(asJson, err.message)
+  if (opened.state === 'uninitialized') {
+    curateFailure(asJson, SCHEMA_UNINITIALIZED_DETAIL)
     return
   }
+  if (opened.state === 'unreadable') {
+    curateFailure(asJson, `base ilegible (${dbPath}): ${opened.error.message}`)
+    return
+  }
+  const engine = opened.engine
   let report
   try {
     report = curateMemory(engine, { projectRoot: resolveMemoryProjectRoot(dbPath) })
@@ -3364,7 +3470,32 @@ async function memoryRepairRefs(flags) {
     process.exitCode = 1
     return
   }
-  const engine = dryRun ? createReadonlyMemoryEngine(dbPath) : createMemoryEngine(dbPath)
+  let engine
+  if (dryRun) {
+    const opened = await openReadableMemory(dbPath)
+    if (opened.state === 'no-db') {
+      if (asJson) console.log(JSON.stringify({ status: 'no-db', ...empty }))
+      else console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+      process.exitCode = 1
+      return
+    }
+    if (opened.state === 'uninitialized') {
+      if (asJson) console.log(JSON.stringify({ status: 'error', ...empty, reason: SCHEMA_UNINITIALIZED_DETAIL }))
+      else console.error(`ancleto: base de memoria sin esquema inicializado (${dbPath})`)
+      process.exitCode = 1
+      return
+    }
+    if (opened.state === 'unreadable') {
+      const reason = `base ilegible (${dbPath}): ${opened.error.message}`
+      if (asJson) console.log(JSON.stringify({ status: 'error', ...empty, reason }))
+      else console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${opened.error.message}`)
+      process.exitCode = 1
+      return
+    }
+    engine = opened.engine
+  } else {
+    engine = createMemoryEngine(dbPath)
+  }
   try {
     let result
     try {

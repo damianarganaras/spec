@@ -58,6 +58,13 @@ function inspectExpected(root) {
   return { expected: false, evidence: 0 }
 }
 
+// Deteccion canonica de "esquema inicializado": la tabla `memory_nodes` existe en
+// `sqlite_master`. Unica fuente del literal SQL para `status`, `doctor` y las
+// superficies de lectura del CLI.
+export function hasMemorySchema(db) {
+  return db.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE name = 'memory_nodes'`).get().n > 0
+}
+
 // Read-only estricto: pre-check de existencia antes de abrir y apertura con
 // migraciones deshabilitadas y `readonly: true`. La base nunca se crea; el
 // directorio tampoco (el `mkdirSync` vive solo en la apertura de escritura).
@@ -70,8 +77,7 @@ function inspectDatabase(dbPath) {
     throw new Error(`no se pudo abrir la base de memoria (${dbPath}): ${err.message}`)
   }
   try {
-    const hasSchema =
-      db.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE name = 'memory_nodes'`).get().n > 0
+    const hasSchema = hasMemorySchema(db)
     if (!hasSchema) return { status: 'uninitialized', dbPresent: true, activeNodes: 0 }
     const activeNodes = db.prepare(`SELECT count(*) AS n FROM memory_nodes WHERE status = 'active'`).get().n
     return { status: activeNodes > 0 ? 'ok' : 'empty', dbPresent: true, activeNodes }

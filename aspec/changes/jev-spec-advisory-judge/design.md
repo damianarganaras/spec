@@ -38,7 +38,7 @@ judgeCommand(argv)
        ├─ si dryRun                   → resuelve, imprime el comando, NO spawnea el tool
        ├─ enabled !== true            → skipped/disabled (no resuelve ni spawnea)
        ├─ resuelve el binario         → PATH | npx -y jev-spec@0.4.1
-       ├─ (sólo --require) sonda      → <bin> --version   (offline, sin key)
+       ├─ (sólo --require) sonda      → <bin> --version   (no requiere credenciales; no envía código del repo; con npx consulta el registry)
        ├─ spawn                       → <bin> check
        └─ mapea exit + arma estado/envelope
 ```
@@ -67,7 +67,9 @@ se prueba sin procesos.
   en win32 y es seguro porque el argv es una constante del módulo: no hay argumentos del usuario.
 - Binario resuelto por `PATH`: argv `['check']`. Fallback: `npx -y jev-spec@0.4.1` con el mismo
   argv, como Repomix (`src/cli/index.js:2598-2617`).
-- Sonda (`--require`): mismo binario con `['--version']`, sin red y sin credenciales.
+- Sonda (`--require`): mismo binario con `['--version']`, que no requiere credenciales y no envía
+  código del repo: con un binario local no hay red, y con el fallback `npx` sí consulta el registry
+  para resolver el pin.
 - `timeoutMs` (default 120000, `judge.timeoutMs` o `--timeout`) agota el spawn →
   `broken`/`tool-error`.
 - Sin `--require` y sin binario resoluble no se cae a `npx` (ver §3): no hay forma barata y
@@ -147,13 +149,14 @@ Envelope estable, sin `schemaVersion`, en **todos** los caminos (incluido exit 2
 - **Credencial sólo por entorno**: `TYPESAFE_AI_API_KEY`. Nunca en `.ancletorc` (porque `export`
   empaqueta el archivo), nunca en `--json`, nunca en logs ni en mensajes de error. El adaptador no la
   lee ni la imprime: sólo la hereda el binario.
-- **Egreso anunciado**: cada corrida humana advierte que el código se envía a un servicio externo de
-  terceros. Sin `--json`, la advertencia precede al reporte.
+- **Egreso anunciado**: cada corrida humana que invoca el binario advierte que el código se envía a un
+  servicio externo de terceros. Sin `--json`, la advertencia precede al reporte.
 - **`--dry-run` no ejecuta config**: el adaptador no invoca el binario, así que
   `jev-spec.config.ts` no corre. Esto reemplaza la mitigación anterior, que era falsa: `jev-spec`
   ejecuta su config también en su propio `--dry-run`.
-- **Sin inyección de shell**: no hay argumentos de usuario; el único `shell: true` es el fallback
-  `npx` con argv constante.
+- **Sin inyección de shell**: no hay argumentos de usuario; `shell: true` se usa en ambos caminos
+  (binario resuelto y fallback `npx`), con argv constante que no deriva de input, así que no hay
+  inyección.
 - **Sin red en `src/`**: el fetch lo hace el binario; el módulo sólo usa `node:fs`, `node:path` y
   `node:child_process`.
 - **Sin escrituras**: el comando no crea ni modifica archivos (ni siquiera `.ancleto/`).

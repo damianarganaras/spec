@@ -431,7 +431,7 @@ ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-bud
 
 - Es **advisory**: nunca es gate de `check`, de `specs merge` ni del archive.
 - La credencial se lee solo de `TYPESAFE_AI_API_KEY`, nunca de `.ancletorc`.
-- Toda corrida humana avisa que el código puede enviarse a un servicio de terceros; `--dry-run` imprime el comando sin ejecutar el binario ni su config.
+- Toda corrida humana que invoca el binario avisa que el código puede enviarse a un servicio de terceros; `--dry-run` imprime el comando sin ejecutar el binario ni su config.
 - Exit codes, límites y rollback: [`docs/jev-advisory-judge.md`](docs/jev-advisory-judge.md).
 
 ---

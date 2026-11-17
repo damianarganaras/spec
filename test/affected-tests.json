@@ -9,6 +9,7 @@
         "test/cli.test.js",
         "test/curation.test.js",
         "test/discovery-topology.test.js",
+        "test/judge.test.js",
         "test/mcp.test.js",
         "test/memory-doctor-uninitialized.test.js",
         "test/memory-engine.test.js",
@@ -76,6 +77,11 @@
       "trigger": ["test/fixtures/memory-writer-child.mjs"],
       "tests": ["test/memory-writers.test.js"],
       "reason": "memory-writers spawns the writer fixture by path, so a fixture change leaves no edge in the import graph"
+    },
+    {
+      "trigger": ["test/fixtures/jev-spec-mock.mjs"],
+      "tests": ["test/judge.test.js"],
+      "reason": "judge spawns the jev-spec mock through a PATH shim, so a fixture change leaves no edge in the import graph"
     },
     {
       "trigger": ["test/**", "scripts/test-affected.mjs"],

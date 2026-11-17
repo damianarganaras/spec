@@ -116,8 +116,9 @@ Principios:
   `ancleto judge [--dry-run] [--json] [--require]`, entrada de ayuda y sin escrituras (read-only). No
   acepta `--target` ni `--change`: v1 no pasa argumentos del usuario al binario.
 - **Resolución del binario:** `jev-spec` por `PATH`; si falta, `npx -y jev-spec@0.4.1` (pin exacto en
-  una constante del release, nunca `latest`). El adaptador reporta el origen (`path`/`npx`) y la
-  versión cuando la sonda corrió; si no corrió, la versión es null. No reporta el modelo.
+  una constante del release, nunca `latest`). El adaptador reporta el origen (`path`/`npx`) y siempre
+  la versión pinneada `0.4.1` del adaptador; v1 no inspecciona la versión real del binario. No reporta
+  el modelo.
 - **`.ancletorc` (schema aditivo):**
   ```json
   {
@@ -205,9 +206,9 @@ Principios:
   modelo. Mitigación: pin exacto `jev-spec@0.4.1` en una constante, y el adaptador **no parsea** el
   reporte: sólo consume exit codes y transporta stdout/stderr verbatim. Sin fixture de JSON que
   mantener.
-- **Windows y `npx` (`.cmd`):** el binario resuelto se spawnea directo, sin shell; sólo el fallback
-  `npx` usa `shell: true`, con argv constante. Mitigación: no hay argumentos de usuario, así que no
-  hay nada que escapar; un test verifica que no se pasa ningún argumento variable.
+- **Windows y `npx` (`.cmd`):** `shell: true` se usa en ambos caminos (binario resuelto y fallback
+  `npx`), con argv constante que no deriva de input. Mitigación: no hay argumentos de usuario, así que
+  no hay nada que escapar; un test verifica que no se pasa ningún argumento variable.
 - **Config del usuario que se ejecuta:** `jev-spec.config.ts` corre código en el `--dry-run` del tool.
   Mitigación: el `--dry-run` de ancleto **no invoca el binario**, así que la config del usuario nunca
   se ejecuta en ese camino; la corrida real es explícita y anuncia el egreso de código. No se ejecuta
@@ -245,7 +246,7 @@ Estado: aprobado
 Estado: aprobado
 
 ### judge-probes-required-before-require
-- Elección: --require exige una sonda de setup verde (spawn del binario con su flag de versión, offline y sin credenciales) antes de la corrida live; una sonda rota produce unavailable con exit 2.
+- Elección: --require exige una sonda de setup verde (spawn del binario con su flag de versión, que no requiere credenciales ni envía código del repo; con binario local no hay red y el fallback npx sí consulta el registry) antes de la corrida live; una sonda rota produce unavailable con exit 2.
 - Descartado: exigir el gate sin probar el setup, o convertir una sonda rota en fail.
 - Justificación: fail significaría que la aserción corrió y falló, y una sonda rota no juzgó nada; un gate cuyo setup no se verificó es peor que no tener gate.
 - Refs:
@@ -290,7 +291,7 @@ Estado: aprobado
 Estado: aprobado
 
 ### judge-key-env-only-egress-announced
-- Elección: la credencial se lee sólo del entorno (TYPESAFE_AI_API_KEY), nunca desde .ancletorc, el envelope --json, logs o mensajes; cada corrida humana anuncia el egreso de código a un servicio externo de terceros; src/ no accede a la red.
+- Elección: la credencial se lee sólo del entorno (TYPESAFE_AI_API_KEY), nunca desde .ancletorc, el envelope --json, logs o mensajes; cada corrida humana que invoca el binario externo anuncia el egreso de código a un servicio externo de terceros; src/ no accede a la red.
 - Descartado: aceptar la credencial en .ancletorc o imprimirla para diagnóstico.
 - Justificación: export empaqueta .ancletorc, así que una credencial ahí viaja con el bundle; el egreso silencioso es una sorpresa inaceptable para código propietario.
 - Refs:

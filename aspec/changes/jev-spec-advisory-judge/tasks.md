@@ -20,26 +20,29 @@
    el booleano `true`; `judge.timeoutMs` numérico y > 0 o default 120000; archivo ausente, BOM o JSON
    inválido → configuración ausente. Sin escrituras y sin red.
 4. Implementar en `src/core/judge.js` la resolución del binario: `where`/`which` por `spawnSync` y, si
-   falla, `npx -y jev-spec@0.4.1`; exponer el origen `path`/`npx`/`null` y, cuando la sonda corrió, la
-   versión; si no corrió, `null`.
+   falla, `npx -y jev-spec@0.4.1`; exponer el origen `path`/`npx`/`null` y la versión pinneada `"0.4.1"`
+   del adaptador (no la versión real del binario, que v1 no inspecciona).
 5. Implementar el spawn de la verificación con `check` como único argumento, `cwd` del proyecto y
    `timeoutMs`; capturar `stdout`, `stderr`, `status`, `error` y duración; mapear exit `0`→`pass`,
    `1`→`fail`, `2`→`broken`, otro o error/timeout→`broken`.
-6. Implementar la sonda de setup para `--require`: ejecución del binario con `--version`, offline y
-   sin credenciales; sonda rota → `unavailable` con `reason` `probe-failed` y sin corrida live.
+6. Implementar la sonda de setup para `--require`: ejecución del binario con `--version`, sin
+   credenciales y sin enviar código del repo; sonda rota → `unavailable` con `reason` `probe-failed` y
+   sin corrida live.
 7. Implementar el modo `--dry-run`: devolver el comando resuelto sin spawnear el binario ni ejecutar la
    configuración del usuario; con `--require`, exit 2.
 8. Implementar el envelope `--json` con `state`, `reason`, `exitCode`, `enabled`, `tool`
-   (`name`/`source`/`version`), `durationMs`, `report` (stdout verbatim o null) y `stderr`, sin
-   `schemaVersion`, en todos los caminos incluido exit 2. No leer ni imprimir `TYPESAFE_AI_API_KEY`.
+   (`name`/`source`/`version`), `durationMs`, `report` (stdout verbatim o null), `stderr` y `required`;
+   `command` sólo en `--dry-run`; sin `schemaVersion`, en todos los caminos incluido exit 2. No leer ni
+   imprimir `TYPESAFE_AI_API_KEY`.
 
 ## Fase 2 — CLI (`src/cli/index.js`)
 
-9. Agregar `judgeCommand(argv)` en `src/cli/index.js`: parsear sólo `--dry-run`, `--json` y
-   `--require`; un flag desconocido es error de uso con exit 1; delegar en `src/core/judge.js` e
-   imprimir el camino humano con el aviso de egreso de código.
-10. Agregar `case 'judge'` al dispatch y la línea de uso en `HELP`, sin tocar `SUBCOMMAND_HELP`
-    (el comando es read-only).
+9. Agregar `judgeCommand(argv)` en `src/cli/index.js`: parsear sólo `--json`, `--require`, `--dry-run` y
+   `--timeout <ms>` (entero > 0); un flag desconocido o un timeout inválido es error de uso con exit 1;
+   delegar en `src/core/judge.js` e imprimir el camino humano con el aviso de egreso de código.
+10. Agregar `case 'judge'` al dispatch, la línea de uso en `HELP` y la entrada `judge: JUDGE_USAGE` de
+    `SUBCOMMAND_HELP`, para que `ancleto judge --help` imprima el uso por el guard central y no ejecute
+    el subcomando.
 11. Verificar por inspección que ningún camino de `judgeCommand` imprime la credencial ni el contenido
     de `.ancletorc`, y que `check`, `specs merge` y el archive no importan ni invocan `judge`.
 

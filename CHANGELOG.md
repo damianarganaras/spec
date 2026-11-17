@@ -2,6 +2,19 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.40.0] - 2026-11-17
+
+### Added
+- **`ancleto judge`: adaptador opcional y advisory a `jev-spec`**: subcomando nuevo, read-only y advisory, que resuelve el binario `jev-spec@0.4.1` por `PATH` o vía `npx` (sin vendorizar un binario propio) y corre preguntas `noul`/`choice`/`score` por requirement sobre las specs canónicas. Sale con exit `0` (pass/skipped), `1` (fail requerido) y `2` (fallo de uso o tool rota), y admite `--json`, `--require`, `--timeout` y `--dry-run`. `judge.enabled` usa default `false`; el juez **no** es un gate de archive ni de conformidad y nunca bloquea el ciclo.
+- **`--require` opt-in gateado por sonda, `--timeout` y `--dry-run` que no ejecuta config**: `--require` sólo aplica después de una sonda exitosa del binario; `--timeout` acota la corrida (default 120s, sonda 30s); `--dry-run` reporta la resolución del binario y su origen sin ejecutar la configuración del juez.
+- **Degradación determinística a `skipped`/`unavailable`**: sin cuenta, sin binario o con el binario roto el juez degrada a `skipped`/`unavailable` en lugar de romper la corrida; el reporte del binario no se parsea, sólo se consume su exit code.
+- **Requirement `Juez externo advisory opcional` en `cli-diagnostics`**: el delta ADDED promueve el contrato a la spec principal.
+
+### Notas
+- **MINOR**: subcomando nuevo y superficie de skills; sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`.
+- **Sin red en `src/` y cero dependencias de runtime**: el adaptador sólo spawnea un proceso local; un binario `0.39.1` lee el mismo estado persistido.
+- **El juez NO es gate de archive/conformidad**: su relevancia es advisory y no prueba mecánica; el veredicto de valor (AUC ≥ 0.75) sigue pendiente de medición con cuenta real.
+
 ## [0.39.1] - 2026-11-17
 
 ### Fixed

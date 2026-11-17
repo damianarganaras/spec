@@ -3107,7 +3107,28 @@ async function memoryGc(flags) {
     console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
     process.exit(0)
   }
-  const engine = createMemoryEngine(dbPath)
+  // `--dry-run` es estrictamente read-only: abre con el helper compartido (sin
+  // migrar ni crear la base) y solo reporta. La rama de purga conserva el engine
+  // de escritura, que migra antes de tocar la DB.
+  let engine
+  if (dryRun) {
+    const opened = await openReadableMemory(dbPath)
+    if (opened.state === 'no-db') {
+      console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+      process.exit(0)
+    }
+    if (opened.state === 'uninitialized') {
+      console.error(`ancleto: base de memoria sin esquema inicializado (${dbPath})`)
+      process.exit(0)
+    }
+    if (opened.state === 'unreadable') {
+      console.error(`ancleto: no se pudo leer la base de memoria (${dbPath}): ${opened.error.message}`)
+      process.exit(1)
+    }
+    engine = opened.engine
+  } else {
+    engine = createMemoryEngine(dbPath)
+  }
   try {
     const result = engine.gcSuperseded({ dryRun, days })
     if (result.dryRun) {

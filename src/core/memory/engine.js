@@ -906,11 +906,25 @@ function buildEngine(db, dbPath) {
     }
     return supersedeStmt
   }
+  // Una base previa a la migracion aditiva no tiene `superseded_at`: el SELECT del
+  // dry-run (que no migra) cae a `created_at`, el degenerado exacto del `COALESCE`
+  // porque el backfill replica `created_at` en las filas superseded. La columna se
+  // detecta en el primer uso, no al construir el engine, para no volver eager la
+  // consulta ni romper `memory list`/`doctor` sobre una base legacy.
+  let gcSupersededAtColumn = null
+  function gcHasSupersededAt() {
+    if (gcSupersededAtColumn === null) {
+      const columns = db.prepare('PRAGMA table_info(memory_nodes)').all()
+      gcSupersededAtColumn = columns.some((column) => column.name === 'superseded_at')
+    }
+    return gcSupersededAtColumn
+  }
   function getGcSelect() {
     if (!gcSelectStmt) {
+      const stamp = gcHasSupersededAt() ? 'COALESCE(superseded_at, created_at)' : 'created_at'
       gcSelectStmt = db.prepare(
         `SELECT id, length(content) + length(justification) AS size FROM memory_nodes
-         WHERE status = 'superseded' AND julianday(COALESCE(superseded_at, created_at)) < julianday(?)`
+         WHERE status = 'superseded' AND julianday(${stamp}) < julianday(?)`
       )
     }
     return gcSelectStmt

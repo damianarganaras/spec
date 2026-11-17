@@ -71,6 +71,15 @@ function nodesOf(dbPath) {
   }
 }
 
+function nodesColumns(dbPath) {
+  const db = new DatabaseSync(dbPath, { readOnly: true })
+  try {
+    return db.prepare('PRAGMA table_info(memory_nodes)').all().map((column) => column.name)
+  } finally {
+    db.close()
+  }
+}
+
 // Archivos dentro de `.ancleto/`; [] cuando el directorio no existe.
 function memoryFiles(dir) {
   const abs = join(dir, '.ancleto')
@@ -521,5 +530,192 @@ describe('memory readonly surfaces — contratos pineados de status y doctor', (
         }
       })
     }
+  })
+})
+
+// `memory gc --dry-run` debe ser estrictamente read-only
+// (spec:memory-ops#Comando CLI ancleto memory gc). Este bloque queda fuera de
+// `surfaceRuns`, que pinea "las nueve" superficies del mapa: gc no es una décima
+// superficie, sólo comparte el invariante de apertura y degradación.
+describe('memory readonly surfaces — gc --dry-run estrictamente read-only', () => {
+  // Nodo superseded antiguo: no hay flag de CLI para simular la edad de
+  // supersesión, así que el backdate se hace por SQL crudo como en mcp.test.js.
+  function seedSuperseded(dir, key = 'gc-old') {
+    const dbPath = join(dir, DB_REL)
+    const engine = createMemoryEngine(dbPath)
+    try {
+      engine.recordNode({
+        memory_key: key,
+        type: 'rule',
+        scope: 'project',
+        content: 'version vieja',
+        createdAt: new Date(Date.now() - 40 * 86400000).toISOString()
+      })
+      engine.recordNode({ memory_key: key, type: 'rule', scope: 'project', content: 'version nueva' })
+    } finally {
+      engine.close()
+    }
+    const backdate = new Date(Date.now() - 40 * 86400000).toISOString()
+    const db = new DatabaseSync(dbPath)
+    try {
+      db.prepare(
+        `UPDATE memory_nodes SET created_at = ?, superseded_at = ? WHERE memory_key = ? AND status = 'superseded'`
+      ).run(backdate, backdate, key)
+    } finally {
+      db.close()
+    }
+    return dbPath
+  }
+
+  // Base previa a la migración aditiva: `memory_nodes` sin `superseded_at`. Se
+  // parte del esquema vigente y se elimina la columna con DROP COLUMN (ningún
+  // indice ni trigger la referencia) y se fija DELETE para no tolerar sidecars.
+  function legacyWithoutSupersededAt(dir, key = 'gc-legacy-old') {
+    const dbPath = join(dir, DB_REL)
+    const engine = createMemoryEngine(dbPath)
+    engine.close()
+    const db = new DatabaseSync(dbPath)
+    try {
+      db.exec('ALTER TABLE memory_nodes DROP COLUMN superseded_at')
+      db.exec('PRAGMA journal_mode = DELETE')
+      db.prepare(
+        `INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+         VALUES (?, ?, 'rule', 'project', 'superseded', 'historico sin la columna', '', 'test', 1, ?)`
+      ).run(key, key, new Date(Date.now() - 40 * 86400000).toISOString())
+    } finally {
+      db.close()
+    }
+    return dbPath
+  }
+
+  it('sin base sale 0 con el mensaje vigente y no crea .ancleto/', () => {
+    withRepo((dir) => {
+      const r = runCli(dir, ['memory', 'gc', '--dry-run'])
+      assert.equal(r.status, 0, r.stderr)
+      assertNoStack(r, 'gc sin base')
+      assert.match(r.stderr, /no hay memoria en este repo/)
+      assert.equal(existsSync(join(dir, '.ancleto')), false, 'no debe crear .ancleto/')
+    })
+  })
+
+  it('sobre una base de 0 bytes sale 0, nombra el esquema no inicializado y no la migra', () => {
+    withRepo((dir) => {
+      const dbPath = zeroByteDatabase(dir)
+      const hash = hashFile(dbPath)
+
+      const r = runCli(dir, ['memory', 'gc', '--dry-run'])
+      assert.equal(r.status, 0, r.stderr)
+      assertNoStack(r, 'gc 0 bytes')
+      assert.match(r.stderr, /sin esquema inicializado/)
+
+      assert.equal(statSync(dbPath).size, 0, 'el archivo de 0 bytes no debe crecer')
+      assert.equal(hashFile(dbPath), hash, 'los bytes del .db no deben cambiar')
+      assert.deepEqual(schemaOf(dbPath), [], 'sqlite_master sigue vacío')
+      assert.deepEqual(memoryFiles(dir), ['memory.db'], 'no deben aparecer -wal ni -shm')
+    })
+  })
+
+  it('sobre journal_mode=DELETE con un superseded elegible reporta 1 y no muta nada', () => {
+    withRepo((dir) => {
+      const dbPath = seedSuperseded(dir)
+      deleteMode(dbPath)
+      const before = {
+        hash: hashFile(dbPath),
+        schema: schemaOf(dbPath),
+        nodes: nodesOf(dbPath),
+        files: memoryFiles(dir)
+      }
+
+      const r = runCli(dir, ['memory', 'gc', '--dry-run'])
+      assert.equal(r.status, 0, r.stderr)
+      assertNoStack(r, 'gc DELETE')
+      assert.match(r.stdout, /1 nodo\(s\), ~\d+ bytes a liberar/)
+
+      assert.equal(hashFile(dbPath), before.hash, 'el .db conserva su SHA-256')
+      assert.deepEqual(schemaOf(dbPath), before.schema, 'sqlite_master idéntico')
+      assert.deepEqual(nodesOf(dbPath), before.nodes, 'el nodo superseded sigue presente')
+      assert.deepEqual(memoryFiles(dir), before.files, 'journal_mode=DELETE no gana sidecars')
+    })
+  })
+
+  it('sobre journal_mode=WAL con un superseded elegible reporta 1 y tolera sidecars sin tocar .db', () => {
+    withRepo((dir) => {
+      const dbPath = seedSuperseded(dir, 'gc-wal-old')
+      // Segunda conexión viva: el -wal existe y conserva frames mientras corre el
+      // dry-run, que es el estado real de una base WAL. El delta tolera los
+      // sidecars (artefacto de apertura WAL, no escritura de gc); lo estricto es
+      // el .db: mismos bytes y mismo sqlite_master.
+      const holder = new DatabaseSync(dbPath)
+      try {
+        holder.exec('PRAGMA journal_mode = WAL')
+        assert.equal(String(holder.prepare('PRAGMA journal_mode').get().journal_mode).toLowerCase(), 'wal')
+        const backdate = new Date(Date.now() - 40 * 86400000).toISOString()
+        holder.prepare(
+          `UPDATE memory_nodes SET superseded_at = ? WHERE memory_key = 'gc-wal-old' AND status = 'superseded'`
+        ).run(backdate)
+        assert.ok(statSync(`${dbPath}-wal`).size > 0, 'precondición: el -wal tiene frames')
+
+        const snapshot = () => ({
+          schema: holder.prepare('SELECT type, name FROM sqlite_master ORDER BY type, name').all(),
+          nodes: holder
+            .prepare('SELECT id, memory_key, status, superseded_by, superseded_at FROM memory_nodes ORDER BY id')
+            .all()
+        })
+        const before = { hash: hashFile(dbPath), ...snapshot() }
+
+        const r = runCli(dir, ['memory', 'gc', '--dry-run'])
+        assert.equal(r.status, 0, r.stderr)
+        assertNoStack(r, 'gc WAL')
+        assert.match(r.stdout, /1 nodo\(s\), ~\d+ bytes a liberar/)
+
+        assert.equal(hashFile(dbPath), before.hash, 'el .db conserva su SHA-256: el dry-run no escribe')
+        const after = snapshot()
+        assert.deepEqual(after.schema, before.schema, 'sqlite_master idéntico')
+        assert.deepEqual(after.nodes, before.nodes, 'el superseded sigue presente')
+        for (const file of memoryFiles(dir)) {
+          assert.ok(SIDECARS.includes(file), `sidecar inesperado: ${file}`)
+        }
+      } finally {
+        holder.close()
+      }
+    })
+  })
+
+  it('sobre una base ilegible sale 1 con mensaje propio, sin stack y sin tocar bytes', () => {
+    withRepo((dir) => {
+      mkdirSync(join(dir, '.ancleto'), { recursive: true })
+      const dbPath = join(dir, DB_REL)
+      writeFileSync(dbPath, 'esto no es una base sqlite')
+      const hash = hashFile(dbPath)
+
+      const r = runCli(dir, ['memory', 'gc', '--dry-run'])
+      assert.equal(r.status, 1)
+      assertNoStack(r, 'gc ilegible')
+      // Acepta ambos mensajes acotados: el del probe (`openReadableMemory`) y el
+      // del catch del reporte (`no se pudo completar gc --dry-run`).
+      assert.match(r.stderr, /(no se pudo leer|base de memoria ilegible|no se pudo completar gc --dry-run)/)
+      assert.doesNotMatch(`${r.stdout}${r.stderr}`, /esquema (no )?inicializado/i)
+
+      assert.equal(hashFile(dbPath), hash, 'el archivo ilegible no se toca')
+      assert.equal(readFileSync(dbPath, 'utf8'), 'esto no es una base sqlite')
+    })
+  })
+
+  it('sobre una base legacy sin superseded_at cae a created_at y no agrega la columna', () => {
+    withRepo((dir) => {
+      const dbPath = legacyWithoutSupersededAt(dir)
+      const hash = hashFile(dbPath)
+      const schema = schemaOf(dbPath)
+      assert.equal(nodesColumns(dbPath).includes('superseded_at'), false, 'precondición: la columna no existe')
+
+      const r = runCli(dir, ['memory', 'gc', '--dry-run'])
+      assert.equal(r.status, 0, r.stderr)
+      assertNoStack(r, 'gc legacy')
+      assert.match(r.stdout, /1 nodo\(s\), ~\d+ bytes a liberar/)
+
+      assert.equal(hashFile(dbPath), hash, 'el .db conserva su SHA-256')
+      assert.deepEqual(schemaOf(dbPath), schema, 'sqlite_master idéntico')
+      assert.equal(nodesColumns(dbPath).includes('superseded_at'), false, 'la columna sigue ausente')
+    })
   })
 })

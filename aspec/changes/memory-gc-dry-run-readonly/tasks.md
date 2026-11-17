@@ -33,7 +33,7 @@
 
 ## Fase 3 — Tests
 
-- [ ] 3.1 Agregar un bloque nuevo en `test/memory-readonly-surfaces.test.js` (nuevo `describe` o
+- [x] 3.1 Agregar un bloque nuevo en `test/memory-readonly-surfaces.test.js` (nuevo `describe` o
   `it`s) sin modificar el array `surfaceRuns` ni sus conteos "nueve":
   - base de 0 bytes: `memory gc --dry-run` sale 0, no crea esquema y el SHA-256 del `.db` no cambia;
   - base `journal_mode=DELETE` con un superseded elegible: reporta 1 nodo, sale 0 y el `.db`
@@ -41,26 +41,29 @@
   - base ilegible: sale 1, mensaje propio y sin stack trace;
   - base legacy con `memory_nodes` sin `superseded_at`: sale 0, mismo conteo esperado por
     `created_at` y la columna sigue ausente.
-- [ ] 3.2 Actualizar en `test/memory-engine.test.js:2242` la expectativa del dry-run read-only
+- [x] 3.2 Actualizar en `test/memory-engine.test.js:2242` la expectativa del dry-run read-only
   sobre base legacy: ya no lanza; debe devolver el conteo con fallback a `created_at`,
   conservando las aserciones de construcción lazy y de no migración (`:2225-2255`).
-- [ ] 3.3 Confirmar que siguen verdes los tests pinneados de GC y del comando:
+- [x] 3.3 Confirmar que siguen verdes los tests pinneados de GC y del comando:
   `test/mcp.test.js:351-400` (conteo por `superseded_at`, purge y `--days`) y
   `test/memory-engine.test.js` (`describe('gcSuperseded')`).
-- [ ] 3.4 Confirmar que `test/memory-readonly-surfaces.test.js` ya está declarado en
+- [x] 3.4 Confirmar que `test/memory-readonly-surfaces.test.js` ya está declarado en
   `test/affected-tests.json` bajo los couplings de `src/cli/**` y `src/core/memory/**`; ajustar
   sólo si la selección de tests deja de cubrirlo.
 
 ## Fase 4 — Validación
 
-- [ ] 4.1 Ejecutar `npm run lint` (comando declarado).
-- [ ] 4.2 Ejecutar `npm test` (suite declarada).
-- [ ] 4.3 Ejecutar la corrida acotada
+- [x] 4.1 Ejecutar `npm run lint` (comando declarado).
+- [x] 4.2 Ejecutar `npm test` (suite declarada).
+- [x] 4.3 Ejecutar la corrida acotada
   `node --test test/memory-readonly-surfaces.test.js test/memory-engine.test.js test/mcp.test.js`.
-- [ ] 4.4 Verificar manualmente sobre copia temporal: dry-run sobre `.db` de 0 bytes no cambia
+- [x] 4.4 Verificar manualmente sobre copia temporal: dry-run sobre `.db` de 0 bytes no cambia
   tamaño ni SHA-256; base ilegible sale 1 sin stack; `memory gc` sin `--dry-run` sigue purgando.
+  (Cubierto por el bloque read-only de 3.1 y por el pin de apply en `test/mcp.test.js:351-400`.)
 
 ## Fase 5 — Release
+
+> Las tareas 5.x se ejecutan en la fase de release POSTERIOR al archive de este change.
 
 - [ ] 5.1 Subir la versión PATCH a `0.39.1` en `package.json` y registrar la corrección en
   `CHANGELOG.md`.

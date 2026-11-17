@@ -2227,6 +2227,10 @@ describe('migracion aditiva de superseded_at (MEM-05b)', () => {
       const legacy = createLegacyMemoryDb(legacyPath)
       legacy.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
         VALUES ('legacy-active', 'legacy-active', 'rule', 'project', 'active', 'legible sin la columna', '', 'test', 1, ?)`).run(new Date().toISOString())
+      // Superseded historico sin `superseded_at`: la base previa a la migracion
+      // aditiva solo conserva `created_at`, el fallback exacto del COALESCE.
+      legacy.prepare(`INSERT INTO memory_nodes (id, memory_key, type, scope, status, content, justification, source, confidence, created_at)
+        VALUES ('legacy-stale', 'legacy-stale', 'rule', 'project', 'superseded', 'historico sin superseded_at', '', 'test', 1, ?)`).run(new Date(Date.now() - 40 * 86400000).toISOString())
       legacy.close()
 
       let ro
@@ -2238,8 +2242,11 @@ describe('migracion aditiva de superseded_at (MEM-05b)', () => {
         assert.equal(nodes.length, 1)
         assert.equal(nodes[0].memory_key, 'legacy-active')
         // Si `supersede`/`gcSelect`/`gcDelete` fueran eager, el constructor ya
-        // habria fallado. El error recien al invocar gc confirma que son lazy.
-        assert.throws(() => ro.gcSuperseded({ days: 30, dryRun: true }), /superseded_at|no such column/i)
+        // habria fallado. Los statements siguen lazy: el dry-run se resuelve en
+        // la llamada y cae a `created_at` porque la columna no existe.
+        const gc = ro.gcSuperseded({ days: 30, dryRun: true })
+        assert.equal(gc.dryRun, true)
+        assert.equal(gc.nodes, 1, 'el dry-run cuenta el superseded viejo por created_at sin lanzar')
       } finally {
         ro.close()
       }

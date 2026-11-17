@@ -5697,6 +5697,9 @@ async function judgeCommand(args) {
   // `shell: true` es necesario por el shim de `npx`/`.cmd` en win32 y es seguro porque
   // el argv es constante: no hay argumentos del usuario.
   const resolved = buildJudgeCommand({ binPath, probe: false })
+  // El aviso de egreso precede al spawn: en la corrida humana el usuario se entera antes
+  // de que el binario externo pueda enviar contenido del repo a un tercero.
+  if (!asJson) console.log(JUDGE_EGRESS_WARNING)
   const run = spawnSync(resolved.cmd, resolved.args, {
     encoding: 'utf8',
     shell: true,
@@ -5725,7 +5728,6 @@ async function judgeCommand(args) {
     console.log(JSON.stringify(envelope))
     console.error(judgeSummary(envelope))
   } else {
-    console.log(JUDGE_EGRESS_WARNING)
     if (envelope.report) console.log(envelope.report.trimEnd())
     if (envelope.stderr) console.error(envelope.stderr.trimEnd())
     console.log(judgeSummary(envelope))

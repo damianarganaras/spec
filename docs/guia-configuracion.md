@@ -84,6 +84,21 @@ az extension add --name azure-devops
 Con `azure.enabled: false` (o sin `.ancletorc`), los flujos tratan cada request como sin
 Work Item y `ancleto-pr` usa GitHub.
 
+### Juez advisory (opcional)
+
+El juez semántico `ancleto judge` es opt-in y viene apagado. En `.ancletorc`:
+
+```json
+{
+  "judge": {
+    "enabled": false,
+    "timeoutMs": 120000
+  }
+}
+```
+
+`judge.enabled` default `false`; `judge.timeoutMs` default 120000.
+
 ## 5. Generar el contexto técnico inicial
 
 ```bash

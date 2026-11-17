@@ -111,3 +111,9 @@ forma byte-idéntica: no hay estado persistido, ni migración, ni residuo activo
 - El criterio falsable de valor (AUC >= 0.75 sobre requirements correctos, saboteados, refactors
   y un caso donde el keyword search falla) **no está medido** en este entorno: no hay cuenta ni
   `TYPESAFE_AI_API_KEY`. Por eso el default es off y `--require` no se usa en el CI del repo.
+- `npx` no es offline: consulta el registry y escribe su caché fuera del repo (`~/.npm/_npx`), así
+  que `--require` sin binario local necesita red.
+- En win32 `resolveBin` usa `where`, que también busca el directorio actual: un `jev-spec.cmd`
+  commiteado en el repo se resolvería y se spawnearía con `shell: true` si `judge.enabled` está
+  activo.
+- El override persistente del timeout es `judge.timeoutMs`; `--timeout <ms>` gana por corrida.

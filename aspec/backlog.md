@@ -686,12 +686,12 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **npm:** 0.39.0 (latest), gitHead 918534c, tarball 200 (239745 bytes)
 - **Ramas:** development → main (merge --no-ff), sin force
 
-## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 pendiente)
+## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 publicada y verificada)
 
 - **Change:** `memory-gc-dry-run-readonly`, implementado, testeado y archivado en `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`. Commits f91eeed (implementación), 87fc013 (frontera de error + sonda de columnas compartida), 0c3ef28 (tests + bookkeeping) y e11956b (archive).
 - **Conformidad sin delta:** `specs merge` reportó `changed:false` y `specs check` quedó 22 requirements / 0 errores; no se agregó ni modificó ninguna spec canónica.
 - **Comportamiento:** `memory gc --dry-run` sobre base sin esquema ahora abre en modo read-only estricto — no muta la base, no ejecuta DDL y no crea `.ancleto/` ni una DB. Degrada `no-db`/`uninitialized` con exit `0` e ilegible con exit `1`; conserva el fallback legacy de `created_at`.
-- **Release:** PATCH `0.39.1` **pendiente** — no hay tag, publish run ni versión en npm de esta release.
+- **Release:** PATCH `0.39.1` **publicada y verificada** - tag anotado `v0.39.1` -> `6168965`; publish run `44113826461` success; npm `@ancleto/spec@0.39.1` (`latest`), gitHead `6168965`, tarball HTTP 200.
 - **Cierre:** queda cerrado el follow-up declarado por `memory-readonly-surfaces`; sin ítems residuales asociados.
 
 ## Relación con 0.39.1

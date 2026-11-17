@@ -24,6 +24,15 @@ import { escapeRe, matchesGlob } from '../core/discovery-glob.js'
 import { computeAffectedSet } from '../core/affected-set.js'
 import { planTestSelection } from '../core/test-selection.js'
 import { mergeSpecText } from '../core/specs-merge.js'
+import {
+  PROBE_TIMEOUT_MS,
+  JEV_SPEC_VERSION,
+  resolveJudgeConfig,
+  resolveJudgeTimeoutMs,
+  buildJudgeCommand,
+  mapToolOutcome,
+  buildJudgeReport
+} from '../core/judge.js'
 import { readProjectTier, buildRepomixArgs, tierTokenBudget } from '../core/repomix-tier.js'
 import { showBanner, selectOption, selectMultiple, stopBanner } from './ui.js'
 import { TIERS, TIER_CHAINS, declaredModelIds, resolveTierModels, loadModelCatalog, modelIdsFromCatalog, gratisModel, isKnownGratisModel, freeTierOnPrimary } from '../core/tier-models.js'
@@ -123,6 +132,9 @@ ancleto memory doctor [--rebuild] Diagnostica .ancleto/memory.db (integridad, FT
   ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE
                                         expone searchMemory, recordRule y recordDecision
   ancleto check                         Verifica integridad de archivos instalados vs manifiesto
+  ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]
+                                       Senal semantica advisory opcional (jev-spec@0.4.1;
+                                       opt-in con judge.enabled en .ancletorc)
   ancleto export [--tar <file>]         Empaqueta lo portable del proyecto (bundle + manifest.json sin rutas)
   ancleto import <bundle> [--repair]    Restaura el bundle regenerando el MCP local; --repair solo arregla entradas rotas
   ancleto import --repair               Repara in place la config MCP rota: command ausente/vacio o ruta absoluta inexistente; un nombre simple no es roto
@@ -157,6 +169,13 @@ const SPECS_USAGE = `ancleto specs check [--change <name>] [--json]
   Valida keywords canonicos (### Requirement:, WHEN, THEN) en aspec/specs
 ancleto specs merge --change <slug> [--dry-run] [--json]
   Aplica el delta del change sobre los specs canonicos existentes`
+
+const JUDGE_USAGE = `ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]
+  Corre el juez semantico externo jev-spec (opcional, advisory y opt-in).
+  Requiere judge.enabled: true en .ancletorc; sin eso reporta skipped y sale 0.
+  --require    exige una sonda de version verde y sale 2 si el juez no corrio
+  --dry-run    imprime el comando resuelto sin ejecutar el binario
+  --timeout    milisegundos maximos de la corrida (entero > 0)`
 
 // Uso de `projects`, compartido por la ayuda (STDOUT) y el error de subcomando
 // desconocido (stderr) para que no derive.
@@ -5512,6 +5531,210 @@ async function doctorCommand() {
   process.exit(fatal ? 1 : 0)
 }
 
+const JUDGE_FLAGS = new Set(['--json', '--require', '--dry-run', '--timeout'])
+const JUDGE_EGRESS_WARNING =
+  'ancleto judge: aviso: el binario externo jev-spec puede enviar contenido del repo a un servicio de terceros; la credencial se lee de TYPESAFE_AI_API_KEY'
+
+function parseJudgeArgs(args) {
+  const options = { asJson: false, requireFlag: false, dryRun: false, timeoutMs: null }
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (!JUDGE_FLAGS.has(arg)) return { error: `flag desconocido: ${arg}` }
+    if (arg === '--json') options.asJson = true
+    else if (arg === '--require') options.requireFlag = true
+    else if (arg === '--dry-run') options.dryRun = true
+    else {
+      const raw = args[i + 1]
+      i += 1
+      const value = raw === undefined ? NaN : Number(raw)
+      if (raw === undefined || raw.startsWith('-') || !Number.isInteger(value) || value <= 0) {
+        return { error: '--timeout requiere un entero mayor a 0' }
+      }
+      options.timeoutMs = value
+    }
+  }
+  return { options }
+}
+
+function judgeTool(source) {
+  return { name: 'jev-spec', version: JEV_SPEC_VERSION, source: source || null }
+}
+
+function judgeSummary(envelope) {
+  const reason = envelope.reason ? ` (${envelope.reason})` : ''
+  return `ancleto judge: ${envelope.state}${reason} exit ${envelope.exitCode}`
+}
+
+// `ancleto judge` es read-only, advisory y opt-in. Envuelve el binario externo
+// `jev-spec` sin pasarle argumentos del usuario: el argv lo arma `src/core/judge.js`
+// con constantes del release. No escribe archivos, no lee la credencial y no toca
+// `check`, `specs merge` ni el archive.
+async function judgeCommand(args) {
+  const parsed = parseJudgeArgs(args)
+  if (parsed.error) {
+    console.error(`ancleto: judge: ${parsed.error}`)
+    console.error(`ancleto: uso: ${JUDGE_USAGE.split('\n')[0]}`)
+    process.exitCode = 1
+    return
+  }
+
+  const { asJson, requireFlag, dryRun, timeoutMs: timeoutOverride } = parsed.options
+  const startedAt = Date.now()
+  const manifest = await readAncletorc(process.cwd())
+  const config = resolveJudgeConfig(manifest)
+  const timeoutMs = resolveJudgeTimeoutMs(manifest, timeoutOverride)
+  const elapsed = () => Date.now() - startedAt
+
+  // --dry-run se resuelve antes del chequeo de `enabled` porque su contrato es mostrar
+  // el comando aun con el juez deshabilitado. Resolver el binario solo consulta el PATH
+  // (where/which); el binario y `jev-spec.config.ts` NO se ejecutan.
+  if (dryRun) {
+    const binPath = resolveBin('jev-spec')
+    const resolved = buildJudgeCommand({ binPath, probe: false })
+    const command = [resolved.cmd, ...resolved.args].join(' ')
+    const exitCode = requireFlag ? 2 : 0
+    const envelope = buildJudgeReport({
+      state: 'skipped',
+      reason: 'dry-run',
+      exitCode,
+      enabled: config.enabled,
+      tool: judgeTool(binPath ? 'path' : 'npx'),
+      durationMs: elapsed(),
+      command,
+      requireFlag
+    })
+    if (asJson) {
+      console.log(JSON.stringify(envelope))
+      console.error(judgeSummary(envelope))
+    } else {
+      console.log(command)
+    }
+    process.exitCode = exitCode
+    return
+  }
+
+  // Deshabilitado: no se resuelve el binario ni se spawnea nada.
+  if (!config.enabled) {
+    const exitCode = requireFlag ? 2 : 0
+    const envelope = buildJudgeReport({
+      state: 'skipped',
+      reason: 'disabled',
+      exitCode,
+      enabled: false,
+      tool: judgeTool(null),
+      durationMs: elapsed(),
+      requireFlag
+    })
+    if (asJson) {
+      console.log(JSON.stringify(envelope))
+      console.error(judgeSummary(envelope))
+    } else {
+      console.log('ancleto judge: skipped (disabled): habilita judge.enabled en .ancletorc')
+    }
+    process.exitCode = exitCode
+    return
+  }
+
+  const binPath = resolveBin('jev-spec')
+  const source = binPath ? 'path' : 'npx'
+
+  if (requireFlag) {
+    const probe = buildJudgeCommand({ binPath, probe: true })
+    const probeResult = spawnSync(probe.cmd, probe.args, {
+      encoding: 'utf8',
+      shell: true,
+      timeout: PROBE_TIMEOUT_MS,
+      maxBuffer: 10 * 1024 * 1024,
+      windowsHide: true
+    })
+    const probeTimedOut = Boolean(probeResult.error && probeResult.error.code === 'ETIMEDOUT')
+    const probeOk = !probeResult.error && !probeTimedOut && probeResult.status === 0
+    if (!probeOk) {
+      const envelope = buildJudgeReport({
+        state: 'unavailable',
+        reason: 'probe-failed',
+        exitCode: 2,
+        enabled: true,
+        tool: judgeTool(source),
+        durationMs: elapsed(),
+        stdout: probeResult.stdout,
+        stderr: probeResult.stderr,
+        requireFlag
+      })
+      if (asJson) {
+        console.log(JSON.stringify(envelope))
+        console.error(judgeSummary(envelope))
+      } else {
+        console.log(judgeSummary(envelope))
+      }
+      process.exitCode = 2
+      return
+    }
+  }
+
+  // Sin `--require` y sin binario resoluble no hay forma barata y offline de verificar
+  // el setup, y no se cae a `npx`: eso resolveria por red un comando advisory.
+  if (!requireFlag && binPath === null) {
+    const envelope = buildJudgeReport({
+      state: 'unavailable',
+      reason: 'tool-unavailable',
+      exitCode: 0,
+      enabled: true,
+      tool: judgeTool(null),
+      durationMs: elapsed(),
+      requireFlag
+    })
+    if (asJson) {
+      console.log(JSON.stringify(envelope))
+      console.error(judgeSummary(envelope))
+    } else {
+      console.log('ancleto judge: unavailable (tool-unavailable): instala jev-spec o usa --require')
+    }
+    process.exitCode = 0
+    return
+  }
+
+  // `shell: true` es necesario por el shim de `npx`/`.cmd` en win32 y es seguro porque
+  // el argv es constante: no hay argumentos del usuario.
+  const resolved = buildJudgeCommand({ binPath, probe: false })
+  // El aviso de egreso precede al spawn: en la corrida humana el usuario se entera antes
+  // de que el binario externo pueda enviar contenido del repo a un tercero.
+  if (!asJson) console.log(JUDGE_EGRESS_WARNING)
+  const run = spawnSync(resolved.cmd, resolved.args, {
+    encoding: 'utf8',
+    shell: true,
+    timeout: timeoutMs,
+    maxBuffer: 10 * 1024 * 1024,
+    windowsHide: true
+  })
+  const timedOut = Boolean(run.error && run.error.code === 'ETIMEDOUT')
+  const outcome = mapToolOutcome({
+    spawnError: Boolean(run.error),
+    timedOut,
+    status: run.status
+  })
+  const envelope = buildJudgeReport({
+    state: outcome.state,
+    reason: outcome.state === 'broken' ? 'tool-error' : null,
+    exitCode: outcome.exitCode,
+    enabled: true,
+    tool: judgeTool(source),
+    durationMs: elapsed(),
+    stdout: run.stdout,
+    stderr: run.stderr,
+    requireFlag
+  })
+  if (asJson) {
+    console.log(JSON.stringify(envelope))
+    console.error(judgeSummary(envelope))
+  } else {
+    if (envelope.report) console.log(envelope.report.trimEnd())
+    if (envelope.stderr) console.error(envelope.stderr.trimEnd())
+    console.log(judgeSummary(envelope))
+  }
+  process.exitCode = outcome.exitCode
+}
+
 const [cmd, ...rest] = process.argv.slice(2)
 
 // Uso por subcomando para el guard central de `--help`/`-h`. Sólo cubre comandos que
@@ -5529,6 +5752,7 @@ ancleto import --repair               Repara in place la config MCP rota`,
   export: 'ancleto export [--tar <file>]         Empaqueta lo portable del proyecto (bundle + manifest.json sin rutas)',
   mcp: 'ancleto mcp                           Servidor MCP de memoria propia (stdio) para tu IDE',
   specs: SPECS_USAGE,
+  judge: JUDGE_USAGE,
   projects: PROJECTS_USAGE
 }
 
@@ -5564,6 +5788,9 @@ if (helpText) {
     break
   case 'check':
     await checkCommand()
+    break
+  case 'judge':
+    await judgeCommand(rest)
     break
   case 'specs':
     await specsCommand(rest)

@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-17T12:12:05Z
-pluginVersion: 0.39.1
+generatedAt: 2026-11-17T19:19:50.070Z
+pluginVersion: 0.40.0
 skillVersion: '2.3'
 ---
 
@@ -16,6 +16,8 @@ skillVersion: '2.3'
 - **git** para el repo y para `machine-env` (detección de EOL/exclusiones); opcional en runtime.
 - **Repomix** solo para discovery: se resuelve por `PATH` o vía `npx repomix@1.18.0`
   (`src/cli/index.js` → `runRepomix`).
+- **jev-spec 0.4.1** solo si se habilita el juez advisory: se resuelve por `PATH` o vía
+  `npx jev-spec@0.4.1`; el repo no lo declara como dependencia.
 - **opencode** solo para `stats`/`stats failures` (lee su base) y para el refresco manual del
   catálogo de modelos.
 - En Windows el shell declarado es PowerShell 5.1 y `rg` no está disponible: usar `Select-String`.
@@ -40,6 +42,7 @@ skillVersion: '2.3'
 | Validar specs canónicos | `ancleto specs check [--change <name>] [--json]` | `src/cli/index.js` |
 | Aplicar delta de specs | `ancleto specs merge --change <slug> [--dry-run] [--json]` | `src/cli/index.js`, `src/core/specs-merge.js` |
 | Diagnóstico de entorno y MCP | `ancleto doctor` | `src/cli/index.js` |
+| Juez semántico advisory (opt-in) | `ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]` | `src/cli/index.js` → `judgeCommand`, `src/core/judge.js` |
 | Estado advisory de la memoria | `ancleto memory status [--json]` | `src/cli/index.js`, `src/core/memory/status.js` |
 | Descubrir catálogo (dry-run) | `node scripts/refresh-model-catalog.mjs` | `scripts/refresh-model-catalog.mjs` |
 | Reemplazar snapshot del catálogo | `node scripts/refresh-model-catalog.mjs --write` | `scripts/refresh-model-catalog.mjs` |
@@ -210,6 +213,15 @@ del paquete instalado.
   `gratis` (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin
   `--tier` usa `normal`, mientras el default publicado de `agents/*.md` es
   `opencode-go/deepseek-v4.1-flash` (`README.md`).
+- **Juez advisory (0.40.0)**: `ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]` es
+  read-only y opt-in. Corre sólo con `judge.enabled: true` en `.ancletorc`; sin eso reporta
+  `skipped` y sale 0. `judge.timeoutMs` (entero > 0, default 120000) se overrida por `--timeout`.
+  `--require` exige una sonda `--version` exitosa y convierte el exit de `skipped`/`unavailable` en
+  2; `--dry-run` imprime el comando resuelto sin ejecutar el binario ni su config. Estados
+  `pass`/`fail`/`broken`/`skipped`/`unavailable` con exit 0/1/2, y envelope `--json` estable sin
+  `schemaVersion`. La credencial se lee sólo de `TYPESAFE_AI_API_KEY` y el aviso de egreso a
+  terceros precede al spawn. Nunca bloquea `check`, `specs merge` ni el archive. Sin schema,
+  PRAGMAs ni `ruleVersion`.
 - **Conformidad (0.21.0)**: no hay comando CLI de archive. El flujo es agent-driven y se apoya en
   `agents/orchestrator.md` y las skills de triage/archive/workflow/continue; `ancleto specs check`
   sólo valida que los specs canónicos usen los keywords literales en inglés. Un change de
@@ -273,6 +285,7 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 | Variable / archivo | Propósito | Referencia |
 |---|---|---|
 | `.ancletorc` | Manifiesto de instalación y configuración del proyecto (`agent`, `language`, `profile`, `discovery`, `memory`, `gratisModel`, `azure`, `installedPaths`, `version`) | `src/cli/index.js` → `readAncletorc` |
+| `.ancletorc` → `judge` | `judge.enabled` (booleano, default `false`, opt-in del juez advisory) y `judge.timeoutMs` (entero > 0, default 120000); clave aditiva que `install`/`update`/`upgrade` preservan y `check` ignora | `src/core/judge.js` → `resolveJudgeConfig`, `resolveJudgeTimeoutMs` |
 | `.ancletorc` → `memory.criticalKeys` | Lista curada de `memory_key` que el renderer del working-context inyecta primero y que la puerta de criticidad protege en `merge`/`consolidate --apply`; ausente, no-array o con entradas no-string equivale a `[]` | `src/core/memory/working-context.js` → `readCriticalMemoryKeys` |
 | `.opencode/.ancleto-tier` | Último tier aplicado; lo lee `check` y `repomix-tier` | `src/cli/index.js`, `src/core/repomix-tier.js` |
 | `ANCLETO_OPENCODE_DB` | Ruta alternativa a la base de sesiones de opencode para `stats` | `src/cli/index.js` → `opencodeDbPath` |
@@ -281,14 +294,15 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 | `XDG_CONFIG_HOME` | Base de la config global (`~/.config` por defecto) | `src/cli/index.js` → `globalConfigDir` |
 | `NO_COLOR` | Desactiva color en la UI de terminal | `src/cli/index.js` |
 | `AZURE_DEVOPS_ORG_URL`, `AZURE_DEVOPS_PAT` | MCP Azure DevOps opcional (deshabilitado en este repo) | `PRODUCT.md`, `src/cli/index.js` |
+| `TYPESAFE_AI_API_KEY` | Credencial del juez externo `jev-spec`; sólo se lee del entorno, nunca de `.ancletorc` ni se emite en `--json` (valor omitido) | `src/core/judge.js`, `src/cli/index.js` → `judgeCommand` |
 | `.ancleto/machine-env.md` | Artefacto local generado; no se versiona | `src/core/machine-env.js` |
 
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.39.1)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.40.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.39.1`.
+  la fija `package.json` = `0.40.0`.
 
 ## Entorno de máquina
 

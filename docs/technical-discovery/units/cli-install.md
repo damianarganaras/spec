@@ -1,7 +1,7 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, ruteo MCP por host, diagnósticos check/doctor, portabilidad host-neutral, reparación MCP sin escritura, merge de specs, entorno de máquina y materialización de los contratos de conformidad"
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, nota de compresión, tiers, aviso free-on-primary, ruteo MCP por host, diagnósticos check/doctor, portabilidad host-neutral, reparación MCP sin escritura, merge de specs, entorno de máquina, materialización de los contratos de conformidad y juez semántico advisory"
 covers:
   - instalación
   - AGENT_TARGETS
@@ -52,9 +52,12 @@ covers:
   - superficies de lectura read-only
   - openReadableMemory
   - hasMemorySchema
-sources: ["src/cli/index.js", "src/core/discovery-glob.js", "src/core/test-selection.js", "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection", "aspec/changes/archive/2026-11-10-spec-seed-freshness-detector", "aspec/changes/archive/2026-11-11-active-delta-structure-guard", "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material", "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths", "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "src/core/memory/status.js", "src/core/memory/doctor.js", "src/core/memory/database.js", "aspec/changes/archive/2026-11-16-memory-gap-declaration", "aspec/changes/archive/2026-11-16-memory-readonly-surfaces", "test/memory-readonly-surfaces.test.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-08-archive-sync-via-specs-merge", "aspec/changes/archive/2026-11-08-cli-subcommand-help-guards", "aspec/changes/archive/2026-11-08-agent-model-minimo-migration", "aspec/changes/archive/2026-11-08-specs-merge-canonical-guard", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-17T12:12:05Z
-pluginVersion: 0.39.1
+  - juez advisory
+  - jev-spec
+  - judge
+sources: ["src/core/judge.js", "src/cli/index.js", "src/core/discovery-glob.js", "src/core/test-selection.js", "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection", "aspec/changes/archive/2026-11-10-spec-seed-freshness-detector", "aspec/changes/archive/2026-11-11-active-delta-structure-guard", "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material", "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths", "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "src/core/memory/status.js", "src/core/memory/doctor.js", "src/core/memory/database.js", "aspec/changes/archive/2026-11-16-memory-gap-declaration", "aspec/changes/archive/2026-11-16-memory-readonly-surfaces", "test/memory-readonly-surfaces.test.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-08-archive-sync-via-specs-merge", "aspec/changes/archive/2026-11-08-cli-subcommand-help-guards", "aspec/changes/archive/2026-11-08-agent-model-minimo-migration", "aspec/changes/archive/2026-11-08-specs-merge-canonical-guard", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
+generatedAt: 2026-11-17T19:19:50.070Z
+pluginVersion: 0.40.0
 skillVersion: '2.3'
 ---
 
@@ -512,6 +515,33 @@ Reglas del merge (`src/core/specs-merge.js`):
 `specsCheckCommand` sigue siendo el oráculo de keywords: `specIssues` exige `### Requirement:` y,
 si hay `#### Scenario:`, exige `WHEN`/`THEN` y rechaza otros `####` que no sean `Scenario`. Un spec
 traducido o con headings no canónicos puede fallar el merge; `specs check` es la señal temprana.
+
+### Juez semántico advisory (0.40.0)
+
+`judgeCommand` (`src/cli/index.js`) envuelve el binario externo `jev-spec@0.4.1`; el adaptador
+`src/core/judge.js` es puro (no lee `.ancletorc`, no resuelve PATH, no spawnea) y expone
+`resolveJudgeConfig`, `resolveJudgeTimeoutMs`, `buildJudgeCommand`, `mapToolOutcome` y
+`buildJudgeReport`.
+
+1. **Config**: `resolveJudgeConfig(manifest)` habilita sólo con `judge.enabled === true`; cualquier
+   otra forma degrada a `disabled`. `resolveJudgeTimeoutMs` usa `judge.timeoutMs` (entero > 0) o el
+   default 120000; `--timeout <ms>` gana si el CLI ya lo validó.
+2. **Flags**: `parseJudgeArgs` acepta sólo `--json`, `--require`, `--dry-run` y `--timeout <ms>`;
+   cualquier otro flag es error de uso (exit 1). `--dry-run` se resuelve antes de mirar `enabled` y
+   sólo consulta el PATH: imprime `cmd + args` sin ejecutar el binario ni `jev-spec.config.ts`.
+3. **Ejecución**: sin `enabled` no se resuelve el binario ni se spawnea (`skipped`, exit 0 o 2 con
+   `--require`). Con `--require` se hace antes una sonda `--version` de 30 s; si falla se reporta
+   `unavailable`/`probe-failed` con exit 2. Sin `--require` y sin binario local no se cae a `npx`:
+   `unavailable`/`tool-unavailable` con exit 0. Si hay binario (o `--require` ya probó `npx`), el
+   aviso de egreso precede al spawn y `spawnSync` usa `shell: true` (necesario para shims de win32)
+   con argv constante, timeout y `maxBuffer` de 10 MB.
+4. **Resultado**: `mapToolOutcome` mapea exit 0→`pass`, 1→`fail`, cualquier otro/spawn error/
+   timeout→`broken`; `buildJudgeReport` emite un envelope estable (`state`, `reason`, `exitCode`,
+   `enabled`, `tool`, `durationMs`, `report`, `stderr`, `required` y `command` sólo en `--dry-run`),
+   sin `schemaVersion`, entorno ni credenciales. `process.exitCode` sigue al estado.
+5. **Límites**: no escribe archivos, no lee `TYPESAFE_AI_API_KEY`, no parsea el reporte y no es gate
+   de `check`, `specs merge` ni archive. `upgrade`/`install` preservan la clave `judge` como
+   aditiva.
 
 ## Rutas por host (`AGENT_TARGETS`)
 

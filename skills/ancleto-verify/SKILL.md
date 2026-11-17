@@ -1,8 +1,8 @@
 ---
 name: ancleto-verify
-description: Verify an implementation against its change artifacts (completeness, correctness, coherence). Use before archiving a change. Captures architectural findings into persistent memory. No external binaries required.
+description: Verify an implementation against its change artifacts (completeness, correctness, coherence). Use before archiving a change. Captures architectural findings into persistent memory. No external binaries required; the optional semantic judge is opt-in.
 license: MIT
-compatibility: No external binaries required. Works with any agent runtime.
+compatibility: No external binaries required. Works with any agent runtime. An optional external judge (jev-spec) runs only when explicitly enabled in .ancletorc.
 metadata:
   author: ancleto
   version: '1.0'
@@ -48,7 +48,17 @@ A non-canonical spec cannot be matched for coverage or merged reliably, so repor
 
 **Patterns:** review new code against project patterns (naming, dirs, style). Significant deviation → SUGGESTION: "Code pattern deviation: `<details>`" + "Consider following project pattern: `<example>`".
 
-### 5. Capture durable findings into persistent memory
+### 5. Optional semantic judge (advisory)
+
+Skip this step unless `.ancletorc` declares `judge.enabled: true`. When it does, run `ancleto judge --json` (from a source checkout, `node src/cli/index.js judge --json`) and record its result as **advisory evidence only**:
+
+- A `pass` NEVER satisfies the CRITICAL relevance check of step 2; it is a signal, never proof of conformity.
+- A `fail` is at most a WARNING; it does not block the archive.
+- `skipped` or `unavailable` is not a failure; note it and continue.
+
+The judge is opt-in and off by default, so its absence is the expected state.
+
+### 6. Capture durable findings into persistent memory
 
 Verify is not a second promotion point. **Do not promote the change's `## Decisiones`**: the archive gate owns that and will promote the approved blocks when the change is archived. The shape of `## Decisiones` is defined in `agents/spec-writer.md`; reference it, do not restate it here.
 
@@ -59,7 +69,7 @@ Only record a durable finding that is **not** a decision of this change and that
 
 Every write carries a normalized `refs:` block; the engine rejects a capture write without it. A `decision` requires at least one `spec:` or `change:` ref; a `rule` requires at least one `path:`, `spec:` or `change:` ref. Record only what saves future investigation, never workflow meta and never the outcome of the verification itself. If nothing meets the bar, record nothing and say so.
 
-### 6. Verification Report
+### 7. Verification Report
 
 ```
 ## Verification Report: <change-name>
@@ -78,7 +88,7 @@ Every write carries a normalized `refs:` block; the engine rejects a capture wri
 2. **WARNING** (should fix): spec divergences, missing scenario coverage, and legacy design contradictions when a legacy `design.md` is present.
 3. **SUGGESTION** (nice to fix): pattern inconsistencies, minor improvements.
 
-**Assessment:** CRITICAL → "X critical issue(s) found. Fix before archiving."; warnings only → "No critical issues. Y warning(s) to consider. Ready for archive (with noted improvements)."; clean → "All checks passed. Ready for archive." Note memories recorded in step 5 (or "No findings recorded").
+**Assessment:** CRITICAL → "X critical issue(s) found. Fix before archiving."; warnings only → "No critical issues. Y warning(s) to consider. Ready for archive (with noted improvements)."; clean → "All checks passed. Ready for archive." Note memories recorded in step 6 (or "No findings recorded").
 
 ## Heuristics
 

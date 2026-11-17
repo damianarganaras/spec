@@ -1,7 +1,7 @@
 # Backlog — @ancleto/spec
 
 > Follow-ups que todavía no son un change aspec. Un change activo en `aspec/changes/` es la unidad de ejecución; este archivo lista lo que falta decidir/arrancar.
-> Última actualización: 2026-11-17 (follow-up `memory gc --dry-run` **cerrado y archivado**: change `memory-gc-dry-run-readonly` archivado en `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`; conformidad sin delta (`specs merge` changed:false; `specs check` 22/0); commits f91eeed (impl), 87fc013 (frontera de error + sonda compartida), 0c3ef28 (tests + bookkeeping), e11956b (archive); `memory gc --dry-run` abre read-only (no muta, no crea `.ancleto/`), degrada no-db/uninitialized -> 0, ilegible -> 1 y conserva el fallback legacy `created_at`; release PATCH 0.39.1 en curso (version `0.39.1` en package.json y CHANGELOG; todavia sin tag, publish run ni npm); ver `## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 pendiente)` y `## Relación con 0.39.1`) — Antes, 2026-11-16 (superficies de lectura de memoria estrictamente read-only sobre base sin esquema: change memory-readonly-surfaces archivado; context/export ya no migran una base de 0 bytes; list/merge --dry-run/repair refs degradan sin stack; export sin esquema sale 1; doctor sobre base ilegible sin stack; garantia sha256+sqlite_master; 0.39.0 publicada y verificada (tag v0.39.0 -> merge 918534c; publish run 43995807583 success; npm 0.39.0 latest, gitHead 918534c, tarball 200)) — Antes, 2026-11-16 (CH-01/T27 **cerrado y archivado**: memoria de producto tras clone/worktree con DB vacía — `ancleto memory status` read-only/advisory declara `expected`/`gap`/`recovery` y rompe el silencio; `memory doctor` ya no crashea con base sin esquema; la mitad «reindex desde proposals» sigue refutada; 0.38.0 **publicada y verificada** — release MINOR: tag anotado `v0.38.0` → merge `ab751cc`; publish run `43889435565` (success); npm `0.38.0` (`latest`, gitHead `ab751cc`) y tarball HTTP 200 (238493 bytes); canary del workflow 404 en sus 3 intentos por propagación de CDN (no bloqueante, esperado); ver `## Cierre de deuda — CH-01/T27 memoria de producto tras clone/worktree (2026-11-16, 0.38.0 publicada y verificada)` y `## Relación con 0.38.0`). Antes, 2026-11-16 (CH-09b **cerrado y archivado**: auto-reparación de refs con `memory repair refs` — dry-run por defecto, selección fail-closed, allowlist del motivo `inexistente`, gate de criticidad reusado y rollback probado; 0.37.0 publicada en npm; ver `## Cierre de deuda — CH-09b auto-reparación de refs`). Antes, 2026-11-15 (CH-09a **cerrado y archivado**: puerta de criticidad en `memory consolidate --apply` y `memory merge` con `criticalAffected`, `--force-critical`, rechazo atómico exit `2` y fuente en `.ancletorc` → `memory.criticalKeys`; CH-09e **diferido sin consumidor**; **publicado en 0.36.0** — tag anotado `v0.36.0` → `2fe4f4e`, publish run `43776309490` (success), npm `latest` 0.36.0 (gitHead `2fe4f4e`); ver `## Cierre de deuda — CH-09a puerta de criticidad` y `## Relación con 0.36.0`). Antes, 2026-11-15 (cierre de MEM-05c/d/e y CH-09f/g: GC por instantes con `julianday` — defecto de frontera de segundo corregido —, limitación de plan y `status='deleted'` documentados, `memory curate` bajo un snapshot único de lectura y gramática de refs con fuente única; M-1 «integridad del motor de memoria» cerrado; sin versión, tag ni run todavía; propuesta `jev-spec-advisory-judge` agregada para review — juez semántico opcional JEV, **sin implementar**, ver "Propuestas en revisión"; evaluación del proposal JEV registrada: no se implementa ahora, reservado para Lucas). Antes, 2026-11-13 (0.34.0: CH-08/MEM-06 entregó su única pieza sound — `memory import --dry-run [--json]` con clasificación read-only por memory_key (nuevo/identico/divergente/tombstone) y acción predicha (insert/supersede/skip) compartiendo una única función de decisión con el import real; reindex desde proposals y gate fail-closed refutados con evidencia; 0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
+> Última actualización: 2026-11-17 (juez `jev-spec-advisory-judge`: **implementado y archivado** en `aspec/changes/archive/2026-11-17-jev-spec-advisory-judge/`; commits b6cc91c (impl: `ancleto judge`, `src/core/judge.js`), 7d91c0f (aviso de egreso antes del spawn + docs), d9d8742 (tests offline + delta), 55d6765 (merge del delta a `aspec/specs/cli-diagnostics/spec.md` + archive); requirement `Juez externo advisory opcional` agregado a `cli-diagnostics` (11 requirements, 0 deletions); 10 decisiones promovidas a memoria del repo (scope project); tests `test/judge.test.js` 26/26, suite completa 1483 tests 0 fail, lint OK, `format` not-configured, `typecheck` n/a; valor NO medido empíricamente — pendientes AUC con cuenta real y release 0.40.0). Antes, mismo día: follow-up `memory gc --dry-run` **cerrado y archivado**: change `memory-gc-dry-run-readonly` archivado en `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`; conformidad sin delta (`specs merge` changed:false; `specs check` 22/0); commits f91eeed (impl), 87fc013 (frontera de error + sonda compartida), 0c3ef28 (tests + bookkeeping), e11956b (archive); `memory gc --dry-run` abre read-only (no muta, no crea `.ancleto/`), degrada no-db/uninitialized -> 0, ilegible -> 1 y conserva el fallback legacy `created_at`; release PATCH 0.39.1 **publicada y verificada** (merge `6168965`; tag anotado `v0.39.1` -> `6168965`; publish run `44113826461` completed/success; npm `@ancleto/spec@0.39.1` latest, gitHead `6168965`, tarball HTTP 200); ver `## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 publicada y verificada)` y `## Relación con 0.39.1`) — Antes, 2026-11-16 (superficies de lectura de memoria estrictamente read-only sobre base sin esquema: change memory-readonly-surfaces archivado; context/export ya no migran una base de 0 bytes; list/merge --dry-run/repair refs degradan sin stack; export sin esquema sale 1; doctor sobre base ilegible sin stack; garantia sha256+sqlite_master; 0.39.0 publicada y verificada (tag v0.39.0 -> merge 918534c; publish run 43995807583 success; npm 0.39.0 latest, gitHead 918534c, tarball 200)) — Antes, 2026-11-16 (CH-01/T27 **cerrado y archivado**: memoria de producto tras clone/worktree con DB vacía — `ancleto memory status` read-only/advisory declara `expected`/`gap`/`recovery` y rompe el silencio; `memory doctor` ya no crashea con base sin esquema; la mitad «reindex desde proposals» sigue refutada; 0.38.0 **publicada y verificada** — release MINOR: tag anotado `v0.38.0` → merge `ab751cc`; publish run `43889435565` (success); npm `0.38.0` (`latest`, gitHead `ab751cc`) y tarball HTTP 200 (238493 bytes); canary del workflow 404 en sus 3 intentos por propagación de CDN (no bloqueante, esperado); ver `## Cierre de deuda — CH-01/T27 memoria de producto tras clone/worktree (2026-11-16, 0.38.0 publicada y verificada)` y `## Relación con 0.38.0`). Antes, 2026-11-16 (CH-09b **cerrado y archivado**: auto-reparación de refs con `memory repair refs` — dry-run por defecto, selección fail-closed, allowlist del motivo `inexistente`, gate de criticidad reusado y rollback probado; 0.37.0 publicada en npm; ver `## Cierre de deuda — CH-09b auto-reparación de refs`). Antes, 2026-11-15 (CH-09a **cerrado y archivado**: puerta de criticidad en `memory consolidate --apply` y `memory merge` con `criticalAffected`, `--force-critical`, rechazo atómico exit `2` y fuente en `.ancletorc` → `memory.criticalKeys`; CH-09e **diferido sin consumidor**; **publicado en 0.36.0** — tag anotado `v0.36.0` → `2fe4f4e`, publish run `43776309490` (success), npm `latest` 0.36.0 (gitHead `2fe4f4e`); ver `## Cierre de deuda — CH-09a puerta de criticidad` y `## Relación con 0.36.0`). Antes, 2026-11-15 (cierre de MEM-05c/d/e y CH-09f/g: GC por instantes con `julianday` — defecto de frontera de segundo corregido —, limitación de plan y `status='deleted'` documentados, `memory curate` bajo un snapshot único de lectura y gramática de refs con fuente única; M-1 «integridad del motor de memoria» cerrado; sin versión, tag ni run todavía; propuesta `jev-spec-advisory-judge` agregada para review — juez semántico opcional JEV, **sin implementar**, ver "Propuestas en revisión"; evaluación del proposal JEV registrada: no se implementa ahora, reservado para Lucas). Antes, 2026-11-13 (0.34.0: CH-08/MEM-06 entregó su única pieza sound — `memory import --dry-run [--json]` con clasificación read-only por memory_key (nuevo/identico/divergente/tombstone) y acción predicha (insert/supersede/skip) compartiendo una única función de decisión con el import real; reindex desde proposals y gate fail-closed refutados con evidencia; 0.33.1: memory doctor --rebuild usa el helper de transacción (deuda de 0.33.0 cerrada); CH-04 cerrado en 0.33.0: serialización de escritores de `.ancleto/memory.db` con retry acotado, error `MEMORY_DB_BUSY` y oráculo offline; el mutex de SQLite ya existía y la premisa "sin mutex ejecutable" quedó refutada en parte; 0.32.0: selección de tests por affected-set con plan `ancleto affected --tests`, manifiesto cerrado y consumidor fail-closed; 0.31.0: set crítico de working-context por `memory.criticalKeys`; 0.30.1: caché del RegExp del matcher de config.exclude).
 
 ## Prioridad de ejecución
 
@@ -15,35 +15,42 @@
 
 > Nota: el paso 2 (0.21.0) quedó **cerrado en 0.23.0** por `portability-legacy-bundle-advisory`; su mitad `.opencode/*` fue refutada. La nota histórica de diferirlo ya no aplica.
 
-## Propuestas en revisión (sin change aprobado)
+## Change archivado — implementado, pendiente medición de valor y release
 
 ### `jev-spec-advisory-judge` — juez semántico opcional (JEV), 2026-11-15
 
-Propuesta: `aspec/changes/jev-spec-advisory-judge/proposal.md` (sólo `proposal.md`; sin `design.md`,
-`tasks.md` ni delta). **Estado: pendiente de review; no implementada.**
+Artefactos archivados en `aspec/changes/archive/2026-11-17-jev-spec-advisory-judge/` (`proposal.md`,
+`design.md`, `tasks.md` y delta de `cli-diagnostics`). **Estado: implementado y archivado (2026-11-17);
+commits b6cc91c (impl: `ancleto judge`, `src/core/judge.js`), 7d91c0f (aviso de egreso antes del spawn
++ docs), d9d8742 (tests offline + delta), 55d6765 (merge del delta a
+`aspec/specs/cli-diagnostics/spec.md` + archive); requirement `Juez externo advisory opcional`
+agregado a `cli-diagnostics` (11 requirements, 0 deletions); 10 decisiones promovidas a memoria del
+repo (scope project); `test/judge.test.js` 26/26, suite completa 1483 tests 0 fail, lint OK (`format`
+not-configured, `typecheck` n/a).** Default off y advisory; el valor no está medido empíricamente.
 
 - **Qué propone:** un adaptador opcional y advisory a `jev-spec` (Jev de TypeSafe) para que cualquier
   repo que use ancleto pueda correr preguntas `noul`/`choice`/`score` por requirement y obtener
   probabilidades calibradas en 70–400 ms, en lugar de depender sólo del juicio del agente en
   `/cleto-verify` (`skills/ancleto-verify/SKILL.md:37` es búsqueda de keywords).
 - **Cómo:** binario externo pinneado resuelto por `PATH`/`npx` (mismo patrón que Repomix,
-  `src/cli/index.js:2589-2597`); `ancleto judge` read-only; `judge.enabled` en `.ancletorc` default
+  `src/cli/index.js:2598-2617`); `ancleto judge` read-only; `judge.enabled` en `.ancletorc` default
   `false`; exit `0` pass/skip · `1` assertion fallida · `2` setup roto; `--require` para CI. Sin red
   en `src/` y sin dependencias de runtime.
 - **Dónde NO:** archive/conformidad (`aspec/specs/prompt-contracts/spec.md:1222-1228` prohíbe un
   segundo gate y presentar la relevancia como prueba mecánica), `ancleto check`, y deltas de changes
   activos en v1 (sus rutas se mueven al archivar).
-- **Antes de implementar:** spike con 1 capability, 5 rubrics en inglés, 2 probes que **fallen**
-  contra código roto a propósito, y medición de costo/latencia. Sin probes verdes no se habilita
-  `--require`.
-- **Decisiones que necesita el review (6):** nombre del comando (`judge` vs `verify --judge` vs
-  `/cleto-judge`); default de `enabled`; pin del tool vs `jev-latest`; capability nueva `spec-judge`
-  vs delta de `cli-diagnostics`; alcance v1 (canónicas vs `--change`); y si el producto acepta una
-  feature que requiere una cuenta paga de un tercero.
-- **Si se aprueba:** `design.md` + `specs/spec-judge/spec.md` + `tasks.md`; release minor (nuevo
-  subcomando + superficie de skills), con `format`/`typecheck` no configurados como hoy.
+- **Medición de valor (pendiente):** NO medida empíricamente (sin cuenta TypeSafe). Criterio falsable
+  documentado: AUC ≥ 0.75 sobre 5 correctos vs 5 saboteados + 2 refactors + 1 caso donde el keyword
+  search falla. Sin esa corrida no se habilita `--require` en CI.
+- **Decisiones resueltas (2026-11-17):** subcomando `ancleto judge` (sin `/cleto-*` ni
+  `verify --judge`); `judge.enabled` default false e `init` no lo habilita; pin exacto
+  `jev-spec@0.4.1`; delta `ADDED` de `cli-diagnostics` (una capability nueva no es archivable por el
+  flujo); v1 sólo specs canónicas y sin argumentos de usuario al binario; cuenta paga aceptada sólo
+  como opt-in advisory, con criterio falsable en `design.md` §10 y hoy no medible.
+- **Pendiente:** sólo (a) la medición AUC con cuenta real y (b) la release MINOR 0.40.0 (nuevo
+  subcomando + superficie de skills); `--require` queda fuera del CI de este repo hasta medir el valor.
 
-#### Evaluación (2026-11-15) — no se implementa ahora
+#### Evaluación (2026-11-15) — histórica, superada por la implementación (2026-11-17)
 
 **Veredicto:** propuesta bien acotada y respetuosa de los contratos vigentes, pero es una
 **decisión de producto** (cuenta paga de un tercero, el código sale de la máquina, OSS de un solo
@@ -58,7 +65,9 @@ explícito (spike de 5 pasos), tests offline con mock y degrada a `skipped`.
 
 - **Premisa falsa:** el proposal dice "este repositorio no tiene `.ancletorc`". En el working tree
   sí existe (`azure`, `discovery`, `memory`, `version: 0.28.0`). Si la intención era "no está
-  versionado", corregir el texto; la lectura tolerante sigue siendo válida.
+  versionado", corregir el texto; la lectura tolerante sigue siendo válida. **Resuelto:** el encabezado
+  de `proposal.md` declara que el repo sí tiene `.ancletorc` y por qué la lectura tolerante sigue siendo
+  necesaria.
 - **`jev-spec.config.ts` se ejecuta** (también en `--dry-run`): riesgo en CI / PRs de forks.
 - **Sin redacción de secretos:** `codePaths` puede incluir `.env`; las exclusiones quedan a cargo
   del usuario.
@@ -66,19 +75,20 @@ explícito (spike de 5 pasos), tests offline con mock y degrada a `skipped`.
 - **Costo/latencia** (70–400 ms, ~$0.042/M tokens) son del propio `jev-spec`, no doc oficial de
   TypeSafe: verificar con una corrida real.
 - **`## Decisiones` no canónico** (`**memory_key:**` sin bullet, `Estado: propuesto`): al pasar a
-  change, el gate de promoción exige la forma canónica (bullets, `Estado: aprobado`).
+  change, el gate de promoción exige la forma canónica (bullets, `Estado: aprobado`). **Resuelto:** las
+  decisiones usan bullets canónicos con `Estado: aprobado`.
 - **Superficie de producto:** subcomando `judge` + capability `spec-judge` + tocar
-  `skills/ancleto-verify`/`ancleto-apply`/`ancleto-workflow` ⇒ MINOR + `ancleto upgrade`.
+  `skills/ancleto-verify`/`ancleto-apply`/`ancleto-workflow` ⇒ MINOR + `ancleto upgrade`. **Resuelto:**
+  el delta es `ADDED` de `cli-diagnostics` y no se toca `commands/`.
 
-**Decisiones abiertas (6):** nombre del comando (`judge` vs `verify --judge` vs `/cleto-judge`),
-default de `enabled`, pin del tool vs `jev-latest`, capability `spec-judge` vs delta de
-`cli-diagnostics`, alcance v1 (canónicas vs `--change`), y si el producto acepta una cuenta paga de
-un tercero.
+**Decisiones abiertas:** ninguna — las seis se resolvieron el 2026-11-17 (ver `Decisiones resueltas`
+arriba): nombre del comando, default de `enabled`, pin del tool, capability, alcance v1 y cuenta paga
+como opt-in advisory.
 
-**Primer paso si se retoma:** correr el spike (5 pasos) sobre `cli-diagnostics` con 5 rubrics en
-inglés + 2 probes que fallen contra código roto; medir si agrega información que `ancleto-verify`
-no tiene. Sólo con verdes se habilita `--require` y se decide la cuenta paga. Si el spike da rojo,
-se archiva como refutada.
+**Pendiente real:** sólo el criterio de valor (AUC ≥ 0.75 sobre `cli-diagnostics` con 5 rubrics en
+inglés + 2 probes que fallen contra código roto), bloqueado porque no hay cuenta `TYPESAFE_AI_API_KEY`,
+y el release 0.40.0. Sólo con verdes se habilita `--require`; si el spike da rojo, se archiva como
+refutada.
 
 > **Actualización 0.22.1 (2026-11-06):** se cerró la deuda residual de CH-06a (ítems 1–4) y se documentó el ítem 5 como exclusión explícita; también quedó fijado el orden archive → merge. CH-06b sigue **diferido** (proyección de tests incompleta, sin consumidor probado) y CH-07 sigue **bloqueado por CH-00**.
 
@@ -130,7 +140,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
   `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/`.
   **MEM-05f cerrado en 0.23.0** (`template-legacy-eol-preservation`): `reconcileLegacyBlocks` preserva el EOL por línea y el estado de newline final. **MEM-05g diferido**: inalcanzable — 0 code fences dentro de todo bloque `LOCKED` de `templates/`, `profiles/test/templates/` y `AGENTS.md`/`PRODUCT.md` raíz; sólo input artesanal dispara el cierre temprano.
 - **P2 colaboración:** CH-08/MEM-06 entregó en 0.34.0 el dry-run clasificado; el reindex desde proposals y el gate fail-closed quedaron refutados con evidencia. `import --dry-run` por key, `--on-conflict`, `formatVersion`, tombstones, reindex desde proposals (T25, T27, T10/T26/M08/M10). **T25 (`formatVersion`) refutado en 0.23.0**: los exports viejos ya importan sin pérdida, `importNodes` ignora claves extra y exige `Array.isArray`, y ningún consumidor lee una versión; se reabre cuando CH-08 defina el lector. **T27/CH-01 cerrado en 0.38.0** por la mitad viva (`ancleto memory status`); el reindex sigue refutado.
-- **P2 · superficies de lectura read-only (cerrado en 0.39.0):** el change `memory-readonly-surfaces` está archivado: `context`/`export` ya no migran una base de 0 bytes, `list`/`merge --dry-run`/`repair refs` degradan sin stack y `export` sin esquema sale 1 (mapa de exit en `## Cierre de deuda — superficies de lectura de memoria estrictamente read-only`). Follow-up `memory gc --dry-run` **cerrado y archivado el 2026-11-17** (`memory-gc-dry-run-readonly`): abre read-only (no muta, no crea `.ancleto/`), degrada no-db/uninitialized -> 0, ilegible -> 1 y conserva el fallback legacy `created_at`; ver `## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 pendiente)`.
+- **P2 · superficies de lectura read-only (cerrado en 0.39.0):** el change `memory-readonly-surfaces` está archivado: `context`/`export` ya no migran una base de 0 bytes, `list`/`merge --dry-run`/`repair refs` degradan sin stack y `export` sin esquema sale 1 (mapa de exit en `## Cierre de deuda — superficies de lectura de memoria estrictamente read-only`). Follow-up `memory gc --dry-run` **cerrado y archivado el 2026-11-17** (`memory-gc-dry-run-readonly`): abre read-only (no muta, no crea `.ancleto/`), degrada no-db/uninitialized -> 0, ilegible -> 1 y conserva el fallback legacy `created_at`; ver `## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 publicada y verificada)`.
 - **P2 motor/host:** T20 idempotencia **cerrado en 0.23.0** (`memory-record-idempotency`); #4 exclusión mutua de escritores **cerrado en 0.33.0** (`ch-04-memory-writer-serialization`); T30 V1/V2, CH-10 matriz de hosts, #6, #18 pendientes.
 - **P2 · M-1 «integridad del motor de memoria»: CERRADO el 2026-11-15** con los cinco sub-ítems MEM-05c/d/e y CH-09f/g. Sin afirmar todavía versión, tag ni run: eso corresponde a la fase de release. Detalle y evidencia en `## Cierre de deuda M-1 — integridad del motor de memoria (2026-11-15, sin release)`.
 - **Deuda:** MEM-05c–e y CH-09f/g cerrados el 2026-11-15 (ver `## Cierre de deuda M-1`); CH-09a cerrado el 2026-11-15 (publicado en 0.36.0; ver `## Cierre de deuda — CH-09a puerta de criticidad`); MEM-05f cerrado en 0.23.0; MEM-05g diferido; CH-09b cerrado el 2026-11-16 (auto-reparación de refs; 0.37.0 publicada en npm; ver `## Cierre de deuda — CH-09b auto-reparación de refs`); CH-09c–d pendientes; CH-09e diferido sin consumidor; CH-09h refutado.
@@ -663,7 +673,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Delta `memory-ops`:** `## ADDED` mergeado a `aspec/specs/memory-ops/spec.md` — 22 requirements / 203 escenarios.
 - **Validaciones:** `npm test` 1445 pass / 0 fail; `npm run lint` OK; format `not-configured`; typecheck `n/a`.
 - **Memoria:** 2 decisiones promovidas con `scope: project` (`memory-readonly-surfaces-no-migrate`, `memory-schemaless-degrades-as-no-db`) + 1 regla de cierre (`memory-readonly-precheck-before-eager-engine`).
-- **Follow-up `memory gc --dry-run`: CERRADO el 2026-11-17** (misma clase de superficie de lectura, `src/cli/index.js:3110`, fuera del alcance enumerado del change), change `memory-gc-dry-run-readonly` archivado en `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`; ver `## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 pendiente)`.
+- **Follow-up `memory gc --dry-run`: CERRADO el 2026-11-17** (misma clase de superficie de lectura, `src/cli/index.js:3110`, fuera del alcance enumerado del change), change `memory-gc-dry-run-readonly` archivado en `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`; ver `## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 publicada y verificada)`.
 
 ## Relación con 0.39.0
 
@@ -686,26 +696,54 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **npm:** 0.39.0 (latest), gitHead 918534c, tarball 200 (239745 bytes)
 - **Ramas:** development → main (merge --no-ff), sin force
 
-## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 pendiente)
+## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 publicada y verificada)
 
 - **Change:** `memory-gc-dry-run-readonly`, implementado, testeado y archivado en `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`. Commits f91eeed (implementación), 87fc013 (frontera de error + sonda de columnas compartida), 0c3ef28 (tests + bookkeeping) y e11956b (archive).
 - **Conformidad sin delta:** `specs merge` reportó `changed:false` y `specs check` quedó 22 requirements / 0 errores; no se agregó ni modificó ninguna spec canónica.
 - **Comportamiento:** `memory gc --dry-run` sobre base sin esquema ahora abre en modo read-only estricto — no muta la base, no ejecuta DDL y no crea `.ancleto/` ni una DB. Degrada `no-db`/`uninitialized` con exit `0` e ilegible con exit `1`; conserva el fallback legacy de `created_at`.
-- **Release:** PATCH `0.39.1` **pendiente** — no hay tag, publish run ni versión en npm de esta release.
+- **Release:** PATCH `0.39.1` **publicada y verificada** - tag anotado `v0.39.1` -> `6168965`; publish run `44113826461` success; npm `@ancleto/spec@0.39.1` (`latest`), gitHead `6168965`, tarball HTTP 200.
 - **Cierre:** queda cerrado el follow-up declarado por `memory-readonly-surfaces`; sin ítems residuales asociados.
 
 ## Relación con 0.39.1
 
-0.39.1 (2026-11-17) contiene un change archivado (`memory-gc-dry-run-readonly`) y es una conformidad **sin delta**: no se agregó ni modificó ninguna spec canónica. Release PATCH (runtime + test). Estado: **en curso** — versión `0.39.1` en `package.json` y `CHANGELOG.md`; todavía sin tag, publish run ni versión en npm.
+0.39.1 (2026-11-17) contiene un change archivado (`memory-gc-dry-run-readonly`) y es una conformidad **sin delta**: no se agregó ni modificó ninguna spec canónica. Release PATCH (runtime + test). Estado: **publicada y verificada**.
 
 **Hecho:**
 
-- **`memory-gc-dry-run-readonly` (conformidad, sin delta), archivado en `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`:** corrige `memory gc --dry-run` para que sea estrictamente read-only — no muta la base, no ejecuta DDL y no crea `.ancleto/` ni una DB. Detalle en `## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 pendiente)`.
+- **`memory-gc-dry-run-readonly` (conformidad, sin delta), archivado en `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`:** corrige `memory gc --dry-run` para que sea estrictamente read-only — no muta la base, no ejecuta DDL y no crea `.ancleto/` ni una DB. Detalle en `## Cierre de deuda - memory gc --dry-run read-only (2026-11-17, PATCH 0.39.1 publicada y verificada)`.
 - **Conformidad:** `specs merge` reportó `changed:false` y `specs check` quedó 22 requirements / 0 errores.
 - **Degradación:** `no-db`/`uninitialized` -> exit `0`, base ilegible -> exit `1`; se conserva el fallback legacy de `created_at`.
-- **Commits:** f91eeed (implementación), 87fc013 (frontera de error + sonda de columnas compartida), 0c3ef28 (tests + bookkeeping), e11956b (archive), 2407d1f (release: `package.json`/`package-lock.json`/`CHANGELOG.md` en `0.39.1`).
+- **Commits:** f91eeed (implementación), 87fc013 (frontera de error + sonda de columnas compartida), 0c3ef28 (tests + bookkeeping), e11956b (archive), b4be4a7 (backlog: cierre del ítem), 2407d1f (release: `package.json`/`package-lock.json`/`CHANGELOG.md` en `0.39.1`), 2fc5e06 (backlog: nota de release), 138a806 (seed de discovery).
 
 **Release:**
 
-- **Versión:** `0.39.1` en `package.json` y `CHANGELOG.md` (commit 2407d1f).
-- **Pendiente:** tag, publish run y publicación en npm — no existen todavía.
+- **Merge a main:** `chore(release): merge 0.39.1` -> commit `6168965` (`--no-ff`); `main == origin/main == 6168965`.
+- **Tag:** `v0.39.1` (anotado) -> `6168965`.
+- **Publish:** run `44113826461`, completed/success (~2m22s).
+- **npm:** `@ancleto/spec@0.39.1` (`latest`), gitHead `6168965`, tarball `https://registry.npmjs.org/@ancleto/spec/-/spec-0.39.1.tgz` HTTP 200.
+
+## Juez semántico advisory opcional (2026-11-17, implementado y archivado, sin release)
+
+- **Change:** `jev-spec-advisory-judge` (funcional, delta `ADDED` en `cli-diagnostics`), **implementado y archivado** en `aspec/changes/archive/2026-11-17-jev-spec-advisory-judge/`. Commits b6cc91c (implementación: subcomando `ancleto judge`, `src/core/judge.js`), 7d91c0f (aviso de egreso antes del spawn + docs), d9d8742 (tests offline + delta), 55d6765 (merge del delta a `aspec/specs/cli-diagnostics/spec.md` + archive). Spec: requirement `Juez externo advisory opcional` agregado a `aspec/specs/cli-diagnostics/spec.md` (11 requirements, 0 deletions). Tests: `test/judge.test.js` 26/26, suite completa 1483 tests 0 fail, lint OK; `format` not-configured, `typecheck` n/a. 10 decisiones promovidas a memoria del repo (scope project).
+- **Superficie:** `ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]`, read-only, advisory y default off; `judge.enabled: true` en `.ancletorc` lo habilita. Envuelve `jev-spec@0.4.1` (PATH o `npx -y`), no pasa argumentos del usuario, no lee `TYPESAFE_AI_API_KEY` y no escribe archivos.
+- **Contrato:** `pass`=0, `fail`=1, `broken`=2, `skipped`/`unavailable`=0 (2 con `--require`); `--dry-run` imprime el comando sin ejecutar el binario ni `jev-spec.config.ts`; sin `--require` y sin binario reporta `unavailable`/`tool-unavailable` sin spawnear `npx`.
+- **Integración:** paso opcional en `skills/ancleto-verify/SKILL.md` (advisory: un `pass` no satisface el CRITICAL de relevancia; un `fail` es WARNING) y una mención en `skills/ancleto-workflow/SKILL.md`. `check`, `specs merge` y el archive no lo invocan.
+- **Docs:** `README.md` y `docs/jev-advisory-judge.md`.
+- **Review de artifacts (2026-11-17):** cerrados los hallazgos del contrato —`judge.timeoutMs` (`> 0`, default 120000, `--timeout` lo sobrescribe), la garantía de red/escritura acotada a `ancleto` (el binario y `npx` pueden consultar el registry y cachear fuera del repo), el vocabulario cerrado de `reason`, `--json` en todos los caminos de la máquina de estados vs errores de uso por stderr con exit 1, y `tool.source` del `--dry-run`.
+- **Pendiente:** sólo (a) la medición AUC con cuenta real (valor NO medido empíricamente; criterio falsable: AUC ≥ 0.75 sobre 5 correctos vs 5 saboteados + 2 refactors + 1 caso donde el keyword search falla) y (b) la release 0.40.0. El delta ya está sincronizado (`tool-unavailable`) y los tests offline están verdes.
+
+## Relación con 0.40.0
+
+0.40.0 (2026-11-17) contiene un change archivado (`jev-spec-advisory-judge`). Release MINOR (runtime + spec + docs): agrega el subcomando `ancleto judge`, advisory, read-only y opt-in (default off). Estado: **contenido implementado y archivado; release aún no ejecutada** — este apartado no afirma tag, run de publish ni publicación en npm.
+
+**Hecho:**
+
+- **`jev-spec-advisory-judge` (funcional, delta `ADDED` en `cli-diagnostics`), archivado en `aspec/changes/archive/2026-11-17-jev-spec-advisory-judge/`:** `ancleto judge` corre preguntas `noul`/`choice`/`score` por requirement y es advisory/read-only. Detalle en `## Juez semántico advisory opcional (2026-11-17, implementado y archivado, sin release)`.
+- **Spec:** requirement `Juez externo advisory opcional` en `aspec/specs/cli-diagnostics/spec.md` (11 requirements, 0 deletions).
+- **Sin dependencias de runtime nuevas:** el binario externo `jev-spec@0.4.1` se resuelve en runtime por `PATH`/`npx`; no se agrega red en `src/` ni paquetes al `package.json`.
+- **Opt-in:** `judge.enabled` default `false`; `--dry-run` no ejecuta `jev-spec.config.ts` (imprime el comando sin spawnear el binario); el juez no es gate de archive/conformidad.
+- **Compatibilidad:** sin cambios en el schema, los PRAGMAs persistentes ni `ruleVersion` de la memoria; un binario 0.39.1 lee el mismo estado.
+
+**Pendiente:**
+
+- **Medición de valor AUC con cuenta TypeSafe real** (posterior a 0.40.0): valor NO medido empíricamente; criterio falsable AUC ≥ 0.75 sobre 5 correctos vs 5 saboteados + 2 refactors + 1 caso donde el keyword search falla. Sin esa corrida no se habilita `--require` en CI.

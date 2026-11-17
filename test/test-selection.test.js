@@ -560,6 +560,7 @@ describe('test-selection — pins por clase de escape (repo real)', () => {
   it('un cambio al CLI selecciona la suite que lo spawnea sin importarlo', () => {
     const plan = planTestSelection({ rootDir: ROOT, seeds: ['src/cli/index.js'] })
     assertCovered(plan, 'test/cli.test.js')
+    assertCovered(plan, 'test/judge.test.js')
     assertCovered(plan, 'test/test-selection.test.js')
     // `test/cli.test.js` también lo cubre el coupling `src/**`; specs-merge sólo
     // entra por `src/cli/**`, así que un typo en ese trigger rompe este pin.
@@ -578,6 +579,11 @@ describe('test-selection — pins por clase de escape (repo real)', () => {
   it('un fixture de memoria selecciona la suite que lo lee sin importarlo', () => {
     const plan = planTestSelection({ rootDir: ROOT, seeds: ['test/fixtures/memory/seed.json'] })
     assertCovered(plan, 'test/memory-fixtures.test.js')
+  })
+
+  it('el binario mock del juez selecciona la suite que lo spawnea', () => {
+    const plan = planTestSelection({ rootDir: ROOT, seeds: ['test/fixtures/jev-spec-mock.mjs'] })
+    assertCovered(plan, 'test/judge.test.js')
   })
 
   it('el manifiesto real selecciona la suite que lo consume', () => {

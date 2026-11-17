@@ -374,6 +374,10 @@ ancleto import <bundle> [--repair] | ancleto import --repair
 
 ancleto check             # Verifica la integridad de la instalación (faltantes / huérfanos)
 
+ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]
+                          # Juez semántico externo opcional (jev-spec@0.4.1):
+                          # advisory y opt-in con judge.enabled en .ancletorc
+
 ancleto specs check [--change <nombre>] [--json]
                           # Valida keywords canónicos en aspec/specs y en los deltas de un change
 
@@ -418,6 +422,17 @@ ancleto mcp               # Servidor MCP de memoria propia (stdio): lo consume t
 ancleto discovery [--compress] [--include <glob>] [--ignore <glob>] [--token-budget <n>]
                           # Empaqueta el repo con Repomix según tu tier
 ```
+
+---
+
+## Juez semántico opcional (advisory)
+
+`ancleto judge` envuelve el binario externo `jev-spec` (pin `jev-spec@0.4.1`) para producir una señal semántica por requirement. Es **opt-in y está deshabilitado por defecto**: solo corre con `judge.enabled: true` en `.ancletorc`; sin eso reporta `skipped` y sale 0.
+
+- Es **advisory**: nunca es gate de `check`, de `specs merge` ni del archive.
+- La credencial se lee solo de `TYPESAFE_AI_API_KEY`, nunca de `.ancletorc`.
+- Toda corrida humana que invoca el binario avisa que el código puede enviarse a un servicio de terceros; `--dry-run` imprime el comando sin ejecutar el binario ni su config.
+- Exit codes, límites y rollback: [`docs/jev-advisory-judge.md`](docs/jev-advisory-judge.md).
 
 ---
 

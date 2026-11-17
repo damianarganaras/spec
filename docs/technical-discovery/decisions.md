@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-17T12:12:05Z
-pluginVersion: 0.39.1
+generatedAt: 2026-11-17T19:19:50.070Z
+pluginVersion: 0.40.0
 skillVersion: '2.3'
 ---
 
@@ -32,7 +32,7 @@ skillVersion: '2.3'
 - **Assets instalables = superficie de producto**: cambios en `agents/`, `commands/`, `skills/`,
   `templates/` o `profiles/` alteran lo que reciben todos los proyectos usuarios (`PRODUCT.md`).
 
-## Modelos y tiers (estado 0.39.1)
+## Modelos y tiers (estado 0.40.0)
 
 ### Tabla y cadenas
 
@@ -1500,9 +1500,42 @@ Change archivado base: `aspec/changes/archive/2026-11-16-memory-readonly-surface
 - **Release 0.39.0 publicada**: tag anotado `v0.39.0` → merge `918534c`, publish run
   `43995807583` (success) y `@ancleto/spec@0.39.0` como `latest` en npm (`gitHead` `918534c`,
   tarball HTTP 200 de 239.745 bytes); `aspec/backlog.md` registra el dato.
-- **Release 0.39.1 en el repo**: `chore(release): 0.39.1` (`2407d1f`) + nota de backlog (`2fc5e06`),
-  con bump en `package.json`/`package-lock.json`/`CHANGELOG.md`. En este checkout no se observó tag
-  `v0.39.1` ni evidencia de publicación en npm; no se afirma una release publicada.
+- **Release 0.39.1 publicada**: tag anotado `v0.39.1` → merge `6168965`, publish run
+  `44113826461` (success) y `@ancleto/spec@0.39.1` (`latest`) en npm (`gitHead` `6168965`, tarball
+  HTTP 200); `aspec/backlog.md` registra el dato.
+- **Release 0.40.0**: `package.json` = `0.40.0` (commit de release `9d2d235`). Agrega el juez
+  advisory descripto abajo; no se verificó en esta generación la publicación en npm ni el tag.
+
+## Juez semántico advisory (0.40.0)
+
+Reglas y contratos declarados en `src/core/judge.js`, `src/cli/index.js` → `judgeCommand`,
+`docs/jev-advisory-judge.md`, `aspec/specs/cli-diagnostics/spec.md` y `CHANGELOG.md`:
+
+- **Advisory, nunca gate**: `check`, `specs merge` y el archive no invocan el juez ni leen
+  `judge.enabled`; su salida y exit code son idénticos con el juez encendido o apagado. Un `pass`
+  no prueba conformidad y un `fail` no bloquea el archive. La señal de `skills/ancleto-verify` es
+  evidencia advisory, no requisito.
+- **Opt-in estricto**: sólo corre con `judge.enabled === true`; ausente, `false`, `.ancletorc`
+  inválido o inexistente degradan a `skipped` (exit 0, o 2 con `--require`). `ancleto init` no lo
+  habilita. `judge` es una clave aditiva que `install`/`update`/`upgrade` preservan.
+- **Aislamiento del adaptador**: `src/core/judge.js` no lee `.ancletorc`, no resuelve el binario y
+  no spawnea; recibe el manifiesto y el binario ya resueltos. El argv es constante del release
+  (`jev-spec check` o `--version` para la sonda) y jamás incluye argumentos del usuario. El reporte
+  no se parsea: sólo se consume el exit code y se transportan `stdout`/`stderr` verbatim.
+- **Estados y exit codes**: `pass` (binario 0) → 0; `fail` (binario 1) → 1; `broken` (otro exit,
+  spawn error o timeout) → 2; `skipped` (deshabilitado o `--dry-run`) → 0; `unavailable` (binario
+  no resuelto o sonda roja) → 0. `--require` no reescribe el estado: sólo convierte el exit de
+  `skipped`/`unavailable` en 2, y hace una sonda `--version` (30 s) antes de correr. Sin `--require`
+  y sin binario local no se cae a `npx`: se reporta `unavailable` sin spawnear.
+- **Credencial y egreso**: la API key se lee sólo de `TYPESAFE_AI_API_KEY` (valor omitido), nunca de
+  `.ancletorc` —porque `export` empaqueta ese archivo— ni del envelope `--json`, logs o errores.
+  Toda corrida humana avisa, antes del spawn, que el binario puede enviar contenido del repo a un
+  servicio de terceros; ancleto no promete redacción y las exclusiones dependen del `codePaths` del
+  usuario. `--dry-run` no ejecuta el binario ni `jev-spec.config.ts`.
+- **Riesgos aceptados**: el criterio de valor (AUC ≥ 0,75) no está medido por falta de cuenta;
+  `npx` requiere red y escribe caché en `~/.npm/_npx`; `resolveBin` usa `where` en win32 y también
+  busca el directorio actual; el pin de un OSS de un solo mantenedor se sube a mano y un binario
+  ausente o cambiado degrada a `unavailable`; el resultado es señal, no veredicto.
 
 ## Lint y publicación
 

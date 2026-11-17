@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-17T12:12:05Z
-pluginVersion: 0.39.1
+generatedAt: 2026-11-17T19:19:50.070Z
+pluginVersion: 0.40.0
 skillVersion: '2.3'
 ---
 
@@ -25,6 +25,9 @@ funciones (`PRODUCT.md`, `README.md`):
    por tier.
 3. **Recordar**: memoria persistente local de reglas y decisiones en `.ancleto/memory.db`
    (SQLite + FTS5 vía `node:sqlite`), expuesta como tools MCP.
+4. **Evaluar (opcional)**: desde 0.40.0, `ancleto judge` envuelve el binario externo `jev-spec`
+   para producir una señal semántica advisory por requirement. Es opt-in, read-only y no es gate
+   de `check`, `specs merge` ni del archive.
 
 Restricciones declaradas: **cero dependencias de runtime** y **Node ≥ 24** (`PRODUCT.md`,
 `package.json`). Todo el producto se distribuye como assets Markdown instalables más un CLI ESM.
@@ -44,6 +47,7 @@ src/core/
   affected-set.js       grafo de imports y clausura de dependientes
   test-selection.js     plan de tests sobre el affected-set + manifiesto cerrado
   specs-merge.js        merge puro de delta specs sobre specs canónicos (0.22.0)
+  judge.js              adaptador puro al juez externo jev-spec: config, argv y envelope (0.40.0)
   machine-env.js        detección y render de .ancleto/machine-env.md
   adapters/frontmatter.js  adaptación pura de frontmatter por host (+ frontmatterValue)
   memory/               motor, DB, tools, MCP, doctor, curaduría, snapshot, working-context
@@ -69,6 +73,10 @@ test/                   suite node --test (content guards incluidos)
   plan y serialización sin disco); `src/cli/index.js` resuelve rutas, lee/escribe y emite `--json`.
   `specsCommand` sólo desvía el token `merge`; `specs check` y `specs` sin argumentos conservan su
   comportamiento.
+- **Juez externo aislado (0.40.0)**: `src/core/judge.js` es puro respecto de filesystem y red
+  (config, timeout, argv constante, mapeo de exit y envelope); el CLI lee `.ancletorc`, resuelve el
+  binario y decide cuándo spawneár. El reporte del binario no se parsea y el juez nunca se consulta
+  desde `check`, `specs merge` ni el archive.
 - **Estado local por proyecto**: `.ancletorc` (manifiesto), `.opencode/.ancleto-tier` (tier
   aplicado), el layout nativo de assets por host (`.opencode`, `.claude`, `.agents`,
   `.commandcode`, `.github`, `.cursor`, `.roo`), `.ancleto/memory.db` y
@@ -88,6 +96,7 @@ test/                   suite node --test (content guards incluidos)
 | Adaptación por host | Frontmatter de agents y layout de assets | `src/core/adapters/frontmatter.js`, `src/cli/index.js` |
 | Ruteo MCP por host | Descriptor único de destino/esquema; escritura por host activo e intención de bundle | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | Diagnósticos | Oráculo de instalación (`check`, salud MCP host-aware) y entorno/MCP (`doctor`) | `src/cli/index.js` → `checkCommand`, `doctorCommand` |
+| Juez advisory (0.40.0) | Adaptador read-only/opt-in a `jev-spec@0.4.1`: estados, exit codes, `--json`, `--require`, `--dry-run`, `--timeout`; nunca gate | `src/core/judge.js`, `src/cli/index.js` → `judgeCommand` |
 | Conformidad SDD | Discriminador conformidad-vs-delta y archive sin delta | `agents/orchestrator.md`, `skills/triage-clarifier`, `skills/ancleto-workflow`, `skills/ancleto-continue`, `aspec/specs/prompt-contracts/spec.md` |
 | Merge de specs | Aplicación determinística de `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED` por título exacto; `--dry-run`, `--json` y fail-closed; 0.22.1 agrega preámbulo H1 estructural, contenedor `archive` fail-closed y espaciado único de `ADDED`; 0.24.0 rechaza headings de sección de delta en la canónica para los cuatro tipos; desde 0.25.0 es la única vía de sync de delta del archive | `src/core/specs-merge.js`, `src/cli/index.js` → `specsMergeCommand`, `aspec/specs/spec-sync/spec.md` |
 | Ciclo de archive (0.22.1) | Orden merge/sync → preflight read-only → promoción de decisiones → move → commit; fases A/B del documenter y literales de fallo | `agents/orchestrator.md`, `agents/documenter.md`, `skills/ancleto-archive/SKILL.md`, `skills/ancleto-bulk-archive/SKILL.md`, `skills/ancleto-onboard/SKILL.md`, `aspec/specs/memory-ops/spec.md` |
@@ -373,6 +382,18 @@ test/                   suite node --test (content guards incluidos)
      fallback legacy mide GC por `created_at` cuando falta `superseded_at`, sin migrar. Sin schema,
      PRAGMAs persistentes ni `ruleVersion` nuevos. Releases minor de `memory-readonly-surfaces` y
      `memory-gc-dry-run-readonly`.
+41. **Juez semántico advisory (0.40.0)**: `ancleto judge [--json] [--require] [--dry-run]
+     [--timeout <ms>]` es un subcomando read-only y opt-in que envuelve `jev-spec@0.4.1` (por
+     `PATH` o `npx`). Sólo corre con `judge.enabled: true`; sin eso reporta `skipped` y sale 0.
+     `src/core/judge.js` arma el argv con constantes del release (sin argumentos del usuario), no
+     lee la credencial y no toca disco ni red; el CLI spawnea con timeout (default 120000 ms, sonda
+     30000 ms), consume sólo el exit code y transporta `stdout`/`stderr` verbatim. Estados:
+     `pass`/`fail`/`broken` (exit 0/1/2) y `skipped`/`unavailable` (exit 0; 2 sólo con
+     `--require`). `--require` hace una sonda `--version` previa y no cae a `npx` sin binario;
+     `--dry-run` imprime el comando resuelto sin ejecutar el binario ni su config. La credencial se
+     lee sólo de `TYPESAFE_AI_API_KEY` y la corrida humana avisa el egreso de código a terceros. No
+     es gate de `check`, `specs merge` ni archive; sin schema, PRAGMAs, `ruleVersion` ni
+     dependencias de runtime nuevas. Release minor de `jev-spec-advisory-judge`.
 
 ## Recorrido de una instalación con tier `minimo`
 

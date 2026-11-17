@@ -1500,9 +1500,9 @@ Change archivado base: `aspec/changes/archive/2026-11-16-memory-readonly-surface
 - **Release 0.39.0 publicada**: tag anotado `v0.39.0` → merge `918534c`, publish run
   `43995807583` (success) y `@ancleto/spec@0.39.0` como `latest` en npm (`gitHead` `918534c`,
   tarball HTTP 200 de 239.745 bytes); `aspec/backlog.md` registra el dato.
-- **Release 0.39.1 en el repo**: `chore(release): 0.39.1` (`2407d1f`) + nota de backlog (`2fc5e06`),
-  con bump en `package.json`/`package-lock.json`/`CHANGELOG.md`. En este checkout no se observó tag
-  `v0.39.1` ni evidencia de publicación en npm; no se afirma una release publicada.
+- **Release 0.39.1 publicada**: tag anotado `v0.39.1` → merge `6168965`, publish run
+  `44113826461` (success) y `@ancleto/spec@0.39.1` (`latest`) en npm (`gitHead` `6168965`, tarball
+  HTTP 200); `aspec/backlog.md` registra el dato.
 
 ## Lint y publicación
 

@@ -458,10 +458,10 @@ skillVersion: '2.3'
   `memory gc --dry-run` estrictamente read-only, su degradación determinista sin esquema y el
   fallback legacy por `created_at`, sin cambios de schema ni `ruleVersion`.
 - **Delta y publicación (0.39.0→0.39.1)**: change funcional `memory-gc-dry-run-readonly`, archivado en
-  `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`. El repo registra
-  `chore(release): 0.39.1` (`2407d1f`) y la nota de backlog (`2fc5e06`), con bump en
-  `package.json`/`package-lock.json`/`CHANGELOG.md`. No se observó tag `v0.39.1` ni evidencia de
-  publicación en npm; el seed no afirma una release publicada.
+  `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`. La release quedó **publicada y
+  verificada**: tag anotado `v0.39.1` → merge `6168965`, publish run `44113826461` (success) y
+  `@ancleto/spec@0.39.1` (`latest`) en npm (`gitHead` `6168965`, tarball HTTP 200), según
+  `aspec/backlog.md`.
 - **Evidencia de 0.39.1**: se verificó leyendo `src/cli/index.js` (`memoryGc`: el dry-run abre con
   `openReadableMemory`, resuelve `no-db`/`uninitialized` con exit 0, acota el fallo ilegible a exit 1
   sin stack y sólo la rama real usa `createMemoryEngine`), `src/core/memory/engine.js`

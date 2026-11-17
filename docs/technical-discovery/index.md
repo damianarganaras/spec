@@ -89,8 +89,9 @@ paths citados (ver `unknowns.md`).
   ilegible sale 1 sin stack y una base legacy sin `superseded_at` mide la elegibilidad por
   `created_at` sin alterar el esquema. `memory gc` sin `--dry-run` conserva engine de escritura,
   migración y purga con `VACUUM` + `REINDEX`. Change: `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`.
-  El repo registra `chore(release): 0.39.1` (`2407d1f`) y la nota de backlog (`2fc5e06`); no se
-  observó tag `v0.39.1` ni publicación en npm. Sin cambios de schema, PRAGMAs persistentes ni
+  **Publicada y verificada el 2026-11-17**: tag anotado `v0.39.1` → merge `6168965`, publish run
+  `44113826461` (success), `@ancleto/spec@0.39.1` como `latest` en npm (`gitHead` `6168965`) y
+  tarball HTTP 200 (`aspec/backlog.md`). Sin cambios de schema, PRAGMAs persistentes ni
   `ruleVersion`.
 - **Release 0.39.0**: las **superficies de lectura de memoria** son estrictamente read-only. `context`,
   `list`, `export`, `curate`, `status`, `doctor`, `merge --dry-run`, `repair refs` sin `--apply` e

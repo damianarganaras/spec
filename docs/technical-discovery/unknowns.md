@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-17T01:18:47Z
-pluginVersion: 0.39.0
+generatedAt: 2026-11-17T12:12:05Z
+pluginVersion: 0.39.1
 skillVersion: '2.3'
 ---
 
@@ -201,7 +201,7 @@ skillVersion: '2.3'
   discovery registra **337** porque su `config.exclude` omite 3 archivos bajo `__tests__/`. No es
   una inconsistencia del seed.
 - **Artefactos de máquina**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados
-  gitignored; deben alinearse con `package.json` (`0.39.0`). No se usan como fuente de contenido;
+  gitignored; deben alinearse con `package.json` (`0.39.1`). No se usan como fuente de contenido;
   `memory.criticalKeys` se describe como seam de configuración, no como evidencia de la DB.
 - **`.ancletorc` no se usa como evidencia de producto**: la skill consume el `config` resuelto por
   `ancleto discovery --check` y no trata el manifiesto como contenido del seed. La observación de la
@@ -431,15 +431,18 @@ skillVersion: '2.3'
   `test/memory-engine.test.js`, `test/cli.test.js`, la spec canónica y los artifacts archivados se
   leyeron directamente fuera del pack; el cuerpo cubre `src/` (incluidos `status.js` y `doctor.js`),
   `scripts/` y la configuración versionada.
-- **Estado del chequeo (0.39.0)**: esta generación corrió el pack único directamente, sin un
-  `--check` previo, y reescribió `.discovery-map.json` y `.discovery-state.json` con 893 fuentes
-  (180.166 B, ~44.619 tokens). El `discovery --check` posterior devolvió `READY`/`impact: none`,
-  `changedAreas: []`, `materialReasons: []`, `seedMapPresent: true` y `affectedDocs: []`. El delta
-  0.38.0→0.39.0 es la apertura read-only de las superficies de lectura y el precheck de
-  `sqlite_master`, más `test/memory-readonly-surfaces.test.js`.
-- **Delta y publicación (0.38.0→0.39.0)**: cambio funcional `memory-readonly-surfaces`; no hay tag ni
-  publish verificados en esta generación (`aspec/backlog.md` registra la release 0.39.0 pendiente de
-  tag y verificación npm).
+- **Estado del chequeo (0.39.0)**: esta segunda generación partió de `discovery --check`
+  `STALE`/`impact: minor` con `changedAreas: ["aspec"]` (edición de `aspec/backlog.md`), corrió el
+  pack único y reescribió `.discovery-map.json` y `.discovery-state.json` con 893 fuentes
+  (180.166 B, ~44.619 tokens; el tier `minimo` excluye `**/*.md` del cuerpo, por eso el tamaño no
+  cambia). El `discovery --check` posterior devolvió `READY`/`impact: none`, `changedAreas: []`,
+  `materialReasons: []`, `seedMapPresent: true` y `affectedDocs: []`. El delta 0.38.0→0.39.0 es la
+  apertura read-only de las superficies de lectura y el precheck de `sqlite_master`, más
+  `test/memory-readonly-surfaces.test.js`.
+- **Delta y publicación (0.38.0→0.39.0)**: cambio funcional `memory-readonly-surfaces`. Publicada y
+  verificada el 2026-11-16: tag anotado `v0.39.0` → merge `918534c`, publish run `43995807583`
+  (success), `@ancleto/spec@0.39.0` como `latest` en npm (`gitHead` `918534c`) y tarball HTTP 200
+  (239.745 bytes) (`aspec/backlog.md`).
 - **Evidencia de 0.39.0**: se verificó leyendo `src/cli/index.js` (`openReadableMemory` y las ramas
   de `memoryContext`, `memoryListCmd`, `memoryExport`, `memoryImportDryRun`, `memoryCurateCmd`,
   `memoryMerge`, `memoryRepairRefs`), `src/core/memory/status.js` (`hasMemorySchema` como única
@@ -448,15 +451,37 @@ skillVersion: '2.3'
   `aspec/changes/archive/2026-11-16-memory-readonly-surfaces/` (fuera del pack por el tier). No se
   ejecutó la suite ni comandos `memory` reales contra `.ancleto/memory.db`; el comportamiento y el
   mapa de exit se describieron desde el código y el Requirement `ADDED` de `memory-ops`.
+- **Estado del chequeo (0.39.1)**: esta generación partió de `discovery --check`
+  `STALE`/`impact: minor` con `changedAreas: ["CHANGELOG.md", "aspec", "src"]`, corrió el pack único
+  y reescribió `.discovery-map.json` y `.discovery-state.json` con 895 fuentes (181.738 B,
+  ~45.009 tokens; el tier `minimo` excluye `**/*.md` del cuerpo). El delta 0.39.0→0.39.1 es
+  `memory gc --dry-run` estrictamente read-only, su degradación determinista sin esquema y el
+  fallback legacy por `created_at`, sin cambios de schema ni `ruleVersion`.
+- **Delta y publicación (0.39.0→0.39.1)**: change funcional `memory-gc-dry-run-readonly`, archivado en
+  `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`. El repo registra
+  `chore(release): 0.39.1` (`2407d1f`) y la nota de backlog (`2fc5e06`), con bump en
+  `package.json`/`package-lock.json`/`CHANGELOG.md`. No se observó tag `v0.39.1` ni evidencia de
+  publicación en npm; el seed no afirma una release publicada.
+- **Evidencia de 0.39.1**: se verificó leyendo `src/cli/index.js` (`memoryGc`: el dry-run abre con
+  `openReadableMemory`, resuelve `no-db`/`uninitialized` con exit 0, acota el fallo ilegible a exit 1
+  sin stack y sólo la rama real usa `createMemoryEngine`), `src/core/memory/engine.js`
+  (`gcSuperseded`, statements lazy, `hasSupersededAtColumn` y fallback `created_at`),
+  `CHANGELOG.md` (0.39.1) y el change archivado. No se ejecutó la suite ni `memory gc` reales contra
+  `.ancleto/memory.db`.
 - **Límite de evidencia del pack 0.39.0**: el tier `minimo` excluye `test/**`, `docs/**` y `**/*.md`,
   así que `test/memory-readonly-surfaces.test.js`, `test/memory-status.test.js`,
   `test/memory-doctor-uninitialized.test.js`, la spec canónica y los artifacts archivados se leyeron
   directamente fuera del pack; el cuerpo cubre `src/` (incluidos `status.js`, `database.js` y los
   handlers de memoria de `index.js`), `scripts/` y la configuración versionada.
+- **Límite de evidencia del pack 0.39.1**: el tier `minimo` excluye `test/**`, `docs/**` y `**/*.md`,
+  así que `test/memory-readonly-surfaces.test.js`, `test/memory-engine.test.js`, la spec canónica y
+  los artifacts archivados se leyeron directamente fuera del pack; el cuerpo cubre `src/` (incluidos
+  `engine.js`, `database.js`, `status.js` y los handlers de memoria de `index.js`), `scripts/` y la
+  configuración versionada.
 
 ## Confianza
 
-- **Alta (observado)**: estructura de `src/`, `package.json` `0.39.0`, `packageVersion`,
+- **Alta (observado)**: estructura de `src/`, `package.json` `0.39.1`, `packageVersion`,
   `checkTierOrphan` con `localAgentDirs`, deriva de `.ancletorc.version`, `doctorCommand` con
   precedencia host activo→hosts instalados→global, `HOST_MCP_TARGETS`/`HOST_MCP_ORDER`,
   `resolveHostMcpDestination`/`resolveExistingHostMcpDestinations`, `readHostMcpIntent`,
@@ -495,8 +520,10 @@ skillVersion: '2.3'
    `memory-engine.test.js` y `cli.test.js`), 886 fuentes / 25 tests en 0.37.0 (con
    `repair-refs.test.js` cubriendo la reparación explícita de refs), 890 fuentes / 27 tests en
    0.38.0 (con `memory-status.test.js` y `memory-doctor-uninitialized.test.js` cubriendo el estado
-   advisory y el doctor sin esquema) y 893 fuentes / 28 tests en 0.39.0 (con
-   `memory-readonly-surfaces.test.js` cubriendo la matriz de estados × superficies);
+   advisory y el doctor sin esquema), 893 fuentes / 28 tests en 0.39.0 (con
+   `memory-readonly-surfaces.test.js` cubriendo la matriz de estados × superficies) y 895 fuentes /
+   28 tests en 0.39.1 (con los guards de `gc --dry-run` en `memory-readonly-surfaces.test.js` y el
+   pin de `created_at` en `memory-engine.test.js`);
   `planTestSelection`, el flag aditivo
   `--tests`, el manifiesto `test/affected-tests.json` y el consumidor `scripts/test-affected.mjs`
   (0.32.0); `MEMORY_WRITE_RETRY_POLICY`, `MemoryDatabaseBusyError`, `runImmediateTransaction` y
@@ -520,7 +547,9 @@ skillVersion: '2.3'
     `recovery` y raíz única, `memoryStatusCmd` en el dispatch y el early-path de cinco checks de
     `doctor.js` para bases sin `memory_nodes`; desde 0.39.0 `hasMemorySchema` como precheck único de
     `sqlite_master`, `openDatabase` con `readonly: true` sin `mkdirSync`, `openReadableMemory` como
-    apertura compartida de las nueve superficies y el mapa de degradación por estado de base.
+    apertura compartida de las diez superficies y el mapa de degradación por estado de base; desde
+    0.39.1 `memoryGc` con dry-run read-only, `gcSuperseded` con statements lazy y fallback
+    `created_at` cuando falta `superseded_at`.
 - **Media (inferido)**: comportamiento de hosts no probados, efecto exacto de cada adaptador en
   cada IDE, resultados del workflow, ausencia real del 403 en configuraciones
   concretas, materialización/saneamiento de la nota de compresión sin ejecución real, no-escritura

@@ -2,6 +2,14 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.39.1] - 2026-11-17
+
+### Fixed
+- **`memory gc --dry-run` es estrictamente read-only**: abre la base con `{ readonly: true, migrate: false }` mediante el helper de lectura compartido, así que no crea `.ancleto/` ni `memory.db`, no migra el esquema y no ejecuta DDL, `VACUUM` ni `REINDEX`.
+- **Degradación determinística del dry-run sobre base sin esquema**: sin base o con base sin esquema inicializado sale con exit 0, y una base ilegible sale con exit 1 con mensaje acotado y sin stack trace.
+- **Las bases legacy sin `superseded_at` miden la elegibilidad por `created_at` sin migrar**: el dry-run reutiliza el `SELECT` existente y no altera el esquema para agregar la columna.
+- **`memory gc` sin `--dry-run` conserva su comportamiento**: sigue abriendo el engine de escritura, migrando y ejecutando la purga con `VACUUM` + `REINDEX`.
+
 ## [0.39.0] - 2026-11-16
 
 ### Added

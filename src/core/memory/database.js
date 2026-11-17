@@ -39,6 +39,14 @@ const MIGRATIONS = [
   END`
 ]
 
+// Sonda unica de la columna aditiva `superseded_at`: la comparten la migracion de
+// esta apertura y el SELECT lazy de `gc`, para no repetir el PRAGMA. No crea nada
+// (funciona igual sobre una conexion read-only).
+export function hasSupersededAtColumn(db) {
+  const columns = db.prepare('PRAGMA table_info(memory_nodes)').all()
+  return columns.some((column) => column.name === 'superseded_at')
+}
+
 export function openDatabase(dbPath, { migrate = true, readonly = false } = {}) {
   if (!readonly) mkdirSync(dirname(dbPath), { recursive: true })
   const db = new DatabaseSync(dbPath, { readOnly: readonly })
@@ -54,17 +62,16 @@ export function openDatabase(dbPath, { migrate = true, readonly = false } = {}) 
     // Migracion aditiva guardada: una base previa no tiene la columna. El
     // backfill reproduce la elegibilidad historica de gc (created_at), sin
     // otorgar gracia retroactiva, y no toca los nodos activos.
-    const columns = db.prepare('PRAGMA table_info(memory_nodes)').all()
+    const hasColumn = hasSupersededAtColumn(db)
     let addedColumn = false
-    if (!columns.some((column) => column.name === 'superseded_at')) {
+    if (!hasColumn) {
       try {
         db.exec('ALTER TABLE memory_nodes ADD COLUMN superseded_at TEXT')
         addedColumn = true
       } catch (err) {
         // Carrera con otra apertura concurrente: si la columna ya existe, la
         // migracion se considera aplicada.
-        const after = db.prepare('PRAGMA table_info(memory_nodes)').all()
-        if (!after.some((column) => column.name === 'superseded_at')) throw err
+        if (!hasSupersededAtColumn(db)) throw err
       }
     }
     // El backfill solo hace falta cuando esta apertura agrego la columna: las

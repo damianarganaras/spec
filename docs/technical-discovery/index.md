@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-17T01:18:47Z
-pluginVersion: 0.39.0
+generatedAt: 2026-11-17T12:12:05Z
+pluginVersion: 0.39.1
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (893 fuentes, ~44.619 tokens), `package.json` (`0.39.0`), `src/core/model-catalog.json` y
+`minimo` (895 fuentes, ~45.009 tokens), `package.json` (`0.39.1`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
@@ -50,7 +50,7 @@ paths citados (ver `unknowns.md`).
 | **Reparación MCP sin escritura (0.20.1)**: `repairProjectMcp` escribe sólo ante error de parseo, normalización estructural o entradas reparadas/agregadas; destino sano intacto | `decisions.md`, `units/cli-install.md` |
 | Portabilidad `export`/`import`: bundle, `--repair`, `installedPaths` acumulativo | `units/cli-install.md`, `decisions.md` |
 | Discovery: mapa topológico, pack Repomix, estado del seed, `affectedDocs`, affected-set | `units/discovery-engine.md` |
-| Memoria persistente: SQLite+FTS5, tools MCP, recall, refs, working-context, ops, doctor, curate, `memory status` advisory, `memory doctor` sobre base sin esquema y superficies de lectura estrictamente read-only (0.39.0) | `units/memory-engine.md` |
+| Memoria persistente: SQLite+FTS5, tools MCP, recall, refs, working-context, ops, doctor, curate, `memory status` advisory, `memory doctor` sobre base sin esquema, superficies de lectura estrictamente read-only (0.39.0) y `gc --dry-run` read-only con fallback legacy (0.39.1) | `units/memory-engine.md` |
 | **Conjunto crítico del working-context (0.31.0)**: `memory.criticalKeys` en `.ancletorc` (seam de configuración), claves inyectadas primero en orden declarado, lectura tolerante (ausente/no-array/entradas no-string → `[]`), fallo duro en `ancleto memory context` con `--out` sin sobrescribir, `console.warn` best-effort en lifecycle/on-write/MCP y exit ≠ 0 en `memory merge`/`consolidate --apply`; `<ContextOverflowWarning>` intacto | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **Selección de tests afectados (0.32.0)**: `ancleto affected --tests` agrega el objeto `tests` (`complete`, `reasons`, `selected`, `excluded`) al JSON existente, con el manifiesto cerrado `test/affected-tests.json` y el consumidor `npm run test:affected` que cae fail-closed a la suite completa | `decisions.md`, `setup.md`, `units/discovery-engine.md`, `units/cli-install.md` |
 | **Serialización de escritores y doctor (0.33.0–0.33.1)**: `runImmediateTransaction` (`BEGIN IMMEDIATE` + retry 3/200-600 ms), `MEMORY_DB_BUSY` y oráculo `test/memory-writers.test.js`; desde 0.33.1 `memory doctor --rebuild` corre rebuild FTS5 + integrity-check dentro del helper y reporta `MEMORY_DB_BUSY` en el detalle, mientras el `doctor` por defecto sigue read-only; sin cambio de schema, PRAGMAs, comandos ni `ruleVersion` | `decisions.md`, `units/memory-engine.md` |
@@ -59,7 +59,7 @@ paths citados (ver `unknowns.md`).
 | **Puerta de criticidad de memoria (0.36.0)**: `memory merge` y `memory consolidate --apply` rechazan antes de escribir cuando supersederían una `memory_key` declarada en `.ancletorc` → `memory.criticalKeys`; dry-run y apply reportan `criticalAffected`, `--force-critical` autoriza de forma explícita, el rechazo sale con exit 2 y `{"error":"critical-key-gate","criticalAffected":[...]}` con `--json`; `consolidate` sin base sale con código 1 | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **Reparación de refs (0.37.0)**: `memory repair refs --memory-key <key> [--apply] [--json] [--force-critical]` opera sobre un único nodo activo y remueve solo refs verificables con motivo exactamente `inexistente`; dry-run por defecto en read-only, `--apply` supersede con el writer transaccional, allowlist conserva `commit:`/`workitem:` y cualquier otro motivo, el candidato se valida con el mismo fail-closed que la escritura y el gate crítico sale con exit 2 sin `--force-critical` | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **Estado advisory de memoria (0.38.0)**: `ancleto memory status [--json]` read-only y advisory con exit 0 en `ok`/`empty`/`no-db`/`uninitialized`, `expected` derivado de `aspec/changes/archive/*/proposal.md`, `gap = expected && status !== 'ok'`, recuperación por `memory export`/`import`/`snapshot`; `memory doctor` completa sus 5 checks y sale ≠ 0 sobre una base sin esquema, sin excepción no capturada | `decisions.md`, `units/memory-engine.md`, `setup.md` |
-| **Superficies de lectura read-only (0.39.0)**: `memory context`, `list`, `export`, `curate`, `status`, `doctor`, `merge --dry-run`, `repair refs` sin `--apply` e `import --dry-run` abren con `{ readonly: true, migrate: false }` y precheck de `sqlite_master`; `context`/`export` ya no migran una base de 0 bytes, `export` sin esquema sale 1, `list` sale 0 nombrando el esquema no inicializado, `merge --dry-run`/`repair refs` degradan con exit 1 sin stack, `.db` conserva SHA-256 y `sqlite_master`, y los sidecars WAL se toleran; sin cambios de schema, PRAGMAs persistentes ni `ruleVersion` | `decisions.md`, `units/memory-engine.md`, `setup.md` |
+| **Superficies de lectura read-only (0.39.0–0.39.1)**: `memory context`, `list`, `export`, `curate`, `status`, `doctor`, `merge --dry-run`, `repair refs` sin `--apply`, `import --dry-run` y `gc --dry-run` abren con `{ readonly: true, migrate: false }` y precheck de `sqlite_master`; `context`/`export` ya no migran una base de 0 bytes, `export` sin esquema sale 1, `list` sale 0 nombrando el esquema no inicializado, `merge --dry-run`/`repair refs` degradan con exit 1 sin stack, `gc --dry-run` sin base/sin esquema sale 0 e ilegible sale 1 sin stack, `.db` conserva SHA-256 y `sqlite_master`, los sidecars WAL se toleran y el fallback legacy mide GC por `created_at` sin migrar; sin cambios de schema, PRAGMAs persistentes ni `ruleVersion` | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -80,9 +80,18 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.39.0` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.39.1` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
+- **Release 0.39.1**: cierra el último hueco read-only. `memory gc --dry-run` abre con
+  `{ readonly: true, migrate: false }` vía `openReadableMemory`, así que no crea `.ancleto/` ni
+  `memory.db`, no migra y no ejecuta DDL/`VACUUM`/`REINDEX`; sin base o sin esquema sale 0, una base
+  ilegible sale 1 sin stack y una base legacy sin `superseded_at` mide la elegibilidad por
+  `created_at` sin alterar el esquema. `memory gc` sin `--dry-run` conserva engine de escritura,
+  migración y purga con `VACUUM` + `REINDEX`. Change: `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/`.
+  El repo registra `chore(release): 0.39.1` (`2407d1f`) y la nota de backlog (`2fc5e06`); no se
+  observó tag `v0.39.1` ni publicación en npm. Sin cambios de schema, PRAGMAs persistentes ni
+  `ruleVersion`.
 - **Release 0.39.0**: las **superficies de lectura de memoria** son estrictamente read-only. `context`,
   `list`, `export`, `curate`, `status`, `doctor`, `merge --dry-run`, `repair refs` sin `--apply` e
   `import --dry-run` abren con `{ readonly: true, migrate: false }` y un precheck de esquema
@@ -91,8 +100,9 @@ paths citados (ver `unknowns.md`).
   base de 0 bytes; `export` sin esquema sale con 1, `list` con 0 nombrando el esquema no inicializado,
   y `merge --dry-run`/`repair refs` degradan con exit 1 sin stack. Sobre una base existente el `.db`
   conserva su SHA-256 y el conjunto de `sqlite_master`; los sidecars `-wal`/`-shm` de una apertura WAL
-  read-only se toleran. Sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`; `memory gc
-  --dry-run` queda como follow-up fuera de alcance.
+  read-only se toleran. Sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`. **Publicada y verificada el 2026-11-16**: tag
+  anotado `v0.39.0` → merge `918534c`, publish run `43995807583` (success), `@ancleto/spec@0.39.0`
+  como `latest` en npm (`gitHead` `918534c`) y tarball HTTP 200 (239.745 bytes) (`aspec/backlog.md`).
 - **Release 0.38.0**: `ancleto memory status [--json]` es un subcomando read-only y advisory que
   declara el **gap de memoria de producto** tras clone/worktree. Distingue `ok`, `empty`, `no-db` y
   `uninitialized`; deriva `expected` de los `proposal.md` archivados que declaran decisiones
@@ -151,6 +161,10 @@ paths citados (ver `unknowns.md`).
   schema persistido, PRAGMAs ni `ruleVersion`. El requirement de `memory-engine` se actualizó en el
   lugar.
 - **Cambios recientes archivados**:
+  `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/` (0.39.1:
+  `memory gc --dry-run` pasa a apertura estrictamente read-only con degradación determinista
+  sin base/sin esquema → exit 0, ilegible → exit 1 sin stack, y fallback legacy por `created_at` sin
+  migrar; `gc` real conserva migración y `VACUUM` + `REINDEX`; sin cambio de schema ni `ruleVersion`),
   `aspec/changes/archive/2026-11-16-memory-readonly-surfaces/` (0.39.0: `ADDED` del
   Requirement `Superficies de lectura de memoria estrictamente read-only` en `memory-ops`; apertura
   `readonly: true` + `migrate: false`, precheck de `sqlite_master` reutilizado, mapa de degradación
@@ -273,15 +287,15 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-    archivos) mantienen el conteo; en 0.22.1-0.39.0 no cambió su cantidad.
-- **Pack actual**: 893 fuentes y ~44.619 tokens (180.166 B, comprimido, tier `minimo`), con 33
+    archivos) mantienen el conteo; en 0.22.1-0.39.1 no cambió su cantidad.
+- **Pack actual**: 895 fuentes y ~45.009 tokens (181.738 B, comprimido, tier `minimo`), con 33
    entradas de archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del
-   pack. El `.discovery-map.json` de la corrida reporta 931 archivos (aspec 346, `.opencode` 66,
+   pack. El `.discovery-map.json` de la corrida reporta 933 archivos (aspec 348, `.opencode` 66,
    docs 21, test 37, src 23, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye
    los `test/*.test.js` por `discovery.exclude`; los 8 fixtures de
    `test/fixtures/**` siguen incluidos.
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
-   citadas para reflejar 0.39.0, preservando la estructura del seed. En 0.26.0 `discovery --check`
+   citadas para reflejar 0.39.1, preservando la estructura del seed. En 0.26.0 `discovery --check`
    pasó a calcular `seedMapPresent` antes de clasificar el estado (vale en
    `READY`/`STALE`/`PARTIAL`/`MISSING`); en 0.26.1 el detector de frescura quedó documentado y
    pineado en `cli-diagnostics`; en 0.26.4 la suite declarada sumó el guard estructural de los delta
@@ -340,7 +354,10 @@ paths citados (ver `unknowns.md`).
      `sqlite_master`; `context`/`export` ya no migran una base de 0 bytes, `export` sin esquema sale
      1, `list` sale 0 nombrando el esquema no inicializado, `merge --dry-run`/`repair refs` degradan
      con exit 1 sin stack y `doctor` sobre base ilegible no imprime stack; el `.db` conserva SHA-256
-     y `sqlite_master` y los sidecars WAL se toleran, sin cambios de schema, PRAGMAs persistentes ni
-     `ruleVersion`. El `ancleto discovery --check` de validación, tras regenerar el estado con el
-     pack de 893 fuentes (180.166 B, ~44.619 tokens), reportó `READY`/`impact: none` con
-     `changedAreas: []`, `seedMapPresent: true` y `affectedDocs: []`.
+     y      `sqlite_master` y los sidecars WAL se toleran, sin cambios de schema, PRAGMAs persistentes ni
+     `ruleVersion`. En 0.39.1 `memory gc --dry-run` se suma a la apertura read-only con degradación
+     sin stack y fallback legacy por `created_at`, mientras `gc` real conserva migración, purga y
+     `VACUUM` + `REINDEX`; tampoco cambian schema, PRAGMAs ni `ruleVersion`. El `ancleto discovery
+     --check` de validación, tras regenerar el estado con el pack de 895 fuentes (181.738 B,
+     ~45.009 tokens), reportó `READY`/`impact: none` con `changedAreas: []`,
+     `seedMapPresent: true` y `affectedDocs: []`.

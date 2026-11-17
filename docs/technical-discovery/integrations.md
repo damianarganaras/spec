@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-17T01:18:47Z
-pluginVersion: 0.39.0
+generatedAt: 2026-11-17T12:12:05Z
+pluginVersion: 0.39.1
 skillVersion: '2.3'
 ---
 
@@ -142,7 +142,7 @@ skillVersion: '2.3'
   secuencia de contratos de prompt (`skills/ancleto-archive`, `skills/ancleto-bulk-archive`,
   `agents/documenter.md`) sobre archivos locales, y el guard de `--help`/`-h` es un `console.log`
   del uso antes del dispatch, sin escritura de archivos. Sin red, procesos externos ni servicios.
-- **0.26.0–0.39.0 no agregan integraciones**: `discovery --check` ya era una lectura local de
+- **0.26.0–0.39.1 no agregan integraciones**: `discovery --check` ya era una lectura local de
   `.config`/estado/hashes, el detector de frescura de 0.26.1 sólo se documenta y pinea en tests,
   0.26.2 sólo consolida walkers de snapshot read-only y pines de frescura en tests, 0.26.4 agrega un
   guard estructural de delta specs a la suite y documenta el Requirement en `spec-sync`, 0.27.0
@@ -170,7 +170,9 @@ skillVersion: '2.3'
    local: lee la DB en modo read-only y `aspec/changes/archive/*/proposal.md` del mismo `cwd`; no
    hay red, servicios ni procesos nuevos. 0.39.0 (superficies de lectura read-only) tampoco suma
    integraciones: abre SQLite local con `{ readonly: true, migrate: false }`, consulta
-   `sqlite_master` y lee el filesystem; no hay red, servicios ni procesos nuevos.
+   `sqlite_master` y lee el filesystem; no hay red, servicios ni procesos nuevos. 0.39.1
+   (`gc --dry-run` read-only con fallback legacy) reutiliza esa misma apertura y el SQLite local;
+   tampoco suma red, servicios ni procesos.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee

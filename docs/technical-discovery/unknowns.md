@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-17T12:12:05Z
-pluginVersion: 0.39.1
+generatedAt: 2026-11-17T19:19:50.070Z
+pluginVersion: 0.40.0
 skillVersion: '2.3'
 ---
 
@@ -24,8 +24,10 @@ skillVersion: '2.3'
    `src/core/tier-models.js`, `src/core/test-selection.js`, `src/core/memory/database.js` →
    `runImmediateTransaction`, `runReadTransaction`, `openDatabase` (`readonly`), `src/core/memory/status.js` →
    `inspectMemoryStatus`, `hasMemorySchema`; `src/core/memory/doctor.js` → `SCHEMA_UNINITIALIZED_DETAIL`;
-   `src/cli/index.js` → `openReadableMemory`), no en el pack solo. El estado del pack
-   registra 893 fuentes (180.166 B, ~44.619 tokens) y su cuerpo contiene 33 entradas de archivo, porque
+   `src/cli/index.js` → `openReadableMemory`, `judgeCommand`, `parseJudgeArgs`;
+   `src/core/judge.js` → `resolveJudgeConfig`, `resolveJudgeTimeoutMs`, `buildJudgeCommand`,
+   `mapToolOutcome`, `buildJudgeReport`), no en el pack solo. El estado del pack
+   registra 901 fuentes (185.032 B, ~45.824 tokens) y su cuerpo contiene 35 entradas de archivo, porque
    `**/*.md`, `test/**`, `docs/**` y los ignores de Repomix excluyen el resto. Los cuerpos elididos y
    los Markdown excluidos se verificaron por lectura directa.
 - **Contenido Markdown fuera del pack**: el tier `minimo` excluye `**/*.md` y Repomix aplica además
@@ -41,6 +43,15 @@ skillVersion: '2.3'
   `2026-11-11-seed-freshness-ephemeral-paths` y `2026-11-12-seed-freshness-ignored-areas`, y sobre
   los conteos de `agents/`/`commands/`/`skills/` se verificaron leyendo esos paths directamente. No
   se auditó el resto de `aspec/specs/**`.
+- **Juez advisory 0.40.0**: no se ejecutó `ancleto judge` ni el binario `jev-spec` real: no hay
+  cuenta ni `TYPESAFE_AI_API_KEY` en este entorno y el default es `off`. El contrato se describió
+  desde `src/core/judge.js`, `src/cli/index.js` → `judgeCommand`/`parseJudgeArgs`, `CHANGELOG.md`,
+  `README.md`, `docs/jev-advisory-judge.md` y `aspec/specs/cli-diagnostics/spec.md` (los Markdown
+  quedan fuera del pack). No se verificó el criterio de valor (AUC ≥ 0,75), el comportamiento real
+  del binario ante contenido adversarial, su contrato de salida entre versiones ni la publicación
+  npm del release `0.40.0`; la suite `test/judge.test.js` no se ejecutó en esta generación.
+  `docs/jev-advisory-judge.md` y `docs/guia-configuracion.md` se leyeron directamente porque
+  `docs/**` está excluido del pack.
 - **Contrato de conformidad 0.21.0**: se describió desde `aspec/specs/prompt-contracts/spec.md`
   (los dos Requirements nuevos), `CHANGELOG.md`, el `proposal.md`/`tasks.md` del archive y las cuatro
   decisiones promovidas leídas de `.ancleto/memory.db` vía `searchMemory`. No se leyó línea por línea

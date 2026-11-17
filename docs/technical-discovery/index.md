@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-17T12:12:05Z
-pluginVersion: 0.39.1
+generatedAt: 2026-11-17T19:19:50.070Z
+pluginVersion: 0.40.0
 skillVersion: '2.3'
 ---
 
@@ -11,7 +11,7 @@ skillVersion: '2.3'
 
 Mapa de navegación del repositorio `@ancleto/spec` (CLI `ancleto`, alias `aspec`). No es un
 inventario: enruta a la respuesta más corta. Evidencia base: pack Repomix comprimido del tier
-`minimo` (895 fuentes, ~45.009 tokens), `package.json` (`0.39.1`), `src/core/model-catalog.json` y
+`minimo` (901 fuentes, ~45.824 tokens), `package.json` (`0.40.0`), `src/core/model-catalog.json` y
 el reporte `ancleto discovery --check`. El pack lo generó el CLI del propio repo
 (`node src/cli/index.js discovery`) con la compresión del tier `minimo`; ese tier excluye `test/**`,
 `docs/**` y `**/*.md` del cuerpo del pack, y el pack llega comprimido (cuerpos de funciones elididos).
@@ -60,6 +60,7 @@ paths citados (ver `unknowns.md`).
 | **Reparación de refs (0.37.0)**: `memory repair refs --memory-key <key> [--apply] [--json] [--force-critical]` opera sobre un único nodo activo y remueve solo refs verificables con motivo exactamente `inexistente`; dry-run por defecto en read-only, `--apply` supersede con el writer transaccional, allowlist conserva `commit:`/`workitem:` y cualquier otro motivo, el candidato se valida con el mismo fail-closed que la escritura y el gate crítico sale con exit 2 sin `--force-critical` | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **Estado advisory de memoria (0.38.0)**: `ancleto memory status [--json]` read-only y advisory con exit 0 en `ok`/`empty`/`no-db`/`uninitialized`, `expected` derivado de `aspec/changes/archive/*/proposal.md`, `gap = expected && status !== 'ok'`, recuperación por `memory export`/`import`/`snapshot`; `memory doctor` completa sus 5 checks y sale ≠ 0 sobre una base sin esquema, sin excepción no capturada | `decisions.md`, `units/memory-engine.md`, `setup.md` |
 | **Superficies de lectura read-only (0.39.0–0.39.1)**: `memory context`, `list`, `export`, `curate`, `status`, `doctor`, `merge --dry-run`, `repair refs` sin `--apply`, `import --dry-run` y `gc --dry-run` abren con `{ readonly: true, migrate: false }` y precheck de `sqlite_master`; `context`/`export` ya no migran una base de 0 bytes, `export` sin esquema sale 1, `list` sale 0 nombrando el esquema no inicializado, `merge --dry-run`/`repair refs` degradan con exit 1 sin stack, `gc --dry-run` sin base/sin esquema sale 0 e ilegible sale 1 sin stack, `.db` conserva SHA-256 y `sqlite_master`, los sidecars WAL se toleran y el fallback legacy mide GC por `created_at` sin migrar; sin cambios de schema, PRAGMAs persistentes ni `ruleVersion` | `decisions.md`, `units/memory-engine.md`, `setup.md` |
+| **Juez semántico advisory (0.40.0)**: `ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]`, opt-in `judge.enabled`/`judge.timeoutMs` en `.ancletorc`, adaptador read-only a `jev-spec@0.4.1` resuelto por `PATH` o `npx`, estados `pass`/`fail`/`broken`/`skipped`/`unavailable`, exit 0/1/2, envelope `--json` estable sin `schemaVersion`, credencial sólo desde `TYPESAFE_AI_API_KEY` y aviso de egreso a terceros; nunca es gate de `check`, `specs merge` ni archive | `decisions.md`, `integrations.md`, `units/cli-install.md`, `unknowns.md` |
 | Errores o fallos de tool parts de sesiones opencode (`stats failures`) | `units/cli-install.md`, `integrations.md` |
 | Límites de evidencia: qué no se pudo verificar | `unknowns.md` |
 | Cobertura por directorios/globs | `inventory.md` |
@@ -80,9 +81,24 @@ paths citados (ver `unknowns.md`).
   delta para los cuatro tipos. En 0.25.0 el sync de delta al archivar pasa exclusivamente por
   `ancleto specs merge --change <slug>` (incluido bulk-archive) y `--help`/`-h` en los subcomandos que
   mutan estado imprime el uso y sale con 0 sin escribir nada.
-- **Versión del repo**: `package.json` = `0.39.1` (rama `development`). `.ancletorc` y
+- **Versión del repo**: `package.json` = `0.40.0` (rama `development`). `.ancletorc` y
   `.ancleto/machine-env.md` son artefactos gitignored que se regeneran en `init`/`install`/`upgrade`;
   esta materialización no los usa como fuente de reglas.
+- **Release 0.40.0**: agrega `ancleto judge`, un adaptador **read-only, opt-in y advisory** al
+  binario externo `jev-spec` (pin `jev-spec@0.4.1`), resuelto por `PATH` o vía `npx` sin agregar
+  dependencias de runtime. Corre `jev-spec check` con argv constante (sin argumentos del usuario),
+  consume sólo el exit code y transporta `stdout`/`stderr` verbatim; los estados son
+  `pass`/`fail`/`broken`/`skipped`/`unavailable` con exit 0/1/2. `judge.enabled` default `false`;
+  `judge.timeoutMs` default 120000 y `--timeout` gana por corrida; `--dry-run` imprime el comando
+  resuelto sin ejecutar el binario ni su config. La credencial se lee sólo de
+  `TYPESAFE_AI_API_KEY` (valor omitido) y toda corrida humana avisa el egreso de código a un
+  servicio de terceros. **No es gate** de `check`, `specs merge` ni archive; un `pass` no prueba
+  conformidad y un `fail` no bloquea. Los cinco writers de memoria, el schema, las PRAGMAs
+  persistentes y `ruleVersion` no cambian. Change:
+  `aspec/changes/archive/2026-11-17-jev-spec-advisory-judge/`; delta `ADDED` del Requirement
+  `Juez externo advisory opcional` en `cli-diagnostics` y `skills/ancleto-verify` suma el paso
+  opcional. El criterio de valor (AUC ≥ 0,75) no está medido: no hay cuenta ni
+  `TYPESAFE_AI_API_KEY` en este entorno y `--require` no se usa en CI.
 - **Release 0.39.1**: cierra el último hueco read-only. `memory gc --dry-run` abre con
   `{ readonly: true, migrate: false }` vía `openReadableMemory`, así que no crea `.ancleto/` ni
   `memory.db`, no migra y no ejecuta DDL/`VACUUM`/`REINDEX`; sin base o sin esquema sale 0, una base
@@ -288,11 +304,11 @@ paths citados (ver `unknowns.md`).
 - **Catálogo**: `src/core/model-catalog.json` con `generated_at: 2026-11-04` y 211 IDs en 5
   proveedores (`opencode` 10, `opencode-go` 30, `anthropic` 20, `commandcode` 71, `openai` 80).
    Sin cambios en 0.19.0–0.25.0. `agents/` (10), `commands/` (16) y `skills/` (21 directorios, 35
-    archivos) mantienen el conteo; en 0.22.1-0.39.1 no cambió su cantidad.
-- **Pack actual**: 895 fuentes y ~45.009 tokens (181.738 B, comprimido, tier `minimo`), con 33
+    archivos) mantienen el conteo; en 0.22.1-0.40.0 no cambió su cantidad.
+- **Pack actual**: 901 fuentes y ~45.824 tokens (185.032 B, comprimido, tier `minimo`), con 35
    entradas de archivo en el cuerpo porque `test/**`, `docs/**` y `**/*.md` quedan excluidos del
-   pack. El `.discovery-map.json` de la corrida reporta 933 archivos (aspec 348, `.opencode` 66,
-   docs 21, test 37, src 23, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye
+   pack. El `.discovery-map.json` de la corrida reporta 940 archivos (aspec 351, `.opencode` 66,
+   docs 22, test 39, src 24, scripts 2, documentation 340, audit logs 9). La lista `sources` excluye
    los `test/*.test.js` por `discovery.exclude`; los 8 fixtures de
    `test/fixtures/**` siguen incluidos.
 - **Estado del chequeo**: esta materialización actualizó los documentos desde el pack y las fuentes
@@ -358,7 +374,11 @@ paths citados (ver `unknowns.md`).
      y      `sqlite_master` y los sidecars WAL se toleran, sin cambios de schema, PRAGMAs persistentes ni
      `ruleVersion`. En 0.39.1 `memory gc --dry-run` se suma a la apertura read-only con degradación
      sin stack y fallback legacy por `created_at`, mientras `gc` real conserva migración, purga y
-     `VACUUM` + `REINDEX`; tampoco cambian schema, PRAGMAs ni `ruleVersion`. El `ancleto discovery
-     --check` de validación, tras regenerar el estado con el pack de 895 fuentes (181.738 B,
-     ~45.009 tokens), reportó `READY`/`impact: none` con `changedAreas: []`,
+     `VACUUM` + `REINDEX`; tampoco cambian schema, PRAGMAs ni `ruleVersion`. En 0.40.0 `ancleto
+     judge` agrega una señal semántica opt-in y advisory sobre `jev-spec@0.4.1`: adaptador puro en
+     `src/core/judge.js`, spawn acotado por timeout, `--require` gateado por sonda y `--dry-run` que
+     no ejecuta la config del juez; sin cambios de schema, PRAGMAs, `ruleVersion` ni dependencias de
+     runtime. El `ancleto discovery
+     --check` de validación, tras regenerar el estado con el pack de 901 fuentes (185.032 B,
+     ~45.824 tokens), reportó `READY`/`impact: none` con `changedAreas: []`,
      `seedMapPresent: true` y `affectedDocs: []`.

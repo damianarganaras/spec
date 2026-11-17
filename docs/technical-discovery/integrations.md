@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-17T12:12:05Z
-pluginVersion: 0.39.1
+generatedAt: 2026-11-17T19:19:50.070Z
+pluginVersion: 0.40.0
 skillVersion: '2.3'
 ---
 
@@ -17,6 +17,7 @@ skillVersion: '2.3'
 | GitHub Actions | CI de lint/tests y release | Salida | `.github/workflows/publish.yml` |
 | GitHub Releases | Notas del release por tag | Salida | `.github/workflows/publish.yml` |
 | Repomix | Empaquetado de contexto para discovery | Salida | `src/cli/index.js` → `runRepomix` |
+| jev-spec | Juez semántico externo opt-in (`jev-spec@0.4.1`), por `PATH` o `npx`; egreso de código a un servicio de terceros | Salida | `src/core/judge.js`, `src/cli/index.js` → `judgeCommand`, `docs/jev-advisory-judge.md` |
 | opencode | Host del IDE; base de sesiones para `stats`; destino MCP con `mcp`; `opencode models` solo en mantenimiento | Entrada | `src/cli/index.js` → `opencodeDbPath`, `doctorCommand`, `checkCommand`, `HOST_MCP_TARGETS`, `scripts/refresh-model-catalog.mjs` |
 | MCP por host | Destinos de `opencode`, `antigravity`, `commandcode` y `copilot`; `check`/`doctor` host-aware | Entrada/salida | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
 | MCP del proyecto | Archivos por host (`.opencode/opencode.json` o `.jsonc`, `.agents/mcp_config.json`, `.mcp.json`, `copilot-mcp.json`); salud de comandos y avisos read-only | Entrada | `src/cli/index.js` → `resolveHostMcpDestination`, `mcpCommandBroken` |
@@ -171,8 +172,14 @@ skillVersion: '2.3'
    hay red, servicios ni procesos nuevos. 0.39.0 (superficies de lectura read-only) tampoco suma
    integraciones: abre SQLite local con `{ readonly: true, migrate: false }`, consulta
    `sqlite_master` y lee el filesystem; no hay red, servicios ni procesos nuevos. 0.39.1
-   (`gc --dry-run` read-only con fallback legacy) reutiliza esa misma apertura y el SQLite local;
-   tampoco suma red, servicios ni procesos.
+    (`gc --dry-run` read-only con fallback legacy) reutiliza esa misma apertura y el SQLite local;
+    tampoco suma red, servicios ni procesos.
+- **0.40.0 agrega una integración de proceso, no de red**: `ancleto judge` spawnea el binario
+  externo `jev-spec@0.4.1` (por `PATH` o `npx -y`) y consume sólo su exit code. El adaptador no
+  habla HTTP, no lee `TYPESAFE_AI_API_KEY` y no escribe archivos; el binario puede enviar contenido
+  del repo a un servicio de terceros, por eso el subcomando es opt-in (`judge.enabled: false` por
+  defecto) y la corrida humana imprime el aviso de egreso. `npx` consulta el registry y cachea en
+  `~/.npm/_npx`, fuera del repo. No es gate de `check`, `specs merge` ni archive.
 - El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
   verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
   que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee

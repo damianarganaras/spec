@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-17T01:38:21Z
-pluginVersion: 0.39.0
+generatedAt: 2026-11-17T12:12:05Z
+pluginVersion: 0.39.1
 skillVersion: '2.3'
 ---
 
@@ -148,8 +148,8 @@ del paquete instalado.
 - **Memoria**: `memory context|list|doctor|status|curate|export|import|gc|snapshot|merge|consolidate|repair`,
   `mcp`. Desde 0.39.0 las superficies de lectura (`context`, `list`, `export`, `curate`, `status`,
   `doctor`, `merge --dry-run`, `repair refs` sin `--apply` e `import --dry-run`) abren con
-  `{ readonly: true, migrate: false }` y precheck de `sqlite_master`; `memory gc --dry-run` sigue
-  siendo un follow-up fuera de alcance. Desde 0.31.0 `memory context` (con o sin `--out`) falla con exit ≠ 0 y no sobrescribe el
+  `{ readonly: true, migrate: false }` y precheck de `sqlite_master`; desde 0.39.1 `memory gc
+  --dry-run` se suma a esa apertura read-only. Desde 0.31.0 `memory context` (con o sin `--out`) falla con exit ≠ 0 y no sobrescribe el
   archivo previo si una clave de `memory.criticalKeys` no existe, está inactiva o no entra en el
   presupuesto; el lifecycle y el on-write del MCP advierten sin escribir un bloque degradado.
   Desde 0.36.0 `memory merge` y `memory consolidate --apply` aceptan `--force-critical` y
@@ -170,12 +170,14 @@ del paquete instalado.
   a flags desconocidas. No crea `.ancleto/` ni la DB, no migra, no refresca el working-context y no
   es un gate de archive. En paralelo, `memory doctor` completa sus cinco checks sobre una base sin
   esquema y sale ≠ 0 sin excepción ni stack trace.
-- **Superficies de lectura read-only (0.39.0)**: `context`, `list`, `export`, `curate`, `status`,
-  `doctor`, `merge --dry-run`, `repair refs` sin `--apply` e `import --dry-run` no migran ni crean
-  `.ancleto/memory.db` al leer. Sobre una base de 0 bytes o sin `memory_nodes`, `context` emite
-  día-cero con 0, `list` sale 0 nombrando el esquema no inicializado, `export` sale 1, y
-  `merge --dry-run`/`repair refs` salen 1 sin stack; una base ilegible se distingue de "sin
-  esquema" con mensaje y código ≠ 0 sin stack. El `.db` conserva su SHA-256 y `sqlite_master`; los
+- **Superficies de lectura read-only (0.39.0–0.39.1)**: `context`, `list`, `export`, `curate`, `status`,
+  `doctor`, `merge --dry-run`, `repair refs` sin `--apply`, `import --dry-run` y `gc --dry-run` no
+  migran ni crean `.ancleto/memory.db` al leer. Sobre una base de 0 bytes o sin `memory_nodes`,
+  `context` emite día-cero con 0, `list` sale 0 nombrando el esquema no inicializado, `export` sale
+  1, `merge --dry-run`/`repair refs` salen 1 sin stack y `gc --dry-run` sale 0 sin base/sin esquema
+  o 1 sin stack si es ilegible; una base ilegible se distingue de "sin esquema" con mensaje y código
+  ≠ 0 sin stack. `gc` real conserva migración, purga y `VACUUM` + `REINDEX`; el dry-run legacy mide
+  por `created_at` sin agregar `superseded_at`. El `.db` conserva su SHA-256 y `sqlite_master`; los
   sidecars `-wal`/`-shm` de una apertura WAL read-only se toleran. Sin schema, PRAGMAs persistentes
   ni `ruleVersion` nuevos.
 - **Selección de tests afectados (0.32.0)**: `ancleto affected --tests <archivos...>` implica salida
@@ -284,9 +286,9 @@ El tier `gratis` está pensado para subagentes: un modelo free sobre un agente c
 Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
 `opencode.json`, CI ni de la configuración global.
 
-**Estado de este checkout (0.39.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
+**Estado de este checkout (0.39.1)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
 gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.39.0`.
+  la fija `package.json` = `0.39.1`.
 
 ## Entorno de máquina
 

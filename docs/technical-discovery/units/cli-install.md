@@ -53,8 +53,8 @@ covers:
   - openReadableMemory
   - hasMemorySchema
 sources: ["src/cli/index.js", "src/core/discovery-glob.js", "src/core/test-selection.js", "aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection", "aspec/changes/archive/2026-11-10-spec-seed-freshness-detector", "aspec/changes/archive/2026-11-11-active-delta-structure-guard", "aspec/changes/archive/2026-11-11-seed-freshness-version-bump-not-material", "aspec/changes/archive/2026-11-11-seed-freshness-ephemeral-paths", "aspec/changes/archive/2026-11-12-seed-freshness-ignored-areas", "aspec/changes/archive/2026-11-12-discovery-exclude-regexp-cache", "aspec/changes/archive/2026-11-12-discovery-state-schema-wording", "aspec/changes/archive/2026-11-12-pin-offline-discovery-state", "src/core/memory/status.js", "src/core/memory/doctor.js", "src/core/memory/database.js", "aspec/changes/archive/2026-11-16-memory-gap-declaration", "aspec/changes/archive/2026-11-16-memory-readonly-surfaces", "test/memory-readonly-surfaces.test.js", "src/core/specs-merge.js", "src/core/adapters/frontmatter.js", "src/core/machine-env.js", "src/core/tier-models.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "scripts/refresh-model-catalog.mjs", "aspec/changes/archive/2026-11-08-archive-sync-via-specs-merge", "aspec/changes/archive/2026-11-08-cli-subcommand-help-guards", "aspec/changes/archive/2026-11-08-agent-model-minimo-migration", "aspec/changes/archive/2026-11-08-specs-merge-canonical-guard", "aspec/changes/archive/2026-11-07-portability-legacy-bundle-advisory", "aspec/changes/archive/2026-11-07-template-legacy-eol-preservation", "aspec/changes/archive/2026-11-06-specs-merge-hardening", "aspec/changes/archive/2026-11-06-archive-order-correctness", "aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic", "aspec/changes/archive/2026-11-06-p0-pr5-archive-conformity", "aspec/changes/archive/2026-11-06-fix-repair-mcp-noop", "aspec/changes/archive/2026-11-05-host-neutral-bundle", "aspec/changes/archive/2026-11-05-mcp-host-write-routing", "aspec/changes/archive/2026-11-05-mcp-oracle-residual-closure", "aspec/changes/archive/2026-11-05-mcp-command-health", "aspec/changes/archive/2026-11-04-check-doctor-state-parity", "aspec/changes/archive/2026-11-04-host-compression-note-consistency", "aspec/specs/spec-sync/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "aspec/specs/cli-diagnostics/spec.md", "aspec/specs/agent-install-routing/spec.md", "aspec/specs/project-portability/spec.md", "aspec/specs/agent-model-tiers/spec.md"]
-generatedAt: 2026-11-17T01:38:21Z
-pluginVersion: 0.39.0
+generatedAt: 2026-11-17T12:12:05Z
+pluginVersion: 0.39.1
 skillVersion: '2.3'
 ---
 
@@ -590,7 +590,7 @@ tier puede quedar dormido en `check`.
   `agents/`/`skills/` y en `test/content-guards.test.js`. La clasificación sólo es válida con cita
   resoluble y ausencia de bloques delta; la relevancia semántica es juicio de review.
 - **Riesgo**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos derivados gitignored; deben
-  alinearse con `package.json` (`0.39.0`). No son fuentes del seed. Desde 0.28.0, `.ancleto/**` y
+  alinearse con `package.json` (`0.39.1`). No son fuentes del seed. Desde 0.28.0, `.ancleto/**` y
   `.discovery-map.json` raíz tampoco cuentan para la frescura del seed; desde 0.29.0, tampoco
   `documentation/**` y `audit logs/**` (gitignored, 0 tracked).
 - **Conjunto crítico (0.31.0)**: `ancleto memory context` es la superficie explícita y falla con
@@ -608,14 +608,17 @@ tier puede quedar dormido en `check`.
   ni refresca el working-context. Acepta sólo `--json`; una flag desconocida sale 1 con mensaje en
   stderr. En paralelo, `memoryDoctorCmd` maneja la base sin esquema con
   `SCHEMA_UNINITIALIZED_DETAIL` y evita preparar statements de `memory_nodes` que abortarían.
-- **Superficies de lectura read-only (0.39.0)**: `openReadableMemory(dbPath)` es el precheck y la
-  apertura compartida de `memory context`, `list`, `export`, `curate`, `merge --dry-run`,
-  `repair refs` (sin `--apply`) e `import --dry-run`: verifica existencia, abre con
-  `{ readonly: true, migrate: false }`, consulta `hasMemorySchema` y recién entonces construye
-  `createReadonlyMemoryEngine` dentro del manejo de error. Estados `no-db`/`uninitialized`/`ok`/
-  `unreadable` deciden el exit y el mensaje por superficie (ver `decisions.md`). Ninguna crea
-  `.ancleto/` ni `memory.db`; `context --out` escribe sólo el working-context. Una base ilegible se
-  reporta distinta de "sin esquema", sin stack. Sin cambio de comandos ni flags nuevas.
+- **Superficies de lectura read-only (0.39.0–0.39.1)**: `openReadableMemory(dbPath)` es el precheck y
+  la apertura compartida de `memory context`, `list`, `export`, `curate`, `merge --dry-run`,
+  `repair refs` (sin `--apply`), `import --dry-run` y, desde 0.39.1, `gc --dry-run`: verifica
+  existencia, abre con `{ readonly: true, migrate: false }`, consulta `hasMemorySchema` y recién
+  entonces construye `createReadonlyMemoryEngine` dentro del manejo de error. Estados
+  `no-db`/`uninitialized`/`ok`/`unreadable` deciden el exit y el mensaje por superficie (ver
+  `decisions.md`). Ninguna crea `.ancleto/` ni `memory.db`; `context --out` escribe sólo el
+  working-context. Una base ilegible se reporta distinta de "sin esquema", sin stack. El `gc` real
+  conserva `createMemoryEngine` (migra) y su purga con `VACUUM` + `REINDEX`; el dry-run sin base o
+  sin esquema sale 0 y usa el fallback legacy por `created_at` sin agregar `superseded_at`. Sin
+  cambio de comandos ni flags nuevas.
 - **Merge de specs 0.22.0–0.22.1**: el fail-closed es por plan, no transaccional ante una caída de
   I/O a mitad de la escritura; el comando exige specs canónicos en inglés y no repara specs
   traducidos ni crea capabilities. El contenedor `archive` ya no se trata como change. Desde 0.25.0
@@ -631,7 +634,7 @@ tier puede quedar dormido en `check`.
 
 | Path | Rol |
 |---|---|
-| `src/cli/index.js` | Entry point, subcomandos, instalación, descriptor y ruteo MCP por host, diagnósticos, salud MCP, nota de compresión, validación de bundles, `export`/`import`, `specs merge`, MCP, stats, estado del seed, hash semántico y filtro de rutas efímeras (`isEphemeralSource`/`isEphemeralOnlyChange`), extendido a `documentation/**` y `audit logs/**` (0.29.0); desde 0.30.1 importa el matcher de `discovery.exclude`; `memoryImport` implementa `--dry-run`/`--json` con clasificación read-only (0.34.0); `memoryStatusCmd` implementa `memory status` advisory (0.38.0); `openReadableMemory` centraliza el precheck y la apertura read-only de las nueve superficies (0.39.0) |
+| `src/cli/index.js` | Entry point, subcomandos, instalación, descriptor y ruteo MCP por host, diagnósticos, salud MCP, nota de compresión, validación de bundles, `export`/`import`, `specs merge`, MCP, stats, estado del seed, hash semántico y filtro de rutas efímeras (`isEphemeralSource`/`isEphemeralOnlyChange`), extendido a `documentation/**` y `audit logs/**` (0.29.0); desde 0.30.1 importa el matcher de `discovery.exclude`; `memoryImport` implementa `--dry-run`/`--json` con clasificación read-only (0.34.0); `memoryStatusCmd` implementa `memory status` advisory (0.38.0); `openReadableMemory` centraliza el precheck y la apertura read-only de las diez superficies y `memoryGc` separa dry-run read-only de la purga real (0.39.0–0.39.1) |
 | `src/core/memory/status.js` | `inspectMemoryStatus`: estados `ok`/`empty`/`no-db`/`uninitialized`, `expected` desde proposals archivados, `gap` y `recovery`; única raíz `cwd` y apertura read-only (0.38.0); desde 0.39.0 `hasMemorySchema` es la consulta única de `sqlite_master` compartida con `doctor` y el CLI |
 | `src/core/memory/database.js` | `openDatabase(dbPath, { migrate, readonly })`: con `readonly: true` no ejecuta `mkdirSync`, no activa WAL ni corre migraciones; base de la garantía read-only (0.39.0) |
 | `src/core/discovery-glob.js` | `escapeRe`/`compileGlob`/`matchesGlob`: traducción glob→regex por tokens y caché `Map` del `RegExp` por string exacto de glob (0.30.1) |
@@ -670,7 +673,8 @@ tier puede quedar dormido en `check`.
 | `aspec/changes/archive/2026-11-13-ch-06b-affected-test-selection/` | Change archivado de 0.32.0: `ancleto affected --tests`, módulo `src/core/test-selection.js`, manifiesto `test/affected-tests.json` y consumidor `scripts/test-affected.mjs`; delta `ADDED` de `prompt-contracts` y cierre de `CH-06b` |
 | `aspec/changes/archive/2026-11-16-memory-repair-refs/` | Change archivado de 0.37.0: subcomando `memory repair refs` en el dispatch de `memory`, allowlist `inexistente`, dry-run read-only, `--apply` por supersede y gate crítico; delta de `memory-ops` y cierre de `CH-09b` |
 | `aspec/changes/archive/2026-11-16-memory-gap-declaration/` | Change archivado de 0.38.0: `memory status` advisory en el dispatch (`memoryStatusCmd` → `inspectMemoryStatus`), `expected`/`gap`/`recovery`, raíz única `cwd`, read-only y fix de `memory doctor` sobre base sin esquema; delta `ADDED` de `memory-ops` y cierre de `CH-01/T27` |
-| `aspec/changes/archive/2026-11-16-memory-readonly-surfaces/` | Change archivado de 0.39.0: `openReadableMemory` + `hasMemorySchema` y apertura `{ readonly: true, migrate: false }` en las nueve superficies de lectura; degradación sin stack, `.db` con SHA-256/`sqlite_master` idénticos y sidecars WAL tolerados; delta `ADDED` de `memory-ops` |
+| `aspec/changes/archive/2026-11-16-memory-readonly-surfaces/` | Change archivado de 0.39.0: `openReadableMemory` + `hasMemorySchema` y apertura `{ readonly: true, migrate: false }` en nueve superficies de lectura; degradación sin stack, `.db` con SHA-256/`sqlite_master` idénticos y sidecars WAL tolerados; delta `ADDED` de `memory-ops` |
+| `aspec/changes/archive/2026-11-17-memory-gc-dry-run-readonly/` | Change archivado de 0.39.1: `memoryGc` usa `openReadableMemory` para `--dry-run`, degrada sin stack (sin base/sin esquema → 0; ilegible → 1) y `gcSuperseded` cae a `created_at` en bases legacy; `gc` real conserva migración y `VACUUM` + `REINDEX` |
 | `aspec/changes/archive/2026-11-12-mem-05-working-context-critical-set/` | Change archivado de 0.31.0: `memory.criticalKeys` en `.ancletorc`, inyección primero de las claves críticas y política de fallo (CLI explícita ≠ 0 sin sobrescribir; lifecycle/on-write con `console.warn`; `merge`/`consolidate --apply` ≠ 0); delta `ADDED` de `memory-engine` y `MODIFIED` del orden determinístico |
 | `aspec/changes/archive/2026-11-06-specs-merge-hardening/` | Change archivado del endurecimiento de `specs merge` (0.22.1): contenedor `archive`, H1 estructural, `ADDED` y atomicidad acotada |
 | `aspec/changes/archive/2026-11-06-ch-06a-specs-merge-deterministic/` | Change archivado del merge determinístico de specs y la capability `spec-sync` (0.22.0) |
@@ -685,7 +689,7 @@ tier puede quedar dormido en `check`.
 | `aspec/specs/cli-diagnostics/spec.md` | Requirements de deriva de versión, config MCP de `doctor`, salud MCP, avisos de `check`, aviso de `import`, `--help` sin ejecución (0.25.0), `seedMapPresent` state-independent (0.26.0), detector de frescura (0.26.1), `recommendedAction` `generate`/`complete` (0.26.x), regla normalizada `ruleVersion: 2`/`semantic` con bump de `version` no material (0.27.0), filtro simétrico de rutas efímeras (0.28.0), su extensión a `documentation/**`/`audit logs/**` (0.29.0), semántica por segmentos de `discovery.exclude` (0.30.0; 0.30.1 no cambia el contrato) y precisión 0.30.2 sobre el estado persistido (`version: 1` + `ruleVersion: 2`) frente a `schemaVersion: 2` de la salida |
 | `aspec/specs/spec-sync/spec.md` | Requirements del merge determinístico, idempotencia, fail-closed, dry-run y alcance acotado; 0.22.1 agrega H1 estructural, contenedor `archive` y atomicidad acotada; 0.24.0 agrega el guard canónica-only de headings de delta para los cuatro tipos; 0.26.4 agrega la validación estructural de los deltas de changes activos en la suite declarada y 0.27.0 suma la detección de un `spec.md` de change activo fuera de `specs/<capability>/spec.md` |
 | `aspec/specs/copilot-support/spec.md`, `aspec/specs/legacy-import/spec.md`, `aspec/specs/test-profile/spec.md` | Canónicas normalizadas a `## Requirements` (0.24.0) |
-| `aspec/specs/memory-ops/spec.md` | Requirements de memoria y de la promoción de decisiones al archivar antes del move (0.22.1); desde 0.38.0 `Estado de memoria con ancleto memory status` y el fix del path sin esquema de `memory doctor`; desde 0.39.0 `Superficies de lectura de memoria estrictamente read-only` |
+| `aspec/specs/memory-ops/spec.md` | Requirements de memoria y de la promoción de decisiones al archivar antes del move (0.22.1); desde 0.38.0 `Estado de memoria con ancleto memory status` y el fix del path sin esquema de `memory doctor`; desde 0.39.0 `Superficies de lectura de memoria estrictamente read-only`, extendido en 0.39.1 a `gc --dry-run` |
 | `aspec/specs/memory-engine/spec.md` | `Orden determinístico de inyección de reglas` (7 escenarios) y `Conjunto crítico estable del working-context` (0.31.0), incluida la política de fallo por superficie |
 | `aspec/changes/archive/2026-11-06-archive-order-correctness/` | Change archivado del orden del archive y la semántica de fallo (0.22.1) |
 | `aspec/specs/prompt-contracts/spec.md` | Requirements de conformidad-vs-delta y archive sin delta (0.21.0) y del sync de delta al archivar ruteado por `specs merge` (0.25.0) |

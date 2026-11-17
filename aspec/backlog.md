@@ -664,3 +664,24 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Validaciones:** `npm test` 1445 pass / 0 fail; `npm run lint` OK; format `not-configured`; typecheck `n/a`.
 - **Memoria:** 2 decisiones promovidas con `scope: project` (`memory-readonly-surfaces-no-migrate`, `memory-schemaless-degrades-as-no-db`) + 1 regla de cierre (`memory-readonly-precheck-before-eager-engine`).
 - **Follow-up declarado:** `memory gc --dry-run` (misma clase de superficie de lectura, `src/cli/index.js:3110`, fuera del alcance enumerado del change).
+
+## Relación con 0.39.0
+
+0.39.0 (2026-11-16) contiene un change archivado (`memory-readonly-surfaces`). Release MINOR (runtime + spec + test). Estado: **pendiente de tag y publish**.
+
+**Hecho:**
+
+- **`memory-readonly-surfaces` (delta `## ADDED` en `memory-ops`), archivado en `aspec/changes/archive/2026-11-16-memory-readonly-surfaces/`:** las superficies de lectura de memoria son estrictamente read-only. Detalle en `## Cierre de deuda — superficies de lectura de memoria estrictamente read-only (2026-11-16, 0.39.0 pendiente de release)`.
+- **Garantía RO:** abren con RO + `migrate:false`, ejecutan cero DDL y no crean `.ancleto/` ni una DB; sobre una base existente el `.db` conserva idéntico su sha256 y sus filas de `sqlite_master` antes y después de cada comando.
+- **Degradación sin esquema:** mapa explícito de exit codes por superficie, sin migrar ni inicializar una base de 0 bytes; `doctor` sobre base ilegible reporta mensaje propio y sale sin stack.
+- **Sidecars:** se toleran los WAL; una base en modo DELETE sin sidecars también se lee sin fallar.
+- **Delta mergeado:** 22 requirements / 203 escenarios en `aspec/specs/memory-ops/spec.md`.
+- **Compatibilidad:** sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`; el estado persistido es el mismo, así que un binario 0.38.0 lee el estado escrito por 0.39.0.
+- **Validaciones:** `npm test` 1445 pass / 0 fail / 5 skipped; `npm run lint` OK; format `not-configured`; typecheck `n/a`.
+
+**Release:**
+
+- **Tag:** `v0.39.0` (pendiente de crear tras el merge a `main`).
+- **Publish:** pendiente (workflow por tag).
+- **npm:** `0.39.0` (pendiente de verificación).
+- **Ramas:** `development`.

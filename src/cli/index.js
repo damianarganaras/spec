@@ -3091,6 +3091,13 @@ async function memoryImportDryRun(json, asJson) {
   }
 }
 
+// Unico literal de "sin base" del comando gc: la rama apply (guard de existencia,
+// porque crear el engine crearia la DB) y la rama dry-run (via `openReadableMemory`
+// -> `no-db`) emiten exactamente la misma salida.
+function noMemoryMessage(dbPath) {
+  return `ancleto: no hay memoria en este repo (${dbPath})`
+}
+
 async function memoryGc(flags) {
   const dryRun = flags.includes('--dry-run')
   const daysRaw = flagValue(flags, '--days')
@@ -3103,18 +3110,15 @@ async function memoryGc(flags) {
     }
   }
   const dbPath = defaultMemoryDbPath()
-  if (!(await exists(dbPath))) {
-    console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
-    process.exit(0)
-  }
   // `--dry-run` es estrictamente read-only: abre con el helper compartido (sin
   // migrar ni crear la base) y solo reporta. La rama de purga conserva el engine
-  // de escritura, que migra antes de tocar la DB.
+  // de escritura, que migra antes de tocar la DB: por eso el guard de existencia
+  // vive solo ahi, y el dry-run resuelve `no-db` por el helper (caso alcanzable).
   let engine
   if (dryRun) {
     const opened = await openReadableMemory(dbPath)
     if (opened.state === 'no-db') {
-      console.error(`ancleto: no hay memoria en este repo (${dbPath})`)
+      console.error(noMemoryMessage(dbPath))
       process.exit(0)
     }
     if (opened.state === 'uninitialized') {
@@ -3127,6 +3131,10 @@ async function memoryGc(flags) {
     }
     engine = opened.engine
   } else {
+    if (!(await exists(dbPath))) {
+      console.error(noMemoryMessage(dbPath))
+      process.exit(0)
+    }
     engine = createMemoryEngine(dbPath)
   }
   try {
@@ -3139,8 +3147,15 @@ async function memoryGc(flags) {
         console.error(`ancleto: advertencia: VACUUM/REINDEX falló: ${result.vacuumError}`)
       }
     }
+  } catch (err) {
+    // La rama apply conserva su contrato (el error sigue visible). El dry-run acota
+    // el fallo de la consulta a un mensaje deterministico sin stack trace.
+    if (!dryRun) throw err
+    console.error(`ancleto: no se pudo completar gc --dry-run (${dbPath}): ${UNREADABLE_DETAIL}`)
+    process.exitCode = 1
   } finally {
-    engine.close()
+    // Cierre best-effort: un fallo de `close` no tapa el estado ya emitido.
+    try { engine.close() } catch { /* ignore */ }
   }
 }
 

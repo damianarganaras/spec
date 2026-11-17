@@ -734,7 +734,7 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 
 ## Relación con 0.40.0
 
-0.40.0 (2026-11-17) contiene un change archivado (`jev-spec-advisory-judge`). Release MINOR (runtime + spec + docs): agrega el subcomando `ancleto judge`, advisory, read-only y opt-in (default off). Estado: **contenido implementado y archivado; release aún no ejecutada** — este apartado no afirma tag, run de publish ni publicación en npm.
+0.40.0 (2026-11-17) contiene un change archivado (`jev-spec-advisory-judge`). Release MINOR (runtime + spec + docs): agrega el subcomando `ancleto judge`, advisory, read-only y opt-in (default off). Estado: **release publicada y verificada** (tag anotado, run de publish success y paquete live en npm).
 
 **Hecho:**
 
@@ -743,6 +743,9 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Sin dependencias de runtime nuevas:** el binario externo `jev-spec@0.4.1` se resuelve en runtime por `PATH`/`npx`; no se agrega red en `src/` ni paquetes al `package.json`.
 - **Opt-in:** `judge.enabled` default `false`; `--dry-run` no ejecuta `jev-spec.config.ts` (imprime el comando sin spawnear el binario); el juez no es gate de archive/conformidad.
 - **Compatibilidad:** sin cambios en el schema, los PRAGMAs persistentes ni `ruleVersion` de la memoria; un binario 0.39.1 lee el mismo estado.
+- **Release ejecutada (2026-11-17):** tag ANOTADO `v0.40.0` → commit `5097712` (merge commit `50977125ea56433c3c4654f0d8f265b207497c8d`, `--no-ff` desde `development`); workflow Publish run `44158264794` success (job `publish`, 2m5s).
+- **Publicación npm:** `@ancleto/spec@0.40.0` live, `dist-tags.latest = 0.40.0`, `gitHead = 50977125ea56433c3c4654f0d8f265b207497c8d`; tarball HTTP 200 (244542 bytes, shasum verificado).
+- **Seed:** regenerado con `pluginVersion 0.40.0`, 11/11 docs, `discovery --check` READY/none.
 
 **Pendiente:**
 

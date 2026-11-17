@@ -731,3 +731,19 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Docs:** `README.md` y `docs/jev-advisory-judge.md`.
 - **Review de artifacts (2026-11-17):** cerrados los hallazgos del contrato —`judge.timeoutMs` (`> 0`, default 120000, `--timeout` lo sobrescribe), la garantía de red/escritura acotada a `ancleto` (el binario y `npx` pueden consultar el registry y cachear fuera del repo), el vocabulario cerrado de `reason`, `--json` en todos los caminos de la máquina de estados vs errores de uso por stderr con exit 1, y `tool.source` del `--dry-run`.
 - **Pendiente:** sólo (a) la medición AUC con cuenta real (valor NO medido empíricamente; criterio falsable: AUC ≥ 0.75 sobre 5 correctos vs 5 saboteados + 2 refactors + 1 caso donde el keyword search falla) y (b) la release 0.40.0. El delta ya está sincronizado (`tool-unavailable`) y los tests offline están verdes.
+
+## Relación con 0.40.0
+
+0.40.0 (2026-11-17) contiene un change archivado (`jev-spec-advisory-judge`). Release MINOR (runtime + spec + docs): agrega el subcomando `ancleto judge`, advisory, read-only y opt-in (default off). Estado: **contenido implementado y archivado; release aún no ejecutada** — este apartado no afirma tag, run de publish ni publicación en npm.
+
+**Hecho:**
+
+- **`jev-spec-advisory-judge` (funcional, delta `ADDED` en `cli-diagnostics`), archivado en `aspec/changes/archive/2026-11-17-jev-spec-advisory-judge/`:** `ancleto judge` corre preguntas `noul`/`choice`/`score` por requirement y es advisory/read-only. Detalle en `## Juez semántico advisory opcional (2026-11-17, implementado y archivado, sin release)`.
+- **Spec:** requirement `Juez externo advisory opcional` en `aspec/specs/cli-diagnostics/spec.md` (11 requirements, 0 deletions).
+- **Sin dependencias de runtime nuevas:** el binario externo `jev-spec@0.4.1` se resuelve en runtime por `PATH`/`npx`; no se agrega red en `src/` ni paquetes al `package.json`.
+- **Opt-in:** `judge.enabled` default `false`; `--dry-run` no ejecuta `jev-spec.config.ts` (imprime el comando sin spawnear el binario); el juez no es gate de archive/conformidad.
+- **Compatibilidad:** sin cambios en el schema, los PRAGMAs persistentes ni `ruleVersion` de la memoria; un binario 0.39.1 lee el mismo estado.
+
+**Pendiente:**
+
+- **Medición de valor AUC con cuenta TypeSafe real** (posterior a 0.40.0): valor NO medido empíricamente; criterio falsable AUC ≥ 0.75 sobre 5 correctos vs 5 saboteados + 2 refactors + 1 caso donde el keyword search falla. Sin esa corrida no se habilita `--require` en CI.

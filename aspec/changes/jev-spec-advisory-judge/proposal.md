@@ -1,8 +1,14 @@
 # Proposal: Juez semántico opcional (JEV) para specs, opt-in y advisory
 
-> **Estado:** propuesta para review. **No implementada.** Este change declara sólo `proposal.md`:
-> `design.md`, `tasks.md` y el delta `specs/spec-judge/spec.md` se escriben después de la aprobación
-> (o incorporando lo que pida el review). No hay cambios de código en este directorio.
+> **Estado:** artefactos completos (`proposal.md`, `design.md`, `tasks.md` y delta
+> `specs/cli-diagnostics/spec.md`); decisiones aprobadas. **No implementada:** no hay cambios de código
+> todavía.
+>
+> **Corrección respecto de la revisión previa:** este repositorio **sí tiene `.ancletorc`** (con
+> `azure`, `discovery`, `memory`, `agent`, `language`, `profile`, `version`); la lectura tolerante sigue
+> siendo necesaria por portabilidad, no porque el archivo falte. Las citas de código corregidas son
+> `src/cli/index.js:2598-2617` para `runRepomix` y `src/cli/index.js:3829` para
+> `process.exit(missing > 0 ? 1 : 0)`.
 
 ## Related Work Item
 
@@ -41,20 +47,25 @@ y sin que las skills de ancleto sepan usarlo.
 
 ## Requisito citado
 
-**No cita un requirement existente:** `spec-judge` es una capability nueva y el delta se escribirá
-después de la aprobación. Lo que sí se declara son los cuatro contratos vigentes que el change **NO
-puede violar**:
+**No modifica ningún requirement existente.** Es un cambio funcional con **un** requirement nuevo bajo
+`## ADDED Requirements` en `aspec/specs/cli-diagnostics/spec.md`: `Juez externo advisory opcional`. La
+capability es `cli-diagnostics` y no una nueva `spec-judge` porque `ancleto specs merge` es fail-closed
+con `canonical spec not found` para una capability sin spec canónica (`src/cli/index.js:4189-4192`), así
+que una capability nueva no se podría archivar por el flujo. No se usa `MODIFIED`: reescribiría el
+cuerpo y todos los escenarios de un requirement ajeno.
+
+Los cuatro contratos vigentes que el change **NO puede violar** son:
 
 - `spec:prompt-contracts#Clasificación de conformidad frente a cambio funcional`
-  (`aspec/specs/prompt-contracts/spec.md:1222-1228`): el archive NO agrega un segundo gate de
+  (`aspec/specs/prompt-contracts/spec.md:1154-1241`): el archive NO agrega un segundo gate de
   verificación y la relevancia NO se presenta como mecánicamente demostrable.
 - `path:aspec/specs/cli-diagnostics/spec.md` (contrato de diagnósticos): `check` conserva
   `missing > 0 ? 1 : 0`; el juez no cambia su salida ni su código de salida
-  (`src/cli/index.js:3439`).
+  (`src/cli/index.js:3829`).
 - `path:PRODUCT.md` y `path:package.json`: cero dependencias de runtime, Node ≥ 24, y `src/` no
   accede a la red en runtime (verificado: no hay un solo `fetch(` en `src/`).
-- `spec:spec-sync#...` y la regla de "un dueño por invariante": el parseo y el mapeo del juez viven en
-  un módulo puro, como `src/core/specs-merge.js`.
+- `path:src/core/specs-merge.js` y la regla de "un dueño por invariante": el adaptador vive en un
+  módulo cohesivo, como el merge de specs.
 
 ## Disparador evaluado
 
@@ -81,7 +92,7 @@ Principios:
 
 - **Nada de red en el core.** `src/` no habla HTTP. El adaptador **envuelve un binario externo**
   (`jev-spec`), resuelto por `PATH` o `npx` con versión pinneada, exactamente como hoy se resuelve
-  Repomix (`src/cli/index.js:2589-2597`).
+  Repomix (`src/cli/index.js:2598-2617`).
 - **Deshabilitado por defecto.** Sin `judge.enabled` no hay comportamiento nuevo; `ancleto judge`
   reporta `skipped` con motivo y sale 0.
 - **Advisory por defecto, gate sólo con `--require`.** Un repo sin red o sin API key no se rompe;
@@ -95,38 +106,39 @@ Principios:
 
 ### In scope
 
-- **`src/core/judge/` (módulo puro, sin I/O):**
-  - `config.js`: lectura tolerante de `.ancletorc` → `judge` (ausente, no-objeto o entradas inválidas
-    → defaults, mismo criterio que `memory.criticalKeys`). `.ancletorc` puede **no existir**: este
-    mismo repositorio no lo tiene y el comando debe seguir siendo usable.
-  - `argv.js`: construcción de argv con **whitelist** de flags; `--target` validado por
-    `^[A-Za-z0-9._-]+$`; nunca se interpola input del usuario en una cadena de shell.
-  - `normalize.js`: mapeo de la salida JSON de `jev-spec` a una forma estable de ancleto
-    (`passed`, `targets[]`, `rubrics[]`, `skipped`, `tool`, `model`, `cost`). Si el JSON no se
-    reconoce → `judge-output-unrecognized`, exit 2, nunca "pass".
-  - `verdict.js`: `pass | fail | skip` + exit code (`0` pass/skip, `1` assertion fallida, `2` error
-    de setup); `--require` convierte `skip` en `2`.
-- **`src/cli/index.js`:** subcomando `ancleto judge [--target <name>] [--dry-run] [--json]
-  [--require] [--timeout <ms>]`, con entrada de ayuda y sin escrituras (read-only).
-- **Resolución del binario:** `resolveBin('jev-spec')` → local; si falta, `npx -y jev-spec@<PIN>`;
-  el adaptador reporta la versión y el modelo que respondieron. El pin vive en una sola constante.
+- **`src/core/judge.js` (módulo cohesivo, sin red y sin escrituras):** lectura tolerante de
+  `.ancletorc` → `judge.enabled` / `judge.timeoutMs` (archivo ausente o JSON inválido → `null`),
+  resolución del binario, sonda de setup, spawn, mapeo de estados y armado del envelope `--json`. No
+  hay `src/core/judge/` con cuatro archivos: no hay consumidor interno de las piezas y una API pública
+  sin segundo consumidor es deuda. No importa helpers de `src/cli/index.js` porque ese archivo es un
+  entrypoint ejecutable (su `switch` corre al importarse).
+- **`src/cli/index.js`:** `judgeCommand` y el `case 'judge'` del dispatch; subcomando
+  `ancleto judge [--dry-run] [--json] [--require]`, entrada de ayuda y sin escrituras (read-only). No
+  acepta `--target` ni `--change`: v1 no pasa argumentos del usuario al binario.
+- **Resolución del binario:** `jev-spec` por `PATH`; si falta, `npx -y jev-spec@0.4.1` (pin exacto en
+  una constante del release, nunca `latest`). El adaptador reporta el origen (`path`/`npx`) y la
+  versión cuando la sonda corrió; si no corrió, la versión es null. No reporta el modelo.
 - **`.ancletorc` (schema aditivo):**
-  ```yaml
-  judge:
-    enabled: false        # default
-    tool: jev-spec        # nombre en PATH o ruta
-    command: []           # override opcional (argv list)
-    timeoutMs: 120000
+  ```json
+  {
+    "judge": {
+      "enabled": false,
+      "timeoutMs": 120000
+    }
+  }
   ```
+  `init` no lo habilita. No hay `tool` ni `command` configurables: el pin es del release y un override
+  de argv reintroduciría la superficie de inyección que v1 elimina.
 - **Skills:** `ancleto-verify` gana un paso opcional ("si `judge.enabled`, corré `ancleto judge
-  --json`; usá las probabilidades como evidencia, nunca como veredicto; si `skipped`, declaralo");
-  `ancleto-apply` lo menciona como chequeo opcional por tarea; `ancleto-workflow` lo lista como
-  opcional. `ancleto-archive` NO se toca.
+  --json`; usá las probabilidades como evidencia, nunca como veredicto; si `skipped`, declaralo") y
+  `ancleto-workflow` lo lista como opcional. `ancleto-archive` NO se toca y no se agrega un comando
+  `/cleto-*` nuevo.
 - **Docs:** `README.md` (sección corta), `docs/guia-configuracion.md` (bloque `judge`) y
-  `docs/jev-advisory-judge.md` (setup, protocolo de probes, límites, seguridad y calibración).
+  `docs/jev-advisory-judge.md` (setup, egreso de código, límites, seguridad y criterio de valor).
 - **Tests offline:** `test/judge.test.js` con `test/fixtures/jev-spec-mock.mjs` (binario falso,
-  determinista, sin red). Se commitea además una **grabación real** de `jev-spec check --format json`
-  como fixture, para fijar el parser contra la forma efectiva del tool.
+  determinista, sin red) y PATH señuelo. No se commitea una grabación real: no hay cuenta ni
+  `TYPESAFE_AI_API_KEY` en este entorno, y el adaptador no parsea el reporte (§ design 2), así que no
+  hay forma que fijar contra el tool real.
 
 ### Out of scope (con razón)
 
@@ -135,8 +147,10 @@ Principios:
   además metería red en `src/` y una superficie de seguridad propia. Se descarta.
 - **Integrarse a `ancleto check` o cambiar su exit.** El contrato `missing > 0 ? 1 : 0` está pinneado
   en `cli-diagnostics`; mezclar un gate de red con un oráculo offline rompe ambos.
-- **Gate en `ancleto-archive` / conformidad.** Contradice `prompt-contracts:1222-1228` y "Don't block
-  archiving on warnings". El juez puede informar; el archive no lo consulta.
+- **Gate en `ancleto-archive` / conformidad.** Contradice
+  `spec:prompt-contracts#Clasificación de conformidad frente a cambio funcional`
+  (`aspec/specs/prompt-contracts/spec.md:1222-1241`) y "Don't block archiving on warnings". El juez
+  puede informar; el archive no lo consulta.
 - **Targets sobre deltas de changes activos** (`aspec/changes/<slug>/specs/**`). Esas rutas se mueven
   al archivar (`aspec/changes/archive/<fecha>-<slug>/`) y romperían la config sola. v1 apunta sólo a
   specs canónicas. Un `--change` con config generada queda como follow-up con su propio diseño.
@@ -156,19 +170,23 @@ Principios:
   Node ≥ 24 (`package.json:29-31`).
 - Precedente exacto de binario opcional: `runRepomix` usa `resolveBin('repomix')`, cae a
   `npx -y repomix@1.18.0` y ejecuta con `spawnSync(..., { shell: true })`
-  (`src/cli/index.js:2589-2597`). El juez sigue ese patrón, no uno nuevo.
+  (`src/cli/index.js:2598-2617`). El juez sigue ese patrón, no uno nuevo.
 - La verificación actual es léxica: `skills/ancleto-verify/SKILL.md:37` ("search the codebase for
   related keywords").
 - La relevancia de conformidad es juicio semántico declarado y no mecánico:
-  `aspec/specs/prompt-contracts/spec.md:1222-1228`.
-- `check` cierra con `process.exit(missing > 0 ? 1 : 0)` (`src/cli/index.js:3439`): contrato que el
+  `aspec/specs/prompt-contracts/spec.md:1222-1241`.
+- `check` cierra con `process.exit(missing > 0 ? 1 : 0)` (`src/cli/index.js:3829`): contrato que el
   juez no toca.
-- Este repositorio **no tiene `.ancletorc`**: el adaptador debe funcionar con configuración ausente y
-  reportar `skipped` (evita asumir que el manifiesto siempre existe).
-- Límites y semántica de `jev-spec` (README, 2026): ≤500 archivos, ≤2 MiB por archivo, ≤120k chars por
-  target; exit `0/1/2`; `--staged`/`--diff` eligen targets, no lo que ve el modelo; el config es
-  TS/JS y **se ejecuta** (también en `--dry-run`); no hay redacción de secretos; el inglés es el
-  idioma primario de entrenamiento.
+- Este repositorio **sí tiene `.ancletorc`** (claves `azure`, `discovery`, `agent`, `language`,
+  `profile`, `memory`, `version`). La lectura tolerante sigue siendo requisito para repos sin
+  manifiesto: el adaptador degrada a `skipped` (no asume que el archivo siempre exista).
+- `readAncletorc` (`src/cli/index.js:175-183`) tolera ausencia, BOM y JSON inválido → `null`;
+  `writeManifest` (`:185-198`) preserva keys extra. No hay schema cerrado de keys.
+- Límites y semántica de `jev-spec` (spike sobre `jev-spec@0.4.1`): ≤500 archivos, ≤2 MiB por archivo,
+  ≤120k chars por target; exit `0/1/2`; `--staged`/`--diff` eligen targets, no lo que ve el modelo; el
+  config es TS/JS y **se ejecuta** (también en el `--dry-run` del tool); no hay redacción de secretos;
+  el inglés es el idioma primario de entrenamiento. Sin `TYPESAFE_AI_API_KEY`, `check` sale 2 con un
+  mensaje explícito; `--dry-run` y `--mock` son offline pero no discriminan.
 
 ## Riesgos con mitigación
 
@@ -183,15 +201,17 @@ Principios:
 - **Código fuera de la máquina:** `codePaths` puede incluir secretos. Mitigación: exclusiones
   documentadas, `.ancleto/**` y `.env*` fuera por defecto, y la clave **sólo** por variable de
   entorno (`TYPESAFE_AI_API_KEY`), nunca en `.ancletorc` ni en el bundle.
-- **Deriva del tool o del modelo:** `jev-spec` cambia de forma de salida; sin pin, `jev-latest`
-  cambia el modelo. Mitigación: pin de versión del tool en una constante, pin de `client.model`
-  documentado, y fixture de JSON grabado que se actualiza al subir el pin.
-- **Windows y `npx` (`.cmd`):** el precedente de Repomix usa `shell: true`. Mitigación: argv
-  whitelist, `--target` validado, timeout, y un test que pinea que ningún argumento del usuario
-  llega crudo al shell.
-- **Config del usuario que se ejecuta:** `jev-spec.config.ts` corre código en `--dry-run`. Mitigación:
-  documentar el modelo de amenaza de CI (fork PRs → sólo dry-run, sin secretos) y no ejecutar el
-  juez desde comandos que instalan ni desde `check`.
+- **Deriva del tool o del modelo:** `jev-spec` cambia de forma de salida; sin pin, `latest` cambia el
+  modelo. Mitigación: pin exacto `jev-spec@0.4.1` en una constante, y el adaptador **no parsea** el
+  reporte: sólo consume exit codes y transporta stdout/stderr verbatim. Sin fixture de JSON que
+  mantener.
+- **Windows y `npx` (`.cmd`):** el binario resuelto se spawnea directo, sin shell; sólo el fallback
+  `npx` usa `shell: true`, con argv constante. Mitigación: no hay argumentos de usuario, así que no
+  hay nada que escapar; un test verifica que no se pasa ningún argumento variable.
+- **Config del usuario que se ejecuta:** `jev-spec.config.ts` corre código en el `--dry-run` del tool.
+  Mitigación: el `--dry-run` de ancleto **no invoca el binario**, así que la config del usuario nunca
+  se ejecuta en ese camino; la corrida real es explícita y anuncia el egreso de código. No se ejecuta
+  el juez desde comandos que instalan ni desde `check`.
 - **Ruido de mantenimiento:** una integración que depende de un OSS de un solo mantenedor. Mitigación:
   el adaptador degrada a `skipped` si el tool falta o cambia; el pin se actualiza manualmente y los
   tests offline no dependen de la red.
@@ -201,121 +221,143 @@ Principios:
 
 ## Decisiones
 
-**memory_key:** judge-external-pinned-binary-no-runtime-dep
-
-**Elección:** el juez es un adaptador a `jev-spec` resuelto por `PATH` o `npx` con versión pinneada,
-sin cliente HTTP propio y sin agregar `dependencies`.
-
-**Descartado:** implementar un cliente nativo de la API de TypeSafe dentro de `src/`.
-
-**Justificación:** el cliente nativo duplicaría root-jail, delimitadores, límites y manejo de errores
-que `jev-spec` ya mantiene, y metería red en el core offline. El precedente de Repomix
-(`src/cli/index.js:2589-2597`) demuestra que el patrón de binario opcional ya es parte del producto.
-
-**Refs:**
+### judge-external-pinned-binary-no-runtime-dep
+- Elección: el juez es un adaptador a jev-spec con pin exacto 0.4.1, resuelto por PATH y, si falta, por npx -y jev-spec@0.4.1, sin cliente HTTP propio y sin agregar dependencies de runtime.
+- Descartado: implementar un cliente nativo de la API de TypeSafe en src/ y usar latest como fallback.
+- Justificación: el cliente nativo duplicaría root-jail, delimitadores, límites y manejo de errores que jev-spec mantiene, y metería red en el core offline; latest cambiaría el modelo sin que ningún release de ancleto lo declare. Repomix ya usa este patrón (src/cli/index.js:2598-2617).
+- Refs:
 - path:src/cli/index.js
 - path:package.json
-- path:PRODUCT.md
+- spec:cli-diagnostics#Juez externo advisory opcional
 - change:jev-spec-advisory-judge
 
-**Estado:** propuesto
+Estado: aprobado
 
-**memory_key:** judge-advisory-default-required-ci
-
-**Elección:** `ancleto judge` sale `0` en pass y en skip; `1` si una assertion falla; `2` si el setup
-está roto. `--require` convierte el skip en `2` para CI.
-
-**Descartado:** bloquear por defecto cuando falta el tool o la API key.
-
-**Justificación:** un comando advisory que rompe un repo offline contradice la postura del producto;
-el gate se pide explícitamente. El skip nunca se reporta como pass: siempre nombra el motivo.
-
-**Refs:**
+### judge-advisory-default-required-ci
+- Elección: pass sale 0, fail 1, broken 2, skipped 0 y unavailable 0; con --require skipped y unavailable salen 2 sin reescribir el estado; el exit del tool mapea 0 a pass, 1 a fail, 2 a broken y cualquier otro a broken; con --json el envelope estable se emite en todos los caminos, incluido exit 2, sin schemaVersion.
+- Descartado: bloquear por defecto cuando falta el tool o la credencial, y omitir el JSON en el camino de error.
+- Justificación: un comando advisory que rompe un repo offline contradice la postura del producto; el gate se pide explícitamente y un CI distingue no corrió de falló leyendo state, no el exit. Sin JSON en el error el consumidor no puede clasificar el fallo.
+- Refs:
 - path:src/cli/index.js
-- path:aspec/specs/cli-diagnostics/spec.md
+- spec:cli-diagnostics#Juez externo advisory opcional
 - change:jev-spec-advisory-judge
 
-**Estado:** propuesto
+Estado: aprobado
 
-**memory_key:** judge-never-blocks-archive-relevance-stays-human
+### judge-probes-required-before-require
+- Elección: --require exige una sonda de setup verde (spawn del binario con su flag de versión, offline y sin credenciales) antes de la corrida live; una sonda rota produce unavailable con exit 2.
+- Descartado: exigir el gate sin probar el setup, o convertir una sonda rota en fail.
+- Justificación: fail significaría que la aserción corrió y falló, y una sonda rota no juzgó nada; un gate cuyo setup no se verificó es peor que no tener gate.
+- Refs:
+- path:test/affected-tests.json
+- spec:cli-diagnostics#Juez externo advisory opcional
+- change:jev-spec-advisory-judge
 
-**Elección:** el juez se cablea a `ancleto-verify` y opcionalmente a `ancleto-apply`; nunca al
-archive, y un `pass` no se presenta como prueba de conformidad.
+Estado: aprobado
 
-**Descartado:** usarlo como compuerta de relevancia en el archive de conformidad.
-
-**Justificación:** `prompt-contracts:1222-1228` prohíbe presentar la relevancia como mecánicamente
-demostrable y prohíbe un segundo gate de verificación en el archive. Un score puede informar a
-`@reviewer`, no reemplazarlo.
-
-**Refs:**
+### judge-never-blocks-archive-relevance-stays-human
+- Elección: el juez es opt-in y advisory, default off; se cablea sólo como paso opcional de ancleto-verify y mención en ancleto-workflow; nunca gatea el archive ni presenta un pass como prueba de conformidad; su valor se documenta como criterio falsable de AUC mayor o igual a 0.75 y hoy no está medido.
+- Descartado: presentarlo como compuerta de relevancia en el archive o afirmar valor probado sin medirlo.
+- Justificación: el requirement prohíbe presentar la relevancia como mecánicamente demostrable y prohíbe un segundo gate de verificación en el archive; el juez es semántico y devuelve probabilidades calibradas, distinto del keyword search léxico, pero sin cuenta no hay medición y una afirmación de valor sin AUC es marketing, no evidencia.
+- Refs:
 - spec:prompt-contracts#Clasificación de conformidad frente a cambio funcional
 - path:aspec/specs/prompt-contracts/spec.md
 - change:jev-spec-advisory-judge
 
-**Estado:** propuesto
+Estado: aprobado
 
-**memory_key:** judge-probes-required-before-require
-
-**Elección:** ninguna rubric entra en un gate `--require` sin un probe que demuestre que pasa en el
-código intacto y falla en una copia rota a propósito.
-
-**Descartado:** habilitar el gate con rubrics validadas sólo por inspección.
-
-**Justificación:** una rubric que siempre pasa es peor que no tener gate: agrega costo y falsa
-tranquilidad. Es la lección explícita de `jev-spec` (29/29 probes) y coincide con la cultura del repo
-de oráculos offline y riesgos aceptados.
-
-**Refs:**
-- path:test/
-- spec:spec-sync#Validación estructural de delta specs de changes activos
+### judge-subcommand-surface
+- Elección: la superficie es el subcomando ancleto judge, con integración sólo como paso opcional en ancleto-verify y mención en ancleto-workflow.
+- Descartado: ancleto verify --judge y un comando /cleto-judge nuevo.
+- Justificación: ancleto verify no existe; y un comando nuevo toca el pin del número de archivos de commands/ en content-guards sin necesidad. El subcomando es read-only y no contamina check.
+- Refs:
+- path:src/cli/index.js
+- path:test/content-guards.test.js
+- spec:cli-diagnostics#Juez externo advisory opcional
 - change:jev-spec-advisory-judge
 
-**Estado:** propuesto
+Estado: aprobado
 
-**memory_key:** judge-v1-canonical-specs-only
+### judge-config-default-off
+- Elección: judge.enabled default false; .ancletorc ausente, JSON inválido o un valor distinto de true dejan el juez deshabilitado y reportan skipped; init no lo habilita.
+- Descartado: habilitarlo automáticamente en init cuando el repo ya tiene jev-spec.config.ts.
+- Justificación: habilitar por detección haría que el código salga de la máquina sin una decisión explícita del usuario; el default off mantiene el comportamiento previo byte-idéntico.
+- Refs:
+- path:src/cli/index.js
+- spec:cli-diagnostics#Juez externo advisory opcional
+- change:jev-spec-advisory-judge
 
-**Elección:** v1 apunta sólo a specs canónicas (`aspec/specs/<capability>/spec.md`); los deltas de
-changes activos quedan fuera.
+Estado: aprobado
 
-**Descartado:** `--change <slug>` con generación de config por change en v1.
+### judge-key-env-only-egress-announced
+- Elección: la credencial se lee sólo del entorno (TYPESAFE_AI_API_KEY), nunca desde .ancletorc, el envelope --json, logs o mensajes; cada corrida humana anuncia el egreso de código a un servicio externo de terceros; src/ no accede a la red.
+- Descartado: aceptar la credencial en .ancletorc o imprimirla para diagnóstico.
+- Justificación: export empaqueta .ancletorc, así que una credencial ahí viaja con el bundle; el egreso silencioso es una sorpresa inaceptable para código propietario.
+- Refs:
+- path:src/cli/index.js
+- path:PRODUCT.md
+- spec:cli-diagnostics#Juez externo advisory opcional
+- change:jev-spec-advisory-judge
 
-**Justificación:** las rutas de un change se mueven al archivar y romperían la config del usuario;
-un `--change` necesita su propio diseño (config efímera + derived codePaths desde el affected-set)
-y no es necesario para probar valor.
+Estado: aprobado
 
-**Refs:**
+### judge-dry-run-never-executes-config
+- Elección: --dry-run imprime el comando resuelto y no spawnea el binario ni ejecuta jev-spec.config.ts; con --require sale 2 porque no corrió ninguna aserción.
+- Descartado: reenviar --dry-run al tool, que ejecuta su config igual.
+- Justificación: el dry-run del tool ejecuta el archivo de config del usuario; reenviarlo convertiría un comando de inspección en ejecución de código. No spawnear es la única garantía verificable.
+- Refs:
+- path:src/cli/index.js
+- spec:cli-diagnostics#Juez externo advisory opcional
+- change:jev-spec-advisory-judge
+
+Estado: aprobado
+
+### judge-v1-canonical-specs-only
+- Elección: v1 apunta sólo a specs canónicas y no acepta --target ni --change: los targets y rúbricas los declara jev-spec.config.ts y el adaptador no pasa argumentos del usuario al binario.
+- Descartado: --change con generación de config por change y un --target validado por regex en v1.
+- Justificación: las rutas de un change se mueven al archivar y romperían la config; sin argumentos de usuario se elimina toda superficie de inyección y no hay nada que validar en el shell.
+- Refs:
 - path:src/core/affected-set.js
-- path:aspec/changes/
+- path:aspec/changes/jev-spec-advisory-judge/proposal.md
+- spec:cli-diagnostics#Juez externo advisory opcional
 - change:jev-spec-advisory-judge
 
-**Estado:** propuesto
+Estado: aprobado
 
-## Plan de validación (spike, antes de implementar)
+### judge-delta-added-cli-diagnostics
+- Elección: el cambio funcional entra como un único requirement ADDED (Juez externo advisory opcional) en aspec/specs/cli-diagnostics/spec.md.
+- Descartado: una capability nueva spec-judge o un MODIFIED de un requirement existente.
+- Justificación: specs merge es fail-closed con canonical spec not found para una capability sin spec canónica, así que spec-judge no se podría archivar por el flujo; MODIFIED reescribiría cuerpo y todos los escenarios de un requirement ajeno.
+- Refs:
+- spec:cli-diagnostics#Juez externo advisory opcional
+- path:aspec/specs/cli-diagnostics/spec.md
+- path:src/cli/index.js
+- change:jev-spec-advisory-judge
 
-Criterio de éxito/abandono explícito, con una sola capability (`cli-diagnostics` o `spec-sync`):
+Estado: aprobado
 
-1. `npx jev-spec check --dry-run` con un target sobre una spec canónica: el wiring parsea el spec,
-   matchea los archivos y enumera requirements sin rubric. **Si el dry-run no es limpio, se abandona.**
-2. Escribir 5 rubrics en inglés sobre requirements literales y correr el check real una vez.
-3. Escribir 2 probes (parche que rompe la invariante) y confirmar `FAIL`. **Si el probe no falla, el
-   problema son las preguntas, no el umbral; se abandona o se reescriben.**
-4. Medir: latencia, costo reportado, y si el resultado agrega información que `ancleto-verify` no
-   tenía. **Si no agrega, no se implementa.**
-5. Sólo con 1–4 verdes se habilita `--require` en este repo como dogfooding.
+## Criterio de valor (spike)
 
-## Preguntas abiertas para el review
+El criterio falsable completo vive en `design.md` §10: AUC ≥ 0.75 sobre 5 requirements correctos, 5
+saboteados, 2 refactors y 1 caso donde el keyword search de `ancleto-verify` falla; una rubric que
+pasa sobre un saboteado se invalida.
 
-1. **Nombre del comando:** `ancleto judge` vs. `ancleto verify --judge` vs. un `/cleto-judge`. La
-   propuesta elige `judge` (read-only, separado, no contamina `check`).
-2. **Default de `judge.enabled`:** la propuesta dice `false`. ¿Se habilita en `ancleto init` cuando el
-   repo ya tiene un `jev-spec.config.ts`? (Recomendación: no; sólo detectar y sugerir.)
-3. **Pin:** ¿el pin de `jev-spec` vive en `src/core/judge/` (mantenido por el release de ancleto) o se
-   deja `jev-latest` para no atar releases? La propuesta elige pin + actualización manual.
-4. **Capability:** ¿`spec-judge` nueva, o un delta `MODIFIED` de `cli-diagnostics`? La propuesta crea
-   `spec-judge`; el contrato de `--help`/exit podría ir a `cli-diagnostics` si el review prefiere.
-5. **Alcance v1:** ¿alcanza con specs canónicas o el review exige `--change` desde el día uno? La
-   propuesta lo difiere con razón técnica (rutas que se mueven).
-6. **Costo/legal:** ¿el repo acepta que una feature del producto requiera una cuenta paga de un
-   tercero? Si la respuesta es no, el juez queda como herramienta de usuario (skill + npx), no como
-   feature instalada.
+**Estado actual: no medible.** El spike confirmó que `jev-spec@0.4.1` existe (npm, bin `jev-spec`,
+MIT), requiere `TYPESAFE_AI_API_KEY` y sin key `check` sale 2; `--dry-run` y `--mock` son offline pero
+no discriminan. En este entorno no hay cuenta. Por eso: default off, advisory, `--require` fuera del
+CI de este repo hasta medir.
+
+## Preguntas abiertas (resueltas)
+
+1. **Nombre del comando:** resuelto en `ancleto judge`; `verify --judge` no existe y `/cleto-judge`
+   tocaría el pin de `commands/` (D2).
+2. **Default de `judge.enabled`:** `false`; `init` no lo habilita ni cuando detecta
+   `jev-spec.config.ts` (D3).
+3. **Pin:** exacto `jev-spec@0.4.1`, mantenido por el release de ancleto, nunca `latest` (D4).
+4. **Capability:** delta `ADDED` de `cli-diagnostics`, no `spec-judge` ni `MODIFIED` (D5). Una
+   capability nueva no es archivable por el flujo.
+5. **Alcance v1:** sólo specs canónicas, sin `--target` ni `--change`; sin argumentos de usuario al
+   binario (D6).
+6. **Costo/legal:** el producto acepta la dependencia de una cuenta paga de un tercero **como opt-in
+   advisory**, no como requisito: sin cuenta el comando degrada y el repo sigue funcionando (D1, D7,
+   D8).

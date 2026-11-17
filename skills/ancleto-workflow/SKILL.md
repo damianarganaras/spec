@@ -36,6 +36,7 @@ explore → new/propose/ff → continue* → update? → apply → verify → ar
 | Update artifacts after a definition changed | `ancleto-update` |
 | Implement tasks from ready artifacts | `ancleto-apply` |
 | Check implementation before closing | `ancleto-verify` |
+| Ask for an optional semantic signal (opt-in, advisory, never a gate) | `ancleto judge` |
 | Close one finished change (sync its specs) | `ancleto-archive` |
 | Close several at once | `ancleto-bulk-archive` |
 | Learn the cycle hands-on | `ancleto-onboard` |

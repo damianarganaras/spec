@@ -19,15 +19,16 @@
 
 ### `jev-spec-advisory-judge` — juez semántico opcional (JEV), 2026-11-15
 
-Propuesta: `aspec/changes/jev-spec-advisory-judge/proposal.md` (sólo `proposal.md`; sin `design.md`,
-`tasks.md` ni delta). **Estado: pendiente de review; no implementada.**
+Artefactos: `aspec/changes/jev-spec-advisory-judge/` con `proposal.md`, `design.md`, `tasks.md` y delta
+`specs/cli-diagnostics/spec.md`. **Estado: decisiones aprobadas (2026-11-17); lista para implementar;
+no implementada.** Default off y advisory; el criterio de valor no es medible sin cuenta.
 
 - **Qué propone:** un adaptador opcional y advisory a `jev-spec` (Jev de TypeSafe) para que cualquier
   repo que use ancleto pueda correr preguntas `noul`/`choice`/`score` por requirement y obtener
   probabilidades calibradas en 70–400 ms, en lugar de depender sólo del juicio del agente en
   `/cleto-verify` (`skills/ancleto-verify/SKILL.md:37` es búsqueda de keywords).
 - **Cómo:** binario externo pinneado resuelto por `PATH`/`npx` (mismo patrón que Repomix,
-  `src/cli/index.js:2589-2597`); `ancleto judge` read-only; `judge.enabled` en `.ancletorc` default
+  `src/cli/index.js:2598-2617`); `ancleto judge` read-only; `judge.enabled` en `.ancletorc` default
   `false`; exit `0` pass/skip · `1` assertion fallida · `2` setup roto; `--require` para CI. Sin red
   en `src/` y sin dependencias de runtime.
 - **Dónde NO:** archive/conformidad (`aspec/specs/prompt-contracts/spec.md:1222-1228` prohíbe un
@@ -36,12 +37,14 @@ Propuesta: `aspec/changes/jev-spec-advisory-judge/proposal.md` (sólo `proposal.
 - **Antes de implementar:** spike con 1 capability, 5 rubrics en inglés, 2 probes que **fallen**
   contra código roto a propósito, y medición de costo/latencia. Sin probes verdes no se habilita
   `--require`.
-- **Decisiones que necesita el review (6):** nombre del comando (`judge` vs `verify --judge` vs
-  `/cleto-judge`); default de `enabled`; pin del tool vs `jev-latest`; capability nueva `spec-judge`
-  vs delta de `cli-diagnostics`; alcance v1 (canónicas vs `--change`); y si el producto acepta una
-  feature que requiere una cuenta paga de un tercero.
-- **Si se aprueba:** `design.md` + `specs/spec-judge/spec.md` + `tasks.md`; release minor (nuevo
-  subcomando + superficie de skills), con `format`/`typecheck` no configurados como hoy.
+- **Decisiones resueltas (2026-11-17):** subcomando `ancleto judge` (sin `/cleto-*` ni
+  `verify --judge`); `judge.enabled` default false e `init` no lo habilita; pin exacto
+  `jev-spec@0.4.1`; delta `ADDED` de `cli-diagnostics` (una capability nueva no es archivable por el
+  flujo); v1 sólo specs canónicas y sin argumentos de usuario al binario; cuenta paga aceptada sólo
+  como opt-in advisory, con criterio falsable en `design.md` §10 y hoy no medible.
+- **Siguiente paso:** implementar por `tasks.md`; release MINOR 0.40.0 (nuevo subcomando + superficie
+  de skills), con `format`/`typecheck` no configurados como hoy. `--require` queda fuera del CI de
+  este repo hasta medir el criterio.
 
 #### Evaluación (2026-11-15) — no se implementa ahora
 
@@ -711,3 +714,12 @@ Método: 29 ítems de nivel plan/backlog; las sub-deudas `CH-09a–h` y `MEM-05c
 - **Tag:** `v0.39.1` (anotado) -> `6168965`.
 - **Publish:** run `44113826461`, completed/success (~2m22s).
 - **npm:** `@ancleto/spec@0.39.1` (`latest`), gitHead `6168965`, tarball `https://registry.npmjs.org/@ancleto/spec/-/spec-0.39.1.tgz` HTTP 200.
+
+## Juez semántico advisory opcional (2026-11-17, implementado sin release)
+
+- **Change:** `jev-spec-advisory-judge` (funcional, delta `ADDED` en `cli-diagnostics`), artefactos en `aspec/changes/jev-spec-advisory-judge/`. Implementado en este checkpoint; tests y delta van en el commit siguiente y el release (bump/CHANGELOG) queda fuera de este file-set.
+- **Superficie:** `ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]`, read-only, advisory y default off; `judge.enabled: true` en `.ancletorc` lo habilita. Envuelve `jev-spec@0.4.1` (PATH o `npx -y`), no pasa argumentos del usuario, no lee `TYPESAFE_AI_API_KEY` y no escribe archivos.
+- **Contrato:** `pass`=0, `fail`=1, `broken`=2, `skipped`/`unavailable`=0 (2 con `--require`); `--dry-run` imprime el comando sin ejecutar el binario ni `jev-spec.config.ts`; sin `--require` y sin binario reporta `unavailable`/`tool-unavailable` sin spawnear `npx`.
+- **Integración:** paso opcional en `skills/ancleto-verify/SKILL.md` (advisory: un `pass` no satisface el CRITICAL de relevancia; un `fail` es WARNING) y una mención en `skills/ancleto-workflow/SKILL.md`. `check`, `specs merge` y el archive no lo invocan.
+- **Docs:** `README.md` y `docs/jev-advisory-judge.md`.
+- **Pendiente:** `test/judge.test.js` + fixture mock (commit siguiente, `@tester`), alinear el delta (`tool-missing` vs `tool-unavailable` del código) y el criterio de valor AUC (bloqueado por cuenta).

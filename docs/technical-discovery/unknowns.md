@@ -48,8 +48,10 @@ skillVersion: '2.3'
   desde `src/core/judge.js`, `src/cli/index.js` → `judgeCommand`/`parseJudgeArgs`, `CHANGELOG.md`,
   `README.md`, `docs/jev-advisory-judge.md` y `aspec/specs/cli-diagnostics/spec.md` (los Markdown
   quedan fuera del pack). No se verificó el criterio de valor (AUC ≥ 0,75), el comportamiento real
-  del binario ante contenido adversarial, su contrato de salida entre versiones ni la publicación
-  npm del release `0.40.0`; la suite `test/judge.test.js` no se ejecutó en esta generación.
+  del binario ante contenido adversarial ni su contrato de salida entre versiones; la suite
+  `test/judge.test.js` no se ejecutó en esta generación. La publicación del release `0.40.0` se
+  tomó de `aspec/backlog.md` (fuera del pack): tag anotado `v0.40.0`, publish run `44158264794`
+  success y paquete `latest` en npm.
   `docs/jev-advisory-judge.md` y `docs/guia-configuracion.md` se leyeron directamente porque
   `docs/**` está excluido del pack.
 - **Contrato de conformidad 0.21.0**: se describió desde `aspec/specs/prompt-contracts/spec.md`

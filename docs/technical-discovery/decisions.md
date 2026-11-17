@@ -1503,8 +1503,11 @@ Change archivado base: `aspec/changes/archive/2026-11-16-memory-readonly-surface
 - **Release 0.39.1 publicada**: tag anotado `v0.39.1` → merge `6168965`, publish run
   `44113826461` (success) y `@ancleto/spec@0.39.1` (`latest`) en npm (`gitHead` `6168965`, tarball
   HTTP 200); `aspec/backlog.md` registra el dato.
-- **Release 0.40.0**: `package.json` = `0.40.0` (commit de release `9d2d235`). Agrega el juez
-  advisory descripto abajo; no se verificó en esta generación la publicación en npm ni el tag.
+- **Release 0.40.0 publicada**: `package.json` = `0.40.0` (commit de release `9d2d235`); tag
+  anotado `v0.40.0` → merge `5097712`, publish run `44158264794` (success) y
+  `@ancleto/spec@0.40.0` como `latest` en npm (`gitHead` `5097712`, tarball HTTP 200 de 244.542
+  bytes, shasum verificado); `aspec/backlog.md` registra el dato. Agrega el juez advisory
+  descripto abajo.
 
 ## Juez semántico advisory (0.40.0)
 

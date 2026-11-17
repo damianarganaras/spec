@@ -2,7 +2,7 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-17T01:18:47Z
+generatedAt: 2026-11-17T01:38:21Z
 pluginVersion: 0.39.0
 skillVersion: '2.3'
 ---
@@ -92,7 +92,9 @@ paths citados (ver `unknowns.md`).
   y `merge --dry-run`/`repair refs` degradan con exit 1 sin stack. Sobre una base existente el `.db`
   conserva su SHA-256 y el conjunto de `sqlite_master`; los sidecars `-wal`/`-shm` de una apertura WAL
   read-only se toleran. Sin cambios de schema, PRAGMAs persistentes ni `ruleVersion`; `memory gc
-  --dry-run` queda como follow-up fuera de alcance.
+  --dry-run` queda como follow-up fuera de alcance. **Publicada y verificada el 2026-11-16**: tag
+  anotado `v0.39.0` → merge `918534c`, publish run `43995807583` (success), `@ancleto/spec@0.39.0`
+  como `latest` en npm (`gitHead` `918534c`) y tarball HTTP 200 (239.745 bytes) (`aspec/backlog.md`).
 - **Release 0.38.0**: `ancleto memory status [--json]` es un subcomando read-only y advisory que
   declara el **gap de memoria de producto** tras clone/worktree. Distingue `ok`, `empty`, `no-db` y
   `uninitialized`; deriva `expected` de los `proposal.md` archivados que declaran decisiones

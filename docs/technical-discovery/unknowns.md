@@ -2,7 +2,7 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-17T01:18:47Z
+generatedAt: 2026-11-17T01:38:21Z
 pluginVersion: 0.39.0
 skillVersion: '2.3'
 ---
@@ -431,15 +431,18 @@ skillVersion: '2.3'
   `test/memory-engine.test.js`, `test/cli.test.js`, la spec canónica y los artifacts archivados se
   leyeron directamente fuera del pack; el cuerpo cubre `src/` (incluidos `status.js` y `doctor.js`),
   `scripts/` y la configuración versionada.
-- **Estado del chequeo (0.39.0)**: esta generación corrió el pack único directamente, sin un
-  `--check` previo, y reescribió `.discovery-map.json` y `.discovery-state.json` con 893 fuentes
-  (180.166 B, ~44.619 tokens). El `discovery --check` posterior devolvió `READY`/`impact: none`,
-  `changedAreas: []`, `materialReasons: []`, `seedMapPresent: true` y `affectedDocs: []`. El delta
-  0.38.0→0.39.0 es la apertura read-only de las superficies de lectura y el precheck de
-  `sqlite_master`, más `test/memory-readonly-surfaces.test.js`.
-- **Delta y publicación (0.38.0→0.39.0)**: cambio funcional `memory-readonly-surfaces`; no hay tag ni
-  publish verificados en esta generación (`aspec/backlog.md` registra la release 0.39.0 pendiente de
-  tag y verificación npm).
+- **Estado del chequeo (0.39.0)**: esta segunda generación partió de `discovery --check`
+  `STALE`/`impact: minor` con `changedAreas: ["aspec"]` (edición de `aspec/backlog.md`), corrió el
+  pack único y reescribió `.discovery-map.json` y `.discovery-state.json` con 893 fuentes
+  (180.166 B, ~44.619 tokens; el tier `minimo` excluye `**/*.md` del cuerpo, por eso el tamaño no
+  cambia). El `discovery --check` posterior devolvió `READY`/`impact: none`, `changedAreas: []`,
+  `materialReasons: []`, `seedMapPresent: true` y `affectedDocs: []`. El delta 0.38.0→0.39.0 es la
+  apertura read-only de las superficies de lectura y el precheck de `sqlite_master`, más
+  `test/memory-readonly-surfaces.test.js`.
+- **Delta y publicación (0.38.0→0.39.0)**: cambio funcional `memory-readonly-surfaces`. Publicada y
+  verificada el 2026-11-16: tag anotado `v0.39.0` → merge `918534c`, publish run `43995807583`
+  (success), `@ancleto/spec@0.39.0` como `latest` en npm (`gitHead` `918534c`) y tarball HTTP 200
+  (239.745 bytes) (`aspec/backlog.md`).
 - **Evidencia de 0.39.0**: se verificó leyendo `src/cli/index.js` (`openReadableMemory` y las ramas
   de `memoryContext`, `memoryListCmd`, `memoryExport`, `memoryImportDryRun`, `memoryCurateCmd`,
   `memoryMerge`, `memoryRepairRefs`), `src/core/memory/status.js` (`hasMemorySchema` como única

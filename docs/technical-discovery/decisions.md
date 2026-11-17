@@ -2,7 +2,7 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-17T01:18:47Z
+generatedAt: 2026-11-17T01:38:21Z
 pluginVersion: 0.39.0
 skillVersion: '2.3'
 ---
@@ -1053,9 +1053,9 @@ sin `--tier` es `normal`.
   exacto de glob. El tier `minimo` agrega `test/**`, `docs/**` y `**/*.md` al cuerpo del pack.
 - **Presupuesto**: `gratis` limita a 50.000 tokens; `normal`/`minimo` sin presupuesto fijo. El pack
   que excede el budget aborta.
-- **Pack actual**: tier `minimo`, 886 fuentes, 175.342 B (~43.421 tokens, comprimido, 33 entradas de
-  archivo). El `.discovery-map.json` regenerado reporta 921 archivos (aspec 340, `.opencode` 66,
-  docs 21, test 34, src 22, scripts 2, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
+- **Pack actual**: tier `minimo`, 893 fuentes, 180.166 B (~44.619 tokens, comprimido, 33 entradas de
+  archivo). El `.discovery-map.json` regenerado reporta 931 archivos (aspec 346, `.opencode` 66,
+  docs 21, test 37, src 23, scripts 2, documentation 340, audit logs 9, etc.). 0.27.0 normaliza el bump de versión para
   el hash semántico y amplía el guard de la suite declarada para detectar `spec.md` mal ubicados
   bajo changes activos; 0.28.0 agrega el filtro de rutas efímeras en `checkDiscovery` sin cambiar el
   writer ni `ruleVersion`; 0.29.0 extiende ese filtro a `documentation/**` y `audit logs/**`
@@ -1488,6 +1488,10 @@ Change archivado: `aspec/changes/archive/2026-11-16-memory-readonly-surfaces/`. 
   exit, mensaje, SHA-256 del `.db`, `sqlite_master`, sidecars, `journal_mode=DELETE`, base ilegible
   y `context --out`), con couplings `src/cli/**` y `src/core/memory/**` en
   `test/affected-tests.json`. No se ejecutó la suite en esta generación.
+- **Release publicada (0.39.0)**: tag anotado `v0.39.0` → merge `918534c`, publish run
+  `43995807583` (success) y `@ancleto/spec@0.39.0` como `latest` en npm (`gitHead` `918534c`,
+  tarball HTTP 200 de 239.745 bytes); `aspec/backlog.md` registra el dato. El bump ya estaba
+  aplicado en `package.json`/`package-lock.json`/`CHANGELOG.md`.
 
 ## Lint y publicación
 

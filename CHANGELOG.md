@@ -2,6 +2,21 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.39.0] - 2026-11-16
+
+### Added
+- **Superficies de lectura de memoria estrictamente read-only sobre base sin esquema**: `memory context`, `list`, `export`, `curate`, `status`, `doctor`, `merge --dry-run`, `repair refs` (sin `--apply`) e `import --dry-run` abren la base con `{ readonly: true, migrate: false }`, reutilizan el precheck de `sqlite_master` de `status.js` y no ejecutan DDL, migraciones, `VACUUM` ni checkpoint. Sobre una base existente el `.db` conserva su hash SHA-256 y su conjunto de objetos de `sqlite_master` (nombre y tipo) idéntico; los sidecars `-wal`/`-shm` de una apertura WAL read-only se toleran como artefacto de SQLite.
+- **Mapa de degradación por superficie y estado de base**: `context` y `export` ya no abren en escritura ni migran una base de 0 bytes; `export` sin esquema sale con código 1 y mensaje acotado; `list` sale 0 nombrando el esquema no inicializado; `merge --dry-run` y `repair refs` degradan con exit 1 sin stack; `status` y `doctor` conservan sus cuatro estados y códigos vigentes.
+- **Delta `memory-ops` (ADDED) y change `memory-readonly-surfaces`**: el requirement "Superficies de lectura de memoria estrictamente read-only" se promueve a la spec principal.
+
+### Fixed
+- **`memory list`, `merge --dry-run` y `repair refs` ya no lanzan el stack `no such table: memory_nodes`**: el engine se construye después del precheck y dentro del manejo de error, de modo que un esquema ausente produce un mensaje acotado y exit 1.
+- **`memory doctor` sobre una base ilegible ya no imprime stack trace**: distingue el fallo de lectura de "sin esquema" con mensaje y código distinto de 0.
+
+### Notas
+- **MINOR**: cambio de comportamiento observable en superficies de lectura; sin migración de datos.
+- **Sin cambios** de schema, PRAGMAs persistentes ni `ruleVersion`; un binario `0.38.0` lee el mismo estado persistido.
+
 ## [0.38.0] - 2026-11-16
 
 ### Added

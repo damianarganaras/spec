@@ -855,4 +855,28 @@ describe('main --write y gate de IDs declarados', () => {
       )
     })
   })
+
+  it('deriva opencode.json bajo rootDir y rechaza un ID ausente del candidato', async () => {
+    await withDirAsync(async (dir) => {
+      const { catalogPath, candidatePath, base } = catalogFixture(dir)
+      const rootDir = join(dir, 'root')
+      mkdirSync(join(rootDir, 'agents'), { recursive: true })
+      mkdirSync(join(rootDir, 'profiles'), { recursive: true })
+      writeFileSync(join(rootDir, 'agents', 'coder.md'), '---\nmodel: alpha/a\n---\n')
+      writeFileSync(
+        join(rootDir, 'opencode.json'),
+        JSON.stringify({ agent: { coder: { model: 'missing/only-in-opencode' } } })
+      )
+
+      const { value, output } = await captureLogs(
+        () => main(['--write'], { run: availableRun(), catalogPath, candidatePath, rootDir })
+      )
+
+      assert.equal(value, 1, 'exit code no cero')
+      assert.match(output, /missing\/only-in-opencode/)
+      assert.match(output, /opencode\.json#agent\.coder\.model/, 'nombra el origen del ID ausente')
+      assert.equal(readFileSync(catalogPath, 'utf8'), base, 'el snapshot commiteado queda byte-idéntico')
+      assert.equal(existsSync(candidatePath), false, 'no se escribe el reporte candidato')
+    })
+  })
 })

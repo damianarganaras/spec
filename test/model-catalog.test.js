@@ -93,6 +93,16 @@ describe('snapshot de catálogo', () => {
       [...opencodeIds.values()].every((source) => source.startsWith('opencode.json#agent.')),
       'el grupo de opencode.json conserva su origen'
     )
+    // `opencodeIds` está deduplicado: los agentes de `opencode.json` comparten modelo, así
+    // que `size > 0` seguiría verde si el archivo perdiera agentes. El pin mira el conteo
+    // PRE-dedup para que la deriva de cobertura sea visible.
+    assert.equal(OPENCODE_ENTRIES.length, 10, 'opencode.json declara los 10 agentes')
+    const opencodeSources = new Set(OPENCODE_ENTRIES.map((entry) => entry.source))
+    assert.equal(opencodeSources.size, 10, 'opencode.json aporta 10 fuentes de agente distintas')
+    assert.ok(
+      [...opencodeSources].every((source) => source.startsWith('opencode.json#agent.')),
+      'las 10 fuentes de opencode.json conservan su origen'
+    )
     assert.equal(fileIds.has('inherit'), false, 'inherit no se exige en el catálogo')
     for (const [label, declared] of [
       ['TIERS/TIER_CHAINS', tierIds],
@@ -119,11 +129,6 @@ describe('snapshot de catálogo', () => {
       const tierIds = declaredModelIds()
       const fileIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: ENTRIES })
       const opencodeIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: OPENCODE_ENTRIES })
-      const nonOpencodeIds = declaredModelIds({
-        tiers: {},
-        chains: {},
-        agentModels: ENTRIES.filter((entry) => !entry.source.startsWith('opencode.json#'))
-      })
       const groups = [
         ['TIERS.', tierIds],
         ['TIER_CHAINS.', tierIds],
@@ -135,14 +140,6 @@ describe('snapshot de catálogo', () => {
         const item = [...declared].find(([, source]) => source.startsWith(prefix))
         assert.ok(item, `${prefix} aporta declaraciones`)
         const [id, source] = item
-        // La deduplicación no puede ocultar el origen de `opencode.json`: el mismo ID
-        // también lo declaran TIERS o un agente/perfil.
-        if (prefix === 'opencode.json#agent.') {
-          assert.ok(
-            tierIds.has(id) || nonOpencodeIds.has(id),
-            `${id} también lo declara otra fuente, además de ${source}`
-          )
-        }
         const path = catalogWithout(dir, [id], `guard-${index}.json`)
         withCatalogEnv(path, () => {
           const missing = missingModelIdsInCatalog(loadModelCatalog(), declared)
@@ -303,6 +300,25 @@ describe('missingModelIdsInCatalog', () => {
       missingModelIdsInCatalog(catalog, new Map([['alpha/a', 'TIERS.a'], ['beta/b', 'agents/y.md']])),
       [{ id: 'beta/b', source: 'agents/y.md' }]
     )
+  })
+
+  it('la deduplicación no oculta el origen de opencode.json en el guard', () => {
+    // Fixture en memoria: no depende del contenido real de `opencode.json`.
+    const id = 'fixture/model-compartido'
+    const agentEntry = { id, source: 'agents/orchestrator.md' }
+    const opencodeEntry = { id, source: 'opencode.json#agent.orchestrator.model' }
+    // El conjunto agregado conserva el primer origen y descarta el de opencode.json.
+    assert.deepEqual(
+      [...declaredModelIds({ tiers: {}, chains: {}, agentModels: [agentEntry, opencodeEntry] })],
+      [[id, 'agents/orchestrator.md']]
+    )
+    // El grupo propio de opencode.json conserva su origen aunque el ID no sea único...
+    const opencodeGroup = declaredModelIds({ tiers: {}, chains: {}, agentModels: [opencodeEntry] })
+    assert.deepEqual([...opencodeGroup], [[id, 'opencode.json#agent.orchestrator.model']])
+    // ...y el guard lo reporta con ese origen cuando el ID no figura en el snapshot.
+    const missing = missingModelIdsInCatalog({ providers: {} }, opencodeGroup)
+    assert.deepEqual(missing, [{ id, source: 'opencode.json#agent.orchestrator.model' }])
+    assert.equal(missingSummary(missing), `${id} (opencode.json#agent.orchestrator.model)`)
   })
 
   it('un snapshot vacío reporta todas las entradas y no muta el snapshot', () => {

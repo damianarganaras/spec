@@ -99,6 +99,11 @@
       "reason": "model-catalog reads agents and profile frontmatter as text"
     },
     {
+      "trigger": ["opencode.json"],
+      "tests": ["test/model-catalog.test.js"],
+      "reason": "model-catalog reads the versioned opencode.json through readModelDeclarations at module load, so there is no import edge"
+    },
+    {
       "trigger": ["README.md"],
       "tests": ["test/model-catalog-discovery.test.js"],
       "reason": "model-catalog-discovery reads README as text"

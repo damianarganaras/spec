@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-20T17:05:16.811Z
-pluginVersion: 0.41.0
+generatedAt: 2026-11-20T19:51:44.420Z
+pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
 
@@ -58,7 +58,7 @@ que el núcleo de la CLI funcione.
   parsea: solo se consume su exit code y se transportan `stdout`/`stderr`.
 - Estados: `skipped`, `unavailable`, `pass`, `fail`; `--require` solo aplica tras una sonda
   exitosa. `judge.enabled` es `false` por defecto.
-- Evidencia: `src/core/judge.js`, `src/cli/index.js`, `CHANGELOG.md`.
+- Evidencia: `src/core/judge.js`, `src/cli/index.js`.
 
 ## Git
 
@@ -74,17 +74,23 @@ que el núcleo de la CLI funcione.
 - La base vive en `.ancleto/memory.db`; el snapshot usa `VACUUM INTO` sobre una conexión
   read-only.
 - El score BM25 de FTS5 es la señal primaria del recall desde 0.41.0 (sin cambiar el esquema).
-- Evidencia: `src/core/memory/database.js`, `src/core/memory/snapshot.js`, `src/core/memory/engine.js`.
+- Desde 0.42.0 el presupuesto del working-context es configuración (env/`.ancletorc`), no estado
+  persistido: no agrega columnas, índices ni PRAGMAs.
+- Evidencia: `src/core/memory/database.js`, `src/core/memory/snapshot.js`,
+  `src/core/memory/engine.js`, `src/core/memory/working-context.js`.
 
 ## Publicación
 
 - `.github/workflows/publish.yml` se dispara con tags `v*` (o manualmente).
 - Pasos: `npm ci`, `npm run lint`, `node --test test/*.test.js`, `npm publish --access public`
   (omite si la versión ya existe), creación del Release y canary no bloqueante del tarball.
-- Estado actual: `0.41.0` **preparada, sin publicar** (tag/run/npm pendientes); la última
-  publicada y verificada es `0.40.1` (`aspec/backlog.md`).
+- Estado actual: `0.42.0` está **preparada, no publicada**. `package.json` declara la versión
+  (commit `c316cf4`), pero `aspec/backlog.md` registra “sin tag ni run todavía” y no existe tag
+  `v0.42.0` en el clon.
+- Última release publicada: `0.41.0` — tag anotado `v0.41.0` sobre `5c171bc`, run `44781865327`
+  exitoso y `latest` en npm.
 - Variables: `NODE_AUTH_TOKEN` y `GITHUB_TOKEN`/`GH_TOKEN`; valores omitidos.
-- Evidencia: `.github/workflows/publish.yml`, `package.json`.
+- Evidencia: `.github/workflows/publish.yml`, `package.json`, `aspec/backlog.md`.
 
 ## Hosts de agentes
 

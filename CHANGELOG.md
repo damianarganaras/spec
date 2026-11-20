@@ -2,6 +2,13 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.42.0] - 2026-11-20
+
+### Changed
+- **Presupuesto del working-context configurable**: el tope de tokens del bloque inyectado deja de ser fijo y se resuelve por precedencia `ANCLETO_WORKING_CONTEXT_TOKENS` (env) → `memory.maxTokens` (`.ancletorc`) → default. El default sube a **4000 tokens** (16.000 chars); `0` o `"unlimited"` desactivan el tope. `required`/`criticalKeys` siguen **fail-closed**: una regla crítica que no entra no se omite en silencio.
+- **Sin cambios de schema**: la configuración se valida al parsear; no se agregan columnas, índices, PRAGMAs ni dependencias de runtime.
+- **Deltas `memory-engine` + `prompt-contracts`**: las specs principales documentan el presupuesto configurable, el default de 4000 tokens y el modo sin tope.
+
 ## [0.41.0] - 2026-11-20
 
 ### Changed

@@ -9,10 +9,12 @@ import { createMemoryServer } from '../src/core/memory/mcp-server.js'
 import { memoryDoctor } from '../src/core/memory/doctor.js'
 import {
   checkWorkingContextFreshness,
+  DEFAULT_WORKING_CONTEXT_TOKENS,
   readCriticalMemoryKeys,
   refreshWorkingContextOnWrite,
   renderWorkingContextBlock,
   resolveMemoryProjectRoot,
+  resolveWorkingContextMaxTokens,
   shouldRefreshWorkingContext,
   workingContextPath,
   writeWorkingContext,
@@ -688,9 +690,9 @@ describe('working-context — conjunto critico del proyecto (mem-05-critical-set
     withProject((dir) => {
       const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
       try {
-        // Presupuesto default (2.000 tokens): entra una sola de las dos reglas grandes.
-        engine.recordNode({ memory_key: 'crit-shift', type: 'rule', scope: 'project', content: `CRITICA ${'c'.repeat(5200)}`, createdAt: '2020-01-01T00:00:00.000Z' })
-        engine.recordNode({ memory_key: 'bulk-plain', type: 'rule', scope: 'project', content: `NO_CRITICA ${'p'.repeat(5200)}`, createdAt: '2026-01-01T00:00:00.000Z' })
+        // Presupuesto default (4.000 tokens / 16.000 caracteres): entra una sola de las dos reglas grandes.
+        engine.recordNode({ memory_key: 'crit-shift', type: 'rule', scope: 'project', content: `CRITICA ${'c'.repeat(8000)}`, createdAt: '2020-01-01T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'bulk-plain', type: 'rule', scope: 'project', content: `NO_CRITICA ${'p'.repeat(8000)}`, createdAt: '2026-01-01T00:00:00.000Z' })
 
         const natural = withoutWarn(() => renderWorkingContextBlock(engine, dir))
         assert.ok(natural.includes('[bulk-plain]'), 'sin config entra la no critica mas reciente')
@@ -784,7 +786,7 @@ describe('working-context — conjunto critico del proyecto (mem-05-critical-set
             memory_key: `ov-${i}`,
             type: 'rule',
             scope: 'project',
-            content: `OV ${'x'.repeat(2600)}`,
+            content: `OV ${'x'.repeat(5500)}`,
             createdAt: `2026-01-0${4 - i}T00:00:00.000Z`
           })
         }
@@ -798,6 +800,227 @@ describe('working-context — conjunto critico del proyecto (mem-05-critical-set
           writeRc(dir, raw)
           assert.equal(withoutWarn(() => renderWorkingContextBlock(engine, dir)), baseline)
         }
+      } finally {
+        engine.close()
+      }
+    })
+  })
+})
+
+describe('working-context — presupuesto configurable del bloque', () => {
+  // `.ancletorc` temporal: string crudo (para JSON invalido) u objeto serializado.
+  const writeRc = (dir, value) => {
+    writeFileSync(join(dir, '.ancletorc'), typeof value === 'string' ? value : JSON.stringify(value) + '\n')
+  }
+  // Guarda, fija y restaura la variable de entorno en `finally` para no filtrar
+  // el override entre casos.
+  const withEnv = (value, fn) => {
+    const had = Object.prototype.hasOwnProperty.call(process.env, 'ANCLETO_WORKING_CONTEXT_TOKENS')
+    const previous = process.env.ANCLETO_WORKING_CONTEXT_TOKENS
+    if (value === undefined) delete process.env.ANCLETO_WORKING_CONTEXT_TOKENS
+    else process.env.ANCLETO_WORKING_CONTEXT_TOKENS = value
+    try {
+      return fn()
+    } finally {
+      if (had) process.env.ANCLETO_WORKING_CONTEXT_TOKENS = previous
+      else delete process.env.ANCLETO_WORKING_CONTEXT_TOKENS
+    }
+  }
+  const captureWarnings = (fn) => {
+    const messages = []
+    const original = console.warn
+    console.warn = (...args) => messages.push(args.join(' '))
+    try {
+      return { block: fn(), messages }
+    } finally {
+      console.warn = original
+    }
+  }
+
+  it('T13: sin entorno ni .ancletorc el default es 4000 tokens y no omite reglas que caben en 16.000 caracteres', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'def-new', type: 'rule', scope: 'project', content: 'D'.repeat(3500), createdAt: '2026-01-02T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'def-old', type: 'rule', scope: 'project', content: 'E'.repeat(3500), createdAt: '2026-01-01T00:00:00.000Z' })
+
+        assert.equal(resolveWorkingContextMaxTokens(dir), DEFAULT_WORKING_CONTEXT_TOKENS)
+        const { block, messages } = captureWarnings(() => renderWorkingContextBlock(engine, dir))
+        assert.ok(block.includes('[def-new]') && block.includes('[def-old]'), 'entran las dos reglas')
+        assert.doesNotMatch(block, /<ContextOverflowWarning>/)
+        assert.equal(messages.length, 0, 'sin omisiones no se registra por consola')
+        assert.ok(block.length <= DEFAULT_WORKING_CONTEXT_TOKENS * 4, 'el bloque no excede 16.000 caracteres')
+        assert.equal(renderWorkingContextBlock(engine, dir), block, 'deterministico con configuracion fija')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T14: memory.maxTokens valido cambia el corte y el aviso conserva el literal', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'cfg-new', type: 'rule', scope: 'project', content: 'N'.repeat(1800), createdAt: '2026-01-02T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'cfg-old', type: 'rule', scope: 'project', content: 'O'.repeat(1800), createdAt: '2026-01-01T00:00:00.000Z' })
+
+        const baseline = captureWarnings(() => renderWorkingContextBlock(engine, dir))
+        assert.ok(baseline.block.includes('[cfg-new]') && baseline.block.includes('[cfg-old]'))
+
+        writeRc(dir, { memory: { maxTokens: 1000 } })
+        assert.equal(resolveWorkingContextMaxTokens(dir), 1000)
+        const trimmed = captureWarnings(() => renderWorkingContextBlock(engine, dir))
+        assert.ok(trimmed.block.includes('[cfg-new]'), 'la mas reciente entra')
+        assert.equal(trimmed.block.includes('[cfg-old]'), false, 'la que no cabe queda fuera')
+        assert.match(trimmed.block, /1 rules omitted/)
+        assert.match(trimmed.block, /Omitted: cfg-old/)
+        assert.ok(trimmed.block.length <= 1000 * 4, 'respeta maxTokens x 4')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T15: 0 y "unlimited" en .ancletorc incluyen todas las reglas sin aviso ni registro', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        for (let i = 1; i <= 3; i++) {
+          engine.recordNode({ memory_key: `all-${i}`, type: 'rule', scope: 'project', content: `A${i} ${'x'.repeat(8000)}`, createdAt: `2026-01-0${4 - i}T00:00:00.000Z` })
+        }
+        for (const maxTokens of [0, 'unlimited']) {
+          writeRc(dir, { memory: { maxTokens, criticalKeys: ['all-3'] } })
+          assert.equal(resolveWorkingContextMaxTokens(dir), Infinity, `${maxTokens} es sin tope`)
+          const { block, messages } = captureWarnings(() => renderWorkingContextBlock(engine, dir))
+          for (let i = 1; i <= 3; i++) assert.ok(block.includes(`[all-${i}]`), `entra all-${i}`)
+          assert.equal(block.match(/- \[(all-\d)\]/)?.[1], 'all-3', 'la critica va primero tambien sin tope')
+          assert.doesNotMatch(block, /<ContextOverflowWarning>/)
+          assert.equal(messages.length, 0, 'sin tope no registra omisiones')
+          assert.ok(block.length > DEFAULT_WORKING_CONTEXT_TOKENS * 4, 'el bloque excede el techo finito')
+          assert.ok(block.startsWith('<ProjectMemoryRules>') && block.endsWith('</ProjectMemoryRules>'), 'XML bien formado')
+        }
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T16: el entorno valido prevalece sobre .ancletorc y "unlimited" desactiva el tope', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'env-new', type: 'rule', scope: 'project', content: 'N'.repeat(1800), createdAt: '2026-01-02T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'env-old', type: 'rule', scope: 'project', content: 'O'.repeat(1800), createdAt: '2026-01-01T00:00:00.000Z' })
+        writeRc(dir, { memory: { maxTokens: 1000 } })
+
+        withEnv('4000', () => {
+          assert.equal(resolveWorkingContextMaxTokens(dir), 4000)
+          const { block, messages } = captureWarnings(() => renderWorkingContextBlock(engine, dir))
+          assert.ok(block.includes('[env-new]') && block.includes('[env-old]'), 'el entorno 4000 entra las dos')
+          assert.equal(messages.length, 0)
+        })
+
+        for (const value of ['0', 'unlimited']) {
+          writeRc(dir, { memory: { maxTokens: 1000 } })
+          withEnv(value, () => {
+            assert.equal(resolveWorkingContextMaxTokens(dir), Infinity, `${value} es sin tope`)
+            const { block, messages } = captureWarnings(() => renderWorkingContextBlock(engine, dir))
+            assert.ok(block.includes('[env-new]') && block.includes('[env-old]'))
+            assert.equal(messages.length, 0, 'sin tope no registra omisiones')
+          })
+        }
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T17: un entorno invalido resuelve al default y NO cae a .ancletorc; vacio si cae', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'env-new', type: 'rule', scope: 'project', content: 'N'.repeat(1800), createdAt: '2026-01-02T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'env-old', type: 'rule', scope: 'project', content: 'O'.repeat(1800), createdAt: '2026-01-01T00:00:00.000Z' })
+        writeRc(dir, { memory: { maxTokens: 1000 } })
+
+        withEnv('abc', () => {
+          assert.equal(resolveWorkingContextMaxTokens(dir), DEFAULT_WORKING_CONTEXT_TOKENS)
+          const { block } = captureWarnings(() => renderWorkingContextBlock(engine, dir))
+          assert.ok(block.includes('[env-new]') && block.includes('[env-old]'), 'usa el default 4000, no el 1000 del proyecto')
+        })
+
+        withEnv('', () => {
+          assert.equal(resolveWorkingContextMaxTokens(dir), 1000, 'un entorno vacio no es override')
+        })
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T18: configuracion invalida, ausente o JSON roto resuelve al default sin lanzar', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'inv-rule', type: 'rule', scope: 'project', content: 'regla valida' })
+        const baseline = renderWorkingContextBlock(engine, dir)
+        const cases = [
+          ['-1', { memory: { maxTokens: -1 } }],
+          ['1.5', { memory: { maxTokens: 1.5 } }],
+          ['"abc"', { memory: { maxTokens: 'abc' } }],
+          ['"12abc"', { memory: { maxTokens: '12abc' } }],
+          ['"1000" (string numerico en config)', { memory: { maxTokens: '1000' } }],
+          ['null', { memory: { maxTokens: null } }],
+          ['booleano', { memory: { maxTokens: true } }],
+          ['clave ausente', '{"memory":{"criticalKeys":[]}}\n'],
+          ['JSON roto', '{ roto\n']
+        ]
+        for (const [label, value] of cases) {
+          writeRc(dir, value)
+          assert.equal(resolveWorkingContextMaxTokens(dir), DEFAULT_WORKING_CONTEXT_TOKENS, label)
+          assert.equal(renderWorkingContextBlock(engine, dir), baseline, label)
+        }
+        assert.equal(resolveWorkingContextMaxTokens(join(dir, 'no-existe')), DEFAULT_WORKING_CONTEXT_TOKENS, 'sin .ancletorc')
+        assert.equal(resolveWorkingContextMaxTokens(null), DEFAULT_WORKING_CONTEXT_TOKENS, 'sin raiz')
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T19: sin tope una requerida que no cabria en el presupuesto finito entra sin error', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'huge-required', type: 'rule', scope: 'project', content: 'H'.repeat(20000) })
+        writeRc(dir, { memory: { maxTokens: 4000, criticalKeys: ['huge-required'] } })
+        assert.throws(() => renderWorkingContextBlock(engine, dir), /no entra en el presupuesto del working-context/)
+
+        writeRc(dir, { memory: { maxTokens: 0, criticalKeys: ['huge-required'] } })
+        const { block, messages } = captureWarnings(() => renderWorkingContextBlock(engine, dir))
+        assert.ok(block.includes('[huge-required]'), 'sin tope la requerida entra')
+        assert.doesNotMatch(block, /<ContextOverflowWarning>/)
+        assert.equal(messages.length, 0)
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T20: buildWorkingContext con maxTokens null usa el default finito 4000, no "sin tope"', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'big-1', type: 'rule', scope: 'project', content: 'x'.repeat(3000), createdAt: '2026-01-03T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'big-2', type: 'rule', scope: 'project', content: 'y'.repeat(3000), createdAt: '2026-01-02T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'big-3', type: 'rule', scope: 'project', content: 'z'.repeat(12000), createdAt: '2026-01-01T00:00:00.000Z' })
+
+        const finite = captureWarnings(() => engine.buildWorkingContext('project', 4000, dir))
+        const withNull = captureWarnings(() => engine.buildWorkingContext('project', null, dir))
+        assert.equal(withNull.block, finite.block, 'null equivale al default 4000')
+        assert.match(finite.block, /1 rules omitted/, 'corta como presupuesto finito')
+        assert.equal(finite.block.includes('[big-3]'), false)
+        assert.deepEqual(withNull.messages, finite.messages)
       } finally {
         engine.close()
       }

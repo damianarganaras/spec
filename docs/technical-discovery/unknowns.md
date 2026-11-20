@@ -2,8 +2,8 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-20T17:05:16.811Z
-pluginVersion: 0.41.0
+generatedAt: 2026-11-20T19:51:44.420Z
+pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
 
@@ -11,41 +11,55 @@ skillVersion: '2.3'
 
 ## Excluido del pack de esta generación
 
-- **Tests**: `test/**`, `*.test.*` y `*.spec.*` quedaron fuera por `discovery.exclude`. No se
-  auditó la cobertura, la calidad de los fixtures ni el detalle de cada suite. Las afirmaciones
-  sobre `node --test` provienen de `package.json`, no de leer los tests.
-- **Markdown**: Repomix excluye `**/*.md` por defaults. `README.md`, `PRODUCT.md`, `CHANGELOG.md` y
-  `aspec/backlog.md` se consultaron aparte solo para comandos declarados y estado de release (tag,
-  npm, archive); no son evidencia de comportamiento runtime. Las specs canónicas (`aspec/specs/**`)
-  tampoco entraron al pack: los límites del fallback OR-prefijo se tomaron de los comentarios del
-  motor y del `CHANGELOG.md`.
+- **Tests**: `test/**`, `*.test.*` y `*.spec.*` quedaron fuera por `discovery.exclude` y por los
+  defaults de Repomix. No se auditó la cobertura, la calidad de los fixtures ni el detalle de cada
+  suite. Las afirmaciones sobre `node --test` provienen de `package.json`, no de leer los tests.
+  En particular, el comportamiento del presupuesto del working-context se leyó del código, las
+  specs y el design del change, **no** de ejecutar `test/working-context.test.js`.
+- **Markdown**: Repomix excluye `**/*.md` y `docs/**` por defaults. `CHANGELOG.md`,
+  `aspec/backlog.md`, `aspec/specs/memory-engine/spec.md`, `aspec/specs/prompt-contracts/spec.md`
+  y los artifacts de `memory-working-context-budget` se consultaron fuera del pack solo para el
+  estado de release, el contrato del presupuesto y la evidencia de la decisión; no son evidencia de
+  comportamiento runtime distinta de la que citan.
 - **Estado local**: `.ancletorc` no se parseó ni se editó (regla de la skill); sus valores
-  efectivos de `discovery`, `memory.criticalKeys`, `azure.enabled` y `agent` no se verificaron.
-  `discovery --check` devolvió la configuración resuelta usada aquí.
+  efectivos de `discovery`, `memory.maxTokens`, `memory.criticalKeys`, `azure.enabled` y `agent` no
+  se verificaron. `discovery --check` devolvió la configuración resuelta usada aquí.
 - **Mirrors instalados**: `.opencode/**` y `.ancleto/**` son estado local, no fuentes; no se
-  verificó si coinciden con la canónica. `.ancleto/machine-env.md` declara `0.39.1`, anterior al
+  verificó si coinciden con la canónica. `.ancleto/machine-env.md` declara `0.40.0`, anterior al
   paquete actual, y no se usó como evidencia de versión.
 - **Legado**: `documentation/**` (lnx-cli) y `audit logs/**` son material gitignored/efímero y no
   se usaron como evidencia.
 
 ## No verificado por ausencia de evidencia directa
 
+- **Publicación 0.42.0**: `package.json` declara `0.42.0` (commit `c316cf4`) y el change está
+  archivado, pero `aspec/backlog.md` declara explícitamente “sin tag ni run todavía”. No se
+  consultó GitHub ni npm (el protocolo prohíbe llamadas de red); no existe tag `v0.42.0` en el
+  clon local. La última release verificada es `0.41.0`.
+- **Ejecución del presupuesto**: la precedencia, la gramática tolerante y el modo `unlimited` se
+  tomaron de `src/core/memory/working-context.js` (comentarios del pack comprimido),
+  `src/core/memory/engine.js`, la spec canónica `memory-engine` y el design del change. No se
+  ejecutó una corrida con env/`.ancletorc` reales para medir cuántas reglas entran.
 - **Comportamiento exacto de `jev-spec`**: el adaptador no parsea su JSON; la forma del reporte y
   su semántica interna no se conocen desde este repositorio. El valor (AUC) sigue sin medirse.
-- **Métricas del spike BM25**: nDCG@5/MRR@5 se transcriben del `CHANGELOG.md` y de los JSON del
-  spike archivado; no se re-ejecutaron las 37 queries en esta generación.
+- **Métricas del spike BM25**: nDCG@5/MRR@5 se transcriben de los JSON del spike archivado
+  (`eval_result.json`, `tuning.json`, `measure_result.json`); no se re-ejecutaron las 37 queries en
+  esta generación.
 - **Hosts externos**: los layouts y esquemas de MCP de antigravity, commandcode, copilot, vscode,
   cursor y roo se tomaron de los comentarios/contratos del adaptador y del instalador; no se
   contrastaron contra documentación externa en esta corrida.
-- **Rendimiento y escalabilidad**: no se midió el costo de `discovery --compress` (≈84.9k tokens
-  sobre 926 archivos en esta corrida), del grafo de imports ni del motor FTS5 en repos grandes.
+- **Rendimiento y escalabilidad**: no se midió el costo de `discovery --compress` (≈85.415 tokens
+  sobre 931 archivos en esta corrida; el mapa topológico resume 971 archivos), del grafo de imports
+  ni del motor FTS5 en repos grandes.
 - **Estado de la suite**: no se ejecutaron `npm run lint` ni `npm test` durante la generación del
-  seed (no son parte del pipeline de discovery). Los conteos de tests citados vienen de
-  `aspec/backlog.md`, no de una corrida propia.
-- **Fuentes de modelo**: no se verificó que `src/core/model-catalog.json` (generado 2026-11-04)
-  siga reflejando la oferta actual de los proveedores.
-- **Publicación 0.41.0**: el estado “preparada, sin publicar” se tomó de `aspec/backlog.md` y de
-  la ausencia de tag `v0.41*` en git local; no se consultó npm ni GitHub en esta corrida.
+  seed (no son parte del pipeline de discovery). Los conteos de tests citados históricamente vienen
+  de `aspec/backlog.md`, no de una corrida propia.
+- **Fuentes de modelo**: no se verificó que `src/core/model-catalog.json` siga reflejando la oferta
+  actual de los proveedores.
+- **Agregados por área**: el estado del seed no incluye el contenido de `docs/technical-discovery`
+  en el walk, así que la frescura no cubre erratas del propio seed. El reporte de esta generación
+  marcó `STALE/minor` por `CHANGELOG.md`, `aspec`, `docs` y `src`, con los once documentos en
+  `affectedDocs`.
 
 ## Inferencias con confianza media
 
@@ -61,10 +75,10 @@ skillVersion: '2.3'
 ## Cómo reducir estos límites
 
 1. Ejecutar `npm run lint` y `npm test` en una corrida de validación separada.
-2. Abrir `test/*.test.js` y `test/affected-tests.json` si la pregunta es sobre cobertura o
-   selección de tests.
+2. Abrir `test/working-context.test.js` si la pregunta es sobre el corte exacto del presupuesto y
+   sus casos borde.
 3. Leer `.ancletorc` solo para operar el proyecto (nunca para generar el seed) si se necesita el
-   valor efectivo de una clave.
+   valor efectivo de `memory.maxTokens` o `memory.criticalKeys`.
 4. Consultar la documentación oficial de cada host antes de cambiar un layout o un esquema MCP.
-5. Tras publicar 0.41.0, actualizar el estado de release en `overview.md`, `decisions.md` e
-   `integrations.md`.
+5. Verificar en GitHub/npm el tag `v0.42.0` y su run cuando existan (requiere red, fuera de este
+   pipeline).

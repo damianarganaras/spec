@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-11-20T17:05:16.811Z
-pluginVersion: 0.41.0
+generatedAt: 2026-11-20T19:51:44.420Z
+pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
 
@@ -19,15 +19,17 @@ skillVersion: '2.3'
 | Selección de tests | Plan determinista fail-closed sobre el affected-set | `src/core/test-selection.js`, `scripts/test-affected.mjs` | `units/discovery-engine.md` |
 | Modelos y tiers | Catálogo, declaraciones versionadas y resolución por tier | `src/core/model-catalog.js`, `src/core/model-declarations.js`, `src/core/tier-models.js` | `units/discovery-engine.md` |
 | Memoria | Motor SQLite/FTS5, recall BM25-first, refs, operaciones y tools MCP | `src/core/memory/**` | `units/memory-engine.md` |
-| Working-context | Artefacto derivado de topología + reglas críticas (sin cambios en 0.41.0) | `src/core/memory/working-context.js` | `units/memory-engine.md` |
+| Working-context | Artefacto derivado de topología + reglas críticas; resuelve el presupuesto configurable (0.42.0) | `src/core/memory/working-context.js` | `units/memory-engine.md` |
 | Snapshot y curaduría | Copia consistente y reporte read-only | `src/core/memory/snapshot.js`, `src/core/memory/curation.js` | `units/memory-engine.md` |
-| Doctor y estado | Integridad de la base y gap de memoria | `src/core/memory/doctor.js`, `src/core/memory/status.js` | `units/memory-engine.md` |
+| Doctor y estado | Integridad de la base, frescura del working-context y gap de memoria | `src/core/memory/doctor.js`, `src/core/memory/status.js` | `units/memory-engine.md` |
 | Specs | Validación canónica y merge de deltas | `src/core/specs-merge.js` | — |
 | Entorno de máquina | Detección de shell/EOL/tools y exclusión git | `src/core/machine-env.js` | — |
 | Juez advisory | Adaptador read-only a `jev-spec` | `src/core/judge.js` | — |
 | Catálogo (refresco) | Actualización manual del snapshot desde `opencode` | `scripts/refresh-model-catalog.mjs` | `units/discovery-engine.md` |
 | Assets instalables | Agentes, comandos, skills, templates y perfil de test | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | `units/cli-install.md` |
 | Artefactos SDD | Changes activos/archivados, specs canónicas y backlog de release | `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` | — |
+| Change archivado (presupuesto) | Evidencia del presupuesto configurable y del delta de specs | `aspec/changes/archive/2026-11-20-memory-working-context-budget/**` | `units/memory-engine.md` |
+| Change archivado BM25 | Evidencia y medición del recall BM25-first (spikes y tuning) | `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**` | `units/memory-engine.md` |
 | Seed técnico | Documentación navegable generada por discovery | `docs/technical-discovery/**` | — |
 
 ## Cómo leer esta tabla
@@ -37,3 +39,6 @@ skillVersion: '2.3'
 - “Entry point” es el archivo desde el que se entiende el comportamiento, no necesariamente el
   único archivo de la unidad.
 - Para impacto de un cambio, cruzá esta tabla con `seed-map.json` y `decisions.md`.
+- Los changes `memory-working-context-budget` y `memory-recall-bm25-first` están archivados y su
+  código vive en el motor/working-context; las carpetas archivadas son evidencia de la decisión,
+  no código en ejecución.

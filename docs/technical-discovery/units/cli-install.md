@@ -3,8 +3,8 @@ node: units/cli-install
 kind: dossier
 read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, MCP, tiers y diagnósticos"
 covers: [instalación, hosts, frontmatter, MCP, tiers, templates, import-export, check, doctor, judge, publicación]
-sources: ["src/cli/index.js", "src/cli/ui.js", "src/core/adapters/frontmatter.js", "src/core/model-declarations.js", "src/core/model-catalog.js", "src/core/tier-models.js", "src/core/judge.js", "src/core/machine-env.js", "agents/**", "commands/**", "skills/**", "templates/**", "profiles/**", "opencode.json", "package.json", "aspec/backlog.md", "CHANGELOG.md"]
-generatedAt: 2026-11-20T17:05:16.811Z
+sources: ["src/cli/index.js", "src/cli/ui.js", "src/core/adapters/frontmatter.js", "src/core/model-declarations.js", "src/core/model-catalog.js", "src/core/tier-models.js", "src/core/judge.js", "src/core/machine-env.js", "agents/**", "commands/**", "skills/**", "templates/**", "profiles/**", "opencode.json", "package.json", ".github/workflows/publish.yml"]
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -65,8 +65,9 @@ sobre el manifiesto existente.
 ### Release
 
 Un tag `v*` dispara `.github/workflows/publish.yml` (lint, tests, publish idempotente, Release y
-canary no bloqueante). `0.41.0` está **preparada, sin publicar** (bump `6669b35`; tag y npm
-pendientes); la última verificada es `0.40.1`. El detalle operativo vive en `aspec/backlog.md`.
+canary no bloqueante). `0.41.0` está **publicada**: tag anotado `v0.41.0` sobre el commit
+`5c171bc`, run `44781865327` exitoso y `latest` en npm. Los datos operativos quedaron registrados
+en `aspec/backlog.md` (commit `24b1eb7`). La versión previa verificada es `0.40.1`.
 
 ## Reglas, contratos y riesgos
 
@@ -100,4 +101,5 @@ pendientes); la última verificada es `0.40.1`. El detalle operativo vive en `as
 | `src/core/machine-env.js` | Detección de shell/EOL/tools y exclusión git |
 | `agents/**`, `commands/**`, `skills/**`, `templates/**`, `profiles/**` | Superficie instalable |
 | `package.json` | Bins, versión, engines y scripts |
+| `.github/workflows/publish.yml` | Pipeline de publicación y Release |
 | `aspec/backlog.md` | Estado de release y seguimiento de deuda |

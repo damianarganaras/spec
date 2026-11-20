@@ -2,7 +2,7 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-11-20T17:05:16.811Z
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -28,6 +28,7 @@ skillVersion: '2.3'
 | Catálogo (refresco) | Actualización manual del snapshot desde `opencode` | `scripts/refresh-model-catalog.mjs` | `units/discovery-engine.md` |
 | Assets instalables | Agentes, comandos, skills, templates y perfil de test | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | `units/cli-install.md` |
 | Artefactos SDD | Changes activos/archivados, specs canónicas y backlog de release | `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` | — |
+| Change archivado BM25 | Evidencia y medición del recall BM25-first (spikes y tuning) | `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**` | `units/memory-engine.md` |
 | Seed técnico | Documentación navegable generada por discovery | `docs/technical-discovery/**` | — |
 
 ## Cómo leer esta tabla
@@ -37,3 +38,5 @@ skillVersion: '2.3'
 - “Entry point” es el archivo desde el que se entiende el comportamiento, no necesariamente el
   único archivo de la unidad.
 - Para impacto de un cambio, cruzá esta tabla con `seed-map.json` y `decisions.md`.
+- El change `memory-recall-bm25-first` está archivado y su código vive en el motor; la carpeta
+  archivada es evidencia de la decisión, no código en ejecución.

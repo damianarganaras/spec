@@ -3,8 +3,8 @@ node: units/memory-engine
 kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools MCP, el recall BM25-first, las refs, el working-context y las operaciones de memoria"
 covers: [motor de memoria, tools MCP, recall BM25-first, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, status, concurrencia]
-sources: ["src/core/memory/**", "src/cli/index.js", "AGENTS.md", "aspec/specs/memory-engine/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**", "CHANGELOG.md"]
-generatedAt: 2026-11-20T17:05:16.811Z
+sources: ["src/core/memory/**", "src/cli/index.js", "aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**"]
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -51,14 +51,18 @@ entrada vive en una sola memoria (`AGENTS.md` → `memory-boundary`).
 ### Evidencia de la decisión 0.41.0 (spike)
 
 - Change `memory-recall-bm25-first` archivado en
-  `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/`; implementación en el commit
-  `cb6592b` y spec promovida a `aspec/specs/memory-engine/spec.md`.
+  `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/`; incluye los spikes `memspike`
+  (extracción, rankers, tuning, contexto) y `memspike2` (medición de la réplica y la llamada
+  real). La implementación quedó en el motor y la spec se promovió a
+  `aspec/specs/memory-engine/spec.md`.
 - Medición: 53 rules, 37 queries y 98 pares; nDCG@5 `0.656 → 0.843` y MRR@5 `0.633 → 0.923`
-  (`CHANGELOG.md`, `spike/memspike/eval_result.json`, `spike/memspike/tuning.json`).
+  (`spike/memspike/eval_result.json`, `spike/memspike/tuning.json`).
 - **Sin cambio de contrato**: `buildWorkingContext` conserva su orden (scope → anclaje →
   `created_at` desc → key, con las críticas al frente) y su presupuesto (`maxChars` 8000,
   `reserve` 1200, efectivo 6800). `spike/memspike2/measure_result.json` confirma que la réplica y
   la llamada real coinciden en orden (`sameOrder: true`): 11 nodos incluidos, 7/7 críticas.
+- La release que contiene el cambio es `0.41.0` (tag `v0.41.0` sobre `5c171bc`, run
+  `44781865327`, `latest` en npm).
 
 ### Tools MCP
 

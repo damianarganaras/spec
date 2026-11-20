@@ -2,7 +2,7 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-20T17:05:16.811Z
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -38,3 +38,5 @@ skillVersion: '2.3'
 - `.ancletorc`, `.opencode/**` y `.ancleto/**`: estado local; no se usan como evidencia ni se
   editan.
 - `documentation/` y `audit logs/`: gitignored, legado/efímero.
+- El `outputDir` del seed se omite del walk de frescura: reescribir estos documentos no genera
+  deriva ni `affectedDocs`.

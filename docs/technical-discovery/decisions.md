@@ -2,7 +2,7 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-20T17:05:16.811Z
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -55,7 +55,7 @@ skillVersion: '2.3'
   no devuelve nada. Evidencia: `src/core/memory/engine.js` (`compareRecall`).
 - **Sin cambio de contrato en 0.41.0**: no cambian el schema persistido, ni `buildWorkingContext`,
   ni el presupuesto de tokens del working-context, ni `ruleVersion`; un binario 0.40.x lee el
-  mismo estado persistido. Evidencia: `CHANGELOG.md`, `aspec/backlog.md`.
+  mismo estado persistido.
 - **Puerta de criticidad**: si una operación supersedería una `memory_key` declarada en
   `.ancletorc` → `memory.criticalKeys`, rechaza con exit 2. El engine nunca lee `.ancletorc`; el
   conjunto se inyecta desde el CLI.
@@ -78,7 +78,8 @@ skillVersion: '2.3'
 - **Impacto**: el estado compara hashes por área; el bump de `version` de `package.json` se
   neutraliza con un centinela para no contar como cambio de contenido.
 - **Rutas efímeras**: `.ancleto/**` y `.discovery-map.json` no participan de la frescura;
-  `documentation/` y `audit logs/` están gitignored y se excluyen.
+  `documentation/` y `audit logs/` están gitignored y se excluyen. El propio `outputDir` del seed
+  se omite del walk, de modo que reescribir el seed no genera deriva.
 - **Fail-closed en tests**: si el manifiesto `test/affected-tests.json` no cubre el universo o hay
   imports irresolubles, `complete` es `false` y el consumidor corre la suite completa declarada.
 - **Grafo conservador**: un argumento no literal en `import()`/`require()` se reporta como
@@ -107,6 +108,7 @@ skillVersion: '2.3'
 | Cambio de orden de recall | Alterar relevancia observable de `searchMemory` | Medición con spike y orden total determinista (`compareRecall`) |
 | Seed sobredimensionado en corridas previas | Costo de lectura alto | Esta regeneración mantiene documentos densos y breves |
 | Secretos en configuración | Fuga en docs o bundles | Nombrar variable/archivo y omitir valor; rechazo en memoria |
+| Dependencia de `version` en `package.json` | Un bump no debe invalidar el seed | Centinela byte-preserving en `hashSources`; observado en `src/cli/index.js` |
 
 ## Decisiones recientes relevantes (0.40.x–0.41.0)
 
@@ -120,15 +122,15 @@ skillVersion: '2.3'
   (`maxChars` 8000, `reserve` 1200, efectivo 6800); el spike `memspike2` verificó la réplica y la
   llamada real con el mismo orden (11 nodos incluidos, 7/7 críticas). El fallback OR-prefijo no
   cambió de alcance.
-- **Release 0.41.0 preparada, sin publicar**: bump en `package.json`/`package-lock.json` y
-  `CHANGELOG.md` (commit `6669b35`); tag, run de publish y npm pendientes (`aspec/backlog.md`).
+- **Release 0.41.0 publicada**: `package.json` en `0.41.0`; tag anotado `v0.41.0` sobre el commit
+  `5c171bc`; run de `publish.yml` `44781865327` exitoso; `@ancleto/spec@0.41.0` como `latest` en
+  npm. Los datos quedaron registrados en `aspec/backlog.md` con el commit `24b1eb7`, que es la
+  única deriva (`STALE/minor`, área `aspec`) respecto del seed anterior.
 - **0.40.1**: el guard de integridad de IDs suma `opencode.json` como quinta fuente declarada y
-  comparte el collector `src/core/model-declarations.js` con `refresh-model-catalog --write`
-  (`CHANGELOG.md`). Change `model-catalog-guard-opencode-json` archivado en
+  comparte el collector `src/core/model-declarations.js` con `refresh-model-catalog --write`.
+  Change `model-catalog-guard-opencode-json` archivado en
   `aspec/changes/archive/2026-11-19-model-catalog-guard-opencode-json/`.
 - **0.40.0**: `ancleto judge` es un adaptador **advisory**, read-only y opt-in a `jev-spec`; no es
-  gate de archive ni de conformidad (`src/core/judge.js`, `CHANGELOG.md`).
-- **Release 0.40.1 verificada**: tag anotado `v0.40.1` (`e6072b2`), run de `publish.yml` exitoso y
-  `@ancleto/spec@0.40.1` como `latest` en npm con `gitHead` coincidente (`aspec/backlog.md`).
+  gate de archive ni de conformidad (`src/core/judge.js`).
 - **Compatibilidad declarada**: ningún cambio de 0.40.x–0.41.0 toca schema, PRAGMAs persistentes ni
-  `ruleVersion`; un binario `0.39.1` lee el mismo estado persistido (`CHANGELOG.md`).
+  `ruleVersion`; un binario `0.39.1` lee el mismo estado persistido.

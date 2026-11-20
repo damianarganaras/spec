@@ -4,7 +4,7 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set, la selección de tests y la resolución de modelos"
 covers: [topología, empaquetado, tiers, estado del seed, impacted-set, selección de tests, catálogo de modelos, integridad de IDs]
 sources: ["src/core/discovery.js", "src/core/discovery-glob.js", "src/core/discovery-state.js", "src/core/repomix-tier.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/model-declarations.js", "src/core/tier-models.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", ".discovery-map.json"]
-generatedAt: 2026-11-20T17:05:16.811Z
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -23,12 +23,13 @@ modelos por tier. Es una unidad de soporte a decisiones, no de producto visible.
 
 1. `buildTopologyMap` recorre el repositorio, aplica los ignores y resume archivos por directorio.
    `writeDiscoveryMap` persiste `.discovery-map.json` (`last_updated`, `total_files`,
-   `tree_summary`, `root_files`). Hoy resume 966 archivos (`aspec` 375, `documentation` 340,
-   `.opencode` 66, `test` 40, `src` 25).
+   `tree_summary`, `root_files`). El mapa vigente resume 966 archivos (`aspec` 375,
+   `documentation` 340, `.opencode` 66, `test` 40, `src` 25).
 2. `discovery --check` calcula hashes por archivo y por área, compara con el estado almacenado y
    deriva `state`/`impact`/`affectedDocs`. Los cambios efímeros (`.ancleto/**`,
-   `.discovery-map.json`) no generan áreas. El bump de `version` de `package.json` se reemplaza por
-   un centinela para no contar como cambio de contenido.
+   `.discovery-map.json`) no generan áreas; el `outputDir` del seed se excluye del walk. El bump de
+   `version` de `package.json` se reemplaza por un centinela para no contar como cambio de
+   contenido.
 3. `discovery --compress` construye **un** pack Repomix con `buildRepomixArgs(flags, tier,
    exclude)`; el presupuesto de tokens depende del tier. El pack va a un archivo temporal y el
    estado se guarda con `packTokens` y hashes.

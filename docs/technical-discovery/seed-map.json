@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-20T17:05:16.811Z",
+  "generatedAt": "2026-11-20T14:36:40.644Z",
   "docs": {
-    "index.md": ["package.json", "src", "agents", "commands", "skills", "templates", "profiles", "scripts", "aspec", "docs", "README.md", "CHANGELOG.md", "AGENTS.md", "PRODUCT.md", ".discovery-map.json"],
-    "overview.md": ["package.json", "src", "agents", "commands", "skills", "templates", "profiles", "aspec", "scripts", "docs", "PRODUCT.md", "CHANGELOG.md", ".discovery-map.json"],
-    "setup.md": ["package.json", "scripts", "src", "PRODUCT.md", "AGENTS.md", "templates", "aspec", ".github", "profiles", "eslint.config.js", ".gitattributes", ".gitignore"],
-    "decisions.md": ["src", "agents", "skills", "profiles", "aspec", "scripts", "package.json", "CHANGELOG.md", "PRODUCT.md", "AGENTS.md", "templates", "commands", "docs", "opencode.json", ".github"],
-    "integrations.md": ["package.json", "src", "scripts", "agents", "skills", ".github", "profiles", "opencode.json", "CHANGELOG.md", "aspec"],
-    "units/_map.md": ["src", "agents", "commands", "skills", "templates", "test", "docs", "aspec", "profiles", "scripts", "package.json", "opencode.json", "CHANGELOG.md"],
-    "units/cli-install.md": ["src", "agents", "commands", "skills", "templates", "profiles", "scripts", "package.json", "opencode.json", "CHANGELOG.md", "aspec", ".gitattributes", ".gitignore"],
-    "units/discovery-engine.md": ["src", "scripts", "package.json", "aspec", "opencode.json", ".discovery-map.json", "CHANGELOG.md", "test"],
-    "units/memory-engine.md": ["src", "aspec", "agents", "skills", "commands", "docs", "package.json", "AGENTS.md", "CHANGELOG.md"],
-    "unknowns.md": ["package.json", "src", "scripts", "test", "aspec", "profiles", "CHANGELOG.md", "PRODUCT.md", ".discovery-map.json", "docs", "agents", "skills", ".gitattributes", ".gitignore"],
-    "inventory.md": ["package.json", ".discovery-map.json", ".github", "aspec", "profiles", "scripts", "src", "test", "agents", "commands", "skills", "templates", "docs", "PRODUCT.md", "CHANGELOG.md"]
+    "index.md": ["package.json", "src", "aspec", "docs", ".discovery-map.json"],
+    "overview.md": ["package.json", "src", "agents", "commands", "skills", "templates", "profiles", "aspec", ".discovery-map.json"],
+    "setup.md": ["package.json", "scripts", "src", "templates", "aspec", ".github", "eslint.config.js", ".gitattributes", ".gitignore"],
+    "decisions.md": ["src", "agents", "skills", "profiles", "aspec", "scripts", "package.json", "templates", "commands", "opencode.json", ".github"],
+    "integrations.md": ["package.json", "src", "scripts", "agents", "skills", ".github", "profiles", "opencode.json", "aspec"],
+    "units/_map.md": ["src", "agents", "commands", "skills", "templates", "aspec", "profiles", "scripts", "package.json", "opencode.json"],
+    "units/cli-install.md": ["src", "agents", "commands", "skills", "templates", "profiles", "scripts", "package.json", "opencode.json", ".github", ".gitattributes", ".gitignore"],
+    "units/discovery-engine.md": ["src", "scripts", "package.json", "aspec", ".discovery-map.json"],
+    "units/memory-engine.md": ["src", "aspec", "package.json"],
+    "unknowns.md": ["package.json", "src", "scripts", "aspec", "profiles", "docs", "agents", "skills", ".gitattributes", ".gitignore", ".discovery-map.json"],
+    "inventory.md": ["package.json", ".discovery-map.json", ".github", "aspec", "profiles", "scripts", "src", "agents", "commands", "skills", "templates", "docs"]
   }
 }

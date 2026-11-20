@@ -2,7 +2,7 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-20T17:05:16.811Z
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -105,10 +105,12 @@ Un tag `v*` dispara `.github/workflows/publish.yml`: `npm ci` → lint → tests
 
 ## Estado de release
 
-`0.41.0` está **preparada y sin publicar**: `package.json` ya declara la versión (commit
-`6669b35`) y `CHANGELOG.md` describe el recall BM25-first; el tag `v0.41.0`, el run de
-`publish.yml` y npm se completan post-publish (`aspec/backlog.md`). La última versión publicada y
-verificada es `0.40.1` (tag anotado `v0.40.1`, `latest` en npm con `gitHead` coincidente).
+`0.41.0` está **publicada**. `package.json` declara la versión y el tag anotado `v0.41.0` apunta
+al commit `5c171bc` ("Merge branch 'development' into main (release 0.41.0)"); el run de
+`publish.yml` `44781865327` terminó en éxito y `@ancleto/spec@0.41.0` quedó como `latest` en npm.
+Datos registrados en el commit `24b1eb7` (`docs(backlog): record 0.41.0 release data`), que es el
+HEAD de `development` y el origen de la deriva menor del área `aspec`. La versión previa verificada
+es `0.40.1` (tag `v0.40.1`).
 
 ## Límites y decisiones de frontera
 

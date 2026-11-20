@@ -2,7 +2,7 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-20T17:05:16.811Z
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -58,7 +58,7 @@ que el núcleo de la CLI funcione.
   parsea: solo se consume su exit code y se transportan `stdout`/`stderr`.
 - Estados: `skipped`, `unavailable`, `pass`, `fail`; `--require` solo aplica tras una sonda
   exitosa. `judge.enabled` es `false` por defecto.
-- Evidencia: `src/core/judge.js`, `src/cli/index.js`, `CHANGELOG.md`.
+- Evidencia: `src/core/judge.js`, `src/cli/index.js`.
 
 ## Git
 
@@ -81,8 +81,9 @@ que el núcleo de la CLI funcione.
 - `.github/workflows/publish.yml` se dispara con tags `v*` (o manualmente).
 - Pasos: `npm ci`, `npm run lint`, `node --test test/*.test.js`, `npm publish --access public`
   (omite si la versión ya existe), creación del Release y canary no bloqueante del tarball.
-- Estado actual: `0.41.0` **preparada, sin publicar** (tag/run/npm pendientes); la última
-  publicada y verificada es `0.40.1` (`aspec/backlog.md`).
+- Estado actual: `0.41.0` **publicada**. El tag anotado `v0.41.0` apunta al commit `5c171bc`
+  ("Merge branch 'development' into main (release 0.41.0)"), el run `44781865327` terminó en
+  éxito y `@ancleto/spec@0.41.0` es `latest` en npm (`aspec/backlog.md`, commit `24b1eb7`).
 - Variables: `NODE_AUTH_TOKEN` y `GITHUB_TOKEN`/`GH_TOKEN`; valores omitidos.
 - Evidencia: `.github/workflows/publish.yml`, `package.json`.
 

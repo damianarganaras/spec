@@ -2,7 +2,7 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-20T17:05:16.811Z
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -98,3 +98,5 @@ Solo se nombran; **los valores se omiten**.
   Commands`; lo no declarado se omite y se registra.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, CI o Azure; nombrar la
   variable o el archivo y omitir el valor.
+- **Release**: `0.41.0` ya está publicada (tag `v0.41.0`, run `44781865327`, npm `latest`); no
+  hace falta repetir el publish, y el canary del tarball es informativo.

@@ -2,7 +2,7 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-20T17:05:16.811Z
+generatedAt: 2026-11-20T14:36:40.644Z
 pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
@@ -18,14 +18,15 @@ recorrer todo el repositorio.
 | Dato | Valor | Evidencia |
 | --- | --- | --- |
 | Producto | Orquestador SDD liviano con subagentes optimizados para costo/tokens | `package.json` |
-| Versión en el árbol | `0.41.0` — release **preparada, sin publicar** (tag y npm pendientes) | `package.json`, `CHANGELOG.md`, `aspec/backlog.md` |
-| Última publicada | `0.40.1` (tag `v0.40.1`, verificada en npm) | `aspec/backlog.md` |
-| Novedad de 0.41.0 | Recall de `searchMemory` **BM25-first**; sin cambios de schema, `buildWorkingContext` ni presupuesto | `CHANGELOG.md`, `src/core/memory/engine.js` |
+| Versión en el árbol | `0.41.0` (rama `development`, HEAD `24b1eb7`) | `package.json` |
+| Última publicada | `0.41.0` — release cerrada: tag `v0.41.0` sobre el commit `5c171bc`, run `44781865327` exitoso y `latest` en npm | `package.json`, `.github/workflows/publish.yml`, reporte de release |
+| Novedad de 0.41.0 | Recall de `searchMemory` **BM25-first**; sin cambios de schema, `buildWorkingContext` ni presupuesto | `src/core/memory/engine.js` (`compareRecall`) |
+| Change archivado relevante | `memory-recall-bm25-first` en `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/` (incluye spikes `memspike` y `memspike2`) | pack del repositorio |
 | Runtime | Node.js ≥ 24, ESM, sin dependencias de runtime | `package.json` |
 | Entrada | `src/cli/index.js` (bins `ancleto` y `aspec`) | `package.json` |
 | Persistencia propia | SQLite nativo (`node:sqlite`) + FTS5 en `.ancleto/memory.db` | `src/core/memory/**` |
 | Seed técnico | `docs/technical-discovery/` (este árbol) | `.discovery-map.json` |
-| Tamaño del mapa | 966 archivos; `aspec` 375, `src` 25, `skills` 35, `commands` 16 | `.discovery-map.json` |
+| Tamaño del mapa | 966 archivos; `aspec` 375, `documentation` 340, `.opencode` 66, `test` 40, `src` 25 | `.discovery-map.json` |
 
 ## Elegí un destino
 
@@ -56,3 +57,5 @@ El seed se genera desde un único pack Repomix y se valida con
 `node src/cli/index.js ...`: el binario global puede estar rezagado (el `machine-env.md` local
 declara `0.39.1`). El estado vive en `.discovery-map.json` y
 `docs/technical-discovery/.discovery-state.json`; `seed-map.json` acota la próxima regeneración.
+Esta generación corresponde al estado posterior a `24b1eb7` (backlog con los datos de release) y
+cierra la deriva `STALE/minor` del área `aspec`.

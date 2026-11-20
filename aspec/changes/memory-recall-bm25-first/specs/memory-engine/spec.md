@@ -1,5 +1,47 @@
 ## MODIFIED Requirements
 
+### Requirement: Límites del fallback OR-prefijo de `searchMemory`
+
+`searchMemory` SHALL resolver cada consulta en dos passes sobre el índice FTS5, con builders
+propios en `src/core/memory/engine.js`: la **pass 1** con AND sobre los términos crudos citados
+(`ftsQuery`) y la **pass 2** con OR sobre prefijos `*` derivados de la tokenización
+(`ftsQueryLoose`). La pass 2 SHALL ejecutarse únicamente cuando la pass 1 devuelve 0 resultados;
+NO SHALL ampliar el recall sobre un hit ya existente de la pass 1.
+
+Los resultados de cada pass SHALL ordenarse por el orden total definido en `Recall task-aware con
+orden total, preview expandible y keys requeridas`: requerido, `bm25` ascendente, anclaje declarado,
+scope específico y `memory_key` ascendente. En FTS5 `bm25` es negativo y `ORDER BY rank` es
+numéricamente ascendente, por lo que NO SHALL usarse `rank DESC`. El orden NO SHALL usar `n.rowid`
+como criterio ni como desempate. El orden SHALL aplicarse tanto a
+la pass 1 (AND) como a la pass 2 (OR con prefijos), de modo que sea **total**. Cuando la cantidad
+de coincidencias supere el `limit`, ese orden total SHALL determinar de forma unívoca el
+subconjunto devuelto.
+
+`searchMemory` SHALL ser determinista para un estado de BD fijo: la misma query sobre el mismo
+corpus devuelve resultados idénticos en contenido y orden. La variabilidad de resultados con una
+misma query NO SHALL atribuirse a aleatoriedad de la búsqueda, sino a mutación concurrente del
+corpus entre invocaciones.
+
+#### Scenario: El fallback no se ejecuta si la pass 1 tiene resultados
+
+- **WHEN** una consulta produce al menos un resultado en la pass 1 (AND con términos crudos)
+- **THEN** `searchMemory` devuelve ese resultado
+- **AND** no ejecuta la pass 2 (OR con prefijos), por lo que el recall no se amplía sobre un hit
+  existente
+
+#### Scenario: Los términos únicos o prefijos cortos pueden desplazar al nodo esperado
+
+- **WHEN** la consulta se compone de un solo término, o de términos que la tokenización reduce a
+  prefijos cortos (p. ej. `work`, `mem`)
+- **THEN** la pass 1 puede devolver 0 resultados y la pass 2 amplía el recall
+- **AND** el nodo esperado puede quedar en posición #2 o posterior; es una limitación conocida del
+  fallback OR-prefijo, sin un conteo fijo de invocaciones
+
+#### Scenario: Determinismo para un estado de BD fijo
+
+- **WHEN** se ejecuta la misma consulta dos veces sobre un corpus sin cambios entre invocaciones
+- **THEN** `searchMemory` devuelve resultados idénticos en contenido y orden
+
 ### Requirement: Recall task-aware con orden total, preview expandible y keys requeridas
 
 `searchMemory` SHALL devolver resultados en un orden total determinístico, independiente de

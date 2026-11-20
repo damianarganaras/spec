@@ -4,7 +4,7 @@ kind: dossier
 read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, MCP, tiers y diagnósticos"
 covers: [instalación, hosts, frontmatter, MCP, tiers, templates, import-export, check, doctor, judge, publicación, working-context]
 sources: ["src/cli/index.js", "src/cli/ui.js", "src/core/adapters/frontmatter.js", "src/core/model-declarations.js", "src/core/model-catalog.js", "src/core/tier-models.js", "src/core/judge.js", "src/core/machine-env.js", "agents/**", "commands/**", "skills/**", "templates/**", "profiles/**", "opencode.json", "package.json", ".github/workflows/publish.yml"]
-generatedAt: 2026-11-20T19:51:44.420Z
+generatedAt: 2026-11-20T20:21:53.850Z
 pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
@@ -67,10 +67,10 @@ sobre el manifiesto existente.
 ### Release
 
 Un tag `v*` dispara `.github/workflows/publish.yml` (lint, tests, publish idempotente, Release y
-canary no bloqueante). `0.42.0` está **preparada, no publicada**: `package.json` declara la versión
-(commit `c316cf4`) y el change `memory-working-context-budget` está archivado, pero
-`aspec/backlog.md` registra “sin tag ni run todavía”. La última release publicada y verificada es
-`0.41.0` (tag anotado `v0.41.0` sobre `5c171bc`, run `44781865327` exitoso, `latest` en npm).
+canary no bloqueante). `0.42.0` está **publicada y verificada**: `package.json` declara la versión
+(commit `c316cf4`), el change `memory-working-context-budget` está archivado y `aspec/backlog.md`
+registra tag anotado `v0.42.0` → `c6319c8` (merge de `main`), run `44808502480` `success` y npm
+`0.42.0` `latest`.
 
 ## Reglas, contratos y riesgos
 

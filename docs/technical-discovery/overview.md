@@ -2,7 +2,7 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-20T19:51:44.420Z
+generatedAt: 2026-11-20T20:21:53.850Z
 pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
@@ -108,12 +108,13 @@ Un tag `v*` dispara `.github/workflows/publish.yml`: `npm ci` → lint → tests
 
 ## Estado de release
 
-`package.json` declara `0.42.0` (commit `c316cf4`, `chore(release): 0.42.0`), pero la release está
-**preparada, no publicada**: `aspec/backlog.md` registra el change `memory-working-context-budget`
-implementado y archivado, con la nota explícita “sin tag ni run todavía”. No hay tag `v0.42.0` en
-el clon local. La última release publicada y verificada es `0.41.0` (tag anotado `v0.41.0` sobre
-`5c171bc`, run `44781865327` exitoso, `latest` en npm). El HEAD de `development` es `9e33868`
-(`docs(backlog): relate memory-working-context-budget to 0.42.0`), que documenta esa relación.
+`package.json` declara `0.42.0` (commit `c316cf4`, `chore(release): 0.42.0`) y la release está
+**publicada y verificada**: tag anotado `v0.42.0` → `c6319c8` (merge de `main`), run
+`44808502480` de `publish.yml` en `success` y npm `@ancleto/spec@0.42.0` como `latest`.
+`aspec/backlog.md` registra el change `memory-working-context-budget` implementado y archivado, y
+el detalle de tag, run y npm. La última release publicada es `0.42.0` (la anterior, `0.41.0`, fue
+tag `v0.41.0` sobre `5c171bc` con run `44781865327`). El HEAD de `development` es `274f890`
+(`docs(backlog): record 0.42.0 release data`).
 
 ## Límites y decisiones de frontera
 

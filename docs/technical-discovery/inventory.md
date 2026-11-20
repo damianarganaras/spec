@@ -2,7 +2,7 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-20T19:51:44.420Z
+generatedAt: 2026-11-20T20:21:53.850Z
 pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
@@ -35,9 +35,8 @@ skillVersion: '2.3'
 - `test/**` y archivos `*.test.*`/`*.spec.*`: el pack los excluye por configuración (y `test/**`
   por default de Repomix).
 - `docs/**` y `**/*.md`: Repomix los excluye por defaults; el seed no se usa como evidencia de sí
-  mismo. `CHANGELOG.md`, `aspec/backlog.md`, las specs canónicas y los artifacts del change
-  archivado se leyeron aparte solo para el estado de release, el contrato del presupuesto y la
-  evidencia de la decisión.
+  mismo. `aspec/backlog.md` se leyó aparte solo para el estado de release; las specs canónicas y los
+  artifacts de los changes archivados no se releyeron en esta corrida.
 - `package-lock.json`, lockfiles e imágenes: excluidos por configuración.
 - `.ancletorc`, `.opencode/**` y `.ancleto/**`: estado local; no se usan como evidencia ni se
   editan.

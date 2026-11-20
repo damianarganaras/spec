@@ -2,7 +2,7 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-20T19:51:44.420Z
+generatedAt: 2026-11-20T20:21:53.850Z
 pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
@@ -18,9 +18,9 @@ recorrer todo el repositorio.
 | Dato | Valor | Evidencia |
 | --- | --- | --- |
 | Producto | Orquestador SDD liviano con subagentes optimizados para costo/tokens | `package.json` |
-| Versión en el árbol | `0.42.0` (rama `development`, HEAD `9e33868`; bump en `c316cf4`) | `package.json`, git log |
-| Estado de 0.42.0 | **Preparada**: change implementado y archivado; **sin tag ni run de publish todavía** | `aspec/backlog.md` |
-| Última publicada | `0.41.0` — tag `v0.41.0` sobre `5c171bc`, run `44781865327` exitoso y `latest` en npm | `aspec/backlog.md`, `.github/workflows/publish.yml` |
+| Versión en el árbol | `0.42.0` (rama `development`, HEAD `274f890`; bump en `c316cf4`) | `package.json`, git log |
+| Estado de 0.42.0 | **Publicada y verificada**: tag anotado `v0.42.0` → `c6319c8`, run `44808502480` `success`, npm `0.42.0` `latest` | `aspec/backlog.md`, git tag |
+| Última publicada | `0.42.0` — tag `v0.42.0` sobre `c6319c8`, run `44808502480` exitoso y `latest` en npm | `aspec/backlog.md`, `.github/workflows/publish.yml` |
 | Novedad de 0.42.0 | Presupuesto del working-context **configurable**: default 4000 tokens (16.000 chars), env `ANCLETO_WORKING_CONTEXT_TOKENS`, `.ancletorc` → `memory.maxTokens`, `0`/`"unlimited"` sin tope | `src/core/memory/working-context.js`, `src/core/memory/engine.js` |
 | Changes archivados relevantes | `memory-working-context-budget` y `memory-recall-bm25-first` en `aspec/changes/archive/2026-11-20-*/` | `aspec/changes/archive/**` |
 | Runtime | Node.js ≥ 24, ESM, sin dependencias de runtime | `package.json` |
@@ -58,5 +58,5 @@ El seed se genera desde un único pack Repomix y se valida con
 `node src/cli/index.js ...`: el binario global puede estar rezagado (el `.ancleto/machine-env.md`
 local declara `0.40.0`, anterior a `0.42.0`). La topología vive en `.discovery-map.json`; el estado
 de frescura en `docs/technical-discovery/.discovery-state.json`; `seed-map.json` acota la próxima
-regeneración. Esta generación parte de `9e33868` (backlog que relaciona el change con 0.42.0) y
-estampa la versión `0.42.0` en los once documentos del seed.
+regeneración. Esta generación parte de `274f890` (backlog que registra la release 0.42.0 publicada)
+y estampa la versión `0.42.0` en los once documentos del seed.

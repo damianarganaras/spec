@@ -2,7 +2,7 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-20T19:51:44.420Z
+generatedAt: 2026-11-20T20:21:53.850Z
 pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
@@ -142,9 +142,10 @@ skillVersion: '2.3'
   nuevos; la configuración se valida al parsear y nunca impide el render. El tope de 5 reglas y
   1.500 bytes del campo `project memory rules` de `prompt-contracts` es una superficie distinta y
   no se compone con el presupuesto del bloque.
-- **Release 0.42.0 preparada**: `package.json` en `0.42.0` (commit `c316cf4`); el change está
-  implementado y archivado; `aspec/backlog.md` declara “sin tag ni run todavía”. No afirmar publish
-  hasta que exista tag/run verificable.
+- **Release 0.42.0 publicada y verificada**: `package.json` en `0.42.0` (commit `c316cf4`); tag
+  anotado `v0.42.0` → `c6319c8` (merge de `main`), run `44808502480` de `publish.yml` en `success`
+  y npm `@ancleto/spec@0.42.0` como `latest`; el change está implementado y archivado. El registro
+  vive en `aspec/backlog.md` (commit `274f890`).
 - **0.41.0**: el recall de `searchMemory` pasa a **BM25-first** (`required` → `bm25` → anclaje →
   scope → `memory_key`). Medido con spike sobre 53 rules, 37 queries y 98 pares: nDCG@5 0.656 →
   0.843 y MRR@5 0.633 → 0.923. Change `memory-recall-bm25-first` archivado en

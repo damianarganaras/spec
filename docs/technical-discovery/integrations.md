@@ -2,7 +2,7 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-20T19:51:44.420Z
+generatedAt: 2026-11-20T20:21:53.850Z
 pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
@@ -84,11 +84,11 @@ que el núcleo de la CLI funcione.
 - `.github/workflows/publish.yml` se dispara con tags `v*` (o manualmente).
 - Pasos: `npm ci`, `npm run lint`, `node --test test/*.test.js`, `npm publish --access public`
   (omite si la versión ya existe), creación del Release y canary no bloqueante del tarball.
-- Estado actual: `0.42.0` está **preparada, no publicada**. `package.json` declara la versión
-  (commit `c316cf4`), pero `aspec/backlog.md` registra “sin tag ni run todavía” y no existe tag
-  `v0.42.0` en el clon.
-- Última release publicada: `0.41.0` — tag anotado `v0.41.0` sobre `5c171bc`, run `44781865327`
-  exitoso y `latest` en npm.
+- Estado actual: `0.42.0` está **publicada y verificada**. `package.json` declara la versión
+  (commit `c316cf4`); `aspec/backlog.md` registra tag anotado `v0.42.0` → `c6319c8` (merge de
+  `main`), run `44808502480` en `success` y npm `@ancleto/spec@0.42.0` como `latest`.
+- Última release publicada: `0.42.0`. La anterior, `0.41.0`, fue tag anotado `v0.41.0` sobre
+  `5c171bc`, run `44781865327` exitoso y `latest` en npm.
 - Variables: `NODE_AUTH_TOKEN` y `GITHUB_TOKEN`/`GH_TOKEN`; valores omitidos.
 - Evidencia: `.github/workflows/publish.yml`, `package.json`, `aspec/backlog.md`.
 

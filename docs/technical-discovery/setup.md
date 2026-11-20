@@ -2,7 +2,7 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-20T19:51:44.420Z
+generatedAt: 2026-11-20T20:21:53.850Z
 pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
@@ -112,4 +112,5 @@ scope, sin aviso de overflow). Evidencia: `src/core/memory/working-context.js`,
   Commands`; lo no declarado se omite y se registra.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, CI o Azure; nombrar la
   variable o el archivo y omitir el valor.
-- **Release**: `0.42.0` está preparada (sin tag ni run); `0.41.0` es la última publicada.
+- **Release**: `0.42.0` está publicada y verificada (tag `v0.42.0` → `c6319c8`, run
+  `44808502480`, npm `0.42.0` `latest`); es la última publicada.

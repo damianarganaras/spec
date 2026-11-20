@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-20T19:51:44.420Z",
+  "generatedAt": "2026-11-20T20:21:53.850Z",
   "docs": {
     "index.md": ["package.json", "src", "aspec", "docs", ".discovery-map.json", "CHANGELOG.md"],
     "overview.md": ["package.json", "src", "agents", "commands", "skills", "templates", "profiles", "aspec", ".discovery-map.json"],

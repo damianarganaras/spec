@@ -4,7 +4,7 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, el recall BM25-first, el presupuesto configurable del working-context, las tools MCP, las refs y las operaciones de memoria"
 covers: [motor de memoria, tools MCP, recall BM25-first, presupuesto del working-context, refs, secretos, export/import, gc, snapshot, merge, consolidate, curate, doctor, status, concurrencia]
 sources: ["src/core/memory/**", "src/cli/index.js", "aspec/changes/archive/2026-11-20-memory-working-context-budget/**", "aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**", "aspec/specs/memory-engine/spec.md", "aspec/specs/prompt-contracts/spec.md"]
-generatedAt: 2026-11-20T19:51:44.420Z
+generatedAt: 2026-11-20T20:21:53.850Z
 pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
@@ -79,6 +79,8 @@ inyecta reglas y topología en cada sesión; desde 0.42.0 su tamaño es configur
   `memory-working-context-budget` archivado en
   `aspec/changes/archive/2026-11-20-memory-working-context-budget/`; deltas promovidos a
   `aspec/specs/memory-engine/spec.md` y `aspec/specs/prompt-contracts/spec.md`.
+- **Release**: el presupuesto se publica en `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run
+  `44808502480` `success`, npm `0.42.0` `latest`).
 
 ### Evidencia de la decisión 0.41.0 (spike)
 

@@ -2,7 +2,7 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-20T19:51:44.420Z
+generatedAt: 2026-11-20T20:21:53.850Z
 pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
@@ -16,11 +16,10 @@ skillVersion: '2.3'
   suite. Las afirmaciones sobre `node --test` provienen de `package.json`, no de leer los tests.
   En particular, el comportamiento del presupuesto del working-context se leyó del código, las
   specs y el design del change, **no** de ejecutar `test/working-context.test.js`.
-- **Markdown**: Repomix excluye `**/*.md` y `docs/**` por defaults. `CHANGELOG.md`,
-  `aspec/backlog.md`, `aspec/specs/memory-engine/spec.md`, `aspec/specs/prompt-contracts/spec.md`
-  y los artifacts de `memory-working-context-budget` se consultaron fuera del pack solo para el
-  estado de release, el contrato del presupuesto y la evidencia de la decisión; no son evidencia de
-  comportamiento runtime distinta de la que citan.
+- **Markdown**: Repomix excluye `**/*.md` y `docs/**` por defaults. `aspec/backlog.md` se leyó
+  aparte solo para el estado de release (tag, run y npm); las specs canónicas y los artifacts de
+  los changes archivados no se releyeron en esta corrida. El contrato del presupuesto proviene del
+  código incluido en el pack y de la generación previa, no de una nueva lectura de la spec.
 - **Estado local**: `.ancletorc` no se parseó ni se editó (regla de la skill); sus valores
   efectivos de `discovery`, `memory.maxTokens`, `memory.criticalKeys`, `azure.enabled` y `agent` no
   se verificaron. `discovery --check` devolvió la configuración resuelta usada aquí.
@@ -33,9 +32,9 @@ skillVersion: '2.3'
 ## No verificado por ausencia de evidencia directa
 
 - **Publicación 0.42.0**: `package.json` declara `0.42.0` (commit `c316cf4`) y el change está
-  archivado, pero `aspec/backlog.md` declara explícitamente “sin tag ni run todavía”. No se
-  consultó GitHub ni npm (el protocolo prohíbe llamadas de red); no existe tag `v0.42.0` en el
-  clon local. La última release verificada es `0.41.0`.
+  archivado. El estado publicado (tag anotado `v0.42.0` → `c6319c8`, run `44808502480` `success`,
+  npm `0.42.0` `latest`) se transcribe de `aspec/backlog.md`, commit `274f890`; el tag existe en el
+  clon local, pero no se consultaron GitHub ni npm (el protocolo prohíbe llamadas de red).
 - **Ejecución del presupuesto**: la precedencia, la gramática tolerante y el modo `unlimited` se
   tomaron de `src/core/memory/working-context.js` (comentarios del pack comprimido),
   `src/core/memory/engine.js`, la spec canónica `memory-engine` y el design del change. No se
@@ -57,9 +56,9 @@ skillVersion: '2.3'
 - **Fuentes de modelo**: no se verificó que `src/core/model-catalog.json` siga reflejando la oferta
   actual de los proveedores.
 - **Agregados por área**: el estado del seed no incluye el contenido de `docs/technical-discovery`
-  en el walk, así que la frescura no cubre erratas del propio seed. El reporte de esta generación
-  marcó `STALE/minor` por `CHANGELOG.md`, `aspec`, `docs` y `src`, con los once documentos en
-  `affectedDocs`.
+  en el walk, así que la frescura no cubre erratas del propio seed. El reporte que motivó esta
+  generación marcó `STALE/minor` por `aspec` (commit `274f890`), con diez documentos en
+  `affectedDocs` (`units/cli-install.md` no figuraba).
 
 ## Inferencias con confianza media
 
@@ -80,5 +79,5 @@ skillVersion: '2.3'
 3. Leer `.ancletorc` solo para operar el proyecto (nunca para generar el seed) si se necesita el
    valor efectivo de `memory.maxTokens` o `memory.criticalKeys`.
 4. Consultar la documentación oficial de cada host antes de cambiar un layout o un esquema MCP.
-5. Verificar en GitHub/npm el tag `v0.42.0` y su run cuando existan (requiere red, fuera de este
-   pipeline).
+5. Contrastar el registro de `aspec/backlog.md` con GitHub/npm si se necesita confirmación externa
+   del run y del `dist-tag` (requiere red, fuera de este pipeline).

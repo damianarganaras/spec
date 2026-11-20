@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-20T14:36:40.644Z
-pluginVersion: 0.41.0
+generatedAt: 2026-11-20T19:51:44.420Z
+pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
 
@@ -32,8 +32,9 @@ skillVersion: '2.3'
 - **Estado de discovery puro**: `src/core/discovery-state.js` arma y serializa sin tocar el
   filesystem ni reordenar; el orden de claves es contrato de bytes persistidos.
 - **Topología**: `src/core/discovery.js` es dueño del mapa; el resto consume su resumen.
-- **Working-context derivado**: `src/core/memory/working-context.js` es dueño del render y la
-  escritura; el engine no importa ese módulo para evitar el ciclo.
+- **Working-context derivado**: `src/core/memory/working-context.js` es dueño del render, la
+  escritura y la **resolución del presupuesto**; el engine no importa ese módulo (evita el ciclo)
+  y no lee `.ancletorc`.
 - **Raíz del proyecto**: se deriva de `.ancletorc`/ubicación de la DB, **nunca** de
   `process.cwd()` en el camino de escritura de memoria.
 - **Procedencia MCP**: `source` se resuelve desde el runtime (`mcp:ancleto-memory`, `cli:import`,
@@ -53,9 +54,24 @@ skillVersion: '2.3'
   criterio primario después de las requeridas; anclaje y scope solo desempatan a igual score.
   El fallback tolerante (OR con prefijos) sigue corriendo **solo** cuando el intento preciso (AND)
   no devuelve nada. Evidencia: `src/core/memory/engine.js` (`compareRecall`).
-- **Sin cambio de contrato en 0.41.0**: no cambian el schema persistido, ni `buildWorkingContext`,
-  ni el presupuesto de tokens del working-context, ni `ruleVersion`; un binario 0.40.x lee el
-  mismo estado persistido.
+- **Presupuesto del working-context configurable (0.42.0)**: precedencia
+  `ANCLETO_WORKING_CONTEXT_TOKENS` (definida y no vacía) → `memory.maxTokens` de `.ancletorc` →
+  default **4000 tokens**. `maxChars = maxTokens × 4` (16.000 por default); la reserva del aviso es
+  `min(1500, 15% de maxChars)`, acotada a `maxChars`. Un valor inválido, negativo, no entero, no
+  numérico o ausente resuelve al default; la lectura nunca lanza. Un env definido e inválido
+  resuelve al default y **no** cae a `.ancletorc`. Evidencia:
+  `src/core/memory/working-context.js` (`resolveWorkingContextMaxTokens`),
+  `src/core/memory/engine.js` (`buildWorkingContext`).
+- **Sin tope explícito**: `0` o `"unlimited"` (en config o entorno) devuelven `Infinity`; el render
+  incluye todas las reglas activas del scope, no emite `<ContextOverflowWarning>` ni el aviso por
+  consola, y no pasa por el piso estructural. `null`/`undefined` **no** son “sin tope”: resuelven
+  al default finito. Evidencia: `src/core/memory/engine.js` (`isUnlimitedWorkingContext`).
+- **`required` fail-closed**: las `criticalKeys` del proyecto se resuelven antes del corte y una
+  regla requerida que no entra no se omite en silencio: falla con error diagnóstico. El aviso de
+  overflow gobierna solo las reglas no requeridas.
+- **Sin cambio de schema en 0.42.0**: no se agregan columnas, índices, PRAGMAs persistentes ni
+  `ruleVersion`; la configuración se valida al parsear. Un binario 0.41.x lee el mismo estado
+  persistido.
 - **Puerta de criticidad**: si una operación supersedería una `memory_key` declarada en
   `.ancletorc` → `memory.criticalKeys`, rechaza con exit 2. El engine nunca lee `.ancletorc`; el
   conjunto se inyecta desde el CLI.
@@ -76,7 +92,9 @@ skillVersion: '2.3'
 - **Un pack**: la generación del seed usa un único pack Repomix comprimido; `--check` no crea
   packs.
 - **Impacto**: el estado compara hashes por área; el bump de `version` de `package.json` se
-  neutraliza con un centinela para no contar como cambio de contenido.
+  neutraliza con un centinela para no contar como cambio de contenido. `CHANGELOG.md` sí es un
+  área raíz observable: un cambio de release puede producir `STALE/minor` aunque el bump de
+  versión se neutralice.
 - **Rutas efímeras**: `.ancleto/**` y `.discovery-map.json` no participan de la frescura;
   `documentation/` y `audit logs/` están gitignored y se excluyen. El propio `outputDir` del seed
   se omite del walk, de modo que reescribir el seed no genera deriva.
@@ -106,31 +124,36 @@ skillVersion: '2.3'
 | Refresco manual del catálogo | IDs declarados pueden faltar en el snapshot | Guard de integridad con quinta fuente (`opencode.json`) |
 | Dependencias externas opcionales | Repomix/opencode/jev-spec pueden faltar | Degradación explícita: `skipped`/`unavailable`, error claro |
 | Cambio de orden de recall | Alterar relevancia observable de `searchMemory` | Medición con spike y orden total determinista (`compareRecall`) |
-| Seed sobredimensionado en corridas previas | Costo de lectura alto | Esta regeneración mantiene documentos densos y breves |
+| Modo `unlimited` del working-context | Inyecta todo el corpus de reglas en cada sesión; costo recurrente y bloque grande | Es opt-in explícito (`0`/`"unlimited"`), reversible, y no altera el tope del campo destilado de 5 reglas/1.500 bytes |
+| Presupuesto mal configurado | Un valor inválido cae al default sin avisar; un valor muy chico omite reglas no requeridas | Resolución tolerante y determinista; `required` falla cerrado; el aviso de overflow nombra las claves omitidas |
+| Cambio de configuración del presupuesto | El working-context puede quedar `desactualizado` hasta el próximo refresh | El chequeo de frescura es advisory; no hay invalidación automática |
 | Secretos en configuración | Fuga en docs o bundles | Nombrar variable/archivo y omitir valor; rechazo en memoria |
 | Dependencia de `version` en `package.json` | Un bump no debe invalidar el seed | Centinela byte-preserving en `hashSources`; observado en `src/cli/index.js` |
 
-## Decisiones recientes relevantes (0.40.x–0.41.0)
+## Decisiones recientes relevantes (0.40.x–0.42.0)
 
+- **0.42.0 — presupuesto configurable**: el tope del working-context deja de ser fijo. Default
+  **4000 tokens** (16.000 chars), resuelto en `src/core/memory/working-context.js` con precedencia
+  env → `.ancletorc` → default; `0`/`"unlimited"` desactivan el tope como estado explícito
+  (`Infinity`); `required` sigue fail-closed. Change `memory-working-context-budget` archivado en
+  `aspec/changes/archive/2026-11-20-memory-working-context-budget/`; deltas promovidos a
+  `aspec/specs/memory-engine/spec.md` y `aspec/specs/prompt-contracts/spec.md`.
+- **0.42.0 sin cambio de schema**: no hay columnas, índices, PRAGMAs persistentes ni `ruleVersion`
+  nuevos; la configuración se valida al parsear y nunca impide el render. El tope de 5 reglas y
+  1.500 bytes del campo `project memory rules` de `prompt-contracts` es una superficie distinta y
+  no se compone con el presupuesto del bloque.
+- **Release 0.42.0 preparada**: `package.json` en `0.42.0` (commit `c316cf4`); el change está
+  implementado y archivado; `aspec/backlog.md` declara “sin tag ni run todavía”. No afirmar publish
+  hasta que exista tag/run verificable.
 - **0.41.0**: el recall de `searchMemory` pasa a **BM25-first** (`required` → `bm25` → anclaje →
   scope → `memory_key`). Medido con spike sobre 53 rules, 37 queries y 98 pares: nDCG@5 0.656 →
   0.843 y MRR@5 0.633 → 0.923. Change `memory-recall-bm25-first` archivado en
-  `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/` (incluye `spike/memspike` y
-  `spike/memspike2`); el delta `memory-engine` quedó promovido a
-  `aspec/specs/memory-engine/spec.md`.
-- **0.41.0 sin cambio de contrato**: `buildWorkingContext` conserva orden y presupuesto
-  (`maxChars` 8000, `reserve` 1200, efectivo 6800); el spike `memspike2` verificó la réplica y la
-  llamada real con el mismo orden (11 nodos incluidos, 7/7 críticas). El fallback OR-prefijo no
-  cambió de alcance.
-- **Release 0.41.0 publicada**: `package.json` en `0.41.0`; tag anotado `v0.41.0` sobre el commit
-  `5c171bc`; run de `publish.yml` `44781865327` exitoso; `@ancleto/spec@0.41.0` como `latest` en
-  npm. Los datos quedaron registrados en `aspec/backlog.md` con el commit `24b1eb7`, que es la
-  única deriva (`STALE/minor`, área `aspec`) respecto del seed anterior.
+  `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/`; delta promovido a
+  `aspec/specs/memory-engine/spec.md`. Release publicada: tag `v0.41.0` sobre `5c171bc`, run
+  `44781865327`, `latest` en npm.
 - **0.40.1**: el guard de integridad de IDs suma `opencode.json` como quinta fuente declarada y
   comparte el collector `src/core/model-declarations.js` con `refresh-model-catalog --write`.
-  Change `model-catalog-guard-opencode-json` archivado en
-  `aspec/changes/archive/2026-11-19-model-catalog-guard-opencode-json/`.
 - **0.40.0**: `ancleto judge` es un adaptador **advisory**, read-only y opt-in a `jev-spec`; no es
   gate de archive ni de conformidad (`src/core/judge.js`).
-- **Compatibilidad declarada**: ningún cambio de 0.40.x–0.41.0 toca schema, PRAGMAs persistentes ni
-  `ruleVersion`; un binario `0.39.1` lee el mismo estado persistido.
+- **Compatibilidad declarada**: ningún cambio de 0.40.x–0.42.0 toca schema, PRAGMAs persistentes ni
+  `ruleVersion`; un binario `0.40.x`/`0.41.x` lee el mismo estado persistido.

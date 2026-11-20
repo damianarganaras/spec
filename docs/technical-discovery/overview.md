@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-20T14:36:40.644Z
-pluginVersion: 0.41.0
+generatedAt: 2026-11-20T19:51:44.420Z
+pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
 
@@ -41,7 +41,7 @@ src/cli/index.js  ── dispatch de subcomandos y toda la instalación
       ├── src/core/machine-env.js   machine-env.md (shell/EOL/tools)
       ├── src/core/model-*.js       catálogo, declaraciones y tiers
       ├── src/core/judge.js         adaptador advisory a jev-spec
-      └── src/core/memory/**        motor SQLite/FTS5, tools MCP y operaciones
+      └── src/core/memory/**        motor SQLite/FTS5, tools MCP, working-context y operaciones
 ```
 
 El paquete publica además una **superficie instalable** (`package.json` → `files`): `agents/`
@@ -56,6 +56,7 @@ El paquete publica además una **superficie instalable** (`package.json` → `fi
 | Instalador multi-host | Materializa assets, adapta frontmatter, escribe MCP y aplica tiers | `src/cli/index.js`, `src/core/adapters/frontmatter.js` |
 | Discovery | Mapa topológico, estado, impacto y pack Repomix | `src/core/discovery.js`, `src/core/discovery-state.js`, `src/core/repomix-tier.js` |
 | Memoria | Motor SQLite/FTS5, supersesión, refs, recall BM25-first, MCP y operaciones | `src/core/memory/**` |
+| Working-context | Render derivado y **resolución del presupuesto configurable** | `src/core/memory/working-context.js` |
 | Modelos | Catálogo commiteado, declaraciones versionadas y resolución por tier | `src/core/model-catalog.js`, `src/core/model-declarations.js`, `src/core/tier-models.js` |
 | Specs | Validación de specs canónicas y merge de deltas | `src/core/specs-merge.js` |
 | Cambios | Artefactos SDD activos, archivados y backlog de release | `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` |
@@ -82,7 +83,9 @@ Evidencia: `src/cli/index.js`, `src/core/discovery.js`, `src/core/discovery-stat
 Las tools MCP (`searchMemory`, `recordRule`, `recordDecision`) leen y escriben
 `.ancleto/memory.db`. Cada `memory_key` tiene un nodo activo y un historial `superseded`; las
 escrituras pasan por validación de refs y rechazo de secretos. Desde 0.41.0 el recall ordena por
-**BM25 ascendente** después de las `required`. Evidencia: `src/core/memory/engine.js`,
+**BM25 ascendente** después de las `required`. Desde 0.42.0 el bloque `<ProjectMemoryRules>` de
+`.ancleto/working-context.md` usa un presupuesto **configurable** (default 4000 tokens) resuelto en
+`working-context.js`. Evidencia: `src/core/memory/engine.js`, `src/core/memory/working-context.js`,
 `src/core/memory/tools.js`, `src/core/memory/mcp-server.js`.
 
 ### 4. Ciclo de cambio SDD
@@ -105,18 +108,19 @@ Un tag `v*` dispara `.github/workflows/publish.yml`: `npm ci` → lint → tests
 
 ## Estado de release
 
-`0.41.0` está **publicada**. `package.json` declara la versión y el tag anotado `v0.41.0` apunta
-al commit `5c171bc` ("Merge branch 'development' into main (release 0.41.0)"); el run de
-`publish.yml` `44781865327` terminó en éxito y `@ancleto/spec@0.41.0` quedó como `latest` en npm.
-Datos registrados en el commit `24b1eb7` (`docs(backlog): record 0.41.0 release data`), que es el
-HEAD de `development` y el origen de la deriva menor del área `aspec`. La versión previa verificada
-es `0.40.1` (tag `v0.40.1`).
+`package.json` declara `0.42.0` (commit `c316cf4`, `chore(release): 0.42.0`), pero la release está
+**preparada, no publicada**: `aspec/backlog.md` registra el change `memory-working-context-budget`
+implementado y archivado, con la nota explícita “sin tag ni run todavía”. No hay tag `v0.42.0` en
+el clon local. La última release publicada y verificada es `0.41.0` (tag anotado `v0.41.0` sobre
+`5c171bc`, run `44781865327` exitoso, `latest` en npm). El HEAD de `development` es `9e33868`
+(`docs(backlog): relate memory-working-context-budget to 0.42.0`), que documenta esa relación.
 
 ## Límites y decisiones de frontera
 
 - **No es una web app ni una API**: es una herramienta de línea de comandos (`PRODUCT.md`).
 - El CLI es dueño del ciclo de vida; los módulos `src/core/**` son dueños de sus invariantes.
 - La memoria es **cwd-scoped**: `<cwd>/.ancleto/memory.db`.
+- El presupuesto del working-context es configuración de proyecto/entorno, no estado persistido.
 - El seed técnico es un mapa, no un inventario: ver `inventory.md` y `unknowns.md`.
 
 ## Riesgos de cambio de alto nivel
@@ -126,5 +130,7 @@ es `0.40.1` (tag `v0.40.1`).
 - `agents/`, `commands/`, `skills/` y `templates/` son producto instalable: un cambio altera a
   todos los proyectos usuarios.
 - El contrato de persistencia de `src/core/memory/**` es sensible a migraciones y concurrencia.
+- El modo `unlimited` puede volcar todo el corpus de reglas en cada sesión: es una decisión de
+  costo explícita del usuario.
 - Detalle: `decisions.md`; recorridos: `units/cli-install.md`, `units/discovery-engine.md`,
   `units/memory-engine.md`.

@@ -2,10 +2,10 @@
 node: units/cli-install
 kind: dossier
 read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, MCP, tiers y diagnósticos"
-covers: [instalación, hosts, frontmatter, MCP, tiers, templates, import-export, check, doctor, judge, publicación]
+covers: [instalación, hosts, frontmatter, MCP, tiers, templates, import-export, check, doctor, judge, publicación, working-context]
 sources: ["src/cli/index.js", "src/cli/ui.js", "src/core/adapters/frontmatter.js", "src/core/model-declarations.js", "src/core/model-catalog.js", "src/core/tier-models.js", "src/core/judge.js", "src/core/machine-env.js", "agents/**", "commands/**", "skills/**", "templates/**", "profiles/**", "opencode.json", "package.json", ".github/workflows/publish.yml"]
-generatedAt: 2026-11-20T14:36:40.644Z
-pluginVersion: 0.41.0
+generatedAt: 2026-11-20T19:51:44.420Z
+pluginVersion: 0.42.0
 skillVersion: '2.3'
 ---
 
@@ -39,7 +39,9 @@ aporta la UI de terminal.
    servidor propio `ancleto-memory` se agrega junto con los servidores por defecto.
 7. **Persistir**: escribe `.ancletorc` (manifiesto + `installedPaths`), el estado de tier
    (`.opencode/.ancleto-tier`) y refresca `machine-env.md` y `working-context.md` de forma
-   best-effort.
+   best-effort. El refresh del working-context usa el presupuesto resuelto por
+   `working-context.js`; un fallo (p. ej. una `criticalKey` inválida) no aborta el lifecycle, pero
+   tampoco persiste un bloque degradado.
 
 `init` agrega el scaffold de `aspec/`, la migración de `openspec/` legacy y el registro global del
 proyecto. `upgrade` materializa la canónica sin aplicar tier. `update` reintenta la instalación
@@ -65,9 +67,10 @@ sobre el manifiesto existente.
 ### Release
 
 Un tag `v*` dispara `.github/workflows/publish.yml` (lint, tests, publish idempotente, Release y
-canary no bloqueante). `0.41.0` está **publicada**: tag anotado `v0.41.0` sobre el commit
-`5c171bc`, run `44781865327` exitoso y `latest` en npm. Los datos operativos quedaron registrados
-en `aspec/backlog.md` (commit `24b1eb7`). La versión previa verificada es `0.40.1`.
+canary no bloqueante). `0.42.0` está **preparada, no publicada**: `package.json` declara la versión
+(commit `c316cf4`) y el change `memory-working-context-budget` está archivado, pero
+`aspec/backlog.md` registra “sin tag ni run todavía”. La última release publicada y verificada es
+`0.41.0` (tag anotado `v0.41.0` sobre `5c171bc`, run `44781865327` exitoso, `latest` en npm).
 
 ## Reglas, contratos y riesgos
 
@@ -84,6 +87,8 @@ en `aspec/backlog.md` (commit `24b1eb7`). La versión previa verificada es `0.40
   desconocido.
 - **Templates `LOCKED`**: un bloque mal formado no se toca; las firmas legadas solo se eliminan con
   coincidencia exacta.
+- **Working-context en lifecycle**: el refresh es best-effort y comparte el render/presupuesto con
+  `memory context`; el lifecycle no debe persistir un bloque degradado.
 - **Riesgo principal**: `src/cli/index.js` concentra demasiadas responsabilidades; los cambios
   deben aislarse por subcomando y apoyarse en los módulos de `src/core/**`.
 
@@ -99,6 +104,7 @@ en `aspec/backlog.md` (commit `24b1eb7`). La versión previa verificada es `0.40
 | `src/core/model-catalog.js` | Helpers puros del catálogo |
 | `src/core/judge.js` | Adaptador advisory a `jev-spec` |
 | `src/core/machine-env.js` | Detección de shell/EOL/tools y exclusión git |
+| `src/core/memory/working-context.js` | Render y presupuesto del artefacto refrescado por el lifecycle |
 | `agents/**`, `commands/**`, `skills/**`, `templates/**`, `profiles/**` | Superficie instalable |
 | `package.json` | Bins, versión, engines y scripts |
 | `.github/workflows/publish.yml` | Pipeline de publicación y Release |

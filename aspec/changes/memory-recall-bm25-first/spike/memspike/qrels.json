@@ -1,0 +1,492 @@
+[
+ {
+  "query": "Q01",
+  "key": "node-test-scope-explicit-paths",
+  "grade": 2
+ },
+ {
+  "query": "Q01",
+  "key": "test-runner-invocation",
+  "grade": 2
+ },
+ {
+  "query": "Q01",
+  "key": "readme-text-guards",
+  "grade": 1
+ },
+ {
+  "query": "Q01",
+  "key": "windows-npm-cmd-shim-test-timeout",
+  "grade": 1
+ },
+ {
+  "query": "Q01",
+  "key": "affected-test-selection-nonindexed-couplings",
+  "grade": 1
+ },
+ {
+  "query": "Q02",
+  "key": "repo-validation-commands",
+  "grade": 2
+ },
+ {
+  "query": "Q02",
+  "key": "node-test-scope-explicit-paths",
+  "grade": 1
+ },
+ {
+  "query": "Q02",
+  "key": "readme-text-guards",
+  "grade": 1
+ },
+ {
+  "query": "Q02",
+  "key": "windows-npm-cmd-shim-test-timeout",
+  "grade": 1
+ },
+ {
+  "query": "Q03",
+  "key": "npm-publish-async-metadata-propagation",
+  "grade": 2
+ },
+ {
+  "query": "Q03",
+  "key": "release-version-bump-and-publish-verification",
+  "grade": 2
+ },
+ {
+  "query": "Q04",
+  "key": "release-version-bump-and-publish-verification",
+  "grade": 2
+ },
+ {
+  "query": "Q04",
+  "key": "npm-publish-async-metadata-propagation",
+  "grade": 1
+ },
+ {
+  "query": "Q05",
+  "key": "agent-model-three-surfaces",
+  "grade": 2
+ },
+ {
+  "query": "Q05",
+  "key": "agent-model-source-of-truth-global-vs-project",
+  "grade": 2
+ },
+ {
+  "query": "Q05",
+  "key": "gratis-model-precedence-oracle",
+  "grade": 1
+ },
+ {
+  "query": "Q05",
+  "key": "opencode-free-tier-custom-primary-agent",
+  "grade": 1
+ },
+ {
+  "query": "Q06",
+  "key": "agent-model-three-surfaces",
+  "grade": 2
+ },
+ {
+  "query": "Q06",
+  "key": "agent-model-source-of-truth-global-vs-project",
+  "grade": 1
+ },
+ {
+  "query": "Q06",
+  "key": "gratis-model-precedence-oracle",
+  "grade": 1
+ },
+ {
+  "query": "Q06",
+  "key": "upgrade-appends-caveman-note-orchestrator",
+  "grade": 1
+ },
+ {
+  "query": "Q07",
+  "key": "memory-ref-removal-allowlist",
+  "grade": 2
+ },
+ {
+  "query": "Q08",
+  "key": "working-context-render",
+  "grade": 2
+ },
+ {
+  "query": "Q08",
+  "key": "content-guard-literal-overflow-warning",
+  "grade": 1
+ },
+ {
+  "query": "Q09",
+  "key": "delta-modified-restates-requirement-body",
+  "grade": 2
+ },
+ {
+  "query": "Q09",
+  "key": "specs-merge-h1-inside-section-ignored",
+  "grade": 1
+ },
+ {
+  "query": "Q09",
+  "key": "delta-oracle-empty-text-accepted",
+  "grade": 1
+ },
+ {
+  "query": "Q09",
+  "key": "negative-invariant-scenario-must-be-explicit",
+  "grade": 1
+ },
+ {
+  "query": "Q10",
+  "key": "discovery-exclude-glob-tokenization",
+  "grade": 2
+ },
+ {
+  "query": "Q10",
+  "key": "discovery-glob-matcher-replacement-equivalence",
+  "grade": 2
+ },
+ {
+  "query": "Q10",
+  "key": "discovery-sources-forward-slash-paths",
+  "grade": 1
+ },
+ {
+  "query": "Q11",
+  "key": "affected-test-selection-nonindexed-couplings",
+  "grade": 2
+ },
+ {
+  "query": "Q11",
+  "key": "readme-text-guards",
+  "grade": 1
+ },
+ {
+  "query": "Q12",
+  "key": "sqlite-wal-readonly-invariant",
+  "grade": 2
+ },
+ {
+  "query": "Q12",
+  "key": "memory-readonly-precheck-before-eager-engine",
+  "grade": 1
+ },
+ {
+  "query": "Q12",
+  "key": "sqlite-no-persistencia-requiere-sqlite-master",
+  "grade": 1
+ },
+ {
+  "query": "Q13",
+  "key": "node-sqlite-lock-contention-shape",
+  "grade": 2
+ },
+ {
+  "query": "Q13",
+  "key": "sqlite-wal-readonly-invariant",
+  "grade": 1
+ },
+ {
+  "query": "Q13",
+  "key": "memory-readonly-precheck-before-eager-engine",
+  "grade": 1
+ },
+ {
+  "query": "Q14",
+  "key": "content-guard-change-artifact-location",
+  "grade": 2
+ },
+ {
+  "query": "Q14",
+  "key": "archive-promocion-antes-del-move",
+  "grade": 1
+ },
+ {
+  "query": "Q14",
+  "key": "affected-set-excludes-markdown-guards",
+  "grade": 1
+ },
+ {
+  "query": "Q15",
+  "key": "content-guard-literal-overflow-warning",
+  "grade": 2
+ },
+ {
+  "query": "Q15",
+  "key": "content-guard-change-artifact-location",
+  "grade": 1
+ },
+ {
+  "query": "Q15",
+  "key": "content-guard-authoring-normalize-slice-mutate",
+  "grade": 1
+ },
+ {
+  "query": "Q15",
+  "key": "readme-text-guards",
+  "grade": 1
+ },
+ {
+  "query": "Q16",
+  "key": "archive-promocion-antes-del-move",
+  "grade": 2
+ },
+ {
+  "query": "Q16",
+  "key": "memory-promotion-standing-consent",
+  "grade": 2
+ },
+ {
+  "query": "Q16",
+  "key": "memory-ref-removal-allowlist",
+  "grade": 1
+ },
+ {
+  "query": "Q17",
+  "key": "opencode-permission-bash-last-match-wins",
+  "grade": 2
+ },
+ {
+  "query": "Q17",
+  "key": "throughput-pipeline-review-ledger-no-rebash",
+  "grade": 1
+ },
+ {
+  "query": "Q18",
+  "key": "fts5-external-content-count",
+  "grade": 2
+ },
+ {
+  "query": "Q19",
+  "key": "node-fs-cp-collision-behavior",
+  "grade": 2
+ },
+ {
+  "query": "Q20",
+  "key": "agent-model-install-upgrade-ownership",
+  "grade": 2
+ },
+ {
+  "query": "Q20",
+  "key": "agent-mirrors-regenerate-upgrade-only",
+  "grade": 2
+ },
+ {
+  "query": "Q20",
+  "key": "agent-model-source-of-truth-global-vs-project",
+  "grade": 1
+ },
+ {
+  "query": "Q20",
+  "key": "gratis-model-precedence-oracle",
+  "grade": 1
+ },
+ {
+  "query": "Q20",
+  "key": "upgrade-appends-caveman-note-orchestrator",
+  "grade": 1
+ },
+ {
+  "query": "Q20",
+  "key": "agent-flag.semantics",
+  "grade": 1
+ },
+ {
+  "query": "Q21",
+  "key": "new-wrapper-command-checklist",
+  "grade": 2
+ },
+ {
+  "query": "Q21",
+  "key": "agent-flag.semantics",
+  "grade": 1
+ },
+ {
+  "query": "Q22",
+  "key": "fix-change-requires-reproducible-baseline",
+  "grade": 2
+ },
+ {
+  "query": "Q23",
+  "key": "user-checkpoints-and-no-push",
+  "grade": 2
+ },
+ {
+  "query": "Q24",
+  "key": "gc-purga-por-created-at-original",
+  "grade": 2
+ },
+ {
+  "query": "Q24",
+  "key": "memory-gc-active-nodes-untouchable",
+  "grade": 2
+ },
+ {
+  "query": "Q25",
+  "key": "refs-path-normalize-before-exists",
+  "grade": 2
+ },
+ {
+  "query": "Q25",
+  "key": "discovery-sources-forward-slash-paths",
+  "grade": 1
+ },
+ {
+  "query": "Q26",
+  "key": "merge-origin-main-conflict-policy",
+  "grade": 2
+ },
+ {
+  "query": "Q27",
+  "key": "upgrade-appends-caveman-note-orchestrator",
+  "grade": 2
+ },
+ {
+  "query": "Q27",
+  "key": "agent-mirrors-regenerate-upgrade-only",
+  "grade": 1
+ },
+ {
+  "query": "Q28",
+  "key": "discovery-check-dev-entrypoint",
+  "grade": 2
+ },
+ {
+  "query": "Q29",
+  "key": "recorte-derivado-se-verifica-en-segunda-pasada",
+  "grade": 2
+ },
+ {
+  "query": "Q30",
+  "key": "memory-readonly-precheck-before-eager-engine",
+  "grade": 2
+ },
+ {
+  "query": "Q30",
+  "key": "sqlite-no-persistencia-requiere-sqlite-master",
+  "grade": 1
+ },
+ {
+  "query": "Q31",
+  "key": "buildworkingcontext-cwd-tercer-parametro",
+  "grade": 2
+ },
+ {
+  "query": "Q31",
+  "key": "working-context-render",
+  "grade": 1
+ },
+ {
+  "query": "Q32",
+  "key": "throughput-pipeline-review-ledger-no-rebash",
+  "grade": 2
+ },
+ {
+  "query": "T1",
+  "key": "memory-readonly-precheck-before-eager-engine",
+  "grade": 2
+ },
+ {
+  "query": "T1",
+  "key": "memory-ref-removal-allowlist",
+  "grade": 1
+ },
+ {
+  "query": "T2",
+  "key": "discovery-glob-matcher-replacement-equivalence",
+  "grade": 2
+ },
+ {
+  "query": "T2",
+  "key": "discovery-exclude-glob-tokenization",
+  "grade": 2
+ },
+ {
+  "query": "T2",
+  "key": "discovery-sources-forward-slash-paths",
+  "grade": 1
+ },
+ {
+  "query": "T2",
+  "key": "discovery-check-dev-entrypoint",
+  "grade": 1
+ },
+ {
+  "query": "T3",
+  "key": "memory-ref-removal-allowlist",
+  "grade": 2
+ },
+ {
+  "query": "T3",
+  "key": "memory-readonly-precheck-before-eager-engine",
+  "grade": 2
+ },
+ {
+  "query": "T3",
+  "key": "working-context-render",
+  "grade": 1
+ },
+ {
+  "query": "T3",
+  "key": "gc-purga-por-created-at-original",
+  "grade": 1
+ },
+ {
+  "query": "T3",
+  "key": "memory-gc-active-nodes-untouchable",
+  "grade": 1
+ },
+ {
+  "query": "T3",
+  "key": "sqlite-no-persistencia-requiere-sqlite-master",
+  "grade": 1
+ },
+ {
+  "query": "T4",
+  "key": "windows-npm-cmd-shim-test-timeout",
+  "grade": 2
+ },
+ {
+  "query": "T4",
+  "key": "discovery-sources-forward-slash-paths",
+  "grade": 1
+ },
+ {
+  "query": "T4",
+  "key": "refs-path-normalize-before-exists",
+  "grade": 1
+ },
+ {
+  "query": "T5",
+  "key": "agent-model-three-surfaces",
+  "grade": 2
+ },
+ {
+  "query": "T5",
+  "key": "agent-model-install-upgrade-ownership",
+  "grade": 2
+ },
+ {
+  "query": "T5",
+  "key": "gratis-model-precedence-oracle",
+  "grade": 2
+ },
+ {
+  "query": "T5",
+  "key": "agent-model-source-of-truth-global-vs-project",
+  "grade": 1
+ },
+ {
+  "query": "T5",
+  "key": "agent-mirrors-regenerate-upgrade-only",
+  "grade": 1
+ },
+ {
+  "query": "T5",
+  "key": "opencode-free-tier-custom-primary-agent",
+  "grade": 1
+ }
+]

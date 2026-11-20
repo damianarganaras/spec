@@ -2,6 +2,15 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.41.0] - 2026-11-20
+
+### Changed
+- **Recall de `searchMemory` BM25-first**: el orden de desempate pasa a `required → bm25 ascendente → anclaje → scope → memory_key`. El score BM25 deja el último lugar y pasa a ser el criterio primario; anclaje y scope sólo desempatan. Medido con spike (53 rules, 37 queries, 98 pares): nDCG@5 0.656 → 0.843, MRR@5 0.633 → 0.923.
+- **Delta `memory-engine` (recall + fallback OR-prefijo) coherente**: la spec principal describe el orden BM25-first y los límites del fallback OR-prefijo tal como quedaron implementados.
+
+### Notas
+- **Sin cambios de contrato**: no cambia el schema persistido, ni `buildWorkingContext`, ni el presupuesto de tokens del working-context.
+
 ## [0.40.1] - 2026-11-19
 
 ### Changed

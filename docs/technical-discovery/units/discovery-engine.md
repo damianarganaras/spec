@@ -3,9 +3,9 @@ node: units/discovery-engine
 kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set, la selección de tests y la resolución de modelos"
 covers: [topología, empaquetado, tiers, estado del seed, impacted-set, selección de tests, catálogo de modelos, integridad de IDs]
-sources: ["src/core/discovery.js", "src/core/discovery-glob.js", "src/core/discovery-state.js", "src/core/repomix-tier.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/model-declarations.js", "src/core/tier-models.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js"]
-generatedAt: 2026-11-20T01:36:10.038Z
-pluginVersion: 0.40.1
+sources: ["src/core/discovery.js", "src/core/discovery-glob.js", "src/core/discovery-state.js", "src/core/repomix-tier.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/model-declarations.js", "src/core/tier-models.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", ".discovery-map.json"]
+generatedAt: 2026-11-20T17:05:16.811Z
+pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
 
@@ -23,7 +23,8 @@ modelos por tier. Es una unidad de soporte a decisiones, no de producto visible.
 
 1. `buildTopologyMap` recorre el repositorio, aplica los ignores y resume archivos por directorio.
    `writeDiscoveryMap` persiste `.discovery-map.json` (`last_updated`, `total_files`,
-   `tree_summary`, `root_files`). Hoy resume 946 archivos (`aspec` 355, `test` 40, `src` 25).
+   `tree_summary`, `root_files`). Hoy resume 966 archivos (`aspec` 375, `documentation` 340,
+   `.opencode` 66, `test` 40, `src` 25).
 2. `discovery --check` calcula hashes por archivo y por área, compara con el estado almacenado y
    deriva `state`/`impact`/`affectedDocs`. Los cambios efímeros (`.ancleto/**`,
    `.discovery-map.json`) no generan áreas. El bump de `version` de `package.json` se reemplaza por

@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-20T01:36:10.038Z
-pluginVersion: 0.40.1
+generatedAt: 2026-11-20T17:05:16.811Z
+pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
 
@@ -73,14 +73,16 @@ que el núcleo de la CLI funcione.
 - `node:sqlite` con `journal_mode=WAL`, FTS5 y transacciones `DEFERRED`/`IMMEDIATE`.
 - La base vive en `.ancleto/memory.db`; el snapshot usa `VACUUM INTO` sobre una conexión
   read-only.
-- Evidencia: `src/core/memory/database.js`, `src/core/memory/snapshot.js`.
+- El score BM25 de FTS5 es la señal primaria del recall desde 0.41.0 (sin cambiar el esquema).
+- Evidencia: `src/core/memory/database.js`, `src/core/memory/snapshot.js`, `src/core/memory/engine.js`.
 
 ## Publicación
 
 - `.github/workflows/publish.yml` se dispara con tags `v*` (o manualmente).
 - Pasos: `npm ci`, `npm run lint`, `node --test test/*.test.js`, `npm publish --access public`
   (omite si la versión ya existe), creación del Release y canary no bloqueante del tarball.
-- Último estado verificado: `0.40.1` publicada y verificada (`aspec/backlog.md`).
+- Estado actual: `0.41.0` **preparada, sin publicar** (tag/run/npm pendientes); la última
+  publicada y verificada es `0.40.1` (`aspec/backlog.md`).
 - Variables: `NODE_AUTH_TOKEN` y `GITHUB_TOKEN`/`GH_TOKEN`; valores omitidos.
 - Evidencia: `.github/workflows/publish.yml`, `package.json`.
 

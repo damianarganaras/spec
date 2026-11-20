@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, las tools MCP, el recall, las refs, el working-context y las operaciones de memoria"
-covers: [motor de memoria, tools MCP, recall, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, status, concurrencia]
-sources: ["src/core/memory/**", "src/cli/index.js", "AGENTS.md", "aspec/specs/memory-engine/spec.md", "aspec/specs/memory-ops/spec.md"]
-generatedAt: 2026-11-20T01:36:10.038Z
-pluginVersion: 0.40.1
+read_when: "cómo funciona la memoria persistente, las tools MCP, el recall BM25-first, las refs, el working-context y las operaciones de memoria"
+covers: [motor de memoria, tools MCP, recall BM25-first, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, status, concurrencia]
+sources: ["src/core/memory/**", "src/cli/index.js", "AGENTS.md", "aspec/specs/memory-engine/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**", "CHANGELOG.md"]
+generatedAt: 2026-11-20T17:05:16.811Z
+pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
 
@@ -33,16 +33,32 @@ entrada vive en una sola memoria (`AGENTS.md` → `memory-boundary`).
    (`shouldRefreshWorkingContext` + `refreshWorkingContextOnWrite`). Un fallo de render propaga en
    merge/consolidate; en import es best-effort; en MCP se absorbe.
 
-### Lectura y recall
+### Lectura y recall (BM25-first desde 0.41.0)
 
 - `searchMemory` usa FTS5: intento preciso (AND por términos) y fallback tolerante (OR con
-  prefijos) solo si el primero no devuelve nada.
+  prefijos) **solo si el primero no devuelve nada**; el alcance del fallback no cambió en 0.41.0.
+- **Orden total de recall**: `required` (orden declarado) → `bm25` ascendente → anclaje declarado
+  → `scope` (project > feature > task) → `memory_key`. `score` es el bm25 de FTS5 (negativo: mejor
+  primero) y es el criterio primario después de las requeridas; anclaje y scope solo desempatan a
+  igual score. Se rankea antes de recortar al `limit`, de modo que la página es el prefijo del
+  orden total. Evidencia: `src/core/memory/engine.js` (`compareRecall`).
 - Modo por defecto: **preview** (prefijo de 239 caracteres + `…`, flag `content_truncated`).
   `expand: true` devuelve el payload completo; `keys: [...]` expande solo claves presentes.
 - `required: [...]` promueve keys al frente y falla si no entran en el límite o en el presupuesto.
-  El orden total es requerido → anclaje declarado → scope → bm25 → `memory_key`.
 - Un aviso de overflow lista hasta 40 claves omitidas y resume el resto como `+N`.
 - Evidencia: `src/core/memory/engine.js`, `src/core/memory/tools.js`.
+
+### Evidencia de la decisión 0.41.0 (spike)
+
+- Change `memory-recall-bm25-first` archivado en
+  `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/`; implementación en el commit
+  `cb6592b` y spec promovida a `aspec/specs/memory-engine/spec.md`.
+- Medición: 53 rules, 37 queries y 98 pares; nDCG@5 `0.656 → 0.843` y MRR@5 `0.633 → 0.923`
+  (`CHANGELOG.md`, `spike/memspike/eval_result.json`, `spike/memspike/tuning.json`).
+- **Sin cambio de contrato**: `buildWorkingContext` conserva su orden (scope → anclaje →
+  `created_at` desc → key, con las críticas al frente) y su presupuesto (`maxChars` 8000,
+  `reserve` 1200, efectivo 6800). `spike/memspike2/measure_result.json` confirma que la réplica y
+  la llamada real coinciden en orden (`sameOrder: true`): 11 nodos incluidos, 7/7 críticas.
 
 ### Tools MCP
 
@@ -84,7 +100,7 @@ los diagnósticos van a `stderr`. Evidencia: `src/core/memory/mcp-server.js`,
   columna sigue funcionando y el dry-run de `gc` mide por `created_at` sin migrar.
 - **Working-context**: dueño único del render/escritura; la raíz se deriva de `.ancletorc` o de
   la ubicación de la DB, no del cwd. Sin base se renderiza la topología (día-cero); sin topología
-  ni reglas no se fabrica contenido.
+  ni reglas no se fabrica contenido. Su orden y presupuesto **no** cambiaron en 0.41.0.
 - **Snapshot**: no usa `openDatabase` (fijaría WAL y mutaría la fuente); `VACUUM INTO` lee el estado
   commiteado. En Windows el reemplazo aparta el destino, mueve la copia y restaura el backup si
   falla.
@@ -96,7 +112,7 @@ los diagnósticos van a `stderr`. Evidencia: `src/core/memory/mcp-server.js`,
 | Path | Rol |
 | --- | --- |
 | `src/core/memory/database.js` | Apertura, WAL, migración aditiva y transacciones |
-| `src/core/memory/engine.js` | Motor: record, search, refs, merge, consolidate, gc, import/export |
+| `src/core/memory/engine.js` | Motor: record, search/recall, refs, merge, consolidate, gc, import/export |
 | `src/core/memory/tools.js` | Handlers de las tools MCP |
 | `src/core/memory/mcp-server.js` | Servidor JSON-RPC por stdio |
 | `src/core/memory/working-context.js` | Render y persistencia del bloque derivado |
@@ -105,4 +121,5 @@ los diagnósticos van a `stderr`. Evidencia: `src/core/memory/mcp-server.js`,
 | `src/core/memory/snapshot.js` | Copia consistente de la base |
 | `src/core/memory/curation.js` | Curaduría read-only |
 | `src/cli/index.js` | Subcomandos `memory`, puerta de criticidad y exit codes |
+| `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/spike/**` | Evidencia y medición del recall BM25-first |
 | `.ancleto/memory.db` | Base local (no versionada) |

@@ -2,8 +2,8 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-11-20T01:36:10.038Z
-pluginVersion: 0.40.1
+generatedAt: 2026-11-20T17:05:16.811Z
+pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
 
@@ -18,8 +18,8 @@ skillVersion: '2.3'
 | Affected-set | Grafo de imports y clausura de dependientes | `src/core/affected-set.js` | `units/discovery-engine.md` |
 | Selección de tests | Plan determinista fail-closed sobre el affected-set | `src/core/test-selection.js`, `scripts/test-affected.mjs` | `units/discovery-engine.md` |
 | Modelos y tiers | Catálogo, declaraciones versionadas y resolución por tier | `src/core/model-catalog.js`, `src/core/model-declarations.js`, `src/core/tier-models.js` | `units/discovery-engine.md` |
-| Memoria | Motor SQLite/FTS5, refs, operaciones y tools MCP | `src/core/memory/**` | `units/memory-engine.md` |
-| Working-context | Artefacto derivado de topología + reglas críticas | `src/core/memory/working-context.js` | `units/memory-engine.md` |
+| Memoria | Motor SQLite/FTS5, recall BM25-first, refs, operaciones y tools MCP | `src/core/memory/**` | `units/memory-engine.md` |
+| Working-context | Artefacto derivado de topología + reglas críticas (sin cambios en 0.41.0) | `src/core/memory/working-context.js` | `units/memory-engine.md` |
 | Snapshot y curaduría | Copia consistente y reporte read-only | `src/core/memory/snapshot.js`, `src/core/memory/curation.js` | `units/memory-engine.md` |
 | Doctor y estado | Integridad de la base y gap de memoria | `src/core/memory/doctor.js`, `src/core/memory/status.js` | `units/memory-engine.md` |
 | Specs | Validación canónica y merge de deltas | `src/core/specs-merge.js` | — |

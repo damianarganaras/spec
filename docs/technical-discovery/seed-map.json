@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-20T20:21:53.850Z",
+  "generatedAt": "2026-11-20T22:00:13.847Z",
   "docs": {
     "index.md": ["package.json", "src", "aspec", "docs", ".discovery-map.json", "CHANGELOG.md"],
-    "overview.md": ["package.json", "src", "agents", "commands", "skills", "templates", "profiles", "aspec", ".discovery-map.json"],
+    "overview.md": ["package.json", "src", "agents", "commands", "skills", "templates", "profiles", "aspec", ".discovery-map.json", "CHANGELOG.md"],
     "setup.md": ["package.json", "scripts", "src", "templates", "aspec", ".github", "eslint.config.js", ".gitattributes", ".gitignore"],
     "decisions.md": ["src", "agents", "skills", "profiles", "aspec", "scripts", "package.json", "templates", "commands", "opencode.json", ".github", "CHANGELOG.md"],
-    "integrations.md": ["package.json", "src", "scripts", "agents", "skills", ".github", "profiles", "opencode.json", "aspec"],
+    "integrations.md": ["package.json", "src", "scripts", "agents", "skills", ".github", "profiles", "opencode.json", "aspec", "CHANGELOG.md"],
     "units/_map.md": ["src", "agents", "commands", "skills", "templates", "aspec", "profiles", "scripts", "package.json", "opencode.json"],
-    "units/cli-install.md": ["src", "agents", "commands", "skills", "templates", "profiles", "scripts", "package.json", "opencode.json", ".github", ".gitattributes", ".gitignore"],
+    "units/cli-install.md": ["src", "agents", "commands", "skills", "templates", "profiles", "scripts", "package.json", "opencode.json", ".github", ".gitattributes", ".gitignore", "aspec"],
     "units/discovery-engine.md": ["src", "scripts", "package.json", "aspec", ".discovery-map.json"],
-    "units/memory-engine.md": ["src", "aspec", "package.json", "docs"],
+    "units/memory-engine.md": ["src", "aspec", "package.json", "docs", "CHANGELOG.md"],
     "unknowns.md": ["package.json", "src", "scripts", "aspec", "profiles", "docs", "agents", "skills", ".gitattributes", ".gitignore", ".discovery-map.json", "CHANGELOG.md"],
-    "inventory.md": ["package.json", ".discovery-map.json", ".github", "aspec", "profiles", "scripts", "src", "agents", "commands", "skills", "templates", "docs", "test"]
+    "inventory.md": ["package.json", ".discovery-map.json", ".github", "aspec", "profiles", "scripts", "src", "agents", "commands", "skills", "templates", "docs", "test", "CHANGELOG.md"]
   }
 }

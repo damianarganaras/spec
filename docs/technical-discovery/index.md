@@ -2,8 +2,8 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-20T20:21:53.850Z
-pluginVersion: 0.42.0
+generatedAt: 2026-11-20T22:00:13.847Z
+pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
 
@@ -18,16 +18,17 @@ recorrer todo el repositorio.
 | Dato | Valor | Evidencia |
 | --- | --- | --- |
 | Producto | Orquestador SDD liviano con subagentes optimizados para costo/tokens | `package.json` |
-| Versión en el árbol | `0.42.0` (rama `development`, HEAD `274f890`; bump en `c316cf4`) | `package.json`, git log |
-| Estado de 0.42.0 | **Publicada y verificada**: tag anotado `v0.42.0` → `c6319c8`, run `44808502480` `success`, npm `0.42.0` `latest` | `aspec/backlog.md`, git tag |
-| Última publicada | `0.42.0` — tag `v0.42.0` sobre `c6319c8`, run `44808502480` exitoso y `latest` en npm | `aspec/backlog.md`, `.github/workflows/publish.yml` |
+| Versión en el árbol | `0.43.0` (rama `development`, HEAD `30bfd07`; bump en `9ba7975`) | `package.json`, git log |
+| Estado de 0.43.0 | **Preparada: sin tag ni run de publicación**. El bump 0.42.0 → 0.43.0 está commiteado y `aspec/backlog.md` declara “preparada, sin tag ni run todavía” | `aspec/backlog.md`, `git tag` |
+| Última publicada | `0.42.0` — tag anotado `v0.42.0` sobre `c6319c8`, run `44808502480` exitoso y `latest` en npm | `aspec/backlog.md`, `.github/workflows/publish.yml` |
+| Novedad de 0.43.0 | `memory import` rechaza `scope` no-string o vacío (`entry[i].scope invalido`) en el validador compartido por `importNodes` y `classifyImport`; paridad dry-run/write | `CHANGELOG.md`, `src/core/memory/engine.js`, `src/cli/index.js` |
 | Novedad de 0.42.0 | Presupuesto del working-context **configurable**: default 4000 tokens (16.000 chars), env `ANCLETO_WORKING_CONTEXT_TOKENS`, `.ancletorc` → `memory.maxTokens`, `0`/`"unlimited"` sin tope | `src/core/memory/working-context.js`, `src/core/memory/engine.js` |
-| Changes archivados relevantes | `memory-working-context-budget` y `memory-recall-bm25-first` en `aspec/changes/archive/2026-11-20-*/` | `aspec/changes/archive/**` |
+| Changes archivados relevantes | `memory-import-scope-string`, `memory-working-context-budget`, `memory-recall-bm25-first` | `aspec/changes/archive/2026-11-20-*/` |
 | Runtime | Node.js ≥ 24, ESM, sin dependencias de runtime | `package.json` |
 | Entrada | `src/cli/index.js` (bins `ancleto` y `aspec`) | `package.json` |
 | Persistencia propia | SQLite nativo (`node:sqlite`) + FTS5 en `.ancleto/memory.db` | `src/core/memory/**` |
 | Seed técnico | `docs/technical-discovery/` (este árbol) | `.discovery-map.json` |
-| Tamaño del mapa | 971 archivos; `aspec` 380, `documentation` 340, `.opencode` 66, `test` 40, `docs` 22, `src` 25, `skills` 35 | `.discovery-map.json` |
+| Tamaño del mapa | 975 archivos; `aspec` 384, `documentation` 340, `.opencode` 66, `test` 40, `docs` 22, `src` 25, `skills` 35 | `.discovery-map.json` |
 
 ## Elegí un destino
 
@@ -40,7 +41,7 @@ recorrer todo el repositorio.
 | Qué unidades existen y dónde entra cada una | `units/_map.md` | Tabla compacta de unidades |
 | Instalación, actualización, hosts, MCP, tiers y diagnósticos | `units/cli-install.md` | Dossier de alto impacto |
 | Discovery, pack Repomix, impacto del seed, affected-set y tests | `units/discovery-engine.md` | Dossier de alto impacto |
-| Memoria persistente, recall BM25-first, presupuesto del working-context, tools MCP y operaciones | `units/memory-engine.md` | Dossier de alto impacto |
+| Memoria persistente, recall BM25-first, presupuesto del working-context, validación de import, tools MCP y operaciones | `units/memory-engine.md` | Dossier de alto impacto |
 | Qué no se pudo verificar en esta generación | `unknowns.md` | Límites de evidencia |
 | Qué cubre el seed | `inventory.md` | Alcance documentado |
 
@@ -56,7 +57,7 @@ recorrer todo el repositorio.
 El seed se genera desde un único pack Repomix y se valida con
 `node src/cli/index.js discovery --check`. Toda corrida de CLI en este repositorio debe usar
 `node src/cli/index.js ...`: el binario global puede estar rezagado (el `.ancleto/machine-env.md`
-local declara `0.40.0`, anterior a `0.42.0`). La topología vive en `.discovery-map.json`; el estado
+local declara `0.40.0`, anterior a `0.43.0`). La topología vive en `.discovery-map.json`; el estado
 de frescura en `docs/technical-discovery/.discovery-state.json`; `seed-map.json` acota la próxima
-regeneración. Esta generación parte de `274f890` (backlog que registra la release 0.42.0 publicada)
-y estampa la versión `0.42.0` en los once documentos del seed.
+regeneración. Esta generación parte de `30bfd07` y estampa la versión `0.43.0` en los once
+documentos del seed.

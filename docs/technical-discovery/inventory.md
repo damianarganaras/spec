@@ -2,8 +2,8 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-20T20:21:53.850Z
-pluginVersion: 0.42.0
+generatedAt: 2026-11-20T22:00:13.847Z
+pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
 
@@ -17,14 +17,15 @@ skillVersion: '2.3'
 | `src/core/repomix-tier.js` | `units/discovery-engine.md` | Presupuesto de tokens y argumentos del pack |
 | `src/core/affected-set.js`, `src/core/test-selection.js` | `units/discovery-engine.md` | Impacto y tests afectados |
 | `src/core/model-*.js`, `src/core/model-*.json`, `src/core/tier-models.js` | `units/discovery-engine.md` | Catálogo y resolución de modelos |
-| `src/core/memory/**` | `units/memory-engine.md` | Persistencia, recall BM25-first, presupuesto del working-context, MCP y operaciones |
+| `src/core/memory/**` | `units/memory-engine.md` | Persistencia, recall BM25-first, presupuesto del working-context, validación del import, MCP y operaciones |
 | `src/core/specs-merge.js` | `decisions.md` | Merge de delta specs |
 | `src/core/machine-env.js`, `src/core/judge.js` | `integrations.md`, `decisions.md` | Integraciones locales |
 | `agents/**`, `commands/**`, `skills/**`, `templates/**`, `profiles/**` | `units/cli-install.md` | Superficie de producto instalable |
 | `scripts/**` | `units/discovery-engine.md` | Consumidores de afectados y catálogo |
+| `aspec/changes/archive/2026-11-20-memory-import-scope-string/**` | `units/memory-engine.md`, `decisions.md` | Evidencia y delta del `scope` string en el import |
 | `aspec/changes/archive/2026-11-20-memory-working-context-budget/**` | `units/memory-engine.md`, `decisions.md` | Evidencia del presupuesto configurable y del delta de specs |
 | `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**` | `units/memory-engine.md`, `decisions.md` | Evidencia y medición del recall BM25-first |
-| `aspec/**` | `overview.md`, `decisions.md` | Artefactos SDD, specs y estado de release |
+| `aspec/**`, `CHANGELOG.md` | `overview.md`, `decisions.md` | Artefactos SDD, specs y estado de release |
 | `test/**` | `unknowns.md` | Excluido del pack; cobertura no auditada |
 | `.github/workflows/**` | `integrations.md` | Publicación npm y Release |
 | `docs/technical-discovery/**` | `index.md`, `inventory.md` | Este seed |
@@ -35,8 +36,8 @@ skillVersion: '2.3'
 - `test/**` y archivos `*.test.*`/`*.spec.*`: el pack los excluye por configuración (y `test/**`
   por default de Repomix).
 - `docs/**` y `**/*.md`: Repomix los excluye por defaults; el seed no se usa como evidencia de sí
-  mismo. `aspec/backlog.md` se leyó aparte solo para el estado de release; las specs canónicas y los
-  artifacts de los changes archivados no se releyeron en esta corrida.
+  mismo. `CHANGELOG.md`, `aspec/backlog.md` y los dos specs canónicos tocados por 0.43.0 se leyeron
+  aparte, de forma acotada, para el estado de release y el contrato del import.
 - `package-lock.json`, lockfiles e imágenes: excluidos por configuración.
 - `.ancletorc`, `.opencode/**` y `.ancleto/**`: estado local; no se usan como evidencia ni se
   editan.

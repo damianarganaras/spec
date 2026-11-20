@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-20T20:21:53.850Z
-pluginVersion: 0.42.0
+generatedAt: 2026-11-20T22:00:13.847Z
+pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
 
@@ -43,7 +43,7 @@ que el núcleo de la CLI funcione.
 - **Sesiones y fallos**: `ancleto stats` lee la base de opencode (solo lectura) para reportar
   tokens, costo y fallos de tools.
 - **MCP**: el servidor `ancleto-memory` se declara en la configuración del host; en opencode vive
-  en `.opencode/opencode.json`/`.jsonc`.
+  en `.opencode/opencode.json[c]`.
 - **Modelos por agente**: `opencode.json` declara `agent.<nombre>.model`; desde 0.40.1 es la
   quinta fuente declarada del guard de integridad.
 - Evidencia: `scripts/refresh-model-catalog.mjs`, `src/cli/index.js`, `opencode.json`.
@@ -76,6 +76,8 @@ que el núcleo de la CLI funcione.
 - El score BM25 de FTS5 es la señal primaria del recall desde 0.41.0 (sin cambiar el esquema).
 - Desde 0.42.0 el presupuesto del working-context es configuración (env/`.ancletorc`), no estado
   persistido: no agrega columnas, índices ni PRAGMAs.
+- Desde 0.43.0 el import valida `scope` como string antes del bind, evitando que la afinidad TEXT
+  de SQLite persista un valor coercido que el dry-run no predijo.
 - Evidencia: `src/core/memory/database.js`, `src/core/memory/snapshot.js`,
   `src/core/memory/engine.js`, `src/core/memory/working-context.js`.
 
@@ -84,10 +86,10 @@ que el núcleo de la CLI funcione.
 - `.github/workflows/publish.yml` se dispara con tags `v*` (o manualmente).
 - Pasos: `npm ci`, `npm run lint`, `node --test test/*.test.js`, `npm publish --access public`
   (omite si la versión ya existe), creación del Release y canary no bloqueante del tarball.
-- Estado actual: `0.42.0` está **publicada y verificada**. `package.json` declara la versión
-  (commit `c316cf4`); `aspec/backlog.md` registra tag anotado `v0.42.0` → `c6319c8` (merge de
-  `main`), run `44808502480` en `success` y npm `@ancleto/spec@0.42.0` como `latest`.
-- Última release publicada: `0.42.0`. La anterior, `0.41.0`, fue tag anotado `v0.41.0` sobre
+- Estado actual: `0.43.0` está **preparada, sin tag ni run**. `package.json` declara la versión
+  (commit `9ba7975`); `aspec/backlog.md` no registra todavía tag, run ni `dist-tag` para 0.43.0.
+- Última release publicada: `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run `44808502480` en
+  `success`, npm `@ancleto/spec@0.42.0` `latest`). La anterior, `0.41.0`, fue tag `v0.41.0` sobre
   `5c171bc`, run `44781865327` exitoso y `latest` en npm.
 - Variables: `NODE_AUTH_TOKEN` y `GITHUB_TOKEN`/`GH_TOKEN`; valores omitidos.
 - Evidencia: `.github/workflows/publish.yml`, `package.json`, `aspec/backlog.md`.

@@ -46,30 +46,68 @@ export function writeWorkingContextBlock(projectRoot, block) {
   return block === null ? null : out
 }
 
+// Default del presupuesto del bloque `<ProjectMemoryRules>` cuando ni el entorno
+// ni `.ancletorc` lo fijan. El engine usa el mismo numero para llamadas directas.
+export const DEFAULT_WORKING_CONTEXT_TOKENS = 4000
+const WORKING_CONTEXT_TOKENS_ENV = 'ANCLETO_WORKING_CONTEXT_TOKENS'
+
+// Lectura tolerante de `.ancletorc`: sin archivo, JSON invalido o lectura fallida
+// devuelven null. Unica lectura de la configuracion de proyecto del modulo.
+function readMemoryConfig(projectRoot) {
+  if (!projectRoot) return null
+  let raw
+  try {
+    raw = readFileSync(join(projectRoot, '.ancletorc'), 'utf8')
+  } catch {
+    return null
+  }
+  try {
+    return JSON.parse(raw.replace(/^\uFEFF/, ''))
+  } catch {
+    return null
+  }
+}
+
 // Conjunto critico declarado en la configuracion del proyecto: `.ancletorc` ->
 // `memory.criticalKeys` (array de `memory_key`). Lectura tolerante: sin archivo, JSON
 // invalido, valor no-array o entradas que no son strings equivalen a la lista vacia;
 // las strings vacias se descartan. Nunca lanza y no importa la CLI (evita el ciclo).
 export function readCriticalMemoryKeys(projectRoot) {
-  if (!projectRoot) return []
-  let raw
-  try {
-    raw = readFileSync(join(projectRoot, '.ancletorc'), 'utf8')
-  } catch {
-    return []
-  }
-  let parsed
-  try {
-    parsed = JSON.parse(raw.replace(/^\uFEFF/, ''))
-  } catch {
-    return []
-  }
-  const keys = parsed?.memory?.criticalKeys
+  const keys = readMemoryConfig(projectRoot)?.memory?.criticalKeys
   if (!Array.isArray(keys)) return []
   // Una lista con entradas que no son strings es invalida como conjunto: se descarta
   // entera (comportamiento identico al vigente). Las strings vacias no son claves.
   if (!keys.every((key) => typeof key === 'string')) return []
   return keys.filter((key) => key.trim() !== '')
+}
+
+// Gramatica del presupuesto: entero positivo finito, o sin tope (`0` numerico,
+// `"0"` o `"unlimited"`). Todo lo demas devuelve null (invalido).
+function parseMaxTokens(raw) {
+  if (typeof raw === 'number') {
+    if (raw === 0) return Infinity
+    return Number.isInteger(raw) && raw > 0 ? raw : null
+  }
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (trimmed === 'unlimited') return Infinity
+  if (!/^\d+$/.test(trimmed)) return null
+  const value = Number(trimmed)
+  return value === 0 ? Infinity : value
+}
+
+// Presupuesto efectivo del working-context: `ANCLETO_WORKING_CONTEXT_TOKENS` ->
+// `memory.maxTokens` de `.ancletorc` -> default. Un entorno definido y no vacio es
+// un override explicito: si es invalido resuelve al default y NO cae a `.ancletorc`.
+// `0`/`"unlimited"` devuelven `Infinity` (sin tope). Nunca lanza.
+export function resolveWorkingContextMaxTokens(projectRoot) {
+  const env = process.env[WORKING_CONTEXT_TOKENS_ENV]
+  if (typeof env === 'string' && env.trim() !== '') {
+    const fromEnv = parseMaxTokens(env)
+    return fromEnv === null ? DEFAULT_WORKING_CONTEXT_TOKENS : fromEnv
+  }
+  const fromConfig = parseMaxTokens(readMemoryConfig(projectRoot)?.memory?.maxTokens)
+  return fromConfig === null ? DEFAULT_WORKING_CONTEXT_TOKENS : fromConfig
 }
 
 // Render del bloque del working-context: desde el engine vivo si se provee, o
@@ -79,7 +117,7 @@ export function readCriticalMemoryKeys(projectRoot) {
 // corte los sigue gobernando el comparador unico del engine.
 export function renderWorkingContextBlock(engine, projectRoot, scope = 'project') {
   if (engine) {
-    return engine.buildWorkingContext(scope, undefined, projectRoot, { required: readCriticalMemoryKeys(projectRoot) })
+    return engine.buildWorkingContext(scope, resolveWorkingContextMaxTokens(projectRoot), projectRoot, { required: readCriticalMemoryKeys(projectRoot) })
   }
   return formatTopologyBlock(readTopologySummary(projectRoot))
 }

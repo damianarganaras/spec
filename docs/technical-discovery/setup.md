@@ -2,7 +2,7 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-20T01:12:16.920Z
+generatedAt: 2026-11-20T01:36:10.038Z
 pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---
@@ -33,7 +33,8 @@ skillVersion: '2.3'
 | Publicar (CI) | tag `v*` → `npm ci` + lint + tests + `npm publish` | `.github/workflows/publish.yml` |
 
 Regla del repositorio: **toda corrida de CLI usa `node src/cli/index.js ...`**. El binario del
-PATH puede estar rezagado respecto del código local.
+PATH puede estar rezagado respecto del código local (el `.ancleto/machine-env.md` de este clon
+declara `0.39.1`, mientras el paquete está en `0.40.1`).
 
 ## Subcomandos
 
@@ -81,7 +82,7 @@ Solo se nombran; **los valores se omiten**.
 | `.ancleto/working-context.md` | Refresh de lifecycle/memoria | Local |
 | `.discovery-map.json` | `discovery` | Versionado |
 | `docs/technical-discovery/**` | Skill de discovery | Versionado |
-| `aspec/changes/**`, `aspec/specs/**` | Ciclo `/cleto-*` | Versionado |
+| `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` | Ciclo `/cleto-*` y cierre de release | Versionado |
 
 ## Convenciones operativas
 

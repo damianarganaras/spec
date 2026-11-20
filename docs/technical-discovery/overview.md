@@ -2,7 +2,7 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-20T01:12:16.920Z
+generatedAt: 2026-11-20T01:36:10.038Z
 pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---
@@ -58,7 +58,7 @@ El paquete publica además una **superficie instalable** (`package.json` → `fi
 | Memoria | Motor SQLite/FTS5, supersesión, refs, MCP y operaciones | `src/core/memory/**` |
 | Modelos | Catálogo commiteado, declaraciones versionadas y resolución por tier | `src/core/model-catalog.js`, `src/core/model-declarations.js`, `src/core/tier-models.js` |
 | Specs | Validación de specs canónicas y merge de deltas | `src/core/specs-merge.js` |
-| Cambios | Artefactos SDD activos y archivados | `aspec/changes/**`, `aspec/specs/**` |
+| Cambios | Artefactos SDD activos, archivados y backlog de release | `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` |
 | Juez advisory | Envoltorio read-only de `jev-spec` | `src/core/judge.js` |
 
 ## Flujos principales
@@ -95,6 +95,18 @@ memoria. Evidencia: `src/core/specs-merge.js`, `skills/ancleto-archive/SKILL.md`
 El tier configurado se resuelve contra `src/core/model-catalog.json`; `minimo` usa cadenas de
 preferencia por agente y falla explícitamente si ningún candidato está disponible. Evidencia:
 `src/core/tier-models.js`, `src/core/model-catalog.js`.
+
+### 6. Publicar una release
+
+Un tag `v*` dispara `.github/workflows/publish.yml`: `npm ci` → lint → tests → `npm publish`
+(omite si la versión ya existe) → Release de GitHub → canary no bloqueante del tarball. Evidencia:
+`.github/workflows/publish.yml`, `aspec/backlog.md`.
+
+## Estado de release
+
+`0.40.1` está **publicada y verificada**: tag anotado `v0.40.1`, workflow `publish.yml` exitoso y
+`@ancleto/spec@0.40.1` como `latest` en npm con `gitHead` coincidente (`aspec/backlog.md`,
+`CHANGELOG.md`).
 
 ## Límites y decisiones de frontera
 

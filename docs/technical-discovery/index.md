@@ -2,7 +2,7 @@
 node: index
 kind: router
 read_when: "punto de entrada del seed: elegir qué documento leer según la pregunta"
-generatedAt: 2026-11-20T01:12:16.920Z
+generatedAt: 2026-11-20T01:36:10.038Z
 pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---
@@ -18,11 +18,12 @@ recorrer todo el repositorio.
 | Dato | Valor | Evidencia |
 | --- | --- | --- |
 | Producto | Orquestador SDD liviano con subagentes optimizados para costo/tokens | `package.json` |
-| Versión de release | `0.40.1` | `package.json`, `CHANGELOG.md` |
+| Versión de release | `0.40.1` (publicada y verificada en npm) | `package.json`, `CHANGELOG.md`, `aspec/backlog.md` |
 | Runtime | Node.js ≥ 24, ESM, sin dependencias de runtime | `package.json` |
 | Entrada | `src/cli/index.js` (bins `ancleto` y `aspec`) | `package.json` |
 | Persistencia propia | SQLite nativo (`node:sqlite`) + FTS5 en `.ancleto/memory.db` | `src/core/memory/**` |
 | Seed técnico | `docs/technical-discovery/` (este árbol) | `.discovery-map.json` |
+| Tamaño del mapa | 946 archivos; `aspec` 355, `src` 25, `skills` 35, `commands` 16 | `.discovery-map.json` |
 
 ## Elegí un destino
 
@@ -50,5 +51,6 @@ recorrer todo el repositorio.
 
 El seed se genera desde un único pack Repomix y se valida con
 `node src/cli/index.js discovery --check`. Toda corrida de CLI en este repositorio debe usar
-`node src/cli/index.js ...`: el binario global puede estar rezagado. El estado vive en
-`.discovery-map.json` y `docs/technical-discovery/.discovery-state.json`.
+`node src/cli/index.js ...`: el binario global puede estar rezagado (el `machine-env.md` local
+declara `0.39.1`). El estado vive en `.discovery-map.json` y
+`docs/technical-discovery/.discovery-state.json`; `seed-map.json` acota la próxima regeneración.

@@ -2,7 +2,7 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-20T01:12:16.920Z
+generatedAt: 2026-11-20T01:36:10.038Z
 pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---
@@ -13,32 +13,35 @@ skillVersion: '2.3'
 
 - **Tests**: `test/**`, `*.test.*` y `*.spec.*` quedaron fuera por `discovery.exclude`. No se
   auditó la cobertura, la calidad de los fixtures ni el detalle de cada suite. Las afirmaciones
-  sobre `node --test` provienen de `package.json` y `PRODUCT.md`, no de leer los tests.
-- **Markdown**: Repomix excluye `**/*.md` por defaults. `README.md`, `CHANGELOG.md` y `PRODUCT.md`
-  se consultaron solo para comandos declarados y contexto de release; no son evidencia de
-  comportamiento runtime.
+  sobre `node --test` provienen de `package.json`, no de leer los tests.
+- **Markdown**: Repomix excluye `**/*.md` por defaults. `README.md`, `PRODUCT.md`, `CHANGELOG.md` y
+  `aspec/backlog.md` se consultaron solo para comandos declarados y estado de release (tag, npm,
+  archive); no son evidencia de comportamiento runtime.
 - **Estado local**: `.ancletorc` no se parseó ni se editó (regla de la skill); sus valores
   efectivos de `discovery`, `memory.criticalKeys`, `azure.enabled` y `agent` no se verificaron.
   `discovery --check` devolvió la configuración resuelta usada aquí.
 - **Mirrors instalados**: `.opencode/**` y `.ancleto/**` son estado local, no fuentes; no se
-  verificó si coinciden con la canónica.
+  verificó si coinciden con la canónica. `.ancleto/machine-env.md` declara `0.39.1`, anterior al
+  paquete actual, y no se usó como evidencia de versión.
 - **Legado**: `documentation/**` (lnx-cli) y `audit logs/**` son material gitignored/efímero y no
   se usaron como evidencia.
 
 ## No verificado por ausencia de evidencia directa
 
 - **Comportamiento exacto de `jev-spec`**: el adaptador no parsea su JSON; la forma del reporte y
-  su semántica interna no se conocen desde este repositorio.
+  su semántica interna no se conocen desde este repositorio. El valor (AUC) sigue sin medirse.
 - **Hosts externos**: los layouts y esquemas de MCP de antigravity, commandcode, copilot, vscode,
   cursor y roo se tomaron de los comentarios/contratos del adaptador y del instalador; no se
   contrastaron contra documentación externa en esta corrida.
-- **Rendimiento y escalabilidad**: no se midió el costo de `discovery --compress`, del grafo de
-  imports ni del motor FTS5 sobre repositorios grandes.
+- **Rendimiento y escalabilidad**: no se midió el costo de `discovery --compress` (≈46k tokens
+  sobre 906 archivos en esta corrida), del grafo de imports ni del motor FTS5 en repos grandes.
 - **Estado de la suite**: no se ejecutaron `npm run lint` ni `npm test` durante la generación del
-  seed (no son parte del pipeline de discovery).
+  seed (no son parte del pipeline de discovery). Los conteos de tests citados vienen de
+  `aspec/backlog.md`, no de una corrida propia.
 - **Fuentes de modelo**: no se verificó que `src/core/model-catalog.json` (generado 2026-11-04)
   siga reflejando la oferta actual de los proveedores.
-- **Publicación**: no se validó el estado remoto de npm/GitHub ni la existencia de tags.
+- **Publicación**: el estado remoto (tag `v0.40.1`, run de publish, `latest` en npm) se tomó de
+  `aspec/backlog.md`; no se consultó npm ni GitHub en esta corrida.
 
 ## Inferencias con confianza media
 
@@ -48,6 +51,8 @@ skillVersion: '2.3'
   agregar matices no cubiertos.
 - `src/cli/index.js` es el mayor punto de acoplamiento; la afirmación se basa en su tamaño y en la
   cantidad de responsabilidades visibles en el pack, no en un análisis de complejidad medido.
+- Los conteos por directorio provienen de `.discovery-map.json` (pueden incluir material no
+  versionado, como `documentation/` y `audit logs/`).
 
 ## Cómo reducir estos límites
 

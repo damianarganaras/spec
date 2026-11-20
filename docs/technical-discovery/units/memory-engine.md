@@ -4,7 +4,7 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, las tools MCP, el recall, las refs, el working-context y las operaciones de memoria"
 covers: [motor de memoria, tools MCP, recall, refs, secretos, working-context, export/import, gc, snapshot, merge, consolidate, curate, doctor, status, concurrencia]
 sources: ["src/core/memory/**", "src/cli/index.js", "AGENTS.md", "aspec/specs/memory-engine/spec.md", "aspec/specs/memory-ops/spec.md"]
-generatedAt: 2026-11-20T01:12:16.920Z
+generatedAt: 2026-11-20T01:36:10.038Z
 pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---

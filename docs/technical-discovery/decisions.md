@@ -2,7 +2,7 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-20T01:12:16.920Z
+generatedAt: 2026-11-20T01:36:10.038Z
 pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---
@@ -18,6 +18,7 @@ skillVersion: '2.3'
 | JavaScript ESM | Sin TypeScript ni `tsconfig.json`; la regla de “TypeScript strict” del template es genérica | `package.json`, `PRODUCT.md` |
 | Sin red desde `src/` | `fetch`/HTTP no son parte del runtime; los procesos externos son locales y opcionales | `src/core/judge.js`, `scripts/refresh-model-catalog.mjs` |
 | CLI local como fuente | Las validaciones usan `node src/cli/index.js`; el binario del PATH puede estar rezagado | `PRODUCT.md` |
+| Lint con ESLint | `eslint src/ test/ scripts/`; `eslint.config.js` existe y está vacío (defaults) | `package.json`, `eslint.config.js` |
 
 ## Invariantes de arquitectura
 
@@ -101,6 +102,16 @@ skillVersion: '2.3'
 ## Decisiones recientes relevantes (0.40.x)
 
 - **0.40.0**: `ancleto judge` es un adaptador **advisory**, read-only y opt-in a `jev-spec`; no es
-  gate de archive ni de conformidad (`src/core/judge.js`, `CHANGELOG.md`).
+  gate de archive ni de conformidad (`src/core/judge.js`, `CHANGELOG.md`). Change
+  `jev-spec-advisory-judge` archivado en `aspec/changes/archive/2026-11-17-jev-spec-advisory-judge/`;
+  el requirement “Juez externo advisory opcional” vive en `aspec/specs/cli-diagnostics/spec.md`.
 - **0.40.1**: el guard de integridad de IDs suma `opencode.json` como quinta fuente declarada y
-  comparte el collector `src/core/model-declarations.js` (`CHANGELOG.md`).
+  comparte el collector `src/core/model-declarations.js` con `refresh-model-catalog --write`
+  (`CHANGELOG.md`). Change `model-catalog-guard-opencode-json` archivado en
+  `aspec/changes/archive/2026-11-19-model-catalog-guard-opencode-json/`; el delta
+  `agent-model-tiers` promueve el requirement de integridad de IDs sin cambiar el advisory de
+  `check` ni el runtime de tiers.
+- **Release 0.40.1 verificada**: tag anotado `v0.40.1` (`e6072b2`), run de `publish.yml` exitoso y
+  `@ancleto/spec@0.40.1` como `latest` en npm con `gitHead` coincidente (`aspec/backlog.md`).
+- **Compatibilidad declarada**: ningún cambio de 0.40.x toca schema, PRAGMAs persistentes ni
+  `ruleVersion`; un binario `0.39.1` lee el mismo estado persistido (`CHANGELOG.md`).

@@ -2,7 +2,7 @@
 node: units/_map
 kind: inventory
 read_when: "qué unidades componen el repo, con propósito y entry point"
-generatedAt: 2026-11-20T01:12:16.920Z
+generatedAt: 2026-11-20T01:36:10.038Z
 pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---
@@ -27,7 +27,7 @@ skillVersion: '2.3'
 | Juez advisory | Adaptador read-only a `jev-spec` | `src/core/judge.js` | — |
 | Catálogo (refresco) | Actualización manual del snapshot desde `opencode` | `scripts/refresh-model-catalog.mjs` | `units/discovery-engine.md` |
 | Assets instalables | Agentes, comandos, skills, templates y perfil de test | `agents/`, `commands/`, `skills/`, `templates/`, `profiles/` | `units/cli-install.md` |
-| Artefactos SDD | Changes activos/archivados y specs canónicas | `aspec/changes/**`, `aspec/specs/**` | — |
+| Artefactos SDD | Changes activos/archivados, specs canónicas y backlog de release | `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` | — |
 | Seed técnico | Documentación navegable generada por discovery | `docs/technical-discovery/**` | — |
 
 ## Cómo leer esta tabla

@@ -1,11 +1,11 @@
 ---
 node: units/memory-engine
 kind: dossier
-read_when: "cómo funciona la memoria persistente, el recall BM25-first, el presupuesto configurable del working-context, las tools MCP, las refs y las operaciones de memoria"
-covers: [motor de memoria, tools MCP, recall BM25-first, presupuesto del working-context, refs, secretos, export/import, gc, snapshot, merge, consolidate, curate, doctor, status, concurrencia]
-sources: ["src/core/memory/**", "src/cli/index.js", "aspec/changes/archive/2026-11-20-memory-working-context-budget/**", "aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**", "aspec/specs/memory-engine/spec.md", "aspec/specs/prompt-contracts/spec.md"]
-generatedAt: 2026-11-20T19:51:44.420Z
-pluginVersion: 0.42.0
+read_when: "cómo funciona la memoria persistente, el recall BM25-first, el presupuesto configurable del working-context, la validación del import, las tools MCP, las refs y las operaciones de memoria"
+covers: [motor de memoria, tools MCP, recall BM25-first, presupuesto del working-context, validación de import, refs, secretos, export/import, gc, snapshot, merge, consolidate, curate, doctor, status, concurrencia]
+sources: ["src/core/memory/**", "src/cli/index.js", "aspec/changes/archive/2026-11-20-memory-import-scope-string/**", "aspec/changes/archive/2026-11-20-memory-working-context-budget/**", "aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**", "aspec/specs/memory-engine/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "CHANGELOG.md"]
+generatedAt: 2026-11-20T22:00:13.847Z
+pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
 
@@ -17,7 +17,8 @@ La memoria del proyecto guarda reglas y decisiones que deben sobrevivir a la ses
 con el equipo. Vive en `.ancleto/memory.db` (SQLite nativo + FTS5), no sale del repositorio y se
 consume por tools MCP y por subcomandos `memory`. No es la memoria de sesión del agente: una
 entrada vive en una sola memoria (`AGENTS.md` → `memory-boundary`). El working-context derivado
-inyecta reglas y topología en cada sesión; desde 0.42.0 su tamaño es configurable.
+inyecta reglas y topología en cada sesión; desde 0.42.0 su tamaño es configurable y desde 0.43.0
+el import valida `scope` como string.
 
 ## Recorrido relevante
 
@@ -34,6 +35,27 @@ inyecta reglas y topología en cada sesión; desde 0.42.0 su tamaño es configur
    (`shouldRefreshWorkingContext` + `refreshWorkingContextOnWrite`). Un fallo de render propaga en
    merge/consolidate; en import es best-effort; en MCP se absorbe.
 
+### Import y su validación (0.43.0)
+
+1. `validateImportEntries(json)` recorre todas las entradas antes de cualquier procesamiento:
+   exige `memory_key`, `type` (`rule`|`decision`), `content`, `scope` y `createdAt` presentes y no
+   nulos/vacíos, y `createdAt` parseable.
+2. **`scope` debe ser string con `trim()` no vacío**. Un número, booleano, objeto, array o string
+   de sólo espacios se rechaza con `entry[i].scope invalido: <valor> (se esperaba un string no
+   vacio)`; `null`/ausente/`""` se reporta como campo obligatorio faltante. El mensaje formatea el
+   valor crudo con `formatRawValue`, que nunca lanza (ni con `BigInt`, ciclos o
+   `Symbol.toPrimitive` defectuoso).
+3. **Sin coerción**: el valor aceptado se persiste tal cual; no se restringe a un vocabulario
+   cerrado (`global` es válido), igual que `recordNode`.
+4. `importNodes` aplica la validación antes de la transacción; `classifyImport` (dry-run) usa la
+   misma función, así que un archivo inválido aborta entero en ambos caminos, sin clasificación
+   parcial.
+5. El write del CLI pre-valida con la misma función y reporta `ancleto: import invalido: …`
+   (exit 1) **antes** de abrir o crear la base, en lugar de escapar como stack.
+
+Evidencia: `src/core/memory/engine.js` (`validateImportEntries`, `formatRawValue`,
+`classifyImport`, `importNodes`), `src/cli/index.js` (`memoryImport`), `CHANGELOG.md` (0.43.0).
+
 ### Lectura y recall (BM25-first desde 0.41.0)
 
 - `searchMemory` usa FTS5: intento preciso (AND por términos) y fallback tolerante (OR con
@@ -43,7 +65,7 @@ inyecta reglas y topología en cada sesión; desde 0.42.0 su tamaño es configur
   primero) y es el criterio primario después de las requeridas; anclaje y scope solo desempatan a
   igual score. Se rankea antes de recortar al `limit`, de modo que la página es el prefijo del
   orden total. Evidencia: `src/core/memory/engine.js` (`compareRecall`).
-- Modo por defecto: **preview** (prefijo de 239 caracteres + `…`, flag `content_truncated`).
+- Modo por defecto: **preview** (prefijo de hasta 240 caracteres, flag `content_truncated`).
   `expand: true` devuelve el payload completo; `keys: [...]` expande solo claves presentes.
 - `required: [...]` promueve keys al frente y falla si no entran en el límite o en el presupuesto.
 - Un aviso de overflow lista hasta 40 claves omitidas y resume el resto como `+N`.
@@ -78,7 +100,8 @@ inyecta reglas y topología en cada sesión; desde 0.42.0 su tamaño es configur
   nuevo default duplica el techo y es reversible con `memory.maxTokens` o el entorno. Change
   `memory-working-context-budget` archivado en
   `aspec/changes/archive/2026-11-20-memory-working-context-budget/`; deltas promovidos a
-  `aspec/specs/memory-engine/spec.md` y `aspec/specs/prompt-contracts/spec.md`.
+  `aspec/specs/memory-engine/spec.md` y `aspec/specs/prompt-contracts/spec.md`; release publicado
+  en `0.42.0` (tag `v0.42.0` → `c6319c8`, run `44808502480`, npm `latest`).
 
 ### Evidencia de la decisión 0.41.0 (spike)
 
@@ -105,8 +128,8 @@ los diagnósticos van a `stderr`. Evidencia: `src/core/memory/mcp-server.js`,
 | Operación | Semántica |
 | --- | --- |
 | `export` | Solo nodos activos; sanea paths absolutos en `content`/`justification` |
-| `import` | Valida el archivo completo; upsert por `memory_key`; no reactiva solo-superseded; aborta el batch si una entrada es inválida |
-| `import --dry-run` | Clasifica con el mismo simulador que el import real, sin escribir |
+| `import` | Valida el archivo completo (incluido `scope` string) antes de la transacción; upsert por `memory_key`; no reactiva solo-superseded; aborta el batch si una entrada es inválida |
+| `import --dry-run` | Clasifica con el mismo validador y simulador que el import real, sin escribir |
 | `gc` | Purga superseded por edad de supersesión; dry-run read-only; apply usa `VACUUM`+`REINDEX` best-effort |
 | `snapshot` | Copia consistente con `VACUUM INTO`; incluye historial; reemplazo seguro en Windows |
 | `merge` | Supersede sources activas hacia un target activo; dry-run default; puerta de criticidad |
@@ -120,6 +143,9 @@ los diagnósticos van a `stderr`. Evidencia: `src/core/memory/mcp-server.js`,
 
 - **Identidad**: `memory_key` es la clave; `type`/`scope` no participan de la identidad de
   supersesión. `createdAt`, `source` y `confidence` no son identidad.
+- **Validación de import**: un solo dueño (`validateImportEntries`), compartido por import,
+  dry-run y pre-check del CLI; endurecerla no cambia la semántica de upsert ni el shape persistido
+  (`memory-engine` lo declara explícitamente).
 - **Fail-closed**: refs ambiguas o inexistentes rechazan la escritura; la reparación solo remueve
   `inexistente` (allowlist sin default). Un bloque `refs:` múltiple también falla.
 - **Secretos**: el rechazo es incondicional y nunca repite el valor detectado.
@@ -149,7 +175,7 @@ los diagnósticos van a `stderr`. Evidencia: `src/core/memory/mcp-server.js`,
 | Path | Rol |
 | --- | --- |
 | `src/core/memory/database.js` | Apertura, WAL, migración aditiva y transacciones |
-| `src/core/memory/engine.js` | Motor: record, search/recall, `buildWorkingContext`, refs, merge, consolidate, gc, import/export |
+| `src/core/memory/engine.js` | Motor: record, search/recall, `validateImportEntries`, `buildWorkingContext`, refs, merge, consolidate, gc, import/export |
 | `src/core/memory/working-context.js` | Render, persistencia, frescura y resolución del presupuesto |
 | `src/core/memory/tools.js` | Handlers de las tools MCP |
 | `src/core/memory/mcp-server.js` | Servidor JSON-RPC por stdio |
@@ -157,8 +183,9 @@ los diagnósticos van a `stderr`. Evidencia: `src/core/memory/mcp-server.js`,
 | `src/core/memory/status.js` | Estado advisory del gap y detección de esquema |
 | `src/core/memory/snapshot.js` | Copia consistente de la base |
 | `src/core/memory/curation.js` | Curaduría read-only |
-| `src/cli/index.js` | Subcomandos `memory`, puerta de criticidad y exit codes |
+| `src/cli/index.js` | Subcomandos `memory`, pre-validación del import, puerta de criticidad y exit codes |
 | `.ancletorc` | Configuración de proyecto: `memory.maxTokens` y `memory.criticalKeys` (valores omitidos) |
+| `aspec/changes/archive/2026-11-20-memory-import-scope-string/**` | Evidencia y delta del `scope` string en el import |
 | `aspec/changes/archive/2026-11-20-memory-working-context-budget/**` | Evidencia y contrato del presupuesto configurable |
 | `aspec/changes/archive/2026-11-20-memory-recall-bm25-first/spike/**` | Evidencia y medición del recall BM25-first |
 | `.ancleto/memory.db` | Base local (no versionada) |

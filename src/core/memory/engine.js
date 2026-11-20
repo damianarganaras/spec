@@ -40,6 +40,23 @@ function sanitizePaths(text) {
   return out
 }
 
+// Formato best-effort del valor crudo rechazado. `JSON.stringify` lanza con
+// valores no serializables (BigInt, referencias circulares) y `String` puede
+// lanzar si `Symbol.toPrimitive` falla: el error de validacion tiene que nombrar
+// `entry[i].scope` siempre, nunca convertirse en un TypeError del formateador.
+function formatRawValue(value) {
+  try {
+    const json = JSON.stringify(value)
+    return json === undefined ? String(value) : json
+  } catch {
+    try {
+      return String(value)
+    } catch {
+      return '<valor no formateable>'
+    }
+  }
+}
+
 // Valida el archivo de import con el esquema que exige `importNodes`. Compartida
 // con `classifyImport` (dry-run): mismas reglas, mismo orden y mismos mensajes,
 // para que un archivo invalido aborte entero sin clasificacion parcial.
@@ -59,6 +76,12 @@ export function validateImportEntries(json) {
     }
     if (typeof entry.createdAt !== 'string' || Number.isNaN(Date.parse(entry.createdAt))) {
       throw new Error(`entry[${i}].createdAt invalido: ${entry.createdAt}`)
+    }
+    // `scope` es string libre (mismo contrato que `recordNode`), pero nunca un
+    // valor que SQLite coaccionaria o que el bind rechazaria: eso haria divergir
+    // la prediccion del dry-run del efecto real. Se rechaza sin coercion.
+    if (typeof entry.scope !== 'string' || entry.scope.trim() === '') {
+      throw new Error(`entry[${i}].scope invalido: ${formatRawValue(entry.scope)} (se esperaba un string no vacio)`)
     }
   }
 }

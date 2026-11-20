@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-20T19:51:44.420Z
-pluginVersion: 0.42.0
+generatedAt: 2026-11-20T22:00:13.847Z
+pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
 
@@ -34,7 +34,7 @@ skillVersion: '2.3'
 
 Regla del repositorio: **toda corrida de CLI usa `node src/cli/index.js ...`**. El binario del
 PATH puede estar rezagado respecto del código local (el `.ancleto/machine-env.md` de este clon
-declara `0.40.0`, mientras el paquete está en `0.42.0`).
+declara `0.40.0`, mientras el paquete está en `0.43.0`).
 
 ## Subcomandos
 
@@ -49,7 +49,7 @@ declara `0.40.0`, mientras el paquete está en `0.42.0`).
 | `memory list` | No | Lista nodos activos |
 | `memory search` | No | Búsqueda FTS5; desde 0.41.0 orden BM25-first con preview/expand/keys/required |
 | `memory export` | No | Exporta nodos activos saneados |
-| `memory import` | Sí | `--dry-run` clasifica sin escribir |
+| `memory import` | Sí | `--dry-run` clasifica sin escribir; desde 0.43.0 el CLI pre-valida el archivo antes de abrir la base |
 | `memory status` | No | Estado advisory del gap de memoria |
 | `memory doctor` | No (salvo `--rebuild`) | Cinco checks de integridad + frescura advisory del working-context |
 | `memory gc` | Sí (salvo `--dry-run`) | Purga superseded por antigüedad |
@@ -82,6 +82,16 @@ default y **no** cae a `.ancletorc`. `0`/`"unlimited"` desactivan el tope (todas
 scope, sin aviso de overflow). Evidencia: `src/core/memory/working-context.js`,
 `src/core/memory/engine.js`.
 
+## Contrato de `memory import` (0.43.0)
+
+El archivo JSON se valida completo antes de escribir: `memory_key`, `type`, `content`, `scope` y
+`createdAt` son obligatorios; `type` es `rule` o `decision`; `createdAt` debe parsear como fecha; y
+`scope` debe ser un **string con `trim()` no vacío** (no se acepta número, booleano, objeto, array
+ni string de espacios). Un archivo inválido rechaza el batch entero en el dry-run y en la
+escritura, con `entry[i].scope invalido`; el CLI reporta `ancleto: import invalido: …` antes de
+abrir (y crear) la base. Evidencia: `src/core/memory/engine.js` (`validateImportEntries`),
+`src/cli/index.js` (`memoryImport`).
+
 ## Artefactos y estado local
 
 | Artefacto | Productor | ¿Versionado? |
@@ -112,4 +122,5 @@ scope, sin aviso de overflow). Evidencia: `src/core/memory/working-context.js`,
   Commands`; lo no declarado se omite y se registra.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, CI o Azure; nombrar la
   variable o el archivo y omitir el valor.
-- **Release**: `0.42.0` está preparada (sin tag ni run); `0.41.0` es la última publicada.
+- **Release**: `0.43.0` está preparada (bump `9ba7975`), **sin tag ni run**; la última publicada es
+  `0.42.0` (tag `v0.42.0` → `c6319c8`, run `44808502480`, npm `latest`).

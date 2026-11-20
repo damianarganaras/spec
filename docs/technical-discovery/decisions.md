@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-20T19:51:44.420Z
-pluginVersion: 0.42.0
+generatedAt: 2026-11-20T22:00:13.847Z
+pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
 
@@ -39,6 +39,9 @@ skillVersion: '2.3'
   `process.cwd()` en el camino de escritura de memoria.
 - **Procedencia MCP**: `source` se resuelve desde el runtime (`mcp:ancleto-memory`, `cli:import`,
   `runtime`, `agent:<rol>`), nunca desde el input del caller. Solo `runtime` exime de validar refs.
+- **Validador de import único**: `src/core/memory/engine.js` → `validateImportEntries` es el único
+  dueño del esquema de entrada; `importNodes` y `classifyImport` (dry-run) lo comparten y el CLI
+  lo reusa como pre-check antes de abrir la base (`src/cli/index.js`).
 
 ## Reglas de negocio y contratos
 
@@ -49,6 +52,18 @@ skillVersion: '2.3'
   `confidence` no son parte de la identidad.
 - Import: un archivo inválido aborta el batch completo; un nodo solo superseded no se reactiva;
   un `createdAt` más antiguo o igual es no-op.
+- **`scope` string obligatorio en import (0.43.0)**: el validador compartido rechaza `scope` que no
+  sea string o cuyo `trim()` sea vacío con `entry[i].scope invalido` (se esperaba un string no
+  vacío) y **sin coerción**; `null`/ausente/`""` se reporta como campo obligatorio faltante. No hay
+  vocabulario cerrado: cualquier string no vacío (`project`, `feature`, `task`, `global`, …) se
+  acepta y persiste tal cual, igual que en `recordNode`. El mensaje formatea el valor crudo de forma
+  best-effort (`formatRawValue`) y nunca se convierte en un `TypeError` del formateador. Evidencia:
+  `src/core/memory/engine.js` (`validateImportEntries`, `formatRawValue`), `src/cli/index.js`.
+- **Paridad dry-run/write (0.43.0)**: `classifyImport` y `importNodes` aplican la misma validación,
+  en el mismo orden y con el mismo mensaje, de modo que el dry-run nunca emite clasificación
+  parcial de un archivo inválido. El write del CLI pre-valida con `validateImportEntries` y reporta
+  `ancleto: import invalido: …` (exit 1) **antes** de crear o abrir la base. Evidencia:
+  `src/core/memory/engine.js`, `src/cli/index.js` (`memoryImport`).
 - **Recall BM25-first (0.41.0)**: el orden total es `required` → `bm25` ascendente → anclaje
   declarado → `scope` → `memory_key`. El score BM25 de FTS5 (negativo: mejor primero) es el
   criterio primario después de las requeridas; anclaje y scope solo desempatan a igual score.
@@ -69,9 +84,9 @@ skillVersion: '2.3'
 - **`required` fail-closed**: las `criticalKeys` del proyecto se resuelven antes del corte y una
   regla requerida que no entra no se omite en silencio: falla con error diagnóstico. El aviso de
   overflow gobierna solo las reglas no requeridas.
-- **Sin cambio de schema en 0.42.0**: no se agregan columnas, índices, PRAGMAs persistentes ni
-  `ruleVersion`; la configuración se valida al parsear. Un binario 0.41.x lee el mismo estado
-  persistido.
+- **Sin cambio de schema en 0.42.0/0.43.0**: no se agregan columnas, índices, PRAGMAs persistentes
+  ni `ruleVersion`; la configuración y la validación se resuelven al parsear. Un binario 0.41.x lee
+  el mismo estado persistido.
 - **Puerta de criticidad**: si una operación supersedería una `memory_key` declarada en
   `.ancletorc` → `memory.criticalKeys`, rechaza con exit 2. El engine nunca lee `.ancletorc`; el
   conjunto se inyecta desde el CLI.
@@ -127,24 +142,34 @@ skillVersion: '2.3'
 | Modo `unlimited` del working-context | Inyecta todo el corpus de reglas en cada sesión; costo recurrente y bloque grande | Es opt-in explícito (`0`/`"unlimited"`), reversible, y no altera el tope del campo destilado de 5 reglas/1.500 bytes |
 | Presupuesto mal configurado | Un valor inválido cae al default sin avisar; un valor muy chico omite reglas no requeridas | Resolución tolerante y determinista; `required` falla cerrado; el aviso de overflow nombra las claves omitidas |
 | Cambio de configuración del presupuesto | El working-context puede quedar `desactualizado` hasta el próximo refresh | El chequeo de frescura es advisory; no hay invalidación automática |
+| Endurecimiento del import (0.43.0) | Archivos con `scope` numérico/objeto/**vacío** que antes importaban (o fallaban al bindear) ahora se rechazan enteros | Cambio de contrato **intencional** declarado en `CHANGELOG.md` y en la spec `memory-ops`; sin schema ni migración |
 | Secretos en configuración | Fuga en docs o bundles | Nombrar variable/archivo y omitir valor; rechazo en memoria |
 | Dependencia de `version` en `package.json` | Un bump no debe invalidar el seed | Centinela byte-preserving en `hashSources`; observado en `src/cli/index.js` |
 
-## Decisiones recientes relevantes (0.40.x–0.42.0)
+## Decisiones recientes relevantes (0.40.x–0.43.0)
 
+- **0.43.0 — `scope` string en el import**: el validador compartido (`importNodes` +
+  `classifyImport`) rechaza `scope` no-string o vacío con `entry[i].scope invalido`, elimina la
+  coerción de SQLite (afinidad TEXT) y hace coincidir la predicción del dry-run con el efecto real.
+  El write del CLI pre-valida antes de abrir la base. Change `memory-import-scope-string` archivado
+  en `aspec/changes/archive/2026-11-20-memory-import-scope-string/`; deltas promovidos a
+  `aspec/specs/memory-ops/spec.md` y `aspec/specs/memory-engine/spec.md`.
+- **0.43.0 sin cambio de schema**: la validación es de entrada, no de persistencia; `memory-engine`
+  explicita que endurecer la validación del import **no** es un cambio de la semántica de upsert ni
+  del shape persistido.
+- **Release 0.43.0 preparada**: `package.json` en `0.43.0` (commit `9ba7975`, `chore(release):
+  0.43.0`) y `CHANGELOG.md` con la sección 0.43.0; `aspec/backlog.md` la declara “preparada, sin tag
+  ni run todavía”. El tag `v0.43.0` no existe localmente.
 - **0.42.0 — presupuesto configurable**: el tope del working-context deja de ser fijo. Default
   **4000 tokens** (16.000 chars), resuelto en `src/core/memory/working-context.js` con precedencia
   env → `.ancletorc` → default; `0`/`"unlimited"` desactivan el tope como estado explícito
   (`Infinity`); `required` sigue fail-closed. Change `memory-working-context-budget` archivado en
-  `aspec/changes/archive/2026-11-20-memory-working-context-budget/`; deltas promovidos a
-  `aspec/specs/memory-engine/spec.md` y `aspec/specs/prompt-contracts/spec.md`.
+  `aspec/changes/archive/2026-11-20-memory-working-context-budget/`; publicado en `0.42.0` (tag
+  `v0.42.0` → `c6319c8`, run `44808502480`, npm `latest`).
 - **0.42.0 sin cambio de schema**: no hay columnas, índices, PRAGMAs persistentes ni `ruleVersion`
   nuevos; la configuración se valida al parsear y nunca impide el render. El tope de 5 reglas y
   1.500 bytes del campo `project memory rules` de `prompt-contracts` es una superficie distinta y
   no se compone con el presupuesto del bloque.
-- **Release 0.42.0 preparada**: `package.json` en `0.42.0` (commit `c316cf4`); el change está
-  implementado y archivado; `aspec/backlog.md` declara “sin tag ni run todavía”. No afirmar publish
-  hasta que exista tag/run verificable.
 - **0.41.0**: el recall de `searchMemory` pasa a **BM25-first** (`required` → `bm25` → anclaje →
   scope → `memory_key`). Medido con spike sobre 53 rules, 37 queries y 98 pares: nDCG@5 0.656 →
   0.843 y MRR@5 0.633 → 0.923. Change `memory-recall-bm25-first` archivado en
@@ -155,5 +180,5 @@ skillVersion: '2.3'
   comparte el collector `src/core/model-declarations.js` con `refresh-model-catalog --write`.
 - **0.40.0**: `ancleto judge` es un adaptador **advisory**, read-only y opt-in a `jev-spec`; no es
   gate de archive ni de conformidad (`src/core/judge.js`).
-- **Compatibilidad declarada**: ningún cambio de 0.40.x–0.42.0 toca schema, PRAGMAs persistentes ni
-  `ruleVersion`; un binario `0.40.x`/`0.41.x` lee el mismo estado persistido.
+- **Compatibilidad declarada**: ningún cambio de 0.40.x–0.43.0 toca schema, PRAGMAs persistentes ni
+  `ruleVersion`; un binario `0.40.x`/`0.41.x`/`0.42.x` lee el mismo estado persistido.

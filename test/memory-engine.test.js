@@ -1452,6 +1452,109 @@ describe('importNodes', () => {
   })
 })
 
+// memory-import-scope-string: `scope` debe ser un string con `trim()` no vacio.
+// La regla vive en `validateImportEntries`, compartido por `importNodes` y
+// `classifyImport`, asi que ambos caminos rechazan el mismo archivo igual.
+describe('importNodes - scope string no vacio', () => {
+  const scopeEntry = (over = {}) => ({
+    memory_key: 'scope-base',
+    type: 'rule',
+    scope: 'project',
+    content: 'contenido',
+    justification: '',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...over
+  })
+
+  const invalidScopes = [
+    ['numerico', 42, 'entry[1].scope invalido: 42'],
+    ['booleano', true, 'entry[1].scope invalido: true'],
+    ['objeto', { project: true }, 'entry[1].scope invalido: {"project":true}'],
+    ['array', ['project'], 'entry[1].scope invalido: ["project"]'],
+    ['solo espacios', '   ', 'entry[1].scope invalido: "   "']
+  ]
+
+  for (const [label, value, expected] of invalidScopes) {
+    it(`rechaza un scope ${label} sin escribir y nombra entry[i].scope`, () => {
+      withFreshEngine((eng, _dbPath, rawAt) => {
+        const payload = [scopeEntry({ memory_key: 'scope-ok' }), scopeEntry({ memory_key: 'scope-bad', scope: value })]
+        assert.throws(() => eng.importNodes(payload), (err) => {
+          assert.ok(err.message.includes(expected), `mensaje sin el valor crudo: ${err.message}`)
+          assert.match(err.message, /se esperaba un string no vacio/)
+          return true
+        })
+        assert.equal(rawAt('SELECT COUNT(*) AS c FROM memory_nodes')[0].c, 0, 'el batch entero se aborta')
+      })
+    })
+  }
+
+  it('scope null, ausente o string vacio sigue siendo campo obligatorio faltante', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const cases = [null, undefined, '']
+      for (const scope of cases) {
+        const bad = scopeEntry({ memory_key: 'scope-bad' })
+        if (scope === undefined) delete bad.scope
+        else bad.scope = scope
+        assert.throws(
+          () => eng.importNodes([scopeEntry({ memory_key: 'scope-ok' }), bad]),
+          /entry\[1\] invalida: falta campo obligatorio "scope"/
+        )
+      }
+      assert.equal(rawAt('SELECT COUNT(*) AS c FROM memory_nodes')[0].c, 0, 'el batch entero se aborta')
+    })
+  })
+
+  it('acepta un scope string fuera de {project, feature, task} y lo persiste verbatim', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const summary = eng.importNodes([scopeEntry({ memory_key: 'scope-global', scope: 'global' })])
+      assert.equal(summary.inserted, 1)
+      const rows = rawAt(`SELECT scope FROM memory_nodes WHERE memory_key = 'scope-global' AND status = 'active'`)
+      assert.equal(rows.length, 1)
+      assert.equal(rows[0].scope, 'global')
+    })
+  })
+
+  it('un scope no serializable (BigInt o circular) nombra entry[0].scope sin TypeError', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const circular = {}
+      circular.self = circular
+      for (const value of [42n, circular]) {
+        assert.throws(
+          () => eng.importNodes([scopeEntry({ memory_key: 'scope-bad', scope: value })]),
+          (err) => {
+            assert.ok(!(err instanceof TypeError), `lanzo TypeError en vez del error de validacion: ${err.message}`)
+            assert.match(err.message, /entry\[0\]\.scope invalido: .*se esperaba un string no vacio/)
+            return true
+          }
+        )
+      }
+      assert.equal(rawAt('SELECT COUNT(*) AS c FROM memory_nodes')[0].c, 0, 'sin escritura')
+    })
+  })
+
+  it('el dry-run rechaza el mismo archivo con el mismo mensaje y sin clasificacion parcial', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const payload = [
+        scopeEntry({ memory_key: 'scope-parity-ok' }),
+        scopeEntry({ memory_key: 'scope-parity-bad', scope: ['project'] })
+      ]
+      let importMessage
+      let classifyMessage
+      assert.throws(() => eng.importNodes(payload), (err) => {
+        importMessage = err.message
+        return true
+      })
+      assert.throws(() => eng.classifyImport(payload), (err) => {
+        classifyMessage = err.message
+        return true
+      })
+      assert.equal(classifyMessage, importMessage, 'mismo error que importNodes')
+      assert.match(classifyMessage, /entry\[1\]\.scope invalido/)
+      assert.equal(rawAt('SELECT COUNT(*) AS c FROM memory_nodes')[0].c, 0, 'sin clasificacion ni escritura parcial')
+    })
+  })
+})
+
 // ch-08: clasificacion read-only del archivo de import. `classifyImport` comparte
 // `decideImportEntry` con `importNodes`, asi que la prediccion no puede derivar del
 // efecto real. Estos tests pinean los buckets, la equivalencia accion<->efecto, el

@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-20T19:51:44.420Z
-pluginVersion: 0.42.0
+generatedAt: 2026-11-20T22:00:13.847Z
+pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
 
@@ -83,10 +83,11 @@ Evidencia: `src/cli/index.js`, `src/core/discovery.js`, `src/core/discovery-stat
 Las tools MCP (`searchMemory`, `recordRule`, `recordDecision`) leen y escriben
 `.ancleto/memory.db`. Cada `memory_key` tiene un nodo activo y un historial `superseded`; las
 escrituras pasan por validación de refs y rechazo de secretos. Desde 0.41.0 el recall ordena por
-**BM25 ascendente** después de las `required`. Desde 0.42.0 el bloque `<ProjectMemoryRules>` de
+**BM25 ascendente** después de las `required`; desde 0.42.0 el bloque `<ProjectMemoryRules>` de
 `.ancleto/working-context.md` usa un presupuesto **configurable** (default 4000 tokens) resuelto en
-`working-context.js`. Evidencia: `src/core/memory/engine.js`, `src/core/memory/working-context.js`,
-`src/core/memory/tools.js`, `src/core/memory/mcp-server.js`.
+`working-context.js`; desde 0.43.0 el import exige `scope` string no vacío. Evidencia:
+`src/core/memory/engine.js`, `src/core/memory/working-context.js`, `src/core/memory/tools.js`,
+`src/core/memory/mcp-server.js`, `src/cli/index.js`.
 
 ### 4. Ciclo de cambio SDD
 
@@ -108,12 +109,12 @@ Un tag `v*` dispara `.github/workflows/publish.yml`: `npm ci` → lint → tests
 
 ## Estado de release
 
-`package.json` declara `0.42.0` (commit `c316cf4`, `chore(release): 0.42.0`), pero la release está
-**preparada, no publicada**: `aspec/backlog.md` registra el change `memory-working-context-budget`
-implementado y archivado, con la nota explícita “sin tag ni run todavía”. No hay tag `v0.42.0` en
-el clon local. La última release publicada y verificada es `0.41.0` (tag anotado `v0.41.0` sobre
-`5c171bc`, run `44781865327` exitoso, `latest` en npm). El HEAD de `development` es `9e33868`
-(`docs(backlog): relate memory-working-context-budget to 0.42.0`), que documenta esa relación.
+`package.json` declara `0.43.0` (commit `9ba7975`, `chore(release): 0.43.0`). La release está
+**preparada pero no publicada**: el tag `v0.43.0` no existe en el clon local y `aspec/backlog.md`
+la registra como “preparada, sin tag ni run todavía”. La última publicada es `0.42.0` (tag anotado
+`v0.42.0` → `c6319c8`, run `44808502480` en `success`, npm `latest`); antes, `0.41.0` (tag
+`v0.41.0` sobre `5c171bc`, run `44781865327`). El HEAD de `development` es `30bfd07`
+(`docs(backlog): relate memory-import-scope-string to 0.43.0`).
 
 ## Límites y decisiones de frontera
 
@@ -132,5 +133,7 @@ el clon local. La última release publicada y verificada es `0.41.0` (tag anotad
 - El contrato de persistencia de `src/core/memory/**` es sensible a migraciones y concurrencia.
 - El modo `unlimited` puede volcar todo el corpus de reglas en cada sesión: es una decisión de
   costo explícita del usuario.
+- El endurecimiento de `memory import` (0.43.0) es un **cambio de contrato**: archivos con `scope`
+  no-string dejan de importar.
 - Detalle: `decisions.md`; recorridos: `units/cli-install.md`, `units/discovery-engine.md`,
   `units/memory-engine.md`.

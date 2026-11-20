@@ -3038,6 +3038,17 @@ async function memoryImport(flags) {
   }
   const dbPath = defaultMemoryDbPath()
   const projectDir = process.cwd()
+  // Mismo contrato de error que el dry-run: un archivo invalido se reporta como
+  // `import invalido` antes de abrir (y crear) la base, en lugar de escapar como
+  // stack. `importNodes` valida antes de la transaccion (`engine.js:1336`), igual
+  // que este pre-check.
+  try {
+    validateImportEntries(json)
+  } catch (err) {
+    console.error(`ancleto: import invalido: ${err.message}`)
+    process.exitCode = 1
+    return
+  }
   const engine = createMemoryEngine(dbPath)
   try {
     const summary = engine.importNodes(json)

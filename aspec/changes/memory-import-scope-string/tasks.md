@@ -9,18 +9,19 @@
 ## File-set de implementación (autorizado)
 
 - `src/core/memory/engine.js` — `validateImportEntries` únicamente.
+- `src/cli/index.js` — pre-validación del write en `memoryImport` con el mismo formato
+  `ancleto: import invalido: ...` que el dry-run.
 - `test/memory-engine.test.js` — oráculos de `importNodes` y paridad con `classifyImport`.
-- `test/cli.test.js` — mensaje y código de salida del dry-run.
+- `test/cli.test.js` — mensaje y código de salida del dry-run y del write.
 - `aspec/changes/memory-import-scope-string/**` — estos artefactos.
 
 Fuera del file-set: schema y `database.js`, `decideImportEntry`, `simulateImportClassification`,
-`importNodes`/`classifyImport` más allá de heredar la validación, `src/cli/index.js`, cualquier
-cierre de vocabulario de `scope`, `MEM-01`, JEV/Lucas, `package.json` y la base real
-`.ancleto/memory.db`.
+`importNodes`/`classifyImport` más allá de heredar la validación, cualquier cierre de vocabulario de
+`scope`, `MEM-01`, JEV/Lucas, `package.json` y la base real `.ancleto/memory.db`.
 
 ## Fase 1 — Validación compartida
 
-- [x] **1.1** Agregar en `validateImportEntries` (`src/core/memory/engine.js:46-64`), después de las
+- [x] **1.1** Agregar en `validateImportEntries` (`src/core/memory/engine.js:63-87`), después de las
   reglas actuales de `type` y `createdAt`, una comprobación de `scope`: debe ser
   `typeof entry.scope === 'string'` y `entry.scope.trim() !== ''`. Lanzar
   `entry[${i}].scope invalido: ...` indicando que se esperaba un string no vacío.
@@ -29,13 +30,14 @@ cierre de vocabulario de `scope`, `MEM-01`, JEV/Lucas, `package.json` y la base 
   ni ninguna coerción.
 
 - [x] **1.2** Verificar que la comprobación queda dentro del único validador consumido por
-  `importNodes` (`engine.js:1313`) y por `classifyImport` (`:1351`) y por el camino sin base del CLI
-  (`src/cli/index.js:3087`), sin duplicar la regla en otro módulo.
-  **Hecho cuando:** `grep` de la regla de `scope` da un solo punto de definición y el archivo
-  `src/cli/index.js` no cambia.
+  `importNodes` (`engine.js:1336`) y por `classifyImport` (`:1374`) y por el camino sin base del CLI
+  (`src/cli/index.js:3097`), sin duplicar la regla en otro módulo.
+  **Hecho cuando:** `grep` de la regla de `scope` da un solo punto de definición y el cambio en
+  `src/cli/index.js` se limita a la pre-validación del write (reutiliza el validador compartido, sin
+  duplicar la regla).
 
-- [x] **1.3** Confirmar que `decideImportEntry` (`engine.js:72-84`), `simulateImportClassification`
-  (`:92-132`), el bindeo de `entry.scope` (`:1325`, `:1332`) y el schema
+- [x] **1.3** Confirmar que `decideImportEntry` (`engine.js:95-107`), `simulateImportClassification`
+  (`:115-155`), el bindeo de `entry.scope` (`:1348`, `:1355`) y el schema
   (`src/core/memory/database.js:5-30`) quedan intactos.
   **Hecho cuando:** el diff de implementación solo toca `validateImportEntries` y el upsert sigue
   comparando `scope`, `content` y `justification` como hoy.
@@ -82,9 +84,9 @@ cierre de vocabulario de `scope`, `MEM-01`, JEV/Lucas, `package.json` y la base 
   `node --test test/memory-engine.test.js test/cli.test.js`.
   **Hecho cuando:** sale con código 0 y sin fallos nuevos respecto del baseline.
 
-- [ ] **3.3** Ejecutar `npm test`.
+- [x] **3.3** Ejecutar `npm test`.
   **Hecho cuando:** la suite declarada pasa completa; cualquier skip preexistente se reporta como
-  tal.
+  tal. Ledger: 1519 tests (1514 pass, 0 fail, 5 skip).
 
 - [x] **3.4** Registrar las validaciones no configuradas: format check `not-configured` (el repo no
   declara formatter) y typecheck `n/a` (sin `tsconfig.json`).

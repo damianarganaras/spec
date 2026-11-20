@@ -4206,6 +4206,24 @@ describe('CLI memory import --dry-run (ch-08)', () => {
     })
   })
 
+  // El dry-run sin base valida con `validateImportEntries` antes de simular, asi
+  // que rechaza el archivo con el mismo mensaje y tampoco crea el archivo.
+  it('scope invalido en el dry-run sin base aborta con el mismo mensaje y no crea la base', () => {
+    withDir((dir) => {
+      writeJson(dir, 'scope.json', [
+        fileEntry({ memory_key: 'dry-scope-ok' }),
+        fileEntry({ memory_key: 'dry-scope-bad', scope: 42 })
+      ])
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+
+      const dry = run(['memory', 'import', '--dry-run', '--json', 'scope.json'], dir)
+      assert.equal(dry.status, 1)
+      assert.match(dry.stderr, /import invalido: entry\[1\]\.scope invalido: 42/)
+      assert.equal(dry.stdout.trim(), '', 'sin base tampoco se emite clasificacion parcial')
+      assert.equal(existsSync(dbPath), false, 'el dry-run invalido no crea la base')
+    })
+  })
+
   // Regresion R1: la apertura read-only ya no escapa del manejo de errores. Una
   // base corrupta produce exit 1 con mensaje legible, sin stack trace.
   it('base existente pero invalida: exit 1 con mensaje legible y sin stack trace', () => {

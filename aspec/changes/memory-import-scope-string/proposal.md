@@ -2,14 +2,14 @@
 
 ## Contexto y problema
 
-`validateImportEntries` (`src/core/memory/engine.js:46-64`) exige que `scope` esté presente
-(`:48`, `:52-56`) y valida el dominio de `type` (`:57-59`) y el formato de `createdAt` (`:60-62`),
+`validateImportEntries` (`src/core/memory/engine.js:63-87`) exige que `scope` esté presente
+(`:65`, `:70`) y valida el dominio de `type` (`:74-76`) y el formato de `createdAt` (`:77-79`),
 pero nunca valida el tipo de `scope`. El valor entra crudo al resto del camino:
 
-- `decideImportEntry` compara `active.scope === entry.scope` sin normalizar (`engine.js:76`).
-- `simulateImportClassification` copia `entry.scope` al nodo simulado (`engine.js:112-118`), de modo
+- `decideImportEntry` compara `active.scope === entry.scope` sin normalizar (`engine.js:99`).
+- `simulateImportClassification` copia `entry.scope` al nodo simulado (`engine.js:135-150`), de modo
   que el dry-run clasifica sobre el valor crudo de la entrada.
-- `importNodes` bindea `entry.scope` en el `INSERT` (`engine.js:1325`, `:1332`).
+- `importNodes` bindea `entry.scope` en el `INSERT` (`engine.js:1348`, `:1355`).
 - La columna es `scope TEXT NOT NULL DEFAULT 'project'` (`src/core/memory/database.js:10`), con
   afinidad TEXT de SQLite.
 
@@ -22,8 +22,8 @@ La divergencia medida (backlog, `aspec/backlog.md:545`) tiene dos formas:
    pero `importNodes` aborta al bindear el valor. La predicción del dry-run y el efecto del write
    discrepan, que es exactamente lo que el contrato de paridad prohíbe.
 
-El validador es compartido por `importNodes` y por `classifyImport`/dry-run (`engine.js:1313`,
-`:1351`, y el camino sin base en `src/cli/index.js:3087`). Endurecerlo ahí elimina la divergencia
+El validador es compartido por `importNodes` y por `classifyImport`/dry-run (`engine.js:1336`,
+`:1374`, y el camino sin base en `src/cli/index.js:3097`). Endurecerlo ahí elimina la divergencia
 en los dos caminos con una sola regla, sin tocar la política de upsert.
 
 ## Requisito citado
@@ -44,6 +44,9 @@ In scope:
 
 - `src/core/memory/engine.js` — `validateImportEntries`: exigir `scope` string con `trim()` no
   vacío, además de los campos y reglas actuales; mensaje que nombre `entry[i].scope`.
+- `src/cli/index.js` — pre-validación del write en `memoryImport`: validar el archivo antes de
+  escribir y envolver el error con el mismo formato `ancleto: import invalido: ...` que el dry-run,
+  de modo que el write falle con una línea y no con una excepción no capturada.
 - `test/memory-engine.test.js` y `test/cli.test.js` — cobertura de `scope` numérico, objeto, array,
   booleano, `null`, sólo espacios y string arbitrario; paridad dry-run/write.
 - `aspec/changes/memory-import-scope-string/specs/memory-ops/spec.md` — delta MODIFIED.
@@ -59,10 +62,6 @@ Out of scope (explícito):
   comparación de `content`/`justification`.
 - Coercer, sanear o normalizar un `scope` no-string: se rechaza, no se convierte.
 - MEM-01, JEV/Lucas y cualquier trabajo de release/versionado.
-- Reformatear el error del camino de escritura del CLI. `memoryImport` no tiene `catch`
-  (`src/cli/index.js:3043`); el dry-run envuelve el error como `import invalido`
-  (`:3077-3093`). El mensaje de la validación es el mismo en ambos caminos; la presentación del
-  write no se toca.
 
 ## Evaluación de deltas
 
@@ -99,9 +98,11 @@ de refs y no se toca: afirma que el import no aplica la validación de refs, que
   responde `falta campo obligatorio "scope"`; el mensaje nuevo `entry[i].scope` aplica a valores
   presentes de tipo distinto o a strings vacíos por `trim()`. La diferencia queda documentada en el
   requirement y cubierta por tests separados.
-- **Presentación del error en el write.** El camino de escritura puede exponer el error como
-  excepción no capturada (stack) en lugar de una línea; el mensaje nombra el campo igual. Fuera de
-  alcance corregir la presentación.
+- **Cambio de contrato en el write del CLI.** `memoryImport` hoy no captura el error de validación
+  (`src/cli/index.js:3043`); con la pre-validación el write falla con una línea
+  `ancleto: import invalido: ...` (mismo formato que el dry-run, `:3077-3093`) en lugar de una
+  excepción no capturada. Es un cambio observable de salida: va al CHANGELOG/release notes junto
+  con el rechazo de `scope` no-string.
 - **Sin cambio de schema.** La afinidad TEXT sigue existiendo; la garantía es que nunca recibe un
   no-string desde el import.
 
@@ -122,7 +123,7 @@ de refs y no se toca: afirma que el import no aplica la validación de refs, que
   `scope` no-string al importar; validar solo en `importNodes` y dejar el dry-run con su propia
   regla; agregar un CHECK o migración de schema.
 - **Justificación:** el validador ya es la fuente única de las reglas de entrada de ambos caminos
-  (`engine.js:1313`, `:1351`), así que una regla de tipo ahí elimina la divergencia sin duplicar
+  (`engine.js:1336`, `:1374`), así que una regla de tipo ahí elimina la divergencia sin duplicar
   política ni tocar el upsert. El vocabulario cerrado excedería el contrato vigente de `recordNode`,
   que admite strings arbitrarios, y el schema no puede expresar «string no vacío» sin migración. La
   coerción silenciosa es justamente el defecto que se corrige.

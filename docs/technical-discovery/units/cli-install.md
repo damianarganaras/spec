@@ -2,10 +2,10 @@
 node: units/cli-install
 kind: dossier
 read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, MCP, tiers y diagnósticos"
-covers: [instalación, hosts, frontmatter, MCP, tiers, templates, import-export, check, doctor, judge]
-sources: ["src/cli/index.js", "src/cli/ui.js", "src/core/adapters/frontmatter.js", "src/core/model-declarations.js", "src/core/model-catalog.js", "src/core/tier-models.js", "src/core/judge.js", "src/core/machine-env.js", "agents/**", "commands/**", "skills/**", "templates/**", "profiles/**", "opencode.json", "package.json"]
-generatedAt: 2026-11-20T01:12:16.920Z
-pluginVersion: 0.40.1
+covers: [instalación, hosts, frontmatter, MCP, tiers, templates, import-export, check, doctor, judge, publicación]
+sources: ["src/cli/index.js", "src/cli/ui.js", "src/core/adapters/frontmatter.js", "src/core/model-declarations.js", "src/core/model-catalog.js", "src/core/tier-models.js", "src/core/judge.js", "src/core/machine-env.js", "agents/**", "commands/**", "skills/**", "templates/**", "profiles/**", "opencode.json", "package.json", "aspec/backlog.md", "CHANGELOG.md"]
+generatedAt: 2026-11-20T17:05:16.811Z
+pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
 
@@ -62,6 +62,12 @@ sobre el manifiesto existente.
   destino de proyecto.
 - `judge`: adaptador advisory a `jev-spec` (ver `integrations.md`).
 
+### Release
+
+Un tag `v*` dispara `.github/workflows/publish.yml` (lint, tests, publish idempotente, Release y
+canary no bloqueante). `0.41.0` está **preparada, sin publicar** (bump `6669b35`; tag y npm
+pendientes); la última verificada es `0.40.1`. El detalle operativo vive en `aspec/backlog.md`.
+
 ## Reglas, contratos y riesgos
 
 - **Un único dueño del frontmatter**: `src/core/adapters/frontmatter.js`. Agregar una rama de
@@ -94,3 +100,4 @@ sobre el manifiesto existente.
 | `src/core/machine-env.js` | Detección de shell/EOL/tools y exclusión git |
 | `agents/**`, `commands/**`, `skills/**`, `templates/**`, `profiles/**` | Superficie instalable |
 | `package.json` | Bins, versión, engines y scripts |
+| `aspec/backlog.md` | Estado de release y seguimiento de deuda |

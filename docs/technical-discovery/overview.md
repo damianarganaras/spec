@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-20T01:12:16.920Z
-pluginVersion: 0.40.1
+generatedAt: 2026-11-20T17:05:16.811Z
+pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
 
@@ -55,10 +55,10 @@ El paquete publica además una **superficie instalable** (`package.json` → `fi
 | CLI y ciclo de vida | `init`, `install`, `update`, `upgrade`, `import`, `export`, `check`, `doctor`, `projects` | `src/cli/index.js` |
 | Instalador multi-host | Materializa assets, adapta frontmatter, escribe MCP y aplica tiers | `src/cli/index.js`, `src/core/adapters/frontmatter.js` |
 | Discovery | Mapa topológico, estado, impacto y pack Repomix | `src/core/discovery.js`, `src/core/discovery-state.js`, `src/core/repomix-tier.js` |
-| Memoria | Motor SQLite/FTS5, supersesión, refs, MCP y operaciones | `src/core/memory/**` |
+| Memoria | Motor SQLite/FTS5, supersesión, refs, recall BM25-first, MCP y operaciones | `src/core/memory/**` |
 | Modelos | Catálogo commiteado, declaraciones versionadas y resolución por tier | `src/core/model-catalog.js`, `src/core/model-declarations.js`, `src/core/tier-models.js` |
 | Specs | Validación de specs canónicas y merge de deltas | `src/core/specs-merge.js` |
-| Cambios | Artefactos SDD activos y archivados | `aspec/changes/**`, `aspec/specs/**` |
+| Cambios | Artefactos SDD activos, archivados y backlog de release | `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` |
 | Juez advisory | Envoltorio read-only de `jev-spec` | `src/core/judge.js` |
 
 ## Flujos principales
@@ -81,8 +81,9 @@ Evidencia: `src/cli/index.js`, `src/core/discovery.js`, `src/core/discovery-stat
 
 Las tools MCP (`searchMemory`, `recordRule`, `recordDecision`) leen y escriben
 `.ancleto/memory.db`. Cada `memory_key` tiene un nodo activo y un historial `superseded`; las
-escrituras pasan por validación de refs y rechazo de secretos. Evidencia:
-`src/core/memory/engine.js`, `src/core/memory/tools.js`, `src/core/memory/mcp-server.js`.
+escrituras pasan por validación de refs y rechazo de secretos. Desde 0.41.0 el recall ordena por
+**BM25 ascendente** después de las `required`. Evidencia: `src/core/memory/engine.js`,
+`src/core/memory/tools.js`, `src/core/memory/mcp-server.js`.
 
 ### 4. Ciclo de cambio SDD
 
@@ -95,6 +96,19 @@ memoria. Evidencia: `src/core/specs-merge.js`, `skills/ancleto-archive/SKILL.md`
 El tier configurado se resuelve contra `src/core/model-catalog.json`; `minimo` usa cadenas de
 preferencia por agente y falla explícitamente si ningún candidato está disponible. Evidencia:
 `src/core/tier-models.js`, `src/core/model-catalog.js`.
+
+### 6. Publicar una release
+
+Un tag `v*` dispara `.github/workflows/publish.yml`: `npm ci` → lint → tests → `npm publish`
+(omite si la versión ya existe) → Release de GitHub → canary no bloqueante del tarball. Evidencia:
+`.github/workflows/publish.yml`, `aspec/backlog.md`.
+
+## Estado de release
+
+`0.41.0` está **preparada y sin publicar**: `package.json` ya declara la versión (commit
+`6669b35`) y `CHANGELOG.md` describe el recall BM25-first; el tag `v0.41.0`, el run de
+`publish.yml` y npm se completan post-publish (`aspec/backlog.md`). La última versión publicada y
+verificada es `0.40.1` (tag anotado `v0.40.1`, `latest` en npm con `gitHead` coincidente).
 
 ## Límites y decisiones de frontera
 

@@ -1,0 +1,373 @@
+[
+ {
+  "memory_key": "affected-set-excludes-markdown-guards",
+  "content": "En el pipeline del orquestador, el `affected-set` determinístico se calcula sobre el grafo de imports, así que no incluye los content guards: `test/content-guards.test.js` valida markdown de `agents/` y `skills/` y no tiene arista de import. Un change que sólo toca prompts queda con un `affected-set` que no cubre su propia superficie de test y da falsa confianza; hay que sembrar ese archivo explícitamente u agregarlo como task-owned.\n\nrefs:\n  - path:test/content-guards.test.js\n  - path:src/core/affected-set.js\n  - change:mem-03-promocion-decisiones-refs",
+  "scope": "project",
+  "created_at": "2026-10-30T16:04:31.569Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "recorte-derivado-se-verifica-en-segunda-pasada",
+  "content": "Todo recorte o clasificación derivado —inventario de archives, mapa de decisiones, tabla de cobertura— se contrasta fila por fila contra su fuente primaria antes de publicarse, y nunca contra el resumen de la primera pasada. La segunda pasada es adversarial: se reabre el artifact citado y se verifica que efectivamente cubra lo que la fila afirma, en vez de confiar en que la fila lo dice. Evidencia: en el backfill de los design.md archivados, la primera pasada clasificó mal 5 de 27 filas —dos citaban un nodo que no cubría la decisión y tres estaban en el grupo equivocado— y sólo la re-verificación contra los design.md y contra los nodos activos las corrigió.\n\nrefs:\n  - change:backfill-archived-design-decisions\n  - path:aspec/changes/archive/2026-10-30-backfill-archived-design-decisions/proposal.md",
+  "scope": "project",
+  "created_at": "2026-11-01T23:12:59.821Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "refs-path-normalize-before-exists",
+  "content": "En este repo, una ref path: debe normalizarse a separadores / y colapsar . antes del chequeo de existencia. join(root, rawPath) sobre la forma cruda no convierte la barra invertida a POSIX, asi que un ref con backslash resuelve en Windows y da inexistente en Linux; normalizar primero evita el falso negativo y mantiene el path devuelto en forma repo-relativa posix.\n\nrefs:\n  - path:src/core/memory/engine.js\n  - path:test/memory-engine.test.js",
+  "scope": "project",
+  "created_at": "2026-11-02T12:11:04.162Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "agent-flag.semantics",
+  "content": "`--agent` selecciona el layout nativo a materializar y el pipeline de adaptación del host; NO arbitra qué descubre cada host. Si dos hosts leen un mismo directorio, el descubrimiento compartido es efecto del host y el CLI no deduplica ni elige \"ganador\". El default sigue siendo `opencode`.\n\nrefs:\n  - spec:agent-install-routing#Semántica de `--agent` y descubrimiento entre hosts\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.777Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "agent-mirrors-regenerate-upgrade-only",
+  "content": "En @ancleto/spec los mirrors `.opencode/agents/*` sólo se regeneran fielmente con `ancleto upgrade`. `install` y `update` también escriben `.ancletorc` con `version = package.json`, y `install` además aplica el tier `gratis`, reescribiendo la línea `model:` de los 10 agentes; `upgrade` nunca llama a `applyTier`. Nunca editar los mirrors a mano. Después de regenerar hay que verificar que las 10 líneas `model:` no cambiaron y que el diff contra `agents/*.md` es sólo el bloque «## Compresión de contexto (tool del host)» del mirror del orquestador. Ojo con `ancleto check`: si existe `.opencode/.ancleto-tier` (artefacto local, no versionado), `check` simula la sustitución de tier al comparar y advierte «frontmatter diverge del adaptador» en los 10 agentes aunque los mirrors estén correctos; esa advertencia es preexistente y su única diferencia es la línea `model:` (verificable línea por línea), no un defecto de la regeneración.\n\nrefs:\n  - path:.opencode/.ancleto-tier\n  - path:package.json\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.791Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "buildworkingcontext-cwd-tercer-parametro",
+  "content": "En tests que dependen del cwd, `buildWorkingContext` recibe `cwd` como tercer parametro: `buildWorkingContext(scope, maxTokens = MAX_TOKENS, cwd = process.cwd())`; para aislar la topologia hay que pasar la raiz en ese 3er argumento conservando el default de `maxTokens` con `undefined` explicito: `buildWorkingContext(scope, undefined, dir)`. No usar `buildWorkingContext(scope, dir)`: asigna `dir` a `maxTokens` y no aisla la topologia.\n\nrefs:\n  - spec:memory-engine#Aislamiento del cwd en las pruebas de `buildWorkingContext`\n  - spec:memory-engine#Invariancia de la firma y del comportamiento por defecto de `buildWorkingContext`\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.802Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "content-guard-authoring-normalize-slice-mutate",
+  "content": "En content guards sobre prompts, un literal de oración completa sólo es aceptable si asierta el invariante en la superficie que lo posee, vive dentro del slice acotado a su sección sobre el tramo normalizado, es la expresión mínima que conserva la garantía y el predicado que lo introduce tiene una mutación en scratch que lo rompe. Si el literal re-enuncia una regla cuyo hogar canónico es otra superficie, obliga a duplicarla en N prompts y viola `aspec/specs/prompt-contracts/spec.md` (fuente única y no fijar la redacción literal); en ese caso el guard que busca duplicación corre sobre el texto completo normalizado, porque un slice deja la copia fuera de alcance, y todo assert debe tener una mutación que lo haga fallar.\n\nrefs:\n  - spec:prompt-contracts#Fuente única de las reglas compartidas entre skill y agente\n  - path:aspec/specs/prompt-contracts/spec.md\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.813Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "fts5-external-content-count",
+  "content": "En FTS5 external-content, `SELECT count(*) FROM <fts>` no cuenta filas indexadas: FTS5 resuelve la consulta contra la tabla de contenido, así que el resultado coincide siempre con la tabla fuente y la verificación es vacua; la cantidad real de documentos indexados está en la tabla sombra `<fts>_docsize`, que no existe si el índice se creó con `columnsize=0`. En ese caso el chequeo debe reportarse como no verificable (`ok:true` + `skipped:true`), nunca como desalineación. Evidencia: `src/core/memory/doctor.js` (check `Indice FTS5`), `aspec/specs/memory-ops/spec.md` (Requirement `memory doctor` read-only), `test/memory-fixtures.test.js` (caso `columnsize=0`).\n\nrefs:\n  - spec:memory-ops#`memory doctor` estrictamente read-only\n  - path:src/core/memory/doctor.js\n  - path:test/memory-fixtures.test.js\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.824Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "merge-origin-main-conflict-policy",
+  "content": "Al integrar `origin/main` en `development` (release git), la regla de prioridad vigente es: (1) NUESTRA línea gana en el contrato de validaciones declarativo y su migración (`templates/AGENTS.md` bloque `LOCKED: validation-commands`, `PRODUCT.md ## Project Commands`, `agents/*`, `skills/ancleto-upgrade|pr|security`, `src/cli/index.js` con `mergeTemplateInto`/`reconcileLegacyBlocks`, tests y specs); (2) lo aditivo de main se preserva y COMBINA donde no colisiona (host Command Code, skill `ancleto-update`); (3) en archivos que ambos reescribieron (p.ej. `src/cli/index.js` notes de orchestrator, `aspec/specs/agent-install-routing/spec.md` excepciones MCP) se combinan ambas features (copilot+commandcode+caveman; antigravity+commandcode), nunca se descarta una; (4) los artifacts generados del seed (`docs/technical-discovery/*`, `.discovery-map.json`) quedan en su versión local (derivados, regenerables) y se reporta staleness; (5) cualquier skill nueva de main que edite artifacts debe alinearse al bloque `LOCKED: artifacts-language` de su fuente única (no redeclarar el literal), igual que el resto.\n\nrefs:\n  - path:templates/AGENTS.md\n  - path:src/cli/index.js\n  - path:aspec/specs/agent-install-routing/spec.md\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.847Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "node-test-scope-explicit-paths",
+  "content": "En @ancleto/spec, `node --test` SIN rutas descubre archivos `test-*.js` en cualquier directorio (glob por defecto del Node Test Runner), incluido el vendored y gitignoreado `documentation/lnx-cli/source/plugins/azure-devops-mcp/dist/tools/test-plans.js`, que produce 1 fallo preexistente ajeno al change. SIEMPRE acotar la validación con rutas explícitas al archivo relevante: `node --test test/content-guards.test.js` (o el archivo puntual), en vez de `node --test` a secas, para evitar reportar ese falso positivo del suite completo.\n\nrefs:\n  - path:test/content-guards.test.js\n  - path:documentation/lnx-cli/source/plugins/azure-devops-mcp/dist/tools/test-plans.js\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.859Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "readme-text-guards",
+  "content": "En este repo la verificación del texto de README.md vive en tests: test/content-guards.test.js y test/cli.test.js assertean literales del README y toleran el wrap, por lo que editar el README puede romperlos. Tras cualquier edición del README correr `node --test test/content-guards.test.js test/cli.test.js`. Desde add-standard-linter existen `npm run lint` (eslint src/ test/) y el paso de lint en CI (publish.yml), pero ninguno cubre markdown.\n\nrefs:\n  - path:README.md\n  - path:test/content-guards.test.js\n  - path:test/cli.test.js\n  - path:.github/workflows/publish.yml\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.868Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "release-version-bump-and-publish-verification",
+  "content": "En el release de `@ancleto/spec`, un tag `v*` sin bump de versión deja el run de `publish.yml` en verde sin publicar nada: el workflow toma la versión de `package.json` y omite `npm publish` cuando esa versión ya existe en npm. El bump debe tocar `package.json`, `package-lock.json` (solo los dos campos de versión del paquete raíz, sin `npm install --package-lock-only`, que reescribe el lockfile) y `CHANGELOG.md`, con tag anotado sobre el merge commit de `main`. La verificación real es `npm view @ancleto/spec version`, `dist-tags` y `gitHead` igual al sha del merge, más `npm pack` y extraer el tarball porque `files` publica solo `agents/`, `commands/`, `profiles/`, `skills/`, `src/` y `templates/`, considerando que el registry tarda ~45 s en servir la versión nueva.\n\nrefs:\n  - path:package.json\n  - path:package-lock.json\n  - path:CHANGELOG.md\n  - path:.github/workflows/publish.yml\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.878Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "repo-validation-commands",
+  "content": "En @ancleto/spec (CLI JavaScript ESM puro, sin tsconfig.json), los scripts `npm run lint` (eslint src/ test/, flat config eslint.config.js, 4 reglas) y `npm test` (node --test \"test/*.test.js\") SÍ existen desde el change add-standard-linter. `npm run typecheck` sigue sin existir (no hay tsconfig.json). Validación real: `npm run lint` + `npm test`.\n\nrefs:\n  - change:add-standard-linter\n  - path:eslint.config.js\n  - path:package.json\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:38.890Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "sqlite-wal-readonly-invariant",
+  "content": "En SQLite 3.51.3 (Node v24.15.0, win32-x64), abrir en read-only (`DatabaseSync({ readOnly: true })`, incluso con solo un `SELECT 1` y sin lógica propia) una base en modo WAL cerrada limpia y sin sidecars crea `<db>-shm` (32768 B) y un `<db>-wal` de 0 bytes; el `.db` no cambia (sha256 idéntico) y una segunda apertura es byte-idéntica. El read-only solo deja intactos `.db` y `-wal` cuando ya existen, así que ningún test que afirme que no aparecen `-wal`/`-shm` puede correr sobre una fixture en WAL: forzar `journal_mode=DELETE` para ese assert, o tolerar los sidecars vacíos y asertar solo la inmutabilidad de `.db`/`-wal` y la idempotencia. Evidencia: `test/memory-fixtures.test.js` (scenario \"WAL frío\"), `test/memory-pr1-contract.test.js`, `src/core/memory/doctor.js`.\n\nrefs:\n  - path:test/memory-fixtures.test.js\n  - path:test/memory-pr1-contract.test.js\n  - path:src/core/memory/doctor.js\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:48.940Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "template-merge-locked",
+  "content": "En `src/cli/index.js`, `mergeLocked` sólo inserta o reemplaza bloques `LOCKED`, por lo que el texto plano sobrevive en las copias instaladas; `AGENTS.md` y `PRODUCT.md` se mergean por bloques mientras `.opencode/skills/` se copian enteras. Al de-hardcodear un contrato en superficies mergeadas hay que envolver el texto canónico en un bloque `LOCKED` y reconciliar el texto plano legado en toda ruta que mergee `TEMPLATES` (`copyTemplates` para install/update/upgrade e `importCmd`). Las rutas nuevas deben pasar por el punto único `mergeTemplateInto` → `reconcileLegacyBlocks` (firmas acotadas por `filename`); llamar `mergeLocked` directo sobre `TEMPLATES` reintroduce la coexistencia de guía vieja y bloque canónico.\n\nrefs:\n  - path:src/cli/index.js\n  - path:templates/AGENTS.md\n  - path:templates/PRODUCT.md\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:48.953Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "test-runner-invocation",
+  "content": "En este repo con Node 24, `node --test test/` no expande el directorio y falla con `Cannot find module ...\\test`; la forma válida para toda la suite es `node --test \"test/*.test.js\"`, expuesta como `npm test` desde el change add-standard-linter. `package.json` ahora define scripts y devDependencies (eslint, globals). Un `node --test` sin filtrar matchea el vendored `documentation/.../test-plans.js`, ajeno a la suite.\n\nrefs:\n  - change:add-standard-linter\n  - path:package.json\n  - path:documentation/lnx-cli/source/plugins/azure-devops-mcp/dist/tools/test-plans.js\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:48.962Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "throughput-pipeline-review-ledger-no-rebash",
+  "content": "En el pipeline del orquestador, @reviewer corre sin bash por ser frontera de seguridad y @tester le entrega un Validation Ledger prearmado y cerrado, con not-configured como clasificación terminal no-fallo; tras el archive, @documenter y @memory-keeper corren en paralelo sobre superficies disjuntas (aspec/ vs .ancleto/memory.db).\n\nrefs:\n  - spec:prompt-contracts#Paralelización de la finalización y el registro de memoria\n  - spec:review#Reviewer sin rebote con Validation Ledger prearmado\n  - path:.ancleto/memory.db\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:48.975Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "user-checkpoints-and-no-push",
+  "content": "El usuario exige checkpoints explícitos antes de design y antes de review, y no autoriza push sin pedido explícito. Las escrituras a memoria del repo también requieren su OK. No asumir aprobación por silencio, demora ni falta de objeción.\n\nrefs:\n  - spec:prompt-contracts#El checkpoint de aprobación aprueba el contrato del cambio\n  - spec:prompt-contracts#Ownership de commit, merge y push\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:48.985Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "validacion-real-node-test-sin-tooling",
+  "content": "Este repo (@ancleto/spec) es JS puro con linting desde el change add-standard-linter: `eslint.config.js` (flat config) + devDependencies eslint y globals + scripts `lint`/`test`. Ya NO es cierto que falte tooling de lint. Sigue sin haber tsconfig.json/typecheck. Verificación: `npm run lint` y `node --test <archivo>` (o `npm test`).\n\nrefs:\n  - change:add-standard-linter\n  - path:eslint.config.js\n  - path:package.json\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:48.994Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "working-context-render",
+  "content": "En `.ancleto/working-context.md` existen tres vías de escritura: el ciclo de vida (init/install/upgrade), el refresh on-write del MCP y `ancleto memory context --out`. Todo cambio futuro de su contenido debe canalizarse por `renderWorkingContextBlock` (que unifica el render con motor de memoria o `null`) o acotar explícitamente una única vía; de lo contrario el contenido de día-cero diverge entre vías.\n\nrefs:\n  - path:.ancleto/working-context.md\n  - spec:memory-engine#Materialización día-cero del working-context con topología\n  - spec:memory-engine#Frescura del working-context tras escrituras de la CLI\n",
+  "scope": "project",
+  "created_at": "2026-11-02T13:52:49.001Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "fix-change-requires-reproducible-baseline",
+  "content": "En changes de fix, el proposal SHALL incluir evidencia de reproducción del fallo antes de fijar el scope: comando concreto ejecutado y salida real (conteo de fallos y nombres de tests afectados). NO SHALL aceptarse un conteo estático heredado de un hallazgo previo, ni una estimación de lectura de código, como base para declarar qué está en scope y qué queda out-of-scope.\n\nrefs:\n  - change:fix-memory-engine-test-isolation\n  - path:aspec/changes/archive/2026-09-29-fix-memory-engine-test-isolation/proposal.md",
+  "scope": "project",
+  "created_at": "2026-11-02T13:59:25.821Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "negative-invariant-scenario-must-be-explicit",
+  "content": "Cuando un Scenario del delta spec describe un invariante negativo (p. ej. \"no hago X\", \"el default se preserva\"), SHALL quedar marcado explícitamente en el artifact como no-testeable-por-construcción, con su justificación, o bien SHALL tener un test que lo enuncie. NO SHALL quedar ambiguo para que el reviewer lo resuelva tarde en la etapa de review.\n\nrefs:\n  - change:fix-memory-engine-test-isolation\n  - path:aspec/changes/archive/2026-09-29-fix-memory-engine-test-isolation/specs/memory-engine/spec.md",
+  "scope": "project",
+  "created_at": "2026-11-02T13:59:30.582Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "new-wrapper-command-checklist",
+  "content": "Para agregar un comando de usuario `/cleto-<name>` al proyecto hay que crear dos assets: el archivo del comando (`commands/<name>.md`) y la skill correspondiente (`skills/<name>/SKILL.md`) cuando aplica. Ambos se instalan por host vía el mecanismo existente (`installAgentSkills`/`AGENT_TARGETS`, catálogo + ruteo + adapters de frontmatter), sin cambios en `src/`. Verificar con `ancleto check` (assets detectados, check en verde).\n\nrefs:\n  - path:src/cli/index.js\n  - path:commands/cleto-review.md\n  - path:skills/ancleto-review/SKILL.md",
+  "scope": "project",
+  "created_at": "2026-11-02T13:59:35.672Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "node-fs-cp-collision-behavior",
+  "content": "En Node (engines >=24), fs.cp(src, dest, { recursive: true, force: false }) no sobrescribe archivos ya existentes en el destino: los omite en silencio cuando errorOnExist es false (default). Para abortar ante una colisión hay que pasar errorOnExist: true. Es la base del invariante de migración por copia no destructiva.\n\nrefs:\n  - path:src/cli/index.js\n  - path:test/cli.test.js",
+  "scope": "project",
+  "created_at": "2026-11-02T13:59:40.362Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "opencode-free-tier-custom-primary-agent",
+  "content": "En OpenCode con agente primario custom (como el orchestrator generado por ancleto en `.opencode/agents/`), los modelos del free tier `opencode/muse-spark-1.3-contributor-free` y `opencode/big-pickle` fallan con 403 `OpenCode's free tier can only be used from within OpenCode` por un gate server-side que valida la identidad de la sesión de nivel superior. Usar un modelo pago en el agente primario y reservar el free tier para subagentes, que heredan la identidad del padre.\n\nrefs:\n  - path:src/core/tier-models.js\n  - path:docs/technical-discovery/units/discovery-engine.md\n  - path:test/cli.test.js",
+  "scope": "project",
+  "created_at": "2026-11-02T13:59:45.515Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "opencode-permission-bash-last-match-wins",
+  "content": "En OpenCode, `permission.bash` de una definición de agente se evalúa con last-match-wins: gana la última regla que matchea el comando, así que un `'*': allow` posterior reabre un deny previo y un allow a nivel agente pisa un `bash: ask` global aunque esté antes. El patrón matchea por glob sobre el comando completo (`*git push*` no matchea `git -C <dir> push`) y un `'*': deny` bloquea todo el bash de ese agente. Para negar el push como capacidad, la entrada `'*git push*': deny` debe declararse después de cualquier allow en cada definición con `bash: true`.\n\nrefs:\n  - path:test/content-guards.test.js\n  - path:agents/coder.md",
+  "scope": "project",
+  "created_at": "2026-11-02T13:59:51.150Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "content-guard-literal-overflow-warning",
+  "content": "Los content guards de este repo asertan el texto LITERAL del template del `<ContextOverflowWarning>` en `src/core/memory/engine.js`: cualquier cambio al aviso debe conservar exactamente `${omitted} rules omitted.` y la ausencia de `searchMemory`, aunque el comportamiento sea correcto; si no, `test/content-guards.test.js` falla.\n\nrefs:\n  - path:test/content-guards.test.js\n  - path:src/core/memory/engine.js",
+  "scope": "project",
+  "created_at": "2026-11-02T17:10:56.945Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "memory-promotion-standing-consent",
+  "content": "La promoción al archivar de los bloques `## Decisiones` con `memory_key` propia y `Estado: aprobado` es consentimiento permanente: se ejecuta sin volver a pedir OK. El gate fail-closed del archive sigue siendo obligatorio (claves propias y únicas, Estado aprobado, refs resolubles, sin candidatos de sesión). Las escrituras ad-hoc a `.ancleto/memory.db` que no vengan de ese lote siguen requiriendo OK explícito.\nrefs:\n  - path:aspec/specs/memory-ops/spec.md\n  - change:mem-04b-resolver-referencias-navegables",
+  "scope": "project",
+  "created_at": "2026-11-02T17:38:28.324Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "archive-promocion-antes-del-move",
+  "content": "Al archivar un change, la promoción de `proposal ## Decisiones` debe correr después del merge de specs y ANTES de mover el directorio a `archive/`, o las refs `path:` que apuntan al propio change dejan de resolver. Mover primero hace que el gate fail-closed rechace el lote completo con 0 escrituras, en silencio. Alternativa: repuntar esas refs al path archivado antes de promover.\n\nrefs:\n  - path:skills/ancleto-archive/SKILL.md\n  - path:aspec/specs/memory-ops/spec.md",
+  "scope": "project",
+  "created_at": "2026-11-02T18:41:04.283Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "sqlite-no-persistencia-requiere-sqlite-master",
+  "content": "Para probar que un campo de llamada (por ejemplo `required`) no creó estructura nueva en la DB de memoria, `PRAGMA table_info(<tabla>)` no alcanza: sólo enumera columnas de una tabla existente. Hay que consultar además `sqlite_master` (`WHERE type='table'`) para descartar una tabla nueva, y leer el nodo de vuelta para descartar una propiedad expuesta. Un assert de ausencia sobre una proyección de columnas (`'campo' in listNodes(...)`) no prueba no-persistencia.\nrefs:\n  - change:mem-05-recall-task-aware\n  - path:test/memory-engine.test.js\n  - path:src/core/memory/engine.js\n  - spec:memory-engine#Recall task-aware con orden total, preview expandible y keys requeridas",
+  "scope": "project",
+  "created_at": "2026-11-03T00:01:52.935Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "gc-purga-por-created-at-original",
+  "content": "En el engine de memoria, `memory gc` purga nodos `superseded` por `superseded_at` (el instante de supersesión), con `COALESCE(superseded_at, created_at)` como fallback para filas previas a la migración; default 30 días. Consolidar, mergear o re-grabar un nodo antiguo ya NO lo deja elegible para borrado físico inmediato: la ventana de gracia corre desde la supersesión. Único caso legacy: filas cuyo backfill quedó en NULL usan `created_at`. El snapshot previo (`memory export` / `VACUUM INTO`) sigue siendo la red de recuperación.\n\nrefs:\n  - spec:memory-ops#Garbage collection de nodos superseded\n  - change:mem-05b-gc-superseded-age\n  - path:src/core/memory/engine.js\n  - path:src/core/memory/database.js",
+  "scope": "project",
+  "created_at": "2026-11-03T03:06:10.341Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "memory-gc-active-nodes-untouchable",
+  "content": "`memory gc` nunca toca nodos `active` bajo ninguna condición: tanto el dry-run como el `DELETE` filtran `status='superseded'`, y la elegibilidad se mide con `COALESCE(superseded_at, created_at)`, donde `superseded_at` ya existe en el schema y lo escriben las cuatro rutas de supersesión (`recordNode`, `importNodes`, `merge`, `consolidate`). Antes de operaciones destructivas sobre la DB de memoria, el snapshot previo (`memory export` / `VACUUM INTO`) sigue siendo la red de recuperación.\n\nrefs:\n  - spec:memory-ops#Garbage collection de nodos superseded\n  - change:mem-05b-gc-superseded-age\n  - path:src/core/memory/engine.js",
+  "scope": "project",
+  "created_at": "2026-11-03T03:07:10.694Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "agent-model-source-of-truth-global-vs-project",
+  "content": "En OpenCode 1.19.4 con ancleto, el modelo de un subagente lo decide el frontmatter del agente del PROYECTO. El orden real de precedencia es `.opencode/agents/*.md` (el mirror del proyecto) > `opencode.json` → `agent.<nombre>.model` > `~/.config/opencode/agents/*.md` (global). Verificado con `opencode debug config` y `opencode debug agent coder`: con el mirror en `opencode-go/deepseek-v4.1-flash`, los 10 agentes de este repo resolvían a `opencode-go` aunque `opencode.json` y la copia global declararan `commandcode/deepseek/deepseek-v4.1-flash`. Corolario: editar los agentes globales NO cambia a los subagentes cuando existe un mirror de proyecto; para cambiar el modelo hay que tocar la superficie que gana (el mirror) o alinear `agents/*.md` y regenerar. El mirror es frágil: `ancleto upgrade` lo regenera desde `agents/*.md` y `ancleto install/update` re-aplica `TIERS`, así que cualquiera de los dos revierte un ajuste manual. Frente a un subagente que falla, el error `Insufficient account funds` viene del proveedor del modelo resuelto y no del agente: compará con un agente built-in (`@general`) y con `opencode debug config` antes de editar archivos.\n\nrefs:\n  - path:agents/orchestrator.md\n  - path:src/cli/index.js\n  - path:src/core/tier-models.js\n  - path:opencode.json\n  - spec:agent-install-routing#Semántica de --agent y descubrimiento entre hosts",
+  "scope": "project",
+  "created_at": "2026-11-03T15:25:52.250Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "agent-model-install-upgrade-ownership",
+  "content": "En ancleto, `install`/`update`/`init` corren `installProfileOverlay` y DESPUÉS `applyTier`, así que en esas rutas el tier es dueño de la línea `model:` de TODOS los agentes instalados, incluidos los que un overlay de perfil reemplaza (p. ej. `tester`/`reviewer` en `profile: test`). `upgrade` no aplica tier: corre `installAgentAssets` y luego `installProfileOverlay`, así que ahí el perfil es dueño del cuerpo y del `model:`. Cualquier oráculo (`ancleto check`) debe aceptar ambos estados — instalado == fuente esperada (canónica, o el overlay del perfil activo) O instalado == estado con tier aplicado — y calcular el estado de tier también para los agentes del overlay. Si se excluye el overlay de la sustitución de tier se producen falsos `frontmatter diverge del adaptador` en instalaciones sanas hechas por la herramienta.\n\nrefs:\n  - path:src/cli/index.js\n  - path:profiles/test/agents/tester.md\n  - path:profiles/test/agents/reviewer.md\n  - change:align-agent-models-commandcode",
+  "scope": "project",
+  "created_at": "2026-11-03T18:52:54.913Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "gratis-model-precedence-oracle",
+  "content": "En `src/core/tier-models.js`, `tierModels('gratis', TIERS, persisted)` resuelve `persisted || gratisModel()` (env/detección), mientras que `install`/`update` resuelven `env || persisted`. Para un proyecto legacy o importado sin `.ancletorc.gratisModel` el modelo gratis puede diferir entre el momento del install y el del check. Cualquier consumidor que compare el estado instalado debe aceptar AMBOS modelos gratis conocidos (`MUSE_SPARK_MODEL` y `GRATIS_FALLBACK_MODEL`) como estado válido del tier `gratis`, o emite falsos `frontmatter diverge del adaptador` en los 10 agentes.\n\nrefs:\n  - path:src/core/tier-models.js\n  - path:src/cli/index.js\n  - change:align-agent-models-commandcode",
+  "scope": "project",
+  "created_at": "2026-11-03T18:52:59.286Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "upgrade-appends-caveman-note-orchestrator",
+  "content": "`ancleto upgrade` agrega `CAVEMAN_USAGE_NOTE` al agente `orchestrator` instalado cuando el host habilita el MCP `caveman` (`.opencode/opencode.json`). Por eso `.opencode/agents/orchestrator.md` es la canónica MÁS la nota de host, y NO es byte-idéntico a `agents/orchestrator.md`. Cualquier aserción de byte-identidad entre mirror y canónica debe correr sin MCP (`--no-mcp`) o comparar contra la salida del adaptador más las notas de host que correspondan.\n\nrefs:\n  - path:src/cli/index.js\n  - path:agents/orchestrator.md\n  - change:align-agent-models-commandcode",
+  "scope": "project",
+  "created_at": "2026-11-03T18:53:03.462Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "npm-publish-async-metadata-propagation",
+  "content": "En este repo, `npm publish` materializa la metadata de forma asíncrona: `version` / `dist-tags` / `gitHead` pueden tardar minutos en reflejarse y el tarball puede seguir en 404 después de que la metadata ya esté visible. Evidencia del release 0.18.17: el run 42037274344 (evento push del tag v0.18.17, headSha 7c3ea729ef6299fea046fd427988bfd5fc1b9859) terminó success con `+ @ancleto/spec@0.18.17`; el registry aceptó la publicación a las 13:37:54Z y la metadata 0.18.17 (con gitHead=7c3ea72…) apareció recién a las 13:42:02Z (~4m08s), mientras que el tarball seguía en 404 a las 13:42:39Z; por eso una ventana fija de polls (8 × 30 s) puede dar un falso negativo de \"no publicado\" cuando el publish ya ocurrió. Al verificar un release de npm: (a) confirmar primero el run/job de publish y su línea `+ <paquete>@<version>`, (b) no declarar fallo por `npm view version` sin agotar una ventana mayor o hasta que el tarball responda, (c) verificar el tarball y no sólo la metadata, y (d) nunca re-publicar ni mover el tag por un desfase de propagación; el check temprano `npm view \"<pkg>@<version>\"` del workflow puede dar 404 por la misma latencia y el canary no bloqueante lo enmascara como warning.\nrefs:\n  - path:.github/workflows/publish.yml\n  - path:package.json\n  - change:mcp-oracle-residual-closure",
+  "scope": "project",
+  "created_at": "2026-11-05T14:43:25.970Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "content-guard-change-artifact-location",
+  "content": "Un content guard que afirma sobre artefactos de un change (por ejemplo el `proposal.md` de `aspec/changes/<slug>/`) NO debe hardcodear la ruta activa: el archive mueve la carpeta a `aspec/changes/archive/YYYY-MM-DD-<slug>/`, y `npm test` falla con ENOENT en cuanto el change se archiva. Resolver el directorio por la ruta activa O por cualquier `<root>/archive/*-<slug>` que contenga `proposal.md`, y fallar cerrado cuando hay 0 o más de una coincidencia. El predicado correcto es el sufijo `-<slug>` (no `startsWith`) porque el nombre archivado lleva prefijo de fecha. Evidencia: hallazgo CRITICAL del review R1 de `p0-pr5-archive-conformity`; el guard quedó resuelto por `resolveChangeDir` en `test/content-guards.test.js`, probado con un árbol temporal fuera del repo.\n\nrefs:\n  - path:test/content-guards.test.js\n  - spec:prompt-contracts#Clasificación de conformidad frente a cambio funcional\n  - change:p0-pr5-archive-conformity",
+  "scope": "project",
+  "created_at": "2026-11-06T14:48:57.847Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "affected-set-fixture-importer-name-collision",
+  "content": "En fixtures de `computeAffectedSet`/`buildImportGraph`, si el archivo importador se llama igual que el specifier irresoluble, el caso se auto-resuelve porque `resolveRelative` prueba `base` sin extensión como primer candidato, y el test pasa sin probar nada. Nombrar el importador distinto del specifier y no crear el archivo destino para ejercer `unresolved`; para un caso resoluble, crear el target. Un test de `unresolved` que no afirma la ausencia de aristas resueltas puede dar falso verde.\n\nrefs:\n  - path:src/core/affected-set.js\n  - path:test/affected-set.test.js\n  - change:test-oracles-hardening",
+  "scope": "project",
+  "created_at": "2026-11-06T22:00:31.154Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "reconcile-legacy-eol-split-trailing-strip",
+  "content": "Cuando `reconcileLegacyBlocks` (`src/cli/index.js`) preserva el EOL por línea, dividir con `content.split(/(\\r\\n|\\n)/)` deja que cada línea sobreviviente arrastre su propio EOL, incluida la última. Si la entrada NO termina en newline y el run legacy removido está al EOF, hay que eliminar TODAS las secuencias EOL finales del resultado (`replace(/(?:\\r\\n)+$/, '')`), no solo una (`replace(/\\r?\\n$/, '')`): con una línea en blanco previa al run, el strip simple deja un `\\n` colgante y la salida termina en newline aunque la entrada no lo hiciera. Invariante a preservar: la salida termina en newline si y solo si la entrada terminó en newline; el camino `removed === false` debe seguir devolviendo `content` byte a byte.\n\nrefs:\n  - path:src/cli/index.js\n  - path:test/cli.test.js\n  - spec:prompt-contracts#Preservación del fin de línea por línea al reconciliar bloques legacy\n  - change:template-legacy-eol-preservation",
+  "scope": "project",
+  "created_at": "2026-11-07T08:09:26.251Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "agent-model-three-surfaces",
+  "content": "En este repo el `model:` de los agentes vive en tres superficies que se editan juntas: `agents/*.md` (canónica), `.opencode/agents/*.md` (mirror que carga el runtime) y `opencode.json` → `agent.<nombre>.model`. Los agentes built-in como `@general` no leen el mirror, y una sesión de opencode en curso mantiene el cache de definiciones cargado al arrancar: los subagentes de proyecto toman el modelo nuevo recién tras reiniciar la sesión, aunque `opencode debug config` en un proceso nuevo ya lo muestre.\n\nrefs:\n  - path:agents/orchestrator.md\n  - path:.opencode/agents/orchestrator.md\n  - path:opencode.json",
+  "scope": "project",
+  "created_at": "2026-11-07T22:47:05.091Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "specs-merge-h1-inside-section-ignored",
+  "content": "En `src/core/specs-merge.js`, la regla de \"a lo sumo un H1\" aplica sólo al preámbulo previo a la primera sección `## ` (`:199-204`); un segundo `# H1` dentro del cuerpo de una sección no es boundary (`## ` sí lo es), no es requirement y se ignora en silencio con `errors === 0`. Por eso un H1 en el cuerpo no sirve como fixture inválido de delta spec: usarlo produce un falso rojo en cualquier guard que asuma lo contrario.\nrefs:\n  - path:src/core/specs-merge.js\n  - path:test/delta-spec-structure.test.js\n  - path:aspec/specs/spec-sync/spec.md",
+  "scope": "feature",
+  "created_at": "2026-11-11T03:34:01.266Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "delta-oracle-empty-text-accepted",
+  "content": "`parseDeltaSpec('')` devuelve `errors: []`, así que cualquier oráculo que valide un delta spec con `errors.length === 0` acepta texto vacío como delta válido. Hay que exigir contenido no vacío (`trim() !== ''`) antes de parsear, además de la ausencia de errores.\n\nrefs:\n  - path:test/delta-spec-structure.test.js\n  - path:src/core/specs-merge.js\n  - change:seed-freshness-version-bump-not-material",
+  "scope": "feature",
+  "created_at": "2026-11-11T15:50:35.154Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "discovery-check-dev-entrypoint",
+  "content": "En este repo el binario `ancleto` del PATH puede quedar rezagado respecto del working tree: en la sesión de 0.28.0 devolvió `seedMapPresent:false` con un seed-map válido y reportó `.ancleto` en `changedAreas` porque no tenía el filtro efímero. Los chequeos de frescura durante desarrollo deben correr `node src/cli/index.js discovery --check` (el entrypoint del working tree, el mismo que spawnean los tests), no el binario instalado.\n\nrefs:\n  - path:src/cli/index.js\n  - path:test/cli.test.js",
+  "scope": "feature",
+  "created_at": "2026-11-12T10:11:47.995Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "discovery-sources-forward-slash-paths",
+  "content": "En @ancleto/spec, computeSources/walk construyen las rutas relativas de sources con \"/\" incluso en Windows (src/cli/index.js, funcion walk). Cualquier predicado, comparacion o filtro sobre rutas de sources/fileHashes (por ejemplo isEphemeralSource) debe comparar y construir prefijos con \"/\", nunca con path.sep.\n\nrefs:\n  - path:src/cli/index.js\n  - change:seed-freshness-ignored-areas",
+  "scope": "project",
+  "created_at": "2026-11-12T14:10:42.156Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "delta-modified-restates-requirement-body",
+  "content": "Un delta \"## MODIFIED Requirements\" DEBE reescribir el cuerpo completo del requirement Y todos sus escenarios. applyModified en src/core/specs-merge.js:265-280 reemplaza el bloque entero \"### Requirement:\" (cuerpo y escenarios): cualquier escenario omitido en el delta se elimina; solo se preservan los demas requirements no mencionados. Evidencia: test/specs-merge.test.js:142-163 (assert doesNotMatch de Old A) y test/content-guards.test.js:2881-2896 (prohibe la promesa de preservacion).\n\nrefs:\n  - path:src/core/specs-merge.js\n  - path:test/specs-merge.test.js\n  - path:test/content-guards.test.js",
+  "scope": "project",
+  "created_at": "2026-11-12T14:44:29.704Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "discovery-exclude-glob-tokenization",
+  "content": "En el matcher de `discovery.exclude` (`src/cli/index.js:2181-2212`), tokenizar `**/` como `(?:.*/)?` y nunca `**` como `.*`, porque con `.*` el `*` simple queda como cuantificador regex y `**/*.test.*` no matchea `test/x.test.js`, mientras que expandir `**/` como separador obligatorio (`.*/`) rompe `**/*.png` a nivel raíz (`a.png`), que hoy sí matchea; usar `*`→`[^/]*`, `?`→`[^/]`, anclar `^…$` si hay `**` y conservar `^…(/|$)` si no. En este repo, `**/*.test.*` no elimina el área `test` del estado de discovery porque `test/fixtures/memory/**` (fixtures JSON/MD) no matchea el patrón y mantiene viva el área (`src/cli/index.js:2460-2463`), por lo que el primer `discovery --check` tras el fix es `STALE`/`minor`, no `material` por `area raiz eliminada`. Para pinear la exclusión sin duplicar el regex, sembrar el estado con el `sources` esperado y exigir `READY` vía `discovery --check`: sobre- y sub-exclusión rompen el hash y dan `STALE` (`test/cli.test.js:7820-7969`).\n\nrefs:\n  - change:discovery-exclude-glob-match\n  - path:src/cli/index.js\n  - path:test/cli.test.js",
+  "scope": "project",
+  "created_at": "2026-11-12T16:32:09.590Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "discovery-glob-matcher-replacement-equivalence",
+  "content": "Si se reemplaza el matcher regex de `discovery.exclude` (`src/core/discovery-glob.js`), un DP por segmentos NO es equivalente: el `**` embebido (`a**b`, `***`, `x**`, `**x`) se traduce a `.*` y cruza `/`; `**/`→`(?:.*/)?`, `/**`→`(?:/.*)?` y `**`→`.*` usan `.`, que NO matchea `\\n`/`\\r`/`\\u2028`/`\\u2029`, mientras que `*`→`[^/]*` y `?`→`[^/]` sí; `?` consume un code unit UTF-16. La única forma equivalente es un NFA/DP sobre el MISMO stream de tokens indexado por code unit, conservando el anclaje `glob.includes('**') ? ^…$ : ^…(/|$)`. Evidencia: 26 globs × 138 paths sin divergencias con el diseño equivalente; 9 divergencias del split por segmentos en `**` embebido y 1 en `a/**/b` vs `a/\\n/b`. La caché por glob de 0.30.1 conserva el mecanismo y baja 15,04→1,63 ms (9,2×) sobre 9.669 evaluaciones.\n\nrefs:\n  - spec:cli-diagnostics#Semántica por segmentos de los patrones de exclusión del discovery\n  - path:src/core/discovery-glob.js\n  - path:test/discovery-glob.test.js",
+  "scope": "project",
+  "created_at": "2026-11-12T19:48:27.696Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "affected-test-selection-nonindexed-couplings",
+  "content": "En @ancleto/spec, el import graph de `computeAffectedSet`/`ancleto affected` sólo indexa `.js/.mjs/.cjs/.ts/.tsx`: sembrar un `.md`, `.json` u otro archivo no indexado produce `affected` = ese archivo solo, así que la selección de tests para cambios en docs/config depende exclusivamente de que un `coupling.trigger` del manifiesto `test/affected-tests.json` matchee el path y liste el test. Un trigger con typo o un target no declarado NO lo detecta el gate `complete` (queda `complete:true` con el test en `excluded`), por eso el manifiesto se pinea por clase de escape con semillas reales en `test/test-selection.test.js`. Además, un token `import(`/`require(` dentro de un string de fixture deja ese archivo en `unresolved`: la regla de precaución lo selecciona siempre y, si entra al affected-set, fuerza `complete:false` (suite completa); para pinear un coupling hay que pasar `unresolved: []`.\n\nrefs:\n  - change:ch-06b-affected-test-selection\n  - path:src/core/test-selection.js\n  - path:test/affected-tests.json\n  - path:test/test-selection.test.js",
+  "scope": "project",
+  "created_at": "2026-11-13T14:49:18.008Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "node-sqlite-lock-contention-shape",
+  "content": "En `node:sqlite` con Node v24.15.0 (SQLite 3.51.3) la contención de lock llega como `err.errcode` 5 (`SQLITE_BUSY`) o 6 (`SQLITE_LOCKED`) y `err.code = 'ERR_SQLITE_ERROR'`, así que un fallback que compare `err.code` contra `SQLITE_BUSY`/`SQLITE_LOCKED` nunca matchea. Clasificar con `errcode & 0xff` cubre además los códigos extendidos (517 = `SQLITE_BUSY_SNAPSHOT`), y `Atomics.wait(buf, 0, 0, undefined)` equivale a timeout `Infinity` y cuelga para siempre: todo backoff indexado por intento debe normalizarse a un valor finito (`Number.isFinite(raw) && raw >= 0 ? raw : 0`) y `attempts` debe validarse entero >= 1 antes de cualquier `BEGIN`.\n\nrefs:\n  - spec:memory-engine#Serialización de escritores concurrentes sobre la base de memoria\n  - change:ch-04-memory-writer-serialization\n  - path:src/core/memory/database.js",
+  "scope": "project",
+  "created_at": "2026-11-13T19:03:03.640Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "memory-ref-removal-allowlist",
+  "content": "En los clasificadores de refs removibles del motor de memoria, un helper que mapea cualquier motivo desconocido a `inexistente` vuelve removible todo motivo nuevo (fail-open); el filtro de reparación debe usar allowlist estricta: removible sólo si `ok === false`, `verifiable !== false` y `reason === 'inexistente'`. Cualquier otro motivo, incluido uno futuro, como `ambiguo`, no se remueve.\n\nrefs:\n  - path:src/core/memory/engine.js\n  - path:src/cli/index.js\n  - path:test/repair-refs.test.js",
+  "scope": "project",
+  "created_at": "2026-11-16T04:18:06.739Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "memory-readonly-precheck-before-eager-engine",
+  "content": "En @ancleto/spec, antes de construir el engine de memoria sobre una base que puede carecer de tablas, verificar el esquema con `hasMemorySchema` (`sqlite_master WHERE name='memory_nodes'` sobre conexión read-only) en lugar de confiar en que el engine degrade: `buildEngine` prepara statements EAGER contra `memory_nodes` y lanza `no such table: memory_nodes` como stack. Como `DatabaseSync` con `readOnly` no valida el header al abrir, el precheck y `doctor` necesitan su propio try/catch. Los tests de inmutabilidad comparan sha256 del `.db` más `sqlite_master` sobre fixture `journal_mode=DELETE`, porque abrir read-only una base WAL materializa `-wal` 0 B / `-shm` 32 KB sin cambiar el `.db`.\n\nrefs:\n  - change:memory-readonly-surfaces\n  - path:src/core/memory/status.js\n  - path:src/cli/index.js\n  - path:src/core/memory/doctor.js\n  - path:test/memory-readonly-surfaces.test.js\n  - commit:1e9d500",
+  "scope": "project",
+  "created_at": "2026-11-17T01:11:07.315Z",
+  "confidence": 1
+ },
+ {
+  "memory_key": "windows-npm-cmd-shim-test-timeout",
+  "content": "En Windows con el shim `npm.CMD` roto, el timeout de detección de `npm.CMD` en `test/cli.test.js:9247` es ambiental y no una regresión del código: al re-ejecutar la suite pasa. Ejecutar los scripts de npm con `node C:/nvm4w/nodejs/node_modules/npm/bin/npm-cli.js` en lugar de invocar `npm.CMD`.\n\nrefs:\n  - path:test/cli.test.js",
+  "scope": "project",
+  "created_at": "2026-11-17T15:04:08.655Z",
+  "confidence": 1
+ }
+]

@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-20T01:12:16.920Z
-pluginVersion: 0.40.1
+generatedAt: 2026-11-20T17:05:16.811Z
+pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
 
@@ -33,7 +33,8 @@ skillVersion: '2.3'
 | Publicar (CI) | tag `v*` → `npm ci` + lint + tests + `npm publish` | `.github/workflows/publish.yml` |
 
 Regla del repositorio: **toda corrida de CLI usa `node src/cli/index.js ...`**. El binario del
-PATH puede estar rezagado respecto del código local.
+PATH puede estar rezagado respecto del código local (el `.ancleto/machine-env.md` de este clon
+declara `0.39.1`, mientras el paquete está en `0.41.0`).
 
 ## Subcomandos
 
@@ -46,7 +47,7 @@ PATH puede estar rezagado respecto del código local.
 | --- | --- | --- |
 | `memory context` | No | Renderiza topología/reglas; sin base cae a día-cero |
 | `memory list` | No | Lista nodos activos |
-| `memory search` | No | Búsqueda FTS5 con preview/expand/keys/required |
+| `memory search` | No | Búsqueda FTS5; desde 0.41.0 orden BM25-first con preview/expand/keys/required |
 | `memory export` | No | Exporta nodos activos saneados |
 | `memory import` | Sí | `--dry-run` clasifica sin escribir |
 | `memory status` | No | Estado advisory del gap de memoria |
@@ -81,7 +82,7 @@ Solo se nombran; **los valores se omiten**.
 | `.ancleto/working-context.md` | Refresh de lifecycle/memoria | Local |
 | `.discovery-map.json` | `discovery` | Versionado |
 | `docs/technical-discovery/**` | Skill de discovery | Versionado |
-| `aspec/changes/**`, `aspec/specs/**` | Ciclo `/cleto-*` | Versionado |
+| `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` | Ciclo `/cleto-*` y cierre de release | Versionado |
 
 ## Convenciones operativas
 
@@ -91,6 +92,8 @@ Solo se nombran; **los valores se omiten**.
   contenido local se preserva.
 - **Memoria**: reglas y decisiones del proyecto van a `.ancleto/memory.db`; notas de sesión del
   agente no se mezclan (ver `AGENTS.md`).
+- **Recall**: `searchMemory` ordena `required` → BM25 → anclaje → scope → `memory_key`; el
+  fallback tolerante (OR con prefijos) solo corre si el intento preciso (AND) no devuelve nada.
 - **Validaciones declarativas**: solo se ejecuta lo declarado en `PRODUCT.md` → `## Project
   Commands`; lo no declarado se omite y se registra.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, CI o Azure; nombrar la

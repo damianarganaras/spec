@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-20T01:12:16.920Z
-pluginVersion: 0.40.1
+generatedAt: 2026-11-20T17:05:16.811Z
+pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
 
@@ -44,19 +44,20 @@ que el núcleo de la CLI funcione.
   tokens, costo y fallos de tools.
 - **MCP**: el servidor `ancleto-memory` se declara en la configuración del host; en opencode vive
   en `.opencode/opencode.json`/`.jsonc`.
-- **Modelos por agente**: `opencode.json` declara `agent.<nombre>.model`; es una de las fuentes
-  del guard de integridad desde 0.40.1.
+- **Modelos por agente**: `opencode.json` declara `agent.<nombre>.model`; desde 0.40.1 es la
+  quinta fuente declarada del guard de integridad.
 - Evidencia: `scripts/refresh-model-catalog.mjs`, `src/cli/index.js`, `opencode.json`.
 
 ## jev-spec
 
-- Binario externo opcional, pinneado por el release; se resuelve por `PATH` o `npx`.
+- Binario externo opcional, pinneado por el release (`jev-spec@0.4.1`); se resuelve por `PATH` o
+  `npx`.
 - `ancleto judge` es **read-only y advisory**: no escribe archivos, no lee credenciales y no es
   gate de archive ni de conformidad.
 - El argv es constante del release; no se pasan argumentos del usuario. El JSON del binario no se
   parsea: solo se consume su exit code y se transportan `stdout`/`stderr`.
 - Estados: `skipped`, `unavailable`, `pass`, `fail`; `--require` solo aplica tras una sonda
-  exitosa.
+  exitosa. `judge.enabled` es `false` por defecto.
 - Evidencia: `src/core/judge.js`, `src/cli/index.js`, `CHANGELOG.md`.
 
 ## Git
@@ -72,13 +73,16 @@ que el núcleo de la CLI funcione.
 - `node:sqlite` con `journal_mode=WAL`, FTS5 y transacciones `DEFERRED`/`IMMEDIATE`.
 - La base vive en `.ancleto/memory.db`; el snapshot usa `VACUUM INTO` sobre una conexión
   read-only.
-- Evidencia: `src/core/memory/database.js`, `src/core/memory/snapshot.js`.
+- El score BM25 de FTS5 es la señal primaria del recall desde 0.41.0 (sin cambiar el esquema).
+- Evidencia: `src/core/memory/database.js`, `src/core/memory/snapshot.js`, `src/core/memory/engine.js`.
 
 ## Publicación
 
 - `.github/workflows/publish.yml` se dispara con tags `v*` (o manualmente).
 - Pasos: `npm ci`, `npm run lint`, `node --test test/*.test.js`, `npm publish --access public`
   (omite si la versión ya existe), creación del Release y canary no bloqueante del tarball.
+- Estado actual: `0.41.0` **preparada, sin publicar** (tag/run/npm pendientes); la última
+  publicada y verificada es `0.40.1` (`aspec/backlog.md`).
 - Variables: `NODE_AUTH_TOKEN` y `GITHUB_TOKEN`/`GH_TOKEN`; valores omitidos.
 - Evidencia: `.github/workflows/publish.yml`, `package.json`.
 

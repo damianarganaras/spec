@@ -464,20 +464,22 @@ function scopeRank(scope) {
   return SCOPE_RANK[scope] ?? 9
 }
 
-// Orden total de recall: requerido -> anclaje declarado -> scope -> bm25 ascendente
-// -> memory_key ascendente. `requiredIndex` expresa el orden declarado por el
-// llamador; el resto queda despues. `score` es el bm25 de FTS5 (negativo: mejor primero).
+// Orden total de recall: requerido -> bm25 ascendente -> anclaje declarado
+// -> scope -> memory_key ascendente. `requiredIndex` expresa el orden declarado
+// por el llamador; el resto queda despues. `score` es el bm25 de FTS5 (negativo:
+// mejor primero), el criterio primario despues de las requeridas; anclaje y scope
+// solo desempatan a igual score.
 function compareRecall(a, b, requiredIndex) {
   const rankA = requiredIndex.has(a.memory_key) ? requiredIndex.get(a.memory_key) : Number.MAX_SAFE_INTEGER
   const rankB = requiredIndex.has(b.memory_key) ? requiredIndex.get(b.memory_key) : Number.MAX_SAFE_INTEGER
   if (rankA !== rankB) return rankA - rankB
+  const scoreA = Number.isFinite(a.score) ? a.score : 0
+  const scoreB = Number.isFinite(b.score) ? b.score : 0
+  if (scoreA !== scoreB) return scoreA - scoreB
   const byAnchor = Number(declaresAnchor(b.content)) - Number(declaresAnchor(a.content))
   if (byAnchor !== 0) return byAnchor
   const byScope = scopeRank(a.scope) - scopeRank(b.scope)
   if (byScope !== 0) return byScope
-  const scoreA = Number.isFinite(a.score) ? a.score : 0
-  const scoreB = Number.isFinite(b.score) ? b.score : 0
-  if (scoreA !== scoreB) return scoreA - scoreB
   return compareKeys(a.memory_key, b.memory_key)
 }
 

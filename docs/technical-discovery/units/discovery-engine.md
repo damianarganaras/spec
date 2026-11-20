@@ -3,9 +3,9 @@ node: units/discovery-engine
 kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set, la selección de tests y la resolución de modelos"
 covers: [topología, empaquetado, tiers, estado del seed, impacted-set, selección de tests, catálogo de modelos, integridad de IDs]
-sources: ["src/core/discovery.js", "src/core/discovery-glob.js", "src/core/discovery-state.js", "src/core/repomix-tier.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/model-declarations.js", "src/core/tier-models.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js"]
-generatedAt: 2026-11-20T01:12:16.920Z
-pluginVersion: 0.40.1
+sources: ["src/core/discovery.js", "src/core/discovery-glob.js", "src/core/discovery-state.js", "src/core/repomix-tier.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/model-declarations.js", "src/core/tier-models.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", ".discovery-map.json"]
+generatedAt: 2026-11-20T17:05:16.811Z
+pluginVersion: 0.41.0
 skillVersion: '2.3'
 ---
 
@@ -23,7 +23,8 @@ modelos por tier. Es una unidad de soporte a decisiones, no de producto visible.
 
 1. `buildTopologyMap` recorre el repositorio, aplica los ignores y resume archivos por directorio.
    `writeDiscoveryMap` persiste `.discovery-map.json` (`last_updated`, `total_files`,
-   `tree_summary`, `root_files`).
+   `tree_summary`, `root_files`). Hoy resume 966 archivos (`aspec` 375, `documentation` 340,
+   `.opencode` 66, `test` 40, `src` 25).
 2. `discovery --check` calcula hashes por archivo y por área, compara con el estado almacenado y
    deriva `state`/`impact`/`affectedDocs`. Los cambios efímeros (`.ancleto/**`,
    `.discovery-map.json`) no generan áreas. El bump de `version` de `package.json` se reemplaza por
@@ -32,7 +33,7 @@ modelos por tier. Es una unidad de soporte a decisiones, no de producto visible.
    exclude)`; el presupuesto de tokens depende del tier. El pack va a un archivo temporal y el
    estado se guarda con `packTokens` y hashes.
 4. `seed-map.json` mapea cada documento del seed a las áreas de las que sacó evidencia; el check lo
-   usa para acotar la próxima regeneración.
+   usa para acotar la próxima regeneración (`affectedDocs`).
 
 ### Globs
 
@@ -65,7 +66,8 @@ interpreta la ausencia de plan como selección vacía.
   (`available`, `binary-missing`, `network-unavailable`, `partial`) y solo escribe con `--write`
   si el gate de integridad pasa.
 - `src/core/model-declarations.js` es el collector único de IDs declarados en `agents/*.md`,
-  `profiles/*/agents/*.md` y `opencode.json`. Falla cerrado si una fuente no se puede leer.
+  `profiles/*/agents/*.md` y `opencode.json` (quinta fuente desde 0.40.1). Falla cerrado si una
+  fuente no se puede leer; no usa red.
 - `tier-models.js` es dueño de `TIERS`, `TIER_CHAINS`, `resolveTierModels`, `gratisModel`,
   `freeTierOnPrimary` y `declaredModelIds`. `minimo` usa cadenas de preferencia; si ningún
   candidato está disponible, la resolución estricta falla.

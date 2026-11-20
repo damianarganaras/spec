@@ -1,0 +1,187 @@
+[
+ {
+  "id": "Q01",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q02",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q03",
+  "inR0": 4,
+  "unmatched": 1
+ },
+ {
+  "id": "Q04",
+  "inR0": 4,
+  "unmatched": 1
+ },
+ {
+  "id": "Q05",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q06",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q07",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q08",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q09",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q10",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q11",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q12",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q13",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q14",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q15",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q16",
+  "inR0": 4,
+  "unmatched": 1
+ },
+ {
+  "id": "Q17",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q18",
+  "inR0": 2,
+  "unmatched": 3
+ },
+ {
+  "id": "Q19",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q20",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q21",
+  "inR0": 4,
+  "unmatched": 1
+ },
+ {
+  "id": "Q22",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q23",
+  "inR0": 2,
+  "unmatched": 3
+ },
+ {
+  "id": "Q24",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q25",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q26",
+  "inR0": 1,
+  "unmatched": 4
+ },
+ {
+  "id": "Q27",
+  "inR0": 1,
+  "unmatched": 4
+ },
+ {
+  "id": "Q28",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q29",
+  "inR0": 3,
+  "unmatched": 2
+ },
+ {
+  "id": "Q30",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q31",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "Q32",
+  "inR0": 1,
+  "unmatched": 4
+ },
+ {
+  "id": "T1",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "T2",
+  "inR0": 2,
+  "unmatched": 3
+ },
+ {
+  "id": "T3",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "T4",
+  "inR0": 5,
+  "unmatched": 0
+ },
+ {
+  "id": "T5",
+  "inR0": 5,
+  "unmatched": 0
+ }
+]

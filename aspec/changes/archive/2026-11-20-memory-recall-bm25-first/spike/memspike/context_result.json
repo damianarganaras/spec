@@ -1,0 +1,39 @@
+{
+ "reserve": 1200,
+ "maxChars": 8000,
+ "totalProjectRules": 50,
+ "allRules": 53,
+ "a": [
+  "windows-npm-cmd-shim-test-timeout",
+  "memory-readonly-precheck-before-eager-engine",
+  "memory-ref-removal-allowlist",
+  "node-sqlite-lock-contention-shape",
+  "affected-test-selection-nonindexed-couplings",
+  "discovery-glob-matcher-replacement-equivalence",
+  "discovery-exclude-glob-tokenization",
+  "delta-modified-restates-requirement-body",
+  "discovery-sources-forward-slash-paths",
+  "agent-model-three-surfaces"
+ ],
+ "b": [
+  "repo-validation-commands",
+  "node-test-scope-explicit-paths",
+  "delta-modified-restates-requirement-body",
+  "content-guard-change-artifact-location",
+  "agent-model-three-surfaces",
+  "working-context-render",
+  "content-guard-literal-overflow-warning",
+  "windows-npm-cmd-shim-test-timeout",
+  "memory-readonly-precheck-before-eager-engine",
+  "memory-ref-removal-allowlist",
+  "node-sqlite-lock-contention-shape"
+ ],
+ "criticOmittedA": [
+  "repo-validation-commands",
+  "node-test-scope-explicit-paths",
+  "content-guard-change-artifact-location",
+  "working-context-render",
+  "content-guard-literal-overflow-warning"
+ ],
+ "criticOmittedB": []
+}

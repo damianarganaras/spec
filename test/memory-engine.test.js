@@ -4329,12 +4329,13 @@ describe('searchMemory — recall task-aware (MEM-05)', () => {
     })
   })
 
-  it('T1.2 (tier: anclaje declarado) el nodo con refs: declarado gana al scope mas especifico', () => {
-    withRecallEngine((eng) => {
+  it('T1.2 (desempate: anclaje declarado) a igual bm25 el nodo con refs: gana al scope mas especifico', () => {
+    withRecallEngine((eng, _root, dbPath) => {
       const term = 'zqanchortier'
-      // El no anclado tiene el scope mas especifico (task); el anclado declara una
-      // ref y es project, el scope mas amplio.
-      eng.recordNode({ memory_key: 'tier-task-plain', type: 'rule', scope: 'task', content: `${term} sin ancla` })
+      // Mismo largo en tokens y misma frecuencia del termino: bm25 empatado. El no
+      // anclado tiene el scope mas especifico (task); el anclado declara una ref y
+      // es project, el scope mas amplio.
+      eng.recordNode({ memory_key: 'tier-task-plain', type: 'rule', scope: 'task', content: `${term} sin ancla uno dos tres cuatro` })
       eng.recordNode({
         memory_key: 'tier-project-anchored',
         type: 'rule',
@@ -4342,13 +4343,57 @@ describe('searchMemory — recall task-aware (MEM-05)', () => {
         content: `${term} con ancla\n\nrefs:\n  - change:ref-fixture`
       })
 
+      // Premisa: contenidos con el mismo largo en tokens => empate real de bm25.
+      const db = openDatabase(dbPath)
+      let scores
+      try {
+        scores = db.prepare(
+          `SELECT bm25(memory_fts) AS score FROM memory_fts JOIN memory_nodes n ON n.rowid = memory_fts.rowid
+           WHERE memory_fts MATCH ?`
+        ).all(`"${term}"`).map((r) => r.score)
+      } finally {
+        db.close()
+      }
+      assert.equal(scores.length, 2)
+      assert.equal(new Set(scores).size, 1, 'el empate de bm25 es real')
+
       const page = eng.searchMemory({ query: term })
       assert.deepEqual(
         page.map((r) => r.memory_key),
         ['tier-project-anchored', 'tier-task-plain'],
-        'el tier de anclaje declarado precede al tier de scope'
+        'a igual bm25 el anclaje declarado desempata antes que el scope'
       )
       assert.deepEqual(page.map((r) => r.scope), ['project', 'task'])
+    })
+  })
+
+  it('T1.2 (bm25 primario) un match fuerte gana a una rule anclada de scope mas especifico', () => {
+    withRecallEngine((eng) => {
+      const term = 'zqbm25primary'
+      const filler = 'relleno '.repeat(20)
+      // El nodo project no esta anclado; el task ancla una ref y tiene un scope mas
+      // especifico, pero su bm25 es peor por ser un documento mas largo.
+      eng.recordNode({ memory_key: 'bm25-project-plain', type: 'rule', scope: 'project', content: `${term} base de datos` })
+      eng.recordNode({
+        memory_key: 'bm25-task-anchored',
+        type: 'rule',
+        scope: 'task',
+        content: `${term} ${filler}\n\nrefs:\n  - change:ref-fixture`
+      })
+
+      const page = eng.searchMemory({ query: term })
+      assert.deepEqual(
+        page.map((r) => r.memory_key),
+        ['bm25-project-plain', 'bm25-task-anchored'],
+        'el mejor bm25 gana al anclaje declarado y al scope mas especifico'
+      )
+
+      const firstOnly = eng.searchMemory({ query: term, limit: 1 })
+      assert.deepEqual(
+        firstOnly.map((r) => r.memory_key),
+        ['bm25-project-plain'],
+        'si solo entra uno en el limit, entra el de mejor bm25'
+      )
     })
   })
 

@@ -60,6 +60,12 @@ export function validateImportEntries(json) {
     if (typeof entry.createdAt !== 'string' || Number.isNaN(Date.parse(entry.createdAt))) {
       throw new Error(`entry[${i}].createdAt invalido: ${entry.createdAt}`)
     }
+    // `scope` es string libre (mismo contrato que `recordNode`), pero nunca un
+    // valor que SQLite coaccionaria o que el bind rechazaria: eso haria divergir
+    // la prediccion del dry-run del efecto real. Se rechaza sin coercion.
+    if (typeof entry.scope !== 'string' || entry.scope.trim() === '') {
+      throw new Error(`entry[${i}].scope invalido: ${JSON.stringify(entry.scope)} (se esperaba un string no vacio)`)
+    }
   }
 }
 

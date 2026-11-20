@@ -4167,6 +4167,45 @@ describe('CLI memory import --dry-run (ch-08)', () => {
     })
   })
 
+  // memory-import-scope-string: el write y el dry-run comparten la validacion de
+  // entrada, asi que un `scope` no-string aborta ambos con el mismo mensaje.
+  it('scope no-string: write y dry-run abortan con import invalido y no mutan la base', () => {
+    withDir((dir) => {
+      const dbPath = seedBuckets(dir)
+      const before = states(dbPath)
+      writeJson(dir, 'scope.json', [
+        fileEntry({ memory_key: 'dry-scope-ok' }),
+        fileEntry({ memory_key: 'dry-scope-bad', scope: 42 })
+      ])
+
+      const dry = run(['memory', 'import', '--dry-run', '--json', 'scope.json'], dir)
+      assert.equal(dry.status, 1)
+      assert.match(dry.stderr, /import invalido: entry\[1\]\.scope invalido: 42/)
+      assert.equal(dry.stdout.trim(), '', 'el dry-run no emite clasificacion parcial')
+
+      const write = run(['memory', 'import', 'scope.json'], dir)
+      assert.equal(write.status, 1)
+      assert.match(write.stderr, /import invalido: entry\[1\]\.scope invalido: 42/)
+      assert.equal(write.stderr, dry.stderr, 'mismo mensaje en ambos caminos')
+      assert.doesNotMatch(write.stderr, /^\s+at /m, 'el write no filtra un stack trace')
+      assert.equal(write.stdout.trim(), '', 'el write no reporta import OK')
+
+      assert.deepEqual(states(dbPath), before, 'ningun intento fallido escribe la base')
+    })
+  })
+
+  it('scope invalido en el write no crea la base si no existia', () => {
+    withDir((dir) => {
+      writeJson(dir, 'scope.json', [fileEntry({ memory_key: 'dry-scope-bad', scope: { project: true } })])
+      const dbPath = join(dir, '.ancleto', 'memory.db')
+
+      const write = run(['memory', 'import', 'scope.json'], dir)
+      assert.equal(write.status, 1)
+      assert.match(write.stderr, /import invalido: entry\[0\]\.scope invalido/)
+      assert.equal(existsSync(dbPath), false, 'un archivo invalido no abre ni crea la base')
+    })
+  })
+
   // Regresion R1: la apertura read-only ya no escapa del manejo de errores. Una
   // base corrupta produce exit 1 con mensaje legible, sin stack trace.
   it('base existente pero invalida: exit 1 con mensaje legible y sin stack trace', () => {

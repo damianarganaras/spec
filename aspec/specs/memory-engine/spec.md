@@ -987,8 +987,12 @@ antes de abrir la transacción y antes de la comprobación de identidad, de modo
 rechazada siga rechazándose aunque sea idéntica. El objeto devuelto NO SHALL ganar campos y se
 mantiene la decisión `recordnode-return-shape-no-superseded-node`.
 
-`importNodes` NO SHALL modificarse: conserva su semántica last-writer-wins por `createdAt`. Los
-caminos de supersesión de `merge` y `consolidate` NO SHALL modificarse.
+`importNodes` NO SHALL adoptar la comprobación de identidad de `recordNode`: conserva su semántica
+last-writer-wins por `createdAt` y el mismo formato persistido. Su validación de entrada SHALL
+regirse por el requirement `Import de nodos desde JSON con upsert por memory_key` de `memory-ops`;
+endurecer esa validación —por ejemplo, exigir que `scope` sea un string no vacío— NO SHALL
+considerarse un cambio de la semántica de upsert ni del shape persistido. Los caminos de
+supersesión de `merge` y `consolidate` NO SHALL modificarse.
 
 Como consecuencia, una reescritura idéntica de un nodo `rule` + `project` ya no SHALL disparar el
 refresh del working-context por la condición de supersesión; SHALL seguir disparándolo por la
@@ -1040,6 +1044,8 @@ intencional.
   existente
 - **THEN** el import conserva su semántica last-writer-wins por `createdAt`
 - **AND** no aplica la comprobación de identidad de `recordNode`
+- **AND** la validación de entrada del import se rige por el requirement de import de `memory-ops`,
+  no por la identidad de `recordNode`
 
 ### Requirement: Render del bloque proactivo sin el bloque `refs:`
 

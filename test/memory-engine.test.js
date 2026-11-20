@@ -1514,6 +1514,24 @@ describe('importNodes - scope string no vacio', () => {
     })
   })
 
+  it('un scope no serializable (BigInt o circular) nombra entry[0].scope sin TypeError', () => {
+    withFreshEngine((eng, _dbPath, rawAt) => {
+      const circular = {}
+      circular.self = circular
+      for (const value of [42n, circular]) {
+        assert.throws(
+          () => eng.importNodes([scopeEntry({ memory_key: 'scope-bad', scope: value })]),
+          (err) => {
+            assert.ok(!(err instanceof TypeError), `lanzo TypeError en vez del error de validacion: ${err.message}`)
+            assert.match(err.message, /entry\[0\]\.scope invalido: .*se esperaba un string no vacio/)
+            return true
+          }
+        )
+      }
+      assert.equal(rawAt('SELECT COUNT(*) AS c FROM memory_nodes')[0].c, 0, 'sin escritura')
+    })
+  })
+
   it('el dry-run rechaza el mismo archivo con el mismo mensaje y sin clasificacion parcial', () => {
     withFreshEngine((eng, _dbPath, rawAt) => {
       const payload = [

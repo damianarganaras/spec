@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-17T19:19:50.070Z
-pluginVersion: 0.40.0
+generatedAt: 2026-11-20T01:12:16.920Z
+pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---
 
@@ -11,184 +11,92 @@ skillVersion: '2.3'
 
 ## Resumen
 
-| Integración | Tipo | Dirección | Evidencia |
-|---|---|---|---|
-| npm registry | Publicación del paquete `@ancleto/spec` | Salida | `.github/workflows/publish.yml`, `package.json` |
-| GitHub Actions | CI de lint/tests y release | Salida | `.github/workflows/publish.yml` |
-| GitHub Releases | Notas del release por tag | Salida | `.github/workflows/publish.yml` |
-| Repomix | Empaquetado de contexto para discovery | Salida | `src/cli/index.js` → `runRepomix` |
-| jev-spec | Juez semántico externo opt-in (`jev-spec@0.4.1`), por `PATH` o `npx`; egreso de código a un servicio de terceros | Salida | `src/core/judge.js`, `src/cli/index.js` → `judgeCommand`, `docs/jev-advisory-judge.md` |
-| opencode | Host del IDE; base de sesiones para `stats`; destino MCP con `mcp`; `opencode models` solo en mantenimiento | Entrada | `src/cli/index.js` → `opencodeDbPath`, `doctorCommand`, `checkCommand`, `HOST_MCP_TARGETS`, `scripts/refresh-model-catalog.mjs` |
-| MCP por host | Destinos de `opencode`, `antigravity`, `commandcode` y `copilot`; `check`/`doctor` host-aware | Entrada/salida | `src/cli/index.js` → `HOST_MCP_TARGETS`, `setupHostMcp`, `readHostMcpIntent` |
-| MCP del proyecto | Archivos por host (`.opencode/opencode.json` o `.jsonc`, `.agents/mcp_config.json`, `.mcp.json`, `copilot-mcp.json`); salud de comandos y avisos read-only | Entrada | `src/cli/index.js` → `resolveHostMcpDestination`, `mcpCommandBroken` |
-| MCP de memoria (`ancleto-memory`) | Tools `searchMemory`, `recordRule`, `recordDecision` | Salida/entrada | `src/core/memory/mcp-server.js` |
-| MCP caveman | Compresión de contexto en hosts que la exponen | Salida | `src/cli/index.js` → `resolvesHostCompression` |
-| MCP engram | Memoria de sesión opcional (opt-in) | Salida | `src/cli/index.js` → `buildDefaultMcp` |
-| MCP Azure DevOps | Work Items opcional; deshabilitado en este repo | Salida | `PRODUCT.md` |
-| git | EOL, exclusión local de `machine-env`, release notes | Entrada | `src/core/machine-env.js`, workflow |
-| SQLite/FTS5 (`node:sqlite`) | Persistencia y búsqueda de memoria | Interna | `src/core/memory/*` |
+El runtime no tiene dependencias de paquetes. Las integraciones son **procesos locales**,
+**archivos de configuración de hosts** y **servicios de publicación**; ninguna es necesaria para
+que el núcleo de la CLI funcione.
 
-## npm y CI
-
-- El workflow `Publish` se dispara con tags `v*` o manualmente. Corre `npm ci`, `npm run lint`
-  (`eslint src/ test/ scripts/`), `node --test test/*.test.js` y publica solo si la versión no
-  existe en npm (`npm view @ancleto/spec@<v>`).
-- `NPM_TOKEN` y `GITHUB_TOKEN` son secretos del workflow; sus valores no están en el repo.
-- El canary del tarball es **no bloqueante**: reintenta 3 veces y avisa si npm aún no propagó.
-- CI **no** ejecuta descubrimiento de modelos ni accede a la red de proveedores.
-- El paquete publicado no incluye `scripts/` (`package.json` → `files`), por lo que el refresco del
-  catálogo solo existe en el repositorio fuente.
+| Integración | Tipo | Obligatoria | Evidencia |
+| --- | --- | --- | --- |
+| Repomix | Proceso local / `npx` | Solo para `discovery --compress` | `src/cli/index.js` |
+| `opencode` | Proceso local + archivos | Opcional (catálogo, sesiones) | `src/cli/index.js`, `scripts/refresh-model-catalog.mjs` |
+| `jev-spec` | Proceso local | Opcional y advisory | `src/core/judge.js` |
+| Git | Proceso local | Instalación / `machine-env.md` | `src/core/machine-env.js` |
+| `node:sqlite` + FTS5 | Módulo nativo | Sí para memoria | `src/core/memory/database.js` |
+| npm registry + GitHub | Servicios de CI | Solo publicación | `.github/workflows/publish.yml` |
+| Hosts de agentes | Archivos de configuración | Según instalación | `src/cli/index.js`, `src/core/adapters/frontmatter.js` |
 
 ## Repomix
 
-- El CLI resuelve un binario local de `repomix`; si no existe usa `npx -y repomix@1.18.0`
-  (`src/cli/index.js` → `runRepomix`).
-- Los argumentos se construyen en `src/core/repomix-tier.js`: `--output`, `--ignore` (exclusiones
-  del proyecto + extras por tier + `--ignore` explícito) y `--compress` cuando el tier lo pide.
-- `normal` no comprime ni excluye tests/docs; `minimo` comprime y excluye `test/**`, `docs/**` y
-  `**/*.md`; `gratis` agrega un presupuesto de 50.000 tokens.
-- No hay dependencia npm de Repomix en el repo: es una herramienta externa on-demand. El pack de
-  esta generación quedó comprimido (893 fuentes, 180.166 B, ~44.619 tokens); los cuerpos de funciones
-  se eliden y Repomix aplica además sus ignores por defecto
-   (incluye `**/*.md`), por eso el pack no contiene Markdown (ver `unknowns.md`).
+- Se invoca on-demand con `discovery --compress`; se resuelve por `PATH` o vía `npx`.
+- El pack se escribe en el directorio temporal del sistema (`%TEMP%`), nunca en el repo ni en
+  `.ancleto`.
+- El CLI pasa `--ignore` con los globs resueltos de `discovery.exclude`; Repomix agrega sus
+  propios defaults (incluye `**/*.md` y `test/**`).
+- El estado persistido registra `packTokens` y los hashes por archivo.
+- Evidencia: `src/cli/index.js`, `src/core/repomix-tier.js`, `src/core/discovery-state.js`.
 
-## opencode (host, telemetría local y catálogo)
+## opencode
 
-- `stats` y `stats failures` leen la base de sesiones de opencode, por defecto
-  `~/.local/share/opencode/opencode.db`; se puede cambiar con `ANCLETO_OPENCODE_DB`.
-- `stats failures` clasifica fallos de tool parts en `env`/`check`/`tool`/`unknown`, agrupa por
-  comando-esqueleto, enmascara paths y secretos, y nunca proyecta `output`/`error` completos.
-- La integración con la base es **solo lectura**.
-- `doctor` y `check` comparten el descriptor de destino MCP y la resolución de archivos:
-  `HOST_MCP_TARGETS` declara `.opencode/opencode.json|jsonc` (`mcp`), `.agents/mcp_config.json`
-  (`mcpServers`), `.mcp.json` (`mcpServers`) y `copilot-mcp.json` (`mcp`). `resolveHostMcpFile`
-  respeta el par `json`/`jsonc` de `opencode`; `resolveHostMcpDestination` devuelve el destino del
-  host o `null`.
-- `check` deriva los hosts instalados de `installedPaths` y agrega avisos no bloqueantes por cada
-  destino existente: config no parseable (`<ruta> no es JSON valido; no se inspeccionaron las
-  entradas MCP`) y una entrada por comando roto (`MCP '<nombre>' tiene un comando roto (<detalle>)`).
-  La salud se decide con `mcpCommandBroken`: comando inválido o ruta absoluta inexistente; un
-  comando simple se presume resuelto por PATH y una ruta absoluta existente (incluida `C:\...` en
-  Windows) es sana. No inspecciona la config global.
-- `doctor` valida el primer destino existente entre el host activo y los hosts instalados; si no hay
-  ninguno, cae al par global de `opencode` (`GLOBAL_MCP_CANDIDATES`, derivado de
-  `PROJECT_MCP_CANDIDATES`). Un archivo de proyecto inválido no cae al fallback.
-- `export` lee la intención MCP del destino del host activo con `readHostMcpIntent`; los hosts sin
-  destino conservan la lectura legacy de `.opencode`. Un destino ausente exporta intención vacía sin
-  aviso; uno no parseable exporta intención vacía, avisa una vez y sale con 0.
-- `import` avisa por `stderr` antes de reemplazar un destino no parseable y, desde 0.20.0, copia y
-  registra `.opencode/*` sólo cuando el host activo es `opencode`. Desde 0.20.1, `repairProjectMcp`
-  no reescribe un destino sano (bytes y mtime intactos) ni crea un destino inexistente sin entradas
-  que reparar; la garantía se acota a `import`/`import --repair`.
-- `scripts/refresh-model-catalog.mjs` invoca `opencode models --refresh` y
-  `opencode models <provider> --verbose --refresh` en una máquina de mantenimiento. Es la única vía
-  de descubrimiento; el runtime consume el snapshot commiteado y no ejecuta procesos ni red.
-- La detección de binario ausente es **independiente del locale**: `looksBinaryMissing` reconoce
-  `ENOENT` y mensajes de comando no encontrado/no reconocido en varios idiomas; una corrida exitosa
-  o con proveedores enumerados no se clasifica como `binary-missing`.
-- Con `--write`, el script valida que todo ID declarado sobreviva en el candidato antes de escribir;
-  si falta uno, no reemplaza el snapshot ni deja el reporte candidato.
+- **Catálogo de modelos**: `scripts/refresh-model-catalog.mjs` ejecuta
+  `opencode models --refresh` y `opencode models <provider> --verbose --refresh`; el resultado se
+  valida y se escribe en `src/core/model-catalog.json` solo con `--write`.
+- **Sesiones y fallos**: `ancleto stats` lee la base de opencode (solo lectura) para reportar
+  tokens, costo y fallos de tools.
+- **MCP**: el servidor `ancleto-memory` se declara en la configuración del host; en opencode vive
+  en `.opencode/opencode.json`/`.jsonc`.
+- **Modelos por agente**: `opencode.json` declara `agent.<nombre>.model`; es una de las fuentes
+  del guard de integridad desde 0.40.1.
+- Evidencia: `scripts/refresh-model-catalog.mjs`, `src/cli/index.js`, `opencode.json`.
 
-## MCP propios
+## jev-spec
 
-- **Memoria**: `ancleto mcp` levanta un servidor JSON-RPC por stdio que expone `searchMemory`,
-  `recordRule` y `recordDecision` (`src/core/memory/mcp-server.js`, `tools.js`). El binario se
-  registra en la config del host (`buildDefaultMcp`).
-- **Caveman**: tool de compresión disponible solo en hosts con soporte (`opencode`, `antigravity`).
-  La directiva `CAVEMAN_USAGE_NOTE` se decide con `resolvesHostCompression`, que combina la config
-  MCP en disco con el MCP que el comando va a escribir; nunca se agrega a archivos compartidos entre
-  hosts (`src/cli/index.js`). `check` lee la misma config en disco (`hostConfigHasCompression`).
-- **engram**: MCP externo opcional, habilitado con `--with-engram`; no es la memoria del repo.
-- **Azure DevOps**: MCP opcional (`--with-azure`), deshabilitado en este repo
-  (`PRODUCT.md` → `azure.enabled: false`). Requiere `AZURE_DEVOPS_ORG_URL` y `AZURE_DEVOPS_PAT`
-  (valores omitidos).
-- **Alcance de `doctor`/`check`**: validan los destinos MCP declarados de los hosts instalados
-  (`opencode`, `antigravity`, `commandcode`, `copilot`); no validan `.vscode/mcp.json` ni crean MCP
-  para `claude`, `vscode`, `cursor` o `roo`. `check` no valida la config global
-  (`aspec/specs/cli-diagnostics/spec.md`, `aspec/specs/agent-install-routing/spec.md`).
+- Binario externo opcional, pinneado por el release; se resuelve por `PATH` o `npx`.
+- `ancleto judge` es **read-only y advisory**: no escribe archivos, no lee credenciales y no es
+  gate de archive ni de conformidad.
+- El argv es constante del release; no se pasan argumentos del usuario. El JSON del binario no se
+  parsea: solo se consume su exit code y se transportan `stdout`/`stderr`.
+- Estados: `skipped`, `unavailable`, `pass`, `fail`; `--require` solo aplica tras una sonda
+  exitosa.
+- Evidencia: `src/core/judge.js`, `src/cli/index.js`, `CHANGELOG.md`.
 
-## git
+## Git
 
-- `machine-env` usa `git rev-parse --show-prefix` y `git check-ignore --no-index` para excluir
-  `.ancleto/machine-env.md` en `info/exclude`, sin modificar `.gitignore`.
-- La detección de EOL prioriza el atributo git del path, luego la configuración de git y, si no hay
-  repo, la convención de plataforma (`src/core/machine-env.js`).
-- El workflow usa `git for-each-ref` para recuperar el mensaje de un tag anotado.
+- `machine-env.md` detecta shell, fin de línea y herramientas; escribe `.ancleto/machine-env.md`
+  y lo excluye localmente vía `.git/info/exclude` (nunca toca `.gitignore`).
+- La detección de EOL consulta atributos/config de git y cae a la convención de plataforma.
+- La migración de `openspec/` legacy usa copia no destructiva.
+- Evidencia: `src/core/machine-env.js`, `src/cli/index.js`.
 
-## Dependencias privadas observables
+## SQLite nativo
 
-- `src/core/model-catalog.json` es un snapshot **commiteado** del catálogo de proveedores (5
-  proveedores, 211 IDs, `generated_at: 2026-11-04`); no hay llamada de red en runtime.
-  `scripts/refresh-model-catalog.mjs` es la única vía de refresco y requiere `opencode` local.
-- La integridad de los IDs declarados depende del snapshot commiteado: `declaredModelIds` +
-  `missingModelIdsInCatalog` alimentan el guard de tests y el gate de `--write`; `check` agrega un
-  aviso advisory no bloqueante cuando el snapshot válido no contiene un ID declarado.
-- `freeTierOnPrimary` no consulta ningún sistema externo: cruza el `model:` y el `mode:` ya
-  presentes en el frontmatter instalado. Los avisos (set-time en `applyTier`, inspect-time en
-  `check`) tampoco hacen red ni ejecutan procesos.
-- Los diagnósticos de 0.18.15/0.18.16/0.19.0/0.20.1 son locales: `check` compara
-  `.ancletorc.version` con `package.json`, evalúa la salud MCP con `existsSync` sobre los destinos de
-  los hosts instalados y `doctor` lee archivos JSON de config MCP. Ninguno hace red ni escribe.
-- **0.21.0 no cambia integraciones**: el contrato de conformidad vive en `agents/` y `skills/`, y el
-  archive sigue siendo agent-driven. No hay llamadas nuevas a red, procesos ni servicios; el
-  contenido promovido a `.ancleto/memory.db` es estado local.
-- **0.22.0–0.22.1 tampoco agregan integraciones**: `specs merge` es una operación local de archivos
-  (`aspec/changes/**` → `aspec/specs/**`), sin red, procesos externos ni servicios. No consume
-  MCP, git, opencode ni Repomix. El orden del archive de 0.22.1 es una secuencia de contratos de
-  prompt y estado local (`.ancleto/memory.db`), sin integración nueva.
-- **0.24.0 no agrega integraciones**: la alineación del tier `minimo` sólo cambia valores en
-  `src/core/tier-models.js`, y el guard de headings de delta es una validación local de
-  `src/core/specs-merge.js` sobre archivos de `aspec/specs/**`. Sin red, procesos ni servicios.
-- **0.25.0 tampoco agrega integraciones**: el ruteo del sync de delta por `specs merge` es una
-  secuencia de contratos de prompt (`skills/ancleto-archive`, `skills/ancleto-bulk-archive`,
-  `agents/documenter.md`) sobre archivos locales, y el guard de `--help`/`-h` es un `console.log`
-  del uso antes del dispatch, sin escritura de archivos. Sin red, procesos externos ni servicios.
-- **0.26.0–0.39.1 no agregan integraciones**: `discovery --check` ya era una lectura local de
-  `.config`/estado/hashes, el detector de frescura de 0.26.1 sólo se documenta y pinea en tests,
-  0.26.2 sólo consolida walkers de snapshot read-only y pines de frescura en tests, 0.26.4 agrega un
-  guard estructural de delta specs a la suite y documenta el Requirement en `spec-sync`, 0.27.0
-  normaliza el hash del `package.json` raíz en memoria y amplía el guard de deltas mal ubicados,
-  0.28.0 filtra en lectura las rutas efímeras (`.ancleto/**` y `.discovery-map.json` raíz) sin
-  tocar el writer ni el estado persistido, 0.29.0 extiende ese mismo filtro de lectura a
-  `documentation/**` y `audit logs/**`, áreas gitignored y sin archivos versionados, 0.30.0
-  corrige el matcher local de `discovery.exclude` (`escapeRe`/`matchesGlob`), 0.30.1 lo extrae a
-  `src/core/discovery-glob.js` con caché en memoria por glob exacto y 0.30.2 sólo corrige la
-  redacción canónica y pinea el armado offline del estado, sin tocar el writer ni sumar procesos.
-  0.31.0 sólo lee `.ancletorc` → `memory.criticalKeys` en el renderer del working-context y falla o
-  advierte según la superficie; sigue siendo local y no suma red, procesos ni servicios. 0.32.0
-  agrega `ancleto affected --tests` y `scripts/test-affected.mjs`: el plan se computa en proceso
-   sobre el grafo de imports local y, cuando corresponde ejecutar, el consumidor spawnea únicamente
-    `node --test` con rutas explícitas (la suite ya declarada), sin red ni servicios externos.
-   0.33.0–0.33.1 tampoco suman integraciones: el retry de escritores y el `doctor --rebuild` usan
-   `Atomics.wait` en proceso y SQLite local; no hay red, servicios ni procesos nuevos. 0.34.0
-   (`memory import --dry-run`) y 0.35.0 (`memory gc` por instante y snapshot de lectura en `curate`)
-   siguen siendo operaciones locales de SQLite y filesystem, sin red, servicios ni procesos nuevos.
-   0.36.0 (puerta de criticidad de `merge`/`consolidate --apply`) tampoco suma integraciones: lee
-   `.ancletorc` y opera en la misma transacción SQLite local, sin red ni procesos. 0.37.0
-   (`memory repair refs`) también es local: parsea el `content` del nodo, resuelve refs contra el
-   filesystem del repo y, con `--apply`, usa el writer transaccional de SQLite; no hay red,
-   servicios ni procesos nuevos. 0.38.0 (`memory status` y el fix de `memory doctor`) también es
-   local: lee la DB en modo read-only y `aspec/changes/archive/*/proposal.md` del mismo `cwd`; no
-   hay red, servicios ni procesos nuevos. 0.39.0 (superficies de lectura read-only) tampoco suma
-   integraciones: abre SQLite local con `{ readonly: true, migrate: false }`, consulta
-   `sqlite_master` y lee el filesystem; no hay red, servicios ni procesos nuevos. 0.39.1
-    (`gc --dry-run` read-only con fallback legacy) reutiliza esa misma apertura y el SQLite local;
-    tampoco suma red, servicios ni procesos.
-- **0.40.0 agrega una integración de proceso, no de red**: `ancleto judge` spawnea el binario
-  externo `jev-spec@0.4.1` (por `PATH` o `npx -y`) y consume sólo su exit code. El adaptador no
-  habla HTTP, no lee `TYPESAFE_AI_API_KEY` y no escribe archivos; el binario puede enviar contenido
-  del repo a un servicio de terceros, por eso el subcomando es opt-in (`judge.enabled: false` por
-  defecto) y la corrida humana imprime el aviso de egreso. `npx` consulta el registry y cachea en
-  `~/.npm/_npx`, fuera del repo. No es gate de `check`, `specs merge` ni archive.
-- El bundle de `export`/`import` es una dependencia de datos portable: `export` copia `.ancletorc`
-  verbatim, por lo que `import` **no** hereda `installedPaths` del bundle y registra solo las rutas
-  que escribe en el destino (ver `decisions.md`). Desde 0.20.0 la intención MCP de `export` se lee
-  del destino del host activo (fallback legacy `.opencode` para hosts sin destino), y `import` copia
-  `.opencode/*` sólo en `opencode`. `import` valida la forma de `manifest.mcp` (array; entradas con
-  `name` string) antes del primer write. Desde 0.20.1, la reparación in place no reescribe un destino
-  sano y no crea uno vacío.
-- Las bases SQLite (`.ancleto/memory.db` y la de opencode) son dependencias de datos locales; no se
-  versionan.
-- `documentation/` es material legado de lnx-cli y `audit logs/` son logs locales; ambos están
-  gitignored, no tienen archivos versionados, no son runtime y desde 0.29.0 son efímeros para
-  `discovery --check` (`PRODUCT.md`, `.gitignore`).
+- `node:sqlite` con `journal_mode=WAL`, FTS5 y transacciones `DEFERRED`/`IMMEDIATE`.
+- La base vive en `.ancleto/memory.db`; el snapshot usa `VACUUM INTO` sobre una conexión
+  read-only.
+- Evidencia: `src/core/memory/database.js`, `src/core/memory/snapshot.js`.
+
+## Publicación
+
+- `.github/workflows/publish.yml` se dispara con tags `v*` (o manualmente).
+- Pasos: `npm ci`, `npm run lint`, `node --test test/*.test.js`, `npm publish --access public`
+  (omite si la versión ya existe), creación del Release y canary no bloqueante del tarball.
+- Variables: `NODE_AUTH_TOKEN` y `GITHUB_TOKEN`/`GH_TOKEN`; valores omitidos.
+- Evidencia: `.github/workflows/publish.yml`, `package.json`.
+
+## Hosts de agentes
+
+Destinos nativos resueltos por un descriptor único (`src/cli/index.js`):
+
+| Host | Agents | Commands | Skills | MCP de proyecto |
+| --- | --- | --- | --- | --- |
+| opencode | `.opencode/agents` | `.opencode/commands` | `.opencode/skills` | `.opencode/opencode.json[c]` |
+| antigravity | `.agents/agents` | `.agents/skills/<n>/SKILL.md` | `.agents/skills` | `.agents/mcp_config.json` |
+| commandcode | `.commandcode/agents` | `.commandcode/commands` | `.commandcode/skills` | `.mcp.json` |
+| claude | `.claude/agents` | `.claude/commands` | `.claude/skills` | sin destino propio |
+| vscode | `.github/agents` | `.github/prompts` | `.github/skills` | sin destino propio |
+| copilot | `.github/prompts` | `.github/prompts` | no soportado | `copilot-mcp.json` |
+| cursor / roo | solo skills | no soportado | `.cursor`/`.roo` | sin formato documentado |
+
+La adaptación de frontmatter es passthrough para opencode y skills/commands; transforma agents
+para antigravity y commandcode; elimina claves gestionadas para claude/vscode/copilot; y avisa sin
+transformar para cursor/roo y hosts desconocidos. Evidencia:
+`src/core/adapters/frontmatter.js`.

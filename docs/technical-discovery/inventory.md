@@ -2,83 +2,38 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-17T19:19:50.070Z
-pluginVersion: 0.40.0
+generatedAt: 2026-11-20T01:12:16.920Z
+pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---
 
 # Alcance documentado
 
 | Alcance | Documento | Motivo |
-|---|---|---|
-| `src/cli/**` | `units/cli-install.md`, `overview.md` | Entry point único, subcomandos, instalación, ruteo MCP por host, diagnósticos `check`/`doctor`, nota de compresión, `export`/`import` host-neutral y filtro de rutas efímeras en `checkDiscovery` (0.28.0), extendido a `documentation/**` y `audit logs/**` (0.29.0); desde 0.30.1 importa el matcher de `discovery.exclude` desde `src/core/discovery-glob.js` |
-| `src/core/tier-models.js` | `decisions.md`, `units/discovery-engine.md` | Dueño de tiers/cadenas, resolver, `declaredModelIds` y `freeTierOnPrimary` |
-| `src/core/model-catalog.js`, `src/core/model-catalog.json` | `decisions.md`, `units/discovery-engine.md` | Helpers puros, extracción de IDs, integridad y snapshot |
-| `src/core/discovery.js`, `src/core/repomix-tier.js` | `units/discovery-engine.md` | Topología, impacto, args y presupuesto de pack |
-| `src/core/discovery-glob.js` | `units/discovery-engine.md` | Traducción glob→regex por tokens (`escapeRe`/`compileGlob`/`matchesGlob`) con caché `Map` por string exacto de glob (0.30.1) |
-| `src/core/affected-set.js` | `units/discovery-engine.md` | Grafo de imports y clausura de dependientes |
-| `src/core/test-selection.js` | `units/discovery-engine.md`, `decisions.md` | Plan determinístico de tests sobre el affected-set: universo `test/*.test.js`, manifiesto cerrado, gate `complete` fail-closed, read-only (0.32.0) |
-| `src/core/specs-merge.js` | `decisions.md`, `units/cli-install.md` | Merge puro de delta specs: parseo, plan por título exacto, fail-closed y serialización; 0.22.1 endurece H1, `archive` y espaciado; 0.24.0 rechaza headings de sección de delta en la canónica para los cuatro tipos; 0.25.0 es la única vía de sync de delta del archive y del bulk-archive; desde 0.26.4 la suite declarada valida estructuralmente los deltas de changes activos con su parser |
-| `src/core/judge.js` | `decisions.md`, `integrations.md`, `units/cli-install.md` | Adaptador puro al juez externo `jev-spec@0.4.1`: config y timeout, argv constante, mapeo de exit y envelope `--json`; no lee manifiesto, no resuelve binario, no toca disco ni red (0.40.0) |
-| `src/core/adapters/frontmatter.js` | `units/cli-install.md` | Adaptación pura de frontmatter por host y `frontmatterValue` |
-| `src/core/machine-env.js` | `units/cli-install.md`, `setup.md` | Detección de shell/EOL/tooling y exclusión local |
-| `src/core/memory/**` | `units/memory-engine.md` | Motor, DB, tools, MCP, doctor, curaduría, snapshot; idempotencia de `recordNode` (0.23.0); renderer del working-context con `memory.criticalKeys` y política de fallo (0.31.0); serialización de escritores con `runImmediateTransaction`/`MEMORY_DB_BUSY` (0.33.0) y `doctor --rebuild` dentro del helper (0.33.1); `classifyImport` predice `insert`/`supersede`/`skip` en `memory import --dry-run` (0.34.0); `memory gc` compara instantes con `julianday`, retiene fechas no parseables y reserva `deleted`; `curate` compone bajo `runReadTransaction` y `REF_GRAMMAR` unifica el literal de refs (0.35.0); la puerta de criticidad pre-write de `merge`/`consolidate --apply` (`criticalAffected`, `--force-critical`, exit 2) es de 0.36.0; desde 0.37.0 `repairRefs` repara refs con motivo `inexistente` de un único nodo activo (dry-run read-only, `--apply` por supersede, allowlist y gate crítico); desde 0.38.0 `status.js` agrega el estado advisory (`ok`/`empty`/`no-db`/`uninitialized`, `expected`, `gap`, `recovery`) y `doctor.js` completa sus cinco checks sobre una base sin esquema; desde 0.39.0 `hasMemorySchema` es el precheck único de `sqlite_master` y las superficies de lectura abren `readonly: true` + `migrate: false` con degradación determinista; desde 0.39.1 `gc --dry-run` usa esa apertura, degrada sin stack y cae a `created_at` en bases legacy sin `superseded_at` |
-| `scripts/**` | `decisions.md`, `units/discovery-engine.md`, `setup.md` | Descubrimiento dev-only del catálogo; no se publica. Desde 0.32.0 también `scripts/test-affected.mjs`, el consumidor de `npm run test:affected` que ejecuta la selección o cae a la suite completa |
-| `agents/**` | `units/_map.md`, `units/cli-install.md` | 10 agentes instalables (superficie de producto) |
-| `commands/**` | `units/_map.md` | 16 comandos `/cleto-*` |
-| `skills/**` | `units/_map.md` | 21 skills del ciclo SDD/discovery/review |
-| `templates/**` | `units/cli-install.md`, `decisions.md` | `AGENTS.md`/`PRODUCT.md` con bloques `LOCKED` |
-| `profiles/**` | `units/cli-install.md`, `decisions.md` | Overlay del perfil `test` (agents/commands/templates) |
-| `aspec/**` | `overview.md`, `decisions.md` | Config, specs canónicos (incl. `prompt-contracts`, `cli-diagnostics`, `agent-install-routing`, `project-portability`, `spec-sync`, `memory-ops`, `memory-engine`) y changes archivados de diagnóstico, portabilidad, conformidad, merge, orden del archive, idempotencia de memoria, aviso de bundle legacy y EOL de templates (`mcp-host-write-routing`, `mcp-oracle-residual-closure`, `host-neutral-bundle`, `fix-repair-mcp-noop`, `p0-pr5-archive-conformity`, `ch-06a-specs-merge-deterministic`, `specs-merge-hardening`, `archive-order-correctness`, `memory-record-idempotency`, `portability-legacy-bundle-advisory`, `template-legacy-eol-preservation`, `agent-model-minimo-migration`, `specs-merge-canonical-guard`, `archive-sync-via-specs-merge`, `cli-subcommand-help-guards`, `fix-discovery-seedmap-present`, `spec-seed-freshness-detector`, `align-freshness-recommended-action-spec`, `active-delta-structure-guard`, `seed-freshness-version-bump-not-material`, `seed-freshness-ephemeral-paths` y `seed-freshness-ignored-areas`, `discovery-exclude-glob-match`, `discovery-exclude-regexp-cache`, `discovery-state-schema-wording`, `pin-offline-discovery-state`, `mem-05-working-context-critical-set` (0.31.0), `ch-06b-affected-test-selection` (0.32.0), `ch-04-memory-writer-serialization` (0.33.0),
-`ch-08-memory-import-dry-run-classified` (0.34.0), `mem-05-gc-eligibility-curate-snapshot`
-(0.35.0), `ch-09a-criticality-gate` (0.36.0), `memory-repair-refs` (0.37.0),
-`memory-gap-declaration` (0.38.0), `memory-readonly-surfaces` (0.39.0) y
-`memory-gc-dry-run-readonly` (0.39.1) y `jev-spec-advisory-judge` (0.40.0); el fix 0.33.1 actualizó el
-requirement de doctor en `memory-engine` en el lugar) |
-| `test/**` | `setup.md`, `units/_map.md` | Suite `node --test`; guards de modelos, integridad, discovery, contenido, `specs-merge.test.js`, `delta-spec-structure.test.js` (incluye la detección de `spec.md` mal ubicados desde 0.27.0) y `memory-engine.test.js`; `cli.test.js` pinea las rutas efímeras, el anclaje de `documentation`/`audit logs` y el estado legacy (0.28.0–0.29.0); `discovery-glob.test.js` cubre la equivalencia del matcher cacheado (0.30.1); desde 0.31.0 `working-context.test.js` y `cli.test.js` pinean el conjunto crítico y su política de fallo; desde 0.32.0 el manifiesto `test/affected-tests.json` y `test/test-selection.test.js` cubren la selección por affected-set; desde 0.33.0 `memory-writers.test.js` y el fixture `test/fixtures/memory-writer-child.mjs` cubren la serialización de escritores concurrentes y, desde 0.33.1, el rebuild de doctor bajo contención; desde 0.35.0 `memory-engine.test.js`, `curation.test.js` y `memory-writers.test.js` cubren la elegibilidad de GC por instante, las fechas no parseables, `deleted` reservado y el snapshot único de `curate`; desde 0.36.0 `memory-engine.test.js` y `cli.test.js` cubren la puerta de criticidad
-(exit 2, `critical-key-gate`, dry-run sin bloqueo); desde 0.37.0 `repair-refs.test.js` cubre la
-reparación explícita de refs (allowlist, preservación byte a byte, dry-run/apply y gate crítico);
-desde 0.38.0 `memory-status.test.js` cubre el estado advisory y `memory-doctor-uninitialized.test.js`
-el path de doctor sin esquema; desde 0.39.0 `memory-readonly-surfaces.test.js` cubre los cuatro
-estados de base × superficies (exit, mensajes, SHA-256, `sqlite_master`, sidecars y base ilegible) y
-desde 0.39.1 los guards de `gc --dry-run` (sin DB, 0 bytes, `DELETE`, WAL, ilegible, fallback legacy)
-más el pin de `created_at` en `memory-engine.test.js`; desde 0.40.0 `judge.test.js` y el fixture
-`test/fixtures/jev-spec-mock.mjs` cubren estados, exit codes, `--require`, `--dry-run`, envelope y
-degradación sin spawnear `jev-spec` real;
-desde 0.30.1 los 29 `*.test.js` quedan fuera de `sources` por `discovery.exclude`
-(`**/*.test.*`), no por el tier ni por el predicado de frescura |
-| `.github/workflows/**` | `integrations.md` | Publicación npm y release GitHub |
-| `eslint.config.js`, `package.json` | `setup.md`, `decisions.md` | Lint sobre `src/`, `test/`, `scripts/` y contrato de publicación |
-| `docs/technical-discovery/**` | `index.md` | Este seed (excluido del hash de fuentes) |
-| `docs/**` (resto) | `inventory.md` | Documentación del framework y guías; desde 0.40.0 incluye `docs/jev-advisory-judge.md` (contrato, exit codes, egreso y rollback del juez) y la sección de configuración del juez en `docs/guia-configuracion.md` |
-| `documentation/**`, `audit logs/**` | `integrations.md`, `decisions.md` | Material legado lnx-cli y logs locales, gitignored y sin archivos versionados; efímeros para `discovery --check` desde 0.29.0 |
-| `.ancletorc`, `.opencode/.ancleto-tier`, `opencode.json` | `setup.md`, `decisions.md` | Configuración y estado local por proyecto; `.ancletorc` → `memory.criticalKeys` es el seam del conjunto crítico del working-context (0.31.0) |
-| `.ancleto/machine-env.md` | `setup.md` | Artefacto local derivado; `.ancleto` y `.ancleto/**` son rutas efímeras para `discovery --check` (0.28.0); `documentation/**` y `audit logs/**` también lo son desde 0.29.0 |
-| `package.json`, `.gitattributes`, `.gitignore` | `setup.md`, `decisions.md` | Contrato de runtime, EOL y exclusiones |
+| --- | --- | --- |
+| `src/cli/**` | `overview.md`, `units/cli-install.md` | Entry point, dispatch y ciclo de vida |
+| `src/core/adapters/**` | `units/cli-install.md` | Transformación de frontmatter por host |
+| `src/core/discovery*.js` | `units/discovery-engine.md` | Topología, globs y estado del seed |
+| `src/core/repomix-tier.js` | `units/discovery-engine.md` | Presupuesto de tokens y argumentos del pack |
+| `src/core/affected-set.js`, `src/core/test-selection.js` | `units/discovery-engine.md` | Impacto y tests afectados |
+| `src/core/model-*.js`, `src/core/tier-models.js` | `units/discovery-engine.md` | Catálogo y resolución de modelos |
+| `src/core/memory/**` | `units/memory-engine.md` | Persistencia, MCP y operaciones |
+| `src/core/specs-merge.js` | `decisions.md` | Merge de delta specs |
+| `src/core/machine-env.js`, `src/core/judge.js` | `integrations.md`, `decisions.md` | Integraciones locales |
+| `agents/**`, `commands/**`, `skills/**`, `templates/**`, `profiles/**` | `units/cli-install.md` | Superficie de producto instalable |
+| `scripts/**` | `units/discovery-engine.md` | Consumidores de afectados y catálogo |
+| `aspec/**` | `overview.md`, `decisions.md` | Artefactos SDD y specs |
+| `test/**` | `unknowns.md` | Excluido del pack; cobertura no auditada |
+| `.github/workflows/**` | `integrations.md` | Publicación npm y Release |
+| `docs/technical-discovery/**` | `index.md`, `inventory.md` | Este seed |
+| `documentation/**`, `audit logs/**` | `unknowns.md` | Material legado/efímero, no runtime |
 
-## Áreas raíz observadas (`.discovery-map.json` al empacar)
+## Exclusiones deliberadas
 
-`.github` (1), `.opencode` (66), `agents` (10), `aspec` (351), `audit logs` (9), `commands` (16),
-`docs` (22), `documentation` (340), `profiles` (8), `scripts` (2), `skills` (35), `src` (24),
-`templates` (2), `test` (39), más 15 archivos raíz. Total observado: **940 archivos**.
-
-Notas de alcance: `audit logs/` y `documentation/` están gitignored y no son runtime.
-`documentation/` tiene 366 archivos en disco, pero el mapa cuenta 340 tras excluir
-`node_modules`/`.git`/`dist`/`build`/`coverage`; el estado del discovery registra el conteo que
-resulte de su `config.exclude` (omite archivos bajo `__tests__/`). `skills/` tiene 21 directorios de
-skill que suman 35 archivos; `test/` tiene 39 archivos: 29 `*.test.js` en la raíz (incluidos
-`specs-merge.test.js`, `delta-spec-structure.test.js`, `test-selection.test.js`,
-`memory-writers.test.js`, `repair-refs.test.js`, `memory-status.test.js`,
-`memory-readonly-surfaces.test.js` y `judge.test.js`), el manifiesto `affected-tests.json` y 9
-fixtures bajo `test/fixtures/**` (8 previos y `jev-spec-mock.mjs` desde 0.40.0); el patrón declarado
-es `test/*.test.js`. Desde 0.30.1 los `*.test.js` no entran en
-`sources` porque `discovery.exclude` (`**/*.test.*`) aplica; los 9 fixtures siguen incluidos. El
-tier `minimo` excluye además `test/**` del cuerpo del pack, por lo que la evidencia de esas áreas se
-verificó por lectura directa. El pack de esta generación registra 901 fuentes, 185.032 B y ~45.824
-tokens, con 35 entradas de archivo en el cuerpo.
-
-El `.discovery-map.json` observado en esta corrida reporta 940 archivos (aspec 351, `.opencode` 66,
-src 24, test 39, scripts 2, documentation 340, audit logs 9). El estado `.discovery-state.json` lista
-901 fuentes e incluye 674 entradas `documentation/` + 18 `audit logs/` entre `sources` y
-`fileHashes`; desde 0.29.0 esas rutas no cuentan para la frescura, pero `docs/**` y `aspec/**` sí.
-Desde 0.30.1 las rutas `test/*.test.js` ya no figuran en `sources`. Ver `unknowns.md`.
+- `test/**` y archivos `*.test.*`/`*.spec.*`: el pack los excluye por configuración.
+- `docs/**` y `**/*.md`: Repomix los excluye por defaults; el seed no se usa como evidencia de sí
+  mismo.
+- `package-lock.json`, lockfiles e imágenes: excluidos por configuración.
+- `.ancletorc`, `.opencode/**` y `.ancleto/**`: estado local; no se usan como evidencia ni se
+  editan.
+- `documentation/` y `audit logs/`: gitignored, legado/efímero.

@@ -889,10 +889,11 @@ describe('working-context — presupuesto configurable del bloque', () => {
           engine.recordNode({ memory_key: `all-${i}`, type: 'rule', scope: 'project', content: `A${i} ${'x'.repeat(8000)}`, createdAt: `2026-01-0${4 - i}T00:00:00.000Z` })
         }
         for (const maxTokens of [0, 'unlimited']) {
-          writeRc(dir, { memory: { maxTokens } })
+          writeRc(dir, { memory: { maxTokens, criticalKeys: ['all-3'] } })
           assert.equal(resolveWorkingContextMaxTokens(dir), Infinity, `${maxTokens} es sin tope`)
           const { block, messages } = captureWarnings(() => renderWorkingContextBlock(engine, dir))
           for (let i = 1; i <= 3; i++) assert.ok(block.includes(`[all-${i}]`), `entra all-${i}`)
+          assert.equal(block.match(/- \[(all-\d)\]/)?.[1], 'all-3', 'la critica va primero tambien sin tope')
           assert.doesNotMatch(block, /<ContextOverflowWarning>/)
           assert.equal(messages.length, 0, 'sin tope no registra omisiones')
           assert.ok(block.length > DEFAULT_WORKING_CONTEXT_TOKENS * 4, 'el bloque excede el techo finito')
@@ -968,6 +969,7 @@ describe('working-context — presupuesto configurable del bloque', () => {
           ['1.5', { memory: { maxTokens: 1.5 } }],
           ['"abc"', { memory: { maxTokens: 'abc' } }],
           ['"12abc"', { memory: { maxTokens: '12abc' } }],
+          ['"1000" (string numerico en config)', { memory: { maxTokens: '1000' } }],
           ['null', { memory: { maxTokens: null } }],
           ['booleano', { memory: { maxTokens: true } }],
           ['clave ausente', '{"memory":{"criticalKeys":[]}}\n'],
@@ -999,6 +1001,26 @@ describe('working-context — presupuesto configurable del bloque', () => {
         assert.ok(block.includes('[huge-required]'), 'sin tope la requerida entra')
         assert.doesNotMatch(block, /<ContextOverflowWarning>/)
         assert.equal(messages.length, 0)
+      } finally {
+        engine.close()
+      }
+    })
+  })
+
+  it('T20: buildWorkingContext con maxTokens null usa el default finito 4000, no "sin tope"', () => {
+    withProject((dir) => {
+      const engine = createMemoryEngine(join(dir, '.ancleto', 'memory.db'))
+      try {
+        engine.recordNode({ memory_key: 'big-1', type: 'rule', scope: 'project', content: 'x'.repeat(3000), createdAt: '2026-01-03T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'big-2', type: 'rule', scope: 'project', content: 'y'.repeat(3000), createdAt: '2026-01-02T00:00:00.000Z' })
+        engine.recordNode({ memory_key: 'big-3', type: 'rule', scope: 'project', content: 'z'.repeat(12000), createdAt: '2026-01-01T00:00:00.000Z' })
+
+        const finite = captureWarnings(() => engine.buildWorkingContext('project', 4000, dir))
+        const withNull = captureWarnings(() => engine.buildWorkingContext('project', null, dir))
+        assert.equal(withNull.block, finite.block, 'null equivale al default 4000')
+        assert.match(finite.block, /1 rules omitted/, 'corta como presupuesto finito')
+        assert.equal(finite.block.includes('[big-3]'), false)
+        assert.deepEqual(withNull.messages, finite.messages)
       } finally {
         engine.close()
       }

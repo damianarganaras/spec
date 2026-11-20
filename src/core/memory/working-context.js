@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { formatTopologyBlock } from './engine.js'
+import { formatTopologyBlock, MAX_TOKENS } from './engine.js'
 import { readTopologySummary } from '../discovery.js'
 
 // Invariante "memoria activa -> working-context.md": render desde el engine vivo
@@ -47,8 +47,8 @@ export function writeWorkingContextBlock(projectRoot, block) {
 }
 
 // Default del presupuesto del bloque `<ProjectMemoryRules>` cuando ni el entorno
-// ni `.ancletorc` lo fijan. El engine usa el mismo numero para llamadas directas.
-export const DEFAULT_WORKING_CONTEXT_TOKENS = 4000
+// ni `.ancletorc` lo fijan. Se deriva del unico default del engine para evitar drift.
+export const DEFAULT_WORKING_CONTEXT_TOKENS = MAX_TOKENS
 const WORKING_CONTEXT_TOKENS_ENV = 'ANCLETO_WORKING_CONTEXT_TOKENS'
 
 // Lectura tolerante de `.ancletorc`: sin archivo, JSON invalido o lectura fallida
@@ -81,13 +81,19 @@ export function readCriticalMemoryKeys(projectRoot) {
   return keys.filter((key) => key.trim() !== '')
 }
 
-// Gramatica del presupuesto: entero positivo finito, o sin tope (`0` numerico,
-// `"0"` o `"unlimited"`). Todo lo demas devuelve null (invalido).
-function parseMaxTokens(raw) {
-  if (typeof raw === 'number') {
-    if (raw === 0) return Infinity
-    return Number.isInteger(raw) && raw > 0 ? raw : null
-  }
+// Gramatica del presupuesto en `.ancletorc`: entero JSON >= 0, o el string exacto
+// `"unlimited"`. Todo lo demas (incluido un string numerico como `"1000"`, que solo
+// el entorno admite) es invalido y resuelve al default. `0` es sin tope.
+function parseConfigMaxTokens(raw) {
+  if (raw === 'unlimited') return Infinity
+  if (typeof raw !== 'number') return null
+  if (raw === 0) return Infinity
+  return Number.isInteger(raw) && raw > 0 ? raw : null
+}
+
+// Gramatica del presupuesto en el entorno: entero no negativo como string o
+// `"unlimited"`; ambos son overrides explicitos. Todo lo demas es invalido (null).
+function parseEnvMaxTokens(raw) {
   if (typeof raw !== 'string') return null
   const trimmed = raw.trim()
   if (trimmed === 'unlimited') return Infinity
@@ -103,10 +109,10 @@ function parseMaxTokens(raw) {
 export function resolveWorkingContextMaxTokens(projectRoot) {
   const env = process.env[WORKING_CONTEXT_TOKENS_ENV]
   if (typeof env === 'string' && env.trim() !== '') {
-    const fromEnv = parseMaxTokens(env)
+    const fromEnv = parseEnvMaxTokens(env)
     return fromEnv === null ? DEFAULT_WORKING_CONTEXT_TOKENS : fromEnv
   }
-  const fromConfig = parseMaxTokens(readMemoryConfig(projectRoot)?.memory?.maxTokens)
+  const fromConfig = parseConfigMaxTokens(readMemoryConfig(projectRoot)?.memory?.maxTokens)
   return fromConfig === null ? DEFAULT_WORKING_CONTEXT_TOKENS : fromConfig
 }
 

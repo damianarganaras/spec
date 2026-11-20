@@ -2,6 +2,11 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.43.0] - 2026-11-20
+
+### Changed
+- **`memory import` valida `scope` como string**: el validador compartido (`importNodes` + `classifyImport`) rechaza `scope` no-string o vacío con `entry[i].scope invalido`, de modo que `--dry-run` y la escritura clasifican igual y el write del CLI pre-valida antes de tocar la base. **Cambio de contrato**: archivos de import con `scope` no-string dejan de importar (intencional). Sin cambios de schema; deltas `memory-ops` + `memory-engine`.
+
 ## [0.42.0] - 2026-11-20
 
 ### Changed

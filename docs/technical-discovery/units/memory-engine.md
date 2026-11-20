@@ -4,7 +4,7 @@ kind: dossier
 read_when: "cómo funciona la memoria persistente, el recall BM25-first, el presupuesto configurable del working-context, la validación del import, las tools MCP, las refs y las operaciones de memoria"
 covers: [motor de memoria, tools MCP, recall BM25-first, presupuesto del working-context, validación de import, refs, secretos, export/import, gc, snapshot, merge, consolidate, curate, doctor, status, concurrencia]
 sources: ["src/core/memory/**", "src/cli/index.js", "aspec/changes/archive/2026-11-20-memory-import-scope-string/**", "aspec/changes/archive/2026-11-20-memory-working-context-budget/**", "aspec/changes/archive/2026-11-20-memory-recall-bm25-first/**", "aspec/specs/memory-engine/spec.md", "aspec/specs/memory-ops/spec.md", "aspec/specs/prompt-contracts/spec.md", "CHANGELOG.md"]
-generatedAt: 2026-11-20T22:00:13.847Z
+generatedAt: 2026-11-20T22:23:58.644Z
 pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
@@ -54,7 +54,8 @@ el import valida `scope` como string.
    (exit 1) **antes** de abrir o crear la base, en lugar de escapar como stack.
 
 Evidencia: `src/core/memory/engine.js` (`validateImportEntries`, `formatRawValue`,
-`classifyImport`, `importNodes`), `src/cli/index.js` (`memoryImport`), `CHANGELOG.md` (0.43.0).
+`classifyImport`, `importNodes`), `src/cli/index.js` (`memoryImport`), `CHANGELOG.md` (0.43.0,
+publicada: tag `v0.43.0` → `9a7220c`, run `44827344442`, npm `latest`).
 
 ### Lectura y recall (BM25-first desde 0.41.0)
 

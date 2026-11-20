@@ -2,7 +2,7 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-20T22:00:13.847Z
+generatedAt: 2026-11-20T22:23:58.644Z
 pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
@@ -34,7 +34,7 @@ skillVersion: '2.3'
 
 Regla del repositorio: **toda corrida de CLI usa `node src/cli/index.js ...`**. El binario del
 PATH puede estar rezagado respecto del código local (el `.ancleto/machine-env.md` de este clon
-declara `0.40.0`, mientras el paquete está en `0.43.0`).
+declara `0.39.1`, mientras el paquete está en `0.43.0`).
 
 ## Subcomandos
 
@@ -122,5 +122,6 @@ abrir (y crear) la base. Evidencia: `src/core/memory/engine.js` (`validateImport
   Commands`; lo no declarado se omite y se registra.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, CI o Azure; nombrar la
   variable o el archivo y omitir el valor.
-- **Release**: `0.43.0` está preparada (bump `9ba7975`), **sin tag ni run**; la última publicada es
-  `0.42.0` (tag `v0.42.0` → `c6319c8`, run `44808502480`, npm `latest`).
+- **Release**: `0.43.0` está **publicada y verificada** (tag anotado `v0.43.0` → `9a7220c`, run
+  `44827344442`, npm `latest`); la anterior es `0.42.0` (tag `v0.42.0` → `c6319c8`, run
+  `44808502480`, npm `latest`).

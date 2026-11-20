@@ -2,7 +2,7 @@
 node: inventory
 kind: inventory
 read_when: "verificar el alcance documentado de la semilla"
-generatedAt: 2026-11-20T22:00:13.847Z
+generatedAt: 2026-11-20T22:23:58.644Z
 pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---

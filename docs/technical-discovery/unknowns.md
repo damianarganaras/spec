@@ -2,7 +2,7 @@
 node: unknowns
 kind: unknowns
 read_when: "qué no se pudo verificar y cómo afecta la confianza del seed"
-generatedAt: 2026-11-20T22:00:13.847Z
+generatedAt: 2026-11-20T22:23:58.644Z
 pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
@@ -24,7 +24,7 @@ skillVersion: '2.3'
   efectivos de `discovery`, `memory.maxTokens`, `memory.criticalKeys`, `azure.enabled` y `agent` no
   se verificaron. `discovery --check` devolvió la configuración resuelta usada aquí.
 - **Mirrors instalados**: `.opencode/**` y `.ancleto/**` son estado local, no fuentes; no se
-  verificó si coinciden con la canónica. `.ancleto/machine-env.md` declara `0.40.0`, anterior al
+  verificó si coinciden con la canónica. `.ancleto/machine-env.md` declara `0.39.1`, anterior al
   paquete actual (`0.43.0`), y no se usó como evidencia de versión.
 - **Legado**: `documentation/**` (lnx-cli) y `audit logs/**` son material gitignored/efímero y no
   se usaron como evidencia.
@@ -32,10 +32,10 @@ skillVersion: '2.3'
 ## No verificado por ausencia de evidencia directa
 
 - **Publicación 0.43.0**: `package.json` declara `0.43.0` (commit `9ba7975`) y `CHANGELOG.md` tiene
-  la sección; `aspec/backlog.md` la registra como “preparada, sin tag ni run todavía”. El tag
-  `v0.43.0` **no existe** en el clon local (`git tag --list` devuelve `v0.42.0` como último) y no
-  se consultaron GitHub ni npm (el protocolo prohíbe llamadas de red). Cualquier afirmación sobre
-  el run de publish o el `dist-tag` de 0.43.0 sería especulativa.
+  la sección. `aspec/backlog.md` registra el tag anotado `v0.43.0` (objeto `e12cffa`) → `9a7220c`,
+  el run `44827344442` `success` y npm `0.43.0` `latest`; `git rev-list -n1 v0.43.0` confirma el
+  commit. No se consultaron GitHub ni npm (el protocolo prohíbe llamadas de red): el run y el
+  `dist-tag` son **declarados** por el backlog, no verificados contra el servicio.
 - **Contrato del import en ejecución**: la validación de `scope` se leyó del código incluido en el
   pack (`validateImportEntries`, `formatRawValue`, `memoryImport`) y del delta de specs; no se
   ejecutó `memory import` con un archivo inválido para observar el exit code y el mensaje reales.
@@ -59,8 +59,8 @@ skillVersion: '2.3'
   actual de los proveedores.
 - **Agregados por área**: el estado del seed no incluye el contenido de `docs/technical-discovery`
   en el walk, así que la frescura no cubre erratas del propio seed. El reporte que motivó esta
-  generación marcó `STALE/minor` por `CHANGELOG.md`, `aspec` y `src`, con los once documentos en
-  `affectedDocs`.
+  generación marcó `STALE/minor` sólo por el área `aspec` (commit `be47c58`, release 0.43.0), con
+  los once documentos en `affectedDocs`.
 
 ## Inferencias con confianza media
 
@@ -82,4 +82,4 @@ skillVersion: '2.3'
    valor efectivo de `memory.maxTokens` o `memory.criticalKeys`.
 4. Consultar la documentación oficial de cada host antes de cambiar un layout o un esquema MCP.
 5. Contrastar el registro de `aspec/backlog.md` con GitHub/npm si se necesita confirmación externa
-   del tag, run y `dist-tag` de 0.43.0 (requiere red, fuera de este pipeline).
+   del run y del `dist-tag` de `0.43.0` (requiere red, fuera de este pipeline).

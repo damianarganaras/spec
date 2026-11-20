@@ -4,7 +4,7 @@ kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set, la selección de tests y la resolución de modelos"
 covers: [topología, empaquetado, tiers, estado del seed, impacted-set, selección de tests, catálogo de modelos, integridad de IDs]
 sources: ["src/core/discovery.js", "src/core/discovery-glob.js", "src/core/discovery-state.js", "src/core/repomix-tier.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/model-declarations.js", "src/core/tier-models.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", ".discovery-map.json"]
-generatedAt: 2026-11-20T22:00:13.847Z
+generatedAt: 2026-11-20T22:23:58.644Z
 pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
@@ -37,8 +37,8 @@ modelos por tier. Es una unidad de soporte a decisiones, no de producto visible.
    tokens**.
 4. `seed-map.json` mapea cada documento del seed a las áreas de las que sacó evidencia; el check lo
    usa para acotar la próxima regeneración (`affectedDocs`). El reporte que motivó esta corrida
-   marcó `STALE/minor` por `CHANGELOG.md`, `aspec` y `src` (release 0.43.0 + change
-   `memory-import-scope-string`) y listó **los once documentos** como afectados.
+   marcó `STALE/minor` sólo por el área `aspec` (commit `be47c58`, que registra la publicación de
+   0.43.0) y listó **los once documentos** como afectados.
 
 ### Globs
 

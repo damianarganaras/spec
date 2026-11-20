@@ -2,7 +2,7 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-20T22:00:13.847Z
+generatedAt: 2026-11-20T22:23:58.644Z
 pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
@@ -110,11 +110,11 @@ Un tag `v*` dispara `.github/workflows/publish.yml`: `npm ci` → lint → tests
 ## Estado de release
 
 `package.json` declara `0.43.0` (commit `9ba7975`, `chore(release): 0.43.0`). La release está
-**preparada pero no publicada**: el tag `v0.43.0` no existe en el clon local y `aspec/backlog.md`
-la registra como “preparada, sin tag ni run todavía”. La última publicada es `0.42.0` (tag anotado
-`v0.42.0` → `c6319c8`, run `44808502480` en `success`, npm `latest`); antes, `0.41.0` (tag
-`v0.41.0` sobre `5c171bc`, run `44781865327`). El HEAD de `development` es `30bfd07`
-(`docs(backlog): relate memory-import-scope-string to 0.43.0`).
+**publicada y verificada**: tag anotado `v0.43.0` (objeto `e12cffa`) → commit `9a7220c`, run
+`publish.yml` `44827344442` en `success` y `@ancleto/spec@0.43.0` como `latest` en npm con gitHead
+`9a7220c`. La anterior es `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run `44808502480` en
+`success`, npm `latest`); antes, `0.41.0` (tag `v0.41.0` sobre `5c171bc`, run `44781865327`). El
+HEAD de `development` es `be47c58` (`docs(backlog): record 0.43.0 release data`).
 
 ## Límites y decisiones de frontera
 
@@ -134,6 +134,6 @@ la registra como “preparada, sin tag ni run todavía”. La última publicada 
 - El modo `unlimited` puede volcar todo el corpus de reglas en cada sesión: es una decisión de
   costo explícita del usuario.
 - El endurecimiento de `memory import` (0.43.0) es un **cambio de contrato**: archivos con `scope`
-  no-string dejan de importar.
+  no-string dejan de importar; ya está publicado en npm `0.43.0`.
 - Detalle: `decisions.md`; recorridos: `units/cli-install.md`, `units/discovery-engine.md`,
   `units/memory-engine.md`.

@@ -2,7 +2,7 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-20T22:00:13.847Z
+generatedAt: 2026-11-20T22:23:58.644Z
 pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
@@ -86,10 +86,12 @@ que el núcleo de la CLI funcione.
 - `.github/workflows/publish.yml` se dispara con tags `v*` (o manualmente).
 - Pasos: `npm ci`, `npm run lint`, `node --test test/*.test.js`, `npm publish --access public`
   (omite si la versión ya existe), creación del Release y canary no bloqueante del tarball.
-- Estado actual: `0.43.0` está **preparada, sin tag ni run**. `package.json` declara la versión
-  (commit `9ba7975`); `aspec/backlog.md` no registra todavía tag, run ni `dist-tag` para 0.43.0.
-- Última release publicada: `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run `44808502480` en
-  `success`, npm `@ancleto/spec@0.42.0` `latest`). La anterior, `0.41.0`, fue tag `v0.41.0` sobre
+- Estado actual: `0.43.0` está **publicada y verificada**. `package.json` declara la versión
+  (commit `9ba7975`); `aspec/backlog.md` registra el tag anotado `v0.43.0` (objeto `e12cffa`) →
+  `9a7220c`, el run `44827344442` en `success` y npm `@ancleto/spec@0.43.0` `latest` con gitHead
+  `9a7220c`.
+- Release anterior: `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run `44808502480` en `success`,
+  npm `@ancleto/spec@0.42.0` `latest`). La anterior a esa, `0.41.0`, fue tag `v0.41.0` sobre
   `5c171bc`, run `44781865327` exitoso y `latest` en npm.
 - Variables: `NODE_AUTH_TOKEN` y `GITHUB_TOKEN`/`GH_TOKEN`; valores omitidos.
 - Evidencia: `.github/workflows/publish.yml`, `package.json`, `aspec/backlog.md`.

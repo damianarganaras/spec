@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-20T21:56:32.529Z",
+  "generatedAt": "2026-11-20T22:23:58.644Z",
   "sources": [
     ".ancleto/machine-env.md",
     ".ancleto/memory.db",
@@ -947,7 +947,7 @@
     ".ancleto/next-session-prompt.md": "5f62001d37f41bf7",
     ".ancleto/working-context.md": "a6a8fc173b260e4c",
     ".ancletorc": "5debad234dcec52c",
-    ".discovery-map.json": "2b3b9a58ce372d44",
+    ".discovery-map.json": "4ae65a927b89c3a5",
     ".gitattributes": "d60f352d0db1404c",
     ".github/workflows/publish.yml": "afdbac4220001818",
     ".gitignore": "851805d264f984c2",
@@ -1033,7 +1033,7 @@
     "agents/technical-discovery.md": "ec2f9093746a06f8",
     "agents/technical-seed-writer.md": "380d8a62c93dc006",
     "agents/tester.md": "cd2a0ece6b48144a",
-    "aspec/backlog.md": "e0546839653ce325",
+    "aspec/backlog.md": "e8dda80bc0d8f666",
     "aspec/changes/ancleto-vscode-extension/design.md": "7c9463bc7f436e1b",
     "aspec/changes/ancleto-vscode-extension/proposal.md": "2c1a5b4f34084482",
     "aspec/changes/ancleto-vscode-extension/specs/vscode-distribution/spec.md": "fb2c7bb3ed161e75",
@@ -1875,10 +1875,10 @@
     "test/fixtures/memory/refs-root/aspec/specs/prompt-contracts/spec.md": "828fe5dfb0628de9",
     "test/fixtures/memory/seed.json": "ef04fc809da4e5ae"
   },
-  "hash": "16fe325baf20d8cf89e65c188e256d8d3ec780cae92c05c4b416e5c8fd979a59",
+  "hash": "18ffb89983119c2e774a8e875ffbeda50dc25f070e3fab7b736022d676140f9f",
   "ruleVersion": 2,
   "semantic": {
-    "hash": "5933c8136478263dbe05c2dc5a721005889c1c2367ed9de9ea784bdbba61289e",
+    "hash": "93651810fc8273f583d6a296f68c6a98e21577363fa44555c641ff66e399065b",
     "fileHashes": {
       "package.json": "b1792842dce4e963"
     }

@@ -4,7 +4,7 @@ kind: dossier
 read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, MCP, tiers y diagnósticos"
 covers: [instalación, hosts, frontmatter, MCP, tiers, templates, import-export, import de memoria, check, doctor, judge, publicación, working-context]
 sources: ["src/cli/index.js", "src/cli/ui.js", "src/core/adapters/frontmatter.js", "src/core/model-declarations.js", "src/core/model-catalog.js", "src/core/tier-models.js", "src/core/judge.js", "src/core/machine-env.js", "agents/**", "commands/**", "skills/**", "templates/**", "profiles/**", "opencode.json", "package.json", ".github/workflows/publish.yml"]
-generatedAt: 2026-11-20T22:00:13.847Z
+generatedAt: 2026-11-20T22:23:58.644Z
 pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
@@ -74,10 +74,11 @@ exit 1 **sin abrir ni crear la base**; el mismo contrato lo aplica el dry-run. E
 ### Release
 
 Un tag `v*` dispara `.github/workflows/publish.yml` (lint, tests, publish idempotente, Release y
-canary no bloqueante). `0.43.0` está **preparada, sin tag ni run**: `package.json` declara la
-versión (commit `9ba7975`) y `CHANGELOG.md` tiene su sección, pero `aspec/backlog.md` no registra
-tag, run ni `dist-tag`. La última publicada es `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run
-`44808502480` `success`, npm `latest`).
+canary no bloqueante). `0.43.0` está **publicada y verificada**: `package.json` declara la versión
+(commit `9ba7975`), `CHANGELOG.md` tiene su sección y `aspec/backlog.md` registra el tag anotado
+`v0.43.0` (objeto `e12cffa`) → `9a7220c`, el run `44827344442` `success` y npm `0.43.0` `latest`.
+La anterior es `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run `44808502480` `success`, npm
+`latest`).
 
 ## Reglas, contratos y riesgos
 

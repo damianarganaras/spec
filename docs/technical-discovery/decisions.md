@@ -2,7 +2,7 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-20T22:00:13.847Z
+generatedAt: 2026-11-20T22:23:58.644Z
 pluginVersion: 0.43.0
 skillVersion: '2.3'
 ---
@@ -142,7 +142,7 @@ skillVersion: '2.3'
 | Modo `unlimited` del working-context | Inyecta todo el corpus de reglas en cada sesión; costo recurrente y bloque grande | Es opt-in explícito (`0`/`"unlimited"`), reversible, y no altera el tope del campo destilado de 5 reglas/1.500 bytes |
 | Presupuesto mal configurado | Un valor inválido cae al default sin avisar; un valor muy chico omite reglas no requeridas | Resolución tolerante y determinista; `required` falla cerrado; el aviso de overflow nombra las claves omitidas |
 | Cambio de configuración del presupuesto | El working-context puede quedar `desactualizado` hasta el próximo refresh | El chequeo de frescura es advisory; no hay invalidación automática |
-| Endurecimiento del import (0.43.0) | Archivos con `scope` numérico/objeto/**vacío** que antes importaban (o fallaban al bindear) ahora se rechazan enteros | Cambio de contrato **intencional** declarado en `CHANGELOG.md` y en la spec `memory-ops`; sin schema ni migración |
+| Endurecimiento del import (0.43.0) | Archivos con `scope` numérico/objeto/**vacío** que antes importaban (o fallaban al bindear) ahora se rechazan enteros | Cambio de contrato **intencional** declarado en `CHANGELOG.md` y en la spec `memory-ops`; sin schema ni migración; publicado en npm `0.43.0` |
 | Secretos en configuración | Fuga en docs o bundles | Nombrar variable/archivo y omitir valor; rechazo en memoria |
 | Dependencia de `version` en `package.json` | Un bump no debe invalidar el seed | Centinela byte-preserving en `hashSources`; observado en `src/cli/index.js` |
 
@@ -157,9 +157,10 @@ skillVersion: '2.3'
 - **0.43.0 sin cambio de schema**: la validación es de entrada, no de persistencia; `memory-engine`
   explicita que endurecer la validación del import **no** es un cambio de la semántica de upsert ni
   del shape persistido.
-- **Release 0.43.0 preparada**: `package.json` en `0.43.0` (commit `9ba7975`, `chore(release):
-  0.43.0`) y `CHANGELOG.md` con la sección 0.43.0; `aspec/backlog.md` la declara “preparada, sin tag
-  ni run todavía”. El tag `v0.43.0` no existe localmente.
+- **Release 0.43.0 publicada**: `package.json` en `0.43.0` (commit `9ba7975`, `chore(release):
+  0.43.0`) y `CHANGELOG.md` con la sección 0.43.0. `aspec/backlog.md` registra el tag anotado
+  `v0.43.0` (objeto `e12cffa`) → `9a7220c`, el run `publish.yml` `44827344442` `success` y npm
+  `@ancleto/spec@0.43.0` `latest` con gitHead coincidente; coincide con `git rev-list -n1 v0.43.0`.
 - **0.42.0 — presupuesto configurable**: el tope del working-context deja de ser fijo. Default
   **4000 tokens** (16.000 chars), resuelto en `src/core/memory/working-context.js` con precedencia
   env → `.ancletorc` → default; `0`/`"unlimited"` desactivan el tope como estado explícito

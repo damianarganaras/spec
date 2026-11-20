@@ -932,9 +932,12 @@ NO SHALL reabrirlo.
 
 El tope de 5 reglas y 1,500 bytes SHALL aplicar exclusivamente al campo `project memory rules` de cada
 delegación. NO SHALL aplicar al bloque `<ProjectMemoryRules>`, cuyo presupuesto es el del
-working-context —`maxTokens × CHARS_PER_TOKEN`, 2,000 tokens × 4 = 8,000 caracteres, medido sobre el
-bloque completo incluido el wrapper y el `<ContextOverflowWarning>`— y que se define en
-`spec:memory-engine#Aviso de overflow accionable para el orquestador`.
+working-context —`maxTokens × CHARS_PER_TOKEN`, 4.000 tokens × 4 = 16.000 caracteres por default,
+medido sobre el bloque completo incluido el wrapper y el `<ContextOverflowWarning>`— y que se define en
+`spec:memory-engine#Aviso de overflow accionable para el orquestador`. Ese presupuesto SHALL ser
+configurable con la precedencia y la tolerancia de ese requirement: `ANCLETO_WORKING_CONTEXT_TOKENS`
+sobre `memory.maxTokens` de `.ancletorc` sobre el default de 4.000 tokens; `0` o `"unlimited"` desactiva
+el tope del bloque.
 
 Los dos presupuestos SHALL ser superficies distintas, NO convertibles y NO componibles. El
 `<ContextOverflowWarning>` del bloque NO SHALL presentarse como remedio del tope del campo destilado,
@@ -974,9 +977,16 @@ numérico de este requirement ni del presupuesto del bloque SHALL cambiar por ef
 #### Scenario: El tope del campo no se aplica al bloque
 
 - **WHEN** el bloque `<ProjectMemoryRules>` contiene más de 5 reglas o más de 1,500 bytes y respeta su
-  propio presupuesto de 8,000 caracteres
+  propio presupuesto de 16.000 caracteres por default
 - **THEN** el bloque no se recorta por el tope del campo destilado
 - **AND** el campo destilado de cada delegación sigue limitado a 5 reglas y 1,500 bytes
+
+#### Scenario: El presupuesto del bloque es configurable y no altera el tope del campo
+
+- **WHEN** `.ancletorc` declara `memory.maxTokens`, o `ANCLETO_WORKING_CONTEXT_TOKENS` lo sobrescribe, o
+  el presupuesto se desactiva con `0` o `"unlimited"`
+- **THEN** cambia únicamente el presupuesto del bloque `<ProjectMemoryRules>`
+- **AND** el campo destilado conserva su tope de 5 reglas y 1,500 bytes
 
 #### Scenario: El aviso de overflow no reemplaza el tope del campo
 

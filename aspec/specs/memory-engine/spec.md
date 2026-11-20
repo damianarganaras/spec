@@ -185,8 +185,8 @@ propios en `src/core/memory/engine.js`: la **pass 1** con AND sobre los término
 NO SHALL ampliar el recall sobre un hit ya existente de la pass 1.
 
 Los resultados de cada pass SHALL ordenarse por el orden total definido en `Recall task-aware con
-orden total, preview expandible y keys requeridas`: requerido, anclaje declarado, scope específico,
-`bm25` ascendente y `memory_key` ascendente. En FTS5 `bm25` es negativo y `ORDER BY rank` es
+orden total, preview expandible y keys requeridas`: requerido, `bm25` ascendente, anclaje declarado,
+scope específico y `memory_key` ascendente. En FTS5 `bm25` es negativo y `ORDER BY rank` es
 numéricamente ascendente, por lo que NO SHALL usarse `rank DESC`. El orden NO SHALL usar `n.rowid`
 como criterio ni como desempate. El orden SHALL aplicarse tanto a
 la pass 1 (AND) como a la pass 2 (OR con prefijos), de modo que sea **total**. Cuando la cantidad
@@ -1101,11 +1101,11 @@ de claves críticas, el orden y el corte SHALL ser determinísticos.
 `type` solicitado. El orden SHALL ser, en este orden:
 
 1. Nodos cuyas `memory_key` están declaradas en `required`, en el orden declarado por el llamador.
-2. Nodos que declaran al menos una ref `spec:`, `change:` o `path:` en su bloque `refs:`
+2. `bm25` ascendente, con el mejor primero.
+3. Nodos que declaran al menos una ref `spec:`, `change:` o `path:` en su bloque `refs:`
    (anclaje declarado, decidido parseando el content sin resolver refs ni hacer I/O) antes que los
    que no declaran ninguna.
-3. Scope más específico según `SCOPE_RANK`: `task` antes que `feature` antes que `project`.
-4. `bm25` ascendente, con el mejor primero.
+4. Scope más específico según `SCOPE_RANK`: `task` antes que `feature` antes que `project`.
 5. `memory_key` lexicográfico ascendente.
 
 `n.rowid` NO SHALL usarse como criterio de orden ni como desempate. Cuando la cantidad de
@@ -1168,16 +1168,29 @@ SHALL devolver un bloque parcial y NO SHALL degradar la requerida a una omisión
 - **THEN** `k-req` es el primer resultado
 - **AND** el resto conserva el orden total
 
-#### Scenario: El anclaje declarado gana al scope más específico
+#### Scenario: El bm25 manda sobre el anclaje y el scope
 
-- **WHEN** dos nodos empatan en requerido y uno declara una ref `spec:`, `change:` o `path:`
-  mientras el otro no declara ninguna, aunque el segundo tenga un scope más específico
-- **THEN** el nodo anclado se ordena antes
+- **WHEN** dos nodos empatan en requerido y uno tiene mejor `bm25`
+- **AND** el otro declara una ref `spec:`, `change:` o `path:` y tiene un scope más específico
+- **THEN** se ordena primero el nodo con mejor `bm25`
+- **AND** si sólo entra uno en el `limit`, entra el de mejor `bm25`
+
+#### Scenario: El anclaje desempata cuando el bm25 empata
+
+- **WHEN** dos nodos empatan en requerido y en `bm25`
+- **AND** uno declara una ref `spec:`, `change:` o `path:` mientras el otro no declara ninguna
+- **THEN** el nodo anclado se ordena antes, aunque el otro tenga un scope más específico
+
+#### Scenario: El scope desempata después del anclaje
+
+- **WHEN** dos nodos empatan en requerido, `bm25` y anclaje declarado
+- **THEN** el de scope `task` se ordena antes que el de scope `feature`
+- **AND** el de scope `feature` se ordena antes que el de scope `project`
 
 #### Scenario: El empate de bm25 se resuelve por memory_key, no por rowid
 
-- **WHEN** varios nodos con contenido idéntico empatan en `bm25` y `limit` es menor que la cantidad
-  de coincidencias
+- **WHEN** varios nodos con contenido idéntico empatan en `bm25`, anclaje y scope, y `limit` es menor
+  que la cantidad de coincidencias
 - **THEN** el subconjunto devuelto son las `memory_key` lexicográficamente menores
 - **AND** insertar los mismos nodos en orden inverso no cambia el subconjunto ni el orden
 

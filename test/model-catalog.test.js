@@ -1,9 +1,10 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readModelDeclarations } from '../src/core/model-declarations.js'
 import {
   GRATIS_FALLBACK_MODEL,
   TIERS,
@@ -18,37 +19,11 @@ import { missingModelIdsInCatalog, validateCatalogSnapshot } from '../src/core/m
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(TEST_DIR, '..')
 
-function modelOf(file) {
-  const content = readFileSync(file, 'utf8')
-  const match = content.match(/^model: (.+)$/m)
-  assert.ok(match, `${file} declara un model:`)
-  return match[1].trim()
-}
-
-// Declaraciones `model:` leídas de las fuentes versionadas. El cálculo del conjunto
-// declarado y su deduplicación viven en `declaredModelIds` (tier-models); acá sólo se
-// recolectan los archivos para no duplicar esa lógica en el test.
-function agentModelEntries() {
-  const entries = []
-  const agentsDir = join(ROOT, 'agents')
-  for (const file of readdirSync(agentsDir).filter((f) => f.endsWith('.md'))) {
-    entries.push({ id: modelOf(join(agentsDir, file)), source: `agents/${file}` })
-  }
-  const profilesDir = join(ROOT, 'profiles')
-  for (const profile of readdirSync(profilesDir)) {
-    const agentsDirProfile = join(profilesDir, profile, 'agents')
-    let files = []
-    try {
-      files = readdirSync(agentsDirProfile).filter((f) => f.endsWith('.md'))
-    } catch {
-      continue
-    }
-    for (const file of files) {
-      entries.push({ id: modelOf(join(agentsDirProfile, file)), source: `profiles/${profile}/agents/${file}` })
-    }
-  }
-  return entries
-}
+// Declaraciones de las cinco fuentes versionadas. La lectura de archivos y el parseo
+// de `opencode.json` viven en el collector compartido; el cálculo del conjunto
+// declarado y su deduplicación viven en `declaredModelIds` (tier-models).
+const ENTRIES = readModelDeclarations({ rootDir: ROOT })
+const OPENCODE_ENTRIES = ENTRIES.filter((entry) => entry.source.startsWith('opencode.json#'))
 
 // Resumen legible de los IDs ausentes que nombra el origen de cada declaración.
 function missingSummary(missing) {
@@ -104,16 +79,36 @@ describe('snapshot de catálogo', () => {
     }
   })
 
-  it('todos los IDs de TIERS, TIER_CHAINS, agents/*.md y profiles/*/agents/*.md están en el snapshot', () => {
+  it('todos los IDs de TIERS, TIER_CHAINS, agents/*.md, profiles/*/agents/*.md y opencode.json están en el snapshot', () => {
     const catalog = loadModelCatalog()
     const tierIds = declaredModelIds()
-    const fileIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: agentModelEntries() })
+    const fileIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: ENTRIES })
+    const opencodeIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: OPENCODE_ENTRIES })
     assert.ok([...tierIds.values()].some((source) => source.startsWith('TIERS.')), 'TIERS aporta declaraciones')
     assert.ok([...tierIds.values()].some((source) => source.startsWith('TIER_CHAINS.')), 'TIER_CHAINS aporta declaraciones')
     assert.ok([...fileIds.values()].some((source) => source.startsWith('agents/')), 'agents/ aporta declaraciones')
     assert.ok([...fileIds.values()].some((source) => source.startsWith('profiles/')), 'profiles/ aporta declaraciones')
+    assert.ok(opencodeIds.size > 0, 'opencode.json aporta al menos una declaración')
+    assert.ok(
+      [...opencodeIds.values()].every((source) => source.startsWith('opencode.json#agent.')),
+      'el grupo de opencode.json conserva su origen'
+    )
+    // `opencodeIds` está deduplicado: los agentes de `opencode.json` comparten modelo, así
+    // que `size > 0` seguiría verde si el archivo perdiera agentes. El pin mira el conteo
+    // PRE-dedup para que la deriva de cobertura sea visible.
+    assert.equal(OPENCODE_ENTRIES.length, 10, 'opencode.json declara los 10 agentes')
+    const opencodeSources = new Set(OPENCODE_ENTRIES.map((entry) => entry.source))
+    assert.equal(opencodeSources.size, 10, 'opencode.json aporta 10 fuentes de agente distintas')
+    assert.ok(
+      [...opencodeSources].every((source) => source.startsWith('opencode.json#agent.')),
+      'las 10 fuentes de opencode.json conservan su origen'
+    )
     assert.equal(fileIds.has('inherit'), false, 'inherit no se exige en el catálogo')
-    for (const [label, declared] of [['TIERS/TIER_CHAINS', tierIds], ['agents/profiles', fileIds]]) {
+    for (const [label, declared] of [
+      ['TIERS/TIER_CHAINS', tierIds],
+      ['agents/profiles/opencode.json', fileIds],
+      ['opencode.json', opencodeIds]
+    ]) {
       const missing = missingModelIdsInCatalog(catalog, declared)
       assert.deepEqual(missing, [], `${label}: IDs ausentes del snapshot: ${missingSummary(missing)}`)
     }
@@ -128,16 +123,18 @@ describe('snapshot de catálogo', () => {
     assert.deepEqual(missingModelIds(loadModelCatalog(), [target]), [])
   })
 
-  it('un ID declarado en TIERS, TIER_CHAINS, agents/ o profiles/ ausente del snapshot rompe el guard', () => {
+  it('un ID declarado en TIERS, TIER_CHAINS, agents/, profiles/ u opencode.json ausente del snapshot rompe el guard', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ancleto-catalog-guard-'))
     try {
       const tierIds = declaredModelIds()
-      const fileIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: agentModelEntries() })
+      const fileIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: ENTRIES })
+      const opencodeIds = declaredModelIds({ tiers: {}, chains: {}, agentModels: OPENCODE_ENTRIES })
       const groups = [
         ['TIERS.', tierIds],
         ['TIER_CHAINS.', tierIds],
         ['agents/', fileIds],
-        ['profiles/', fileIds]
+        ['profiles/', fileIds],
+        ['opencode.json#agent.', opencodeIds]
       ]
       groups.forEach(([prefix, declared], index) => {
         const item = [...declared].find(([, source]) => source.startsWith(prefix))
@@ -155,7 +152,11 @@ describe('snapshot de catálogo', () => {
         })
       })
       // Las declaraciones siguen cubiertas por el snapshot commiteado.
-      for (const [label, declared] of [['TIERS/TIER_CHAINS', tierIds], ['agents/profiles', fileIds]]) {
+      for (const [label, declared] of [
+        ['TIERS/TIER_CHAINS', tierIds],
+        ['agents/profiles/opencode.json', fileIds],
+        ['opencode.json', opencodeIds]
+      ]) {
         const missing = missingModelIdsInCatalog(loadModelCatalog(), declared)
         assert.deepEqual(missing, [], `${label}: IDs ausentes del snapshot: ${missingSummary(missing)}`)
       }
@@ -299,6 +300,25 @@ describe('missingModelIdsInCatalog', () => {
       missingModelIdsInCatalog(catalog, new Map([['alpha/a', 'TIERS.a'], ['beta/b', 'agents/y.md']])),
       [{ id: 'beta/b', source: 'agents/y.md' }]
     )
+  })
+
+  it('la deduplicación no oculta el origen de opencode.json en el guard', () => {
+    // Fixture en memoria: no depende del contenido real de `opencode.json`.
+    const id = 'fixture/model-compartido'
+    const agentEntry = { id, source: 'agents/orchestrator.md' }
+    const opencodeEntry = { id, source: 'opencode.json#agent.orchestrator.model' }
+    // El conjunto agregado conserva el primer origen y descarta el de opencode.json.
+    assert.deepEqual(
+      [...declaredModelIds({ tiers: {}, chains: {}, agentModels: [agentEntry, opencodeEntry] })],
+      [[id, 'agents/orchestrator.md']]
+    )
+    // El grupo propio de opencode.json conserva su origen aunque el ID no sea único...
+    const opencodeGroup = declaredModelIds({ tiers: {}, chains: {}, agentModels: [opencodeEntry] })
+    assert.deepEqual([...opencodeGroup], [[id, 'opencode.json#agent.orchestrator.model']])
+    // ...y el guard lo reporta con ese origen cuando el ID no figura en el snapshot.
+    const missing = missingModelIdsInCatalog({ providers: {} }, opencodeGroup)
+    assert.deepEqual(missing, [{ id, source: 'opencode.json#agent.orchestrator.model' }])
+    assert.equal(missingSummary(missing), `${id} (opencode.json#agent.orchestrator.model)`)
   })
 
   it('un snapshot vacío reporta todas las entradas y no muta el snapshot', () => {

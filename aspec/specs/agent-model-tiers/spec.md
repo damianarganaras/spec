@@ -423,19 +423,12 @@ requirement "Integridad de los IDs declarados contra el snapshot" y NO SHALL ree
 
 #### Scenario: Un ID inexistente rompe el guard
 
-- **WHEN** `TIERS`, `agents/*.md` o `profiles/*/agents/*.md` declaran un identificador que no figura
-  en el snapshot
+- **WHEN** `TIERS`, `agents/*.md`, `profiles/*/agents/*.md` u `opencode.json` declaran un
+  identificador que no figura en el snapshot
 - **THEN** el guard falla nombrando el identificador y su archivo de origen
 
 _Testeable con `test/model-catalog.test.js`: sobre una copia en memoria del snapshot se retira un ID
 real y se afirma que la validación lo reporta como ausente; el snapshot commiteado no se muta._
-
-#### Scenario: El guard cubre tiers, canónica y perfiles
-
-- **WHEN** se ejecuta el guard de catálogo
-- **THEN** verifica los IDs de todos los tiers de `TIERS`
-- **AND** verifica los `model:` de los diez `agents/*.md`
-- **AND** verifica los `model:` de `profiles/*/agents/*.md`
 
 #### Scenario: El guard no usa red
 
@@ -552,8 +545,12 @@ de agente ausente, un `mode: subagent` o la ausencia de `mode:` NO SHALL produci
 Los dos literales anteriores son normativos y no SHALL sustituirse por paráfrasis. Ambos SHALL contener
 las subcadenas `403` y `agente primario`, SHALL nombrar el agente o el archivo instalado y el modelo
 free, y SHALL formular la consecuencia de forma condicional ("puede"), nunca como garantía. Un override
-`opencode.json → agent.<nombre>.model` es invisible para ancleto: por eso ambos avisos son advisory y
-NO SHALL presentarse como una detección definitiva del modelo efectivo.
+`opencode.json → agent.<nombre>.model` sigue siendo invisible para la detección del modelo efectivo de
+estos avisos: por eso ambos son advisory y NO SHALL presentarse como una detección definitiva del
+modelo efectivo. El guard estático de integridad de IDs SHALL leer los `agent.<nombre>.model`
+declarados en el `opencode.json` versionado para verificar que existan en el snapshot, pero esa lectura
+SHALL limitarse a la integridad de IDs y NO SHALL interpretarse como una detección del modelo efectivo
+ni SHALL volver bloqueantes estos avisos.
 
 `README.md` SHALL documentar en un párrafo breve que el tier `gratis` está pensado para subagentes y
 que un modelo free sobre un agente primario custom puede responder 403.
@@ -833,10 +830,12 @@ _Testeable con `test/agent-model-coherence.test.js`: importa los símbolos desde
 
 El sistema SHALL verificar que todo identificador de modelo declarado en el repositorio exista en el
 snapshot de catálogo verificado. Las declaraciones SHALL derivarse de `TIERS` (todos los tiers y
-agentes), `TIER_CHAINS` (todos los candidatos de todas las cadenas), `agents/*.md` y
-`profiles/*/agents/*.md` (líneas `model:`), excluyendo el valor `inherit`.
+agentes), `TIER_CHAINS` (todos los candidatos de todas las cadenas), `agents/*.md`,
+`profiles/*/agents/*.md` (líneas `model:`) y `opencode.json` (`agent.<nombre>.model`), excluyendo el
+valor `inherit`. `opencode.json` SHALL considerarse una fuente versionada del repositorio y NO SHALL
+tratarse como parte de los archivos que publica el paquete.
 
-Los helpers SHALL ser puros y SHALL vivir en el módulo dueño de su invariante:
+Los helpers de cálculo SHALL ser puros y SHALL vivir en el módulo dueño de su invariante:
 
 - `src/core/tier-models.js` SHALL exponer `declaredModelIds({ tiers, chains, agentModels })`: deriva
   los IDs declarados a partir de los valores ya recibidos (`TIERS`, `TIER_CHAINS` y las fuentes de
@@ -851,12 +850,23 @@ Los helpers SHALL ser puros y SHALL vivir en el módulo dueño de su invariante:
   `src/core/model-catalog.js` y `src/core/tier-models.js` la re-exporta para conservar su API. NO
   SHALL existir una segunda implementación de esa extracción.
 
+La lectura de las fuentes versionadas para el guard y la pre-validación de `--write` SHALL estar
+centralizada en un único collector de E/S, `readModelDeclarations({ rootDir })`, que devuelve
+entradas `{ id, source }` para `agents/*.md`, `profiles/*/agents/*.md` y `opencode.json`
+(`opencode.json#agent.<nombre>.model`). El collector NO
+SHALL hacer red, NO SHALL ejecutar procesos y NO SHALL leer `.opencode/**` ni `.ancletorc`. El guard
+de tests y la pre-validación de `--write`, cuando deriva las declaraciones, SHALL usar ese collector
+en modo fail-closed: una fuente requerida ilegible o un `opencode.json` no parseable (JSON inválido)
+SHALL fallar con un mensaje que nombre la fuente.
+
 La suite SHALL incluir el guard de tests que derive con `declaredModelIds` y compare con
 `missingModelIdsInCatalog`, sin un helper local de declaraciones duplicado, y que falle cuando un ID
-declarado no figure en el snapshot. El guard SHALL cubrir las cuatro fuentes: los tres tiers de
-`TIERS`, todos los candidatos de `TIER_CHAINS`, `agents/*.md` y `profiles/*/agents/*.md`. El mensaje
-de fallo SHALL nombrar el ID y su origen. El guard SHALL leer sólo archivos versionados, NO SHALL
-ejecutar `opencode models` y NO SHALL depender de `.opencode/**`.
+declarado no figure en el snapshot. El guard SHALL cubrir las cinco fuentes: los tres tiers de
+`TIERS`, todos los candidatos de `TIER_CHAINS`, `agents/*.md`, `profiles/*/agents/*.md` y
+`opencode.json`. `opencode.json` SHALL evaluarse en un grupo propio derivado con `declaredModelIds`
+restringido a sus entradas, para que la deduplicación no oculte su origen. El mensaje de fallo SHALL
+nombrar el ID y su origen. El guard SHALL leer sólo archivos versionados, NO SHALL ejecutar
+`opencode models` y NO SHALL depender de `.opencode/**` ni de `.ancletorc`.
 
 `scripts/refresh-model-catalog.mjs` SHALL pre-validar los IDs declarados cuando se solicita
 `--write`, antes de cualquier escritura. Si falta al menos un ID en el snapshot candidato, el script
@@ -866,7 +876,8 @@ existente SHALL continuar.
 
 `main(argv, options)` del script SHALL aceptar `declaredIds` y `rootDir` inyectables. Con
 `declaredIds` provisto, NO SHALL leer archivos para derivar declaraciones; sin él, SHALL derivarlas
-de `TIERS`/`TIER_CHAINS` y de `agents/*.md` y `profiles/*/agents/*.md` bajo `rootDir`.
+de `TIERS`/`TIER_CHAINS` y de `agents/*.md`, `profiles/*/agents/*.md` y `opencode.json` bajo
+`rootDir`.
 
 El guard de contenido SHALL afirmar que `src/core/model-catalog.js` y `src/core/tier-models.js` no
 importan `node:child_process` ni ejecutan procesos. NO SHALL fallar porque
@@ -880,8 +891,8 @@ script lo cargue de forma transitiva.
 
 #### Scenario: Un ID inexistente rompe el guard
 
-- **WHEN** `TIERS`, `TIER_CHAINS`, `agents/*.md` o `profiles/*/agents/*.md` declaran un identificador
-  que no figura en el snapshot
+- **WHEN** `TIERS`, `TIER_CHAINS`, `agents/*.md`, `profiles/*/agents/*.md` u `opencode.json` declaran
+  un identificador que no figura en el snapshot
 - **THEN** el guard falla nombrando el identificador y su archivo de origen
 
 _Testeable con `test/model-catalog.test.js`: sobre una copia en memoria del snapshot se retira un ID
@@ -890,7 +901,7 @@ real y se afirma que la validación lo reporta como ausente; el snapshot commite
 #### Scenario: Un ID declarado ausente bloquea `--write`
 
 - **WHEN** el snapshot candidato no contiene un ID declarado en `TIERS`, `TIER_CHAINS`,
-  `agents/*.md` o `profiles/*/agents/*.md` y se ejecuta el script con `--write`
+  `agents/*.md`, `profiles/*/agents/*.md` u `opencode.json` y se ejecuta el script con `--write`
 - **THEN** el script sale con exit code 1
 - **AND** nombra el ID ausente y su origen
 - **AND** no reemplaza el snapshot commiteado ni escribe el reporte candidato
@@ -910,15 +921,34 @@ real y se afirma que la validación lo reporta como ausente; el snapshot commite
 - **AND** `missingModelIdsInCatalog` reutiliza `modelIdsFromCatalog` sin una segunda extracción
 - **AND** no lee archivos, no ejecuta procesos y no muta el snapshot
 
-#### Scenario: El guard cubre tiers, cadenas, canónica y perfiles
+#### Scenario: El guard cubre tiers, cadenas, canónica, perfiles y `opencode.json`
 
 - **WHEN** se ejecuta el guard de integridad
 - **THEN** deriva las declaraciones con `declaredModelIds` y las compara con `missingModelIdsInCatalog`
 - **AND** verifica los IDs de los tres tiers de `TIERS` y todos los candidatos de `TIER_CHAINS`
 - **AND** verifica los `model:` de `agents/*.md` y de `profiles/*/agents/*.md`
+- **AND** verifica los `agent.<nombre>.model` de `opencode.json`
+- **AND** exige que `opencode.json` aporte al menos una declaración, para que la cobertura no sea
+  vacía
 - **AND** `declaredModelIds` excluye `inherit`
 - **AND** lee sólo archivos versionados, no ejecuta `opencode models` y no depende de `.opencode/**`
 - **AND** falla nombrando el ID y su archivo u origen cuando falta uno
+
+#### Scenario: La deduplicación no oculta el origen de `opencode.json`
+
+- **WHEN** un ID declarado por `opencode.json` ya está declarado por `TIERS` o por un agente y no
+  figura en el snapshot
+- **THEN** el grupo de `opencode.json` lo reporta con origen `opencode.json#agent.<nombre>.model`
+- **AND** el guard no depende de que el ID sea único en el conjunto declarado
+- **AND** el fallo nombra el ID y su origen
+
+#### Scenario: El collector del guard y `--write` es único
+
+- **WHEN** se revisan el guard de tests y la pre-validación de `--write`
+- **THEN** ambos reutilizan el mismo collector de `agents/*.md`, `profiles/*/agents/*.md` y
+  `opencode.json`
+- **AND** ambos fallan cerrado si una fuente requerida no se puede leer
+- **AND** el collector no usa red, no ejecuta procesos y no lee `.opencode/**` ni `.ancletorc`
 
 #### Scenario: El guard de `child_process` distingue módulos puros del script
 

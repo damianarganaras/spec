@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-17T19:19:50.070Z
-pluginVersion: 0.40.0
+generatedAt: 2026-11-20T01:12:16.920Z
+pluginVersion: 0.40.1
 skillVersion: '2.3'
 ---
 
@@ -11,312 +11,87 @@ skillVersion: '2.3'
 
 ## Requisitos
 
-- **Node.js ≥ 24.0.0** (`package.json` → `engines.node`). Obligatorio: el motor de memoria usa
-  `node:sqlite` y `ancleto doctor` falla si el major es menor.
-- **git** para el repo y para `machine-env` (detección de EOL/exclusiones); opcional en runtime.
-- **Repomix** solo para discovery: se resuelve por `PATH` o vía `npx repomix@1.18.0`
-  (`src/cli/index.js` → `runRepomix`).
-- **jev-spec 0.4.1** solo si se habilita el juez advisory: se resuelve por `PATH` o vía
-  `npx jev-spec@0.4.1`; el repo no lo declara como dependencia.
-- **opencode** solo para `stats`/`stats failures` (lee su base) y para el refresco manual del
-  catálogo de modelos.
-- En Windows el shell declarado es PowerShell 5.1 y `rg` no está disponible: usar `Select-String`.
+| Requisito | Valor | Evidencia |
+| --- | --- | --- |
+| Node.js | `>=24.0.0` (obligatorio) | `package.json` → `engines.node` |
+| Módulo nativo | `node:sqlite` (memoria) | `src/core/memory/database.js` |
+| Gestor de paquetes | `npm` (CI usa `npm ci`) | `.github/workflows/publish.yml` |
+| Git | Requerido por instalación, `machine-env.md` y publish | `src/core/machine-env.js` |
+| Repomix | Opcional y on-demand para `discovery --compress` | `src/cli/index.js` |
+| `opencode` | Opcional; solo para refrescar el catálogo y leer sesiones en `stats` | `scripts/refresh-model-catalog.mjs`, `src/cli/index.js` |
 
 ## Comandos principales
 
 | Objetivo | Comando | Fuente |
-|---|---|---|
-| Instalar dependencias de desarrollo | `npm ci` | `.github/workflows/publish.yml` |
-| Lint | `npm run lint` (`eslint src/ test/ scripts/`) | `package.json`, `PRODUCT.md` |
-| Tests | `npm test` (`node --test "test/*.test.js"`) | `package.json`, `PRODUCT.md` |
-| Tests acotados | `node --test test/<archivo>.test.js` | `PRODUCT.md` (rutas explícitas) |
-| Tests seleccionados por affected-set | `npm run test:affected <archivos...>` (`node scripts/test-affected.mjs`) | `package.json`, `scripts/test-affected.mjs` |
-| Ver plan de selección sin ejecutar | `node scripts/test-affected.mjs --plan-only <archivos...>` | `scripts/test-affected.mjs` |
-| CLI local | `node src/cli/index.js <comando>` | `package.json` (`bin`) |
-| Estado del seed | `ancleto discovery --check` | `src/cli/index.js` |
-| Empaquetar contexto | `ancleto discovery --compress` | `src/cli/index.js` |
-| Inicializar proyecto | `ancleto init --agent opencode --tier minimo --lang es` | `src/cli/index.js` |
-| Instalar/actualizar assets | `ancleto install [--project <dir>] [--tier ...]` | `src/cli/index.js` |
-| Re-aplicar templates/skills | `ancleto upgrade [--agent <nombre>]` | `src/cli/index.js` |
-| Verificar instalación | `ancleto check` | `src/cli/index.js` |
-| Validar specs canónicos | `ancleto specs check [--change <name>] [--json]` | `src/cli/index.js` |
-| Aplicar delta de specs | `ancleto specs merge --change <slug> [--dry-run] [--json]` | `src/cli/index.js`, `src/core/specs-merge.js` |
-| Diagnóstico de entorno y MCP | `ancleto doctor` | `src/cli/index.js` |
-| Juez semántico advisory (opt-in) | `ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]` | `src/cli/index.js` → `judgeCommand`, `src/core/judge.js` |
-| Estado advisory de la memoria | `ancleto memory status [--json]` | `src/cli/index.js`, `src/core/memory/status.js` |
-| Descubrir catálogo (dry-run) | `node scripts/refresh-model-catalog.mjs` | `scripts/refresh-model-catalog.mjs` |
-| Reemplazar snapshot del catálogo | `node scripts/refresh-model-catalog.mjs --write` | `scripts/refresh-model-catalog.mjs` |
-| Bundle portable | `ancleto export [--tar <file>]` / `ancleto import <bundle>` | `src/cli/index.js` |
+| --- | --- | --- |
+| Lint | `npm run lint` | `package.json` |
+| Tests | `npm test` | `package.json` |
+| Tests afectados | `npm run test:affected` | `package.json`, `scripts/test-affected.mjs` |
+| CLI local | `node src/cli/index.js <comando>` | `PRODUCT.md` |
+| CLI instalada | `ancleto <comando>` o `aspec <comando>` | `package.json` → `bin` |
+| Refrescar catálogo de modelos | `node scripts/refresh-model-catalog.mjs` | `scripts/refresh-model-catalog.mjs` |
+| Publicar (CI) | tag `v*` → `npm ci` + lint + tests + `npm publish` | `.github/workflows/publish.yml` |
 
-No hay formatter ni typechecker declarados: el repo es JavaScript ESM sin `tsconfig.json` y
-`PRODUCT.md` registra `Format: not-configured` / typecheck no aplica. El lint cubre `src/`, `test/`
-y `scripts/` con `eslint.config.js`: globals de Node y cuatro reglas (`no-undef`, `no-unused-vars`
-con `argsIgnorePattern`/`caughtErrorsIgnorePattern` = `^_`, `eqeqeq`, `no-dupe-keys`).
+Regla del repositorio: **toda corrida de CLI usa `node src/cli/index.js ...`**. El binario del
+PATH puede estar rezagado respecto del código local.
 
-## Diagnósticos (`check` y `doctor`)
+## Subcomandos
 
-`check` es un oráculo read-only: sólo los faltantes alteran el exit code
-(`missing > 0 ? 1 : 0`). Entre sus avisos no bloqueantes están el catálogo no verificable, la
-antigüedad del snapshot, la deriva de `model:`, los IDs declarados ausentes, el modelo free sobre un
-agente primario; desde 0.18.15–0.19.0 se suman:
+`init`, `install`, `update`, `upgrade`, `discovery`, `mcp`, `memory`, `specs`, `stats`,
+`projects`, `check`, `doctor`, `judge`, `list` (`PRODUCT.md`, `src/cli/index.js`).
 
-- **Deriva de versión**: si `.ancletorc.version` es un string no vacío distinto de la versión del
-  CLI (leída de `package.json` con `packageVersion()`), imprime una vez
-  `.ancletorc registra v<rc> y el CLI es v<cli>; corré 'ancleto upgrade' para regenerar los
-  artefactos locales`. No repara: `upgrade` es el único remediador.
-- **Tier dormido**: si el proyecto no declara ninguna superficie local de agentes
-  (`localAgentDirs(rc)` devuelve `[]`, por ejemplo `cursor` o `roo`), el tier existe pero no se
-  considera huérfano. El aviso histórico sólo se emite cuando hay al menos un directorio declarado
-  y la suma de `.md` es cero.
-- **Salud MCP host-aware (0.18.16, ampliada en 0.19.0)**: `check` deriva los hosts instalados de
-  `installedHostsFromPaths(rc.installedPaths)` y, para cada uno que declare destino en
-  `HOST_MCP_TARGETS`, inspecciona el archivo existente con `resolveExistingHostMcpDestinations`.
-  No mira la config global ni hosts sin destino. Por cada destino:
-  - si existe y no parsea: `<ruta> no es JSON valido; no se inspeccionaron las entradas MCP`;
-  - si parsea y `cfg[schema]` es un objeto plano: un aviso por entrada con `mcpCommandBroken`
-    verdadero, `MCP '<nombre>' tiene un comando roto (<detalle>)`.
+### Superficies de memoria
 
-  El esquema se normaliza para `mcpServers` con `normalizeHostMcpEntry`. No escribe y no cambia el
-  exit code; `missing`/`orphans` tampoco cambian.
+| Subcomando | Escritura | Nota |
+| --- | --- | --- |
+| `memory context` | No | Renderiza topología/reglas; sin base cae a día-cero |
+| `memory list` | No | Lista nodos activos |
+| `memory search` | No | Búsqueda FTS5 con preview/expand/keys/required |
+| `memory export` | No | Exporta nodos activos saneados |
+| `memory import` | Sí | `--dry-run` clasifica sin escribir |
+| `memory status` | No | Estado advisory del gap de memoria |
+| `memory doctor` | No (salvo `--rebuild`) | Cinco checks de integridad |
+| `memory gc` | Sí (salvo `--dry-run`) | Purga superseded por antigüedad |
+| `memory snapshot` | Sí | Copia consistente vía `VACUUM INTO` |
+| `memory merge` | Solo con `--apply` | Dry-run default; puerta de criticidad |
+| `memory consolidate` | Solo con `--apply` | Dry-run default; duplicados exactos |
+| `memory curate` | No | Curaduría read-only; `--strict` cambia exit |
+| `memory repair refs` | Solo con `--apply` | Dry-run default; allowlist `inexistente` |
 
-`doctor` valida Node ≥ 24, la importabilidad de `node:sqlite` y la config MCP del host. Resuelve el
-archivo con la precedencia **host activo → hosts instalados → global**:
+## Variables de entorno
 
-1. El destino del host activo (`rc.agent`, o `opencode` por defecto) si existe.
-2. Los destinos de los hosts instalados derivados de `installedPaths`, en el orden
-   `opencode`, `antigravity`, `commandcode`, `copilot`.
-3. `globalConfigDir()/opencode.json` y `globalConfigDir()/opencode.jsonc` sólo si no existe ninguno
-   de proyecto; `GLOBAL_MCP_CANDIDATES` deriva esos nombres de `PROJECT_MCP_CANDIDATES`.
+Solo se nombran; **los valores se omiten**.
 
-Se valida **sólo el primer archivo existente**; si hay config de proyecto, no se cae al fallback
-global aunque sea inválida. La ruta del proyecto se reporta relativa con `/`; la global, por nombre
-base. El parseo es `JSON.parse` estricto (un `.jsonc` con comentarios se reporta inválido) y una
-config inválida o ausente no altera el exit code.
+| Variable | Uso | Evidencia |
+| --- | --- | --- |
+| `ANCLETO_MODEL_CATALOG` | Ruta alternativa al snapshot de catálogo (seam de test/manual) | `src/core/tier-models.js` |
+| `ANCLETO_PROJECTS_FILE` | Ruta alternativa al registro global de proyectos | `src/cli/index.js` |
+| `NODE_AUTH_TOKEN` | Token de publicación npm en CI | `.github/workflows/publish.yml` |
+| `GITHUB_TOKEN` / `GH_TOKEN` | Creación del Release en CI | `.github/workflows/publish.yml` |
+| `NO_COLOR` | Desactiva color en la salida | `src/cli/index.js` |
 
-`export` (0.20.0) resuelve la intención MCP del manifiesto con `readHostMcpIntent` y el descriptor
-del host activo. Si el destino existe y no parsea, emite por `stderr`
-`<ruta> no es JSON valido; el manifiesto exporta intencion MCP vacia`, exporta `manifest.mcp = []` y
-sale con 0. Un destino inexistente exporta intención vacía sin aviso.
+## Artefactos y estado local
 
-`import` (con o sin bundle, incluido `--repair`) avisa por `stderr` antes de reemplazar una config
-MCP no parseable:
-`ancleto: no se pudo leer <ruta> como JSON; se reemplaza por la configuracion MCP nueva`. La decisión
-de reemplazo y el exit code no cambian. Desde 0.20.0, `import <bundle>` copia y registra
-`.opencode/{agents,commands,skills}` sólo si el host activo es `opencode`; en los demás hosts los
-assets se materializan por `installAgentAssets`.
-
-Desde 0.20.1, `repairProjectMcp` sólo escribe el destino MCP del host activo si el archivo no parsea,
-si la estructura requiere normalización o si hay entradas reparadas/agregadas. Un destino sano no se
-reescribe (mismos bytes y mtime) y un destino inexistente sin nada que reparar no se crea.
-
-Desde 0.23.0, `import` de un bundle que omite la clave `manifest.mcp` emite un aviso no bloqueante
-por `stderr` (el exit code y la salida escrita no cambian; `manifest.mcp: []` no avisa y un valor
-no-array sigue fallando con exit 1). La reconciliación de bloques legacy de templates preserva el
-EOL de cada línea superviviente y el estado de newline final de la entrada.
-
-## Refresco del catálogo de modelos
-
-Procedimiento **manual**, con `opencode` instalado en una máquina de mantenimiento. Nunca corre en
-`install`, `update`, `init`, `import`, `check`, la suite de tests ni CI:
-
-1. Dry-run: enumera todos los proveedores de `opencode models --refresh` y consulta cada uno con
-   `opencode models <provider> --verbose --refresh`.
-2. Clasifica la corrida como `available`, `binary-missing`, `network-unavailable` o `partial`; solo
-   `available` habilita escritura. `looksBinaryMissing` es independiente del locale: reconoce
-   `ENOENT` y mensajes de comando no encontrado/no reconocido en varios idiomas; una corrida
-   exitosa o con proveedores enumerados nunca es `binary-missing`.
-3. Con `available`, valida la forma, rechaza `opencode/big-pickle` si dejó de costar 0, imprime el
-   diff contra el snapshot y escribe el candidato en `.ancleto/model-catalog.candidate.json`
-   (local, no se commitea).
-4. Con `--write`, antes de cualquier escritura el script deriva los IDs declarados en `TIERS`,
-   `TIER_CHAINS`, `agents/*.md` y `profiles/*/agents/*.md` y los contrasta contra el candidato. Si
-   falta uno, sale con exit 1, nombra ID y origen, y **no escribe ni el snapshot ni el candidato**.
-   Si las fuentes no se pueden leer, falla cerrado. El dry-run no depende de que esas fuentes sean
-   legibles.
-5. Si el gate pasa, `--write` reemplaza `src/core/model-catalog.json` de forma atómica
-   (temporal + rename). Sin `--write`, el snapshot commiteado no se toca.
-6. Correr los guards `test/model-catalog-discovery.test.js`, `test/model-catalog.test.js` y
-   `test/content-guards.test.js` antes de commitear el snapshot.
-
-`scripts/` **no se publica** en el paquete (`package.json` → `files` incluye `agents`, `commands`,
-`skills`, `templates`, `profiles`, `src`). El refresco solo existe en el repositorio fuente; los
-avisos de remedio de `check` y del resolver refieren al repositorio fuente, no a una ruta ejecutable
-del paquete instalado.
-
-## CLI por áreas
-
-- **Instalación**: `install`, `update`, `init`, `upgrade`, `check`, `doctor`, `export`, `import`.
-- **Descubrimiento y análisis**: `discovery`, `affected`, `specs check`, `specs merge`, `stats`,
-  `stats failures`, `projects`.
-- **Memoria**: `memory context|list|doctor|status|curate|export|import|gc|snapshot|merge|consolidate|repair`,
-  `mcp`. Desde 0.39.0 las superficies de lectura (`context`, `list`, `export`, `curate`, `status`,
-  `doctor`, `merge --dry-run`, `repair refs` sin `--apply` e `import --dry-run`) abren con
-  `{ readonly: true, migrate: false }` y precheck de `sqlite_master`; desde 0.39.1 `memory gc
-  --dry-run` se suma a esa apertura read-only. Desde 0.31.0 `memory context` (con o sin `--out`) falla con exit ≠ 0 y no sobrescribe el
-  archivo previo si una clave de `memory.criticalKeys` no existe, está inactiva o no entra en el
-  presupuesto; el lifecycle y el on-write del MCP advierten sin escribir un bloque degradado.
-  Desde 0.36.0 `memory merge` y `memory consolidate --apply` aceptan `--force-critical` y
-  reportan `criticalAffected`; sin el flag, superseder una clave crítica sale con exit 2 (con
-  `--json`, `{"error":"critical-key-gate","criticalAffected":[...]}`) sin escribir.
-- **Reparación de refs (0.37.0)**: `ancleto memory repair refs --memory-key <key> [--apply] [--json]
-  [--force-critical]`. Dry-run por defecto (conexión read-only): reporta las refs removibles y el
-  `remaining`; `--apply` es la única vía de escritura y supersede el nodo con el writer transaccional.
-  Solo remueve refs verificables con motivo exactamente `inexistente`; `commit:`/`workitem:` y los
-  demás motivos se conservan. Sobre una clave de `memory.criticalKeys`, `--apply` sin
-  `--force-critical` sale con exit 2 sin escribir. `--json` emite `status`, `memory_key`, `dry_run`,
-  `applied`, `critical`, `removed[]` y `remaining`; sin cambios de schema ni `ruleVersion`.
-- **Estado advisory de memoria (0.38.0)**: `ancleto memory status [--json]` es read-only y advisory.
-  Sin `--json` imprime una línea con el estado (`ok`, `empty`, `no-db`, `uninitialized`) y, si hay
-  `gap`, una línea con los comandos de recuperación existentes (`memory export`, `memory import`,
-  `memory snapshot`). Con `--json` emite `status`, `expected`, `gap`, `dbPresent`, `activeNodes`,
-  `evidence` y `recovery`. Sale con 0 en todos los estados; el 1 queda reservado a errores de E/S o
-  a flags desconocidas. No crea `.ancleto/` ni la DB, no migra, no refresca el working-context y no
-  es un gate de archive. En paralelo, `memory doctor` completa sus cinco checks sobre una base sin
-  esquema y sale ≠ 0 sin excepción ni stack trace.
-- **Superficies de lectura read-only (0.39.0–0.39.1)**: `context`, `list`, `export`, `curate`, `status`,
-  `doctor`, `merge --dry-run`, `repair refs` sin `--apply`, `import --dry-run` y `gc --dry-run` no
-  migran ni crean `.ancleto/memory.db` al leer. Sobre una base de 0 bytes o sin `memory_nodes`,
-  `context` emite día-cero con 0, `list` sale 0 nombrando el esquema no inicializado, `export` sale
-  1, `merge --dry-run`/`repair refs` salen 1 sin stack y `gc --dry-run` sale 0 sin base/sin esquema
-  o 1 sin stack si es ilegible; una base ilegible se distingue de "sin esquema" con mensaje y código
-  ≠ 0 sin stack. `gc` real conserva migración, purga y `VACUUM` + `REINDEX`; el dry-run legacy mide
-  por `created_at` sin agregar `superseded_at`. El `.db` conserva su SHA-256 y `sqlite_master`; los
-  sidecars `-wal`/`-shm` de una apertura WAL read-only se toleran. Sin schema, PRAGMAs persistentes
-  ni `ruleVersion` nuevos.
-- **Selección de tests afectados (0.32.0)**: `ancleto affected --tests <archivos...>` implica salida
-  JSON y suma `tests` (`complete`, `reasons`, `selected`, `excluded`) a los cuatro campos
-  existentes; sin `--tests` el JSON y los exit codes no cambian. El consumo canónico es
-  `npm run test:affected <archivos...>` → `scripts/test-affected.mjs`, que importa el módulo puro
-  `src/core/test-selection.js` (read-only, sin abrir `.ancleto/memory.db` ni usar red) y sólo ejecuta
-  `node --test` con las rutas de `tests.selected` si `complete === true`; si el manifiesto
-  `test/affected-tests.json` falta o es inválido, o hay `manifest-gap`, `test-glob-missing` o
-  `unresolved-in-closure`, imprime las razones y corre la suite completa `test/*.test.js`.
-- **Writers serializados (0.33.0–0.33.1)**: sin comandos ni flags nuevos. Los cinco caminos de
-  escritura de `memory` comparten `runImmediateTransaction` (`BEGIN IMMEDIATE` + retry 3/200-600 ms)
-  y fallan con `MEMORY_DB_BUSY` al agotar el presupuesto; desde 0.33.1 `memory doctor --rebuild`
-  hace su rebuild FTS5 + integrity-check dentro del mismo helper y reporta `MEMORY_DB_BUSY` en el
-  detalle, con el `doctor` por defecto aún read-only. Schema, PRAGMAs persistidos, comandos y
-  `ruleVersion` no cambian.
-- **Import con dry-run (0.34.0)**: `ancleto memory import <archivo.json> [--dry-run] [--json]`.
-  `--dry-run` usa `createReadonlyMemoryEngine`, clasifica por `memory_key` en `nuevo`, `identico`,
-  `divergente` y `tombstone`, y predice `insert`/`supersede`/`skip` con la misma función que el
-  import real; no escribe ni refresca el working-context. `--json` emite
-  `{dryRun, databasePresent, summary, entries}`. Sin flags, `import` no cambia.
-- **Puerta de criticidad de memoria (0.36.0)**: `ancleto memory merge --target <key> --sources
-  <k1,k2,...> [--dry-run] [--force-critical] [--json]` y `ancleto memory consolidate
-  [--dry-run] [--apply] [--force-critical] [--json]`. El dry-run reporta `criticalAffected` y sale
-  0; sin `--force-critical`, la corrida real que supersedería una clave de `memory.criticalKeys`
-  aborta antes de escribir con exit 2. `memory consolidate` sin `.ancleto/memory.db` sale con
-  código 1. Sin schema, PRAGMAs ni `ruleVersion` nuevos.
-- **Tiers**: `normal` (opencode-go), `minimo` (cadena de dos candidatos
-  `opencode-go/deepseek-v4.1-flash` → `opencode/deepseek-v4.1-flash-free` contra el catálogo),
-  `gratis` (`opencode/big-pickle`). El tier se escribe en `.opencode/.ancleto-tier`; `install` sin
-  `--tier` usa `normal`, mientras el default publicado de `agents/*.md` es
-  `opencode-go/deepseek-v4.1-flash` (`README.md`).
-- **Juez advisory (0.40.0)**: `ancleto judge [--json] [--require] [--dry-run] [--timeout <ms>]` es
-  read-only y opt-in. Corre sólo con `judge.enabled: true` en `.ancletorc`; sin eso reporta
-  `skipped` y sale 0. `judge.timeoutMs` (entero > 0, default 120000) se overrida por `--timeout`.
-  `--require` exige una sonda `--version` exitosa y convierte el exit de `skipped`/`unavailable` en
-  2; `--dry-run` imprime el comando resuelto sin ejecutar el binario ni su config. Estados
-  `pass`/`fail`/`broken`/`skipped`/`unavailable` con exit 0/1/2, y envelope `--json` estable sin
-  `schemaVersion`. La credencial se lee sólo de `TYPESAFE_AI_API_KEY` y el aviso de egreso a
-  terceros precede al spawn. Nunca bloquea `check`, `specs merge` ni el archive. Sin schema,
-  PRAGMAs ni `ruleVersion`.
-- **Conformidad (0.21.0)**: no hay comando CLI de archive. El flujo es agent-driven y se apoya en
-  `agents/orchestrator.md` y las skills de triage/archive/workflow/continue; `ancleto specs check`
-  sólo valida que los specs canónicos usen los keywords literales en inglés. Un change de
-  conformidad cita `spec:<capability>#<requirement>` y no lleva delta; el archive lo reporta "sin
-  delta".
-- **Merge de specs (0.22.0–0.22.1)**: `ancleto specs merge --change <slug>` aplica el delta del
-  change sobre las specs canónicas existentes. `--dry-run` reporta el plan sin escribir y `--json`
-  emite `{ ok, change, dryRun, capabilities, operations, changed, errors }`. Exit `0` en éxito o
-  no-op, `1` por uso o I/O y `2` por conflicto fail-closed (título ambiguo, delta inválido,
-  capability sin spec, change inexistente/ambiguo, slug inválido o contenedor `archive`). 0.22.1
-  acepta a lo sumo un H1 estructural al inicio del delta, deja una sola línea en blanco tras
-  `ADDED` y declara que sólo el plan es atómico; no crea capabilities nuevas ni agrega flags. Desde
-  0.24.0, la fase de plan rechaza con exit 2 y cero escrituras (también con `--dry-run`) toda spec
-  canónica que contenga `## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED
-  Requirements` o `## RENAMED Requirements`; el guard cubre los cuatro tipos y no se aplica al delta.
-  `copilot-support`, `legacy-import` y `test-profile` ya usan `## Requirements`. `--json` mantiene
-  `ok:false` y `errors:[...]`, sin campos nuevos. Desde 0.25.0, el sync de delta del archive y del
-  bulk-archive invoca exclusivamente `ancleto specs merge --change <slug>`; un exit no cero aborta
-   el archive sin preflight, promoción ni move. Desde 0.26.4, la suite declarada valida además la
-   estructura de los delta specs de changes activos con el parser del merge, sin cambiar el comando;
-   desde 0.27.0 detecta también un `spec.md` de change activo fuera de `specs/<capability>/spec.md`.
-- **Discovery y frescura (0.26.0–0.30.2)**: `ancleto discovery --check` es read-only, emite
-  `schemaVersion: 2` y clasifica `READY`/`STALE`/`PARTIAL`/`MISSING`; `impact` sólo es `material`
-  por archivos materiales o áreas raíz nuevas/eliminadas. No escribe el seed, el estado ni el
-  `seed-map.json`, así que es seguro correrlo como validación antes de cerrar un change. Desde
-  0.26.x, `recommendedAction` queda documentado y pineado como `generate` en `MISSING` y `complete`
-  en `PARTIAL`, excepción a la regla `impact:none` → `continue`. Desde 0.27.0, el bump del valor de
-  `version` de primer nivel del `package.json` raíz no es cambio material ni de contenido, y el
-  estado persiste `ruleVersion: 2` + `semantic` conservando los hashes crudos; los estados legacy
-  se comparan crudos. Desde 0.28.0, `.ancleto`, todo `.ancleto/**` y el `.discovery-map.json` raíz
-  son rutas efímeras: un filtro simétrico de lectura las excluye de `changedAreas` y
-  `materialReasons`, y sólo excusa un desvío de hash si hay al menos una ruta cambiada y todas son
-  efímeras (cero rutas cambiadas sigue `STALE`; un estado sin `fileHashes` sigue `STALE`/`minor`).
-  Desde 0.29.0 se suman `documentation` / `documentation/**` y `audit logs` / `audit logs/**`,
-  anclados a la raíz: están gitignored y sin archivos versionados, y el estado las conserva en
-  `sources`/`fileHashes` (674 + 18 entradas) sin que cuenten para la frescura. `docs/**` y
-  `aspec/**` siguen contando; el writer, la forma del estado y `ruleVersion: 2` no cambian y no hay
-  configuración nueva. En 0.30.0 los globs de `discovery.exclude` se evalúan por segmentos:
-  `**/`→`(?:.*/)?`, `/**`→`(?:/.*)?`, `**`→`.*`, `*`→`[^/]*`, `?`→`[^/]`, con anclaje `^…$` si el
-  patrón contiene `**` y `^(…)(?:/|$)` si no; `**/*.test.*`/`**/*.spec.*` excluyen tests de
-  `sources` y `DEFAULT_IGNORES`/`outputDir`/writer/`ruleVersion: 2` siguen intactos. En 0.30.1 el
-  matcher vive en `src/core/discovery-glob.js` (`escapeRe`/`compileGlob`/`matchesGlob`) y cachea el
-  `RegExp` por string exacto de glob (15,04 ms → 1,63 ms, 9,2× sobre 9.669 evaluaciones), sin
-  cambio de semántica; el ReDoS con `**` repetidos sigue aceptado y el DP por segmentos se descartó
-  por no ser equivalente. En 0.30.2 no hay cambio de comportamiento: la canónica distingue el estado
-  persistido (`version: 1` + `ruleVersion: 2`) del `schemaVersion: 2` que emite `--check`, y un pin
-  de test no conductual cubre el armado offline del estado. 0.31.0 no cambia el discovery ni la
-  frescura: sólo toca el renderer del working-context.
-- **Ayuda sin ejecución (0.25.0)**: en `install`, `update`, `upgrade`, `init`, `memory`, `import`,
-  `export`, `mcp`, `specs`, `specs merge`, `projects` y `list --projects`, `--help`/`-h` imprime el
-  uso en stdout y sale con exit 0 sin escribir nada. `discovery --help`, la ayuda global y los
-  comandos read-only (`check`, `doctor`, `stats`, `affected`, `specs check`) quedan fuera del guard.
-
-El tier `gratis` está pensado para subagentes: un modelo free sobre un agente con `mode: primary`
-(por ejemplo el `orchestrator`, cuyo frontmatter canónico declara `mode: primary`) puede responder
-`403` en OpenCode. `install --tier gratis` y `ancleto check` lo advierten sin bloquear; ver
-`units/cli-install.md`.
-
-## Entornos y variables
-
-| Variable / archivo | Propósito | Referencia |
-|---|---|---|
-| `.ancletorc` | Manifiesto de instalación y configuración del proyecto (`agent`, `language`, `profile`, `discovery`, `memory`, `gratisModel`, `azure`, `installedPaths`, `version`) | `src/cli/index.js` → `readAncletorc` |
-| `.ancletorc` → `judge` | `judge.enabled` (booleano, default `false`, opt-in del juez advisory) y `judge.timeoutMs` (entero > 0, default 120000); clave aditiva que `install`/`update`/`upgrade` preservan y `check` ignora | `src/core/judge.js` → `resolveJudgeConfig`, `resolveJudgeTimeoutMs` |
-| `.ancletorc` → `memory.criticalKeys` | Lista curada de `memory_key` que el renderer del working-context inyecta primero y que la puerta de criticidad protege en `merge`/`consolidate --apply`; ausente, no-array o con entradas no-string equivale a `[]` | `src/core/memory/working-context.js` → `readCriticalMemoryKeys` |
-| `.opencode/.ancleto-tier` | Último tier aplicado; lo lee `check` y `repomix-tier` | `src/cli/index.js`, `src/core/repomix-tier.js` |
-| `ANCLETO_OPENCODE_DB` | Ruta alternativa a la base de sesiones de opencode para `stats` | `src/cli/index.js` → `opencodeDbPath` |
-| `ANCLETO_PROJECTS_FILE` | Ruta alternativa al registro global de proyectos | `src/cli/index.js` → `projectsRegistryPath` |
-| `ANCLETO_MODEL_CATALOG` | Ruta alternativa al snapshot de modelos (seam de test/manual) | `src/core/tier-models.js` → `loadModelCatalog` |
-| `XDG_CONFIG_HOME` | Base de la config global (`~/.config` por defecto) | `src/cli/index.js` → `globalConfigDir` |
-| `NO_COLOR` | Desactiva color en la UI de terminal | `src/cli/index.js` |
-| `AZURE_DEVOPS_ORG_URL`, `AZURE_DEVOPS_PAT` | MCP Azure DevOps opcional (deshabilitado en este repo) | `PRODUCT.md`, `src/cli/index.js` |
-| `TYPESAFE_AI_API_KEY` | Credencial del juez externo `jev-spec`; sólo se lee del entorno, nunca de `.ancletorc` ni se emite en `--json` (valor omitido) | `src/core/judge.js`, `src/cli/index.js` → `judgeCommand` |
-| `.ancleto/machine-env.md` | Artefacto local generado; no se versiona | `src/core/machine-env.js` |
-
-Los valores de credenciales se omiten deliberadamente. No copiar secretos de `.ancletorc`,
-`opencode.json`, CI ni de la configuración global.
-
-**Estado de este checkout (0.40.0)**: `.ancletorc` y `.ancleto/machine-env.md` son artefactos
-gitignored que `init`/`install`/`upgrade` regeneran; no son fuentes del seed. La versión de producto
-  la fija `package.json` = `0.40.0`.
-
-## Entorno de máquina
-
-`init`/`install`/`upgrade` materializan `.ancleto/machine-env.md` con plataforma, shell, EOL y
-tooling observado. La detección es best-effort y acotada: sondea la invocabilidad real de cada
-herramienta (no solo su presencia en `PATH`), con timeout y presupuesto acumulado
-(`src/core/machine-env.js`). El artefacto se excluye localmente vía `info/exclude` de git, sin
-tocar `.gitignore`; `ancleto check` avisa si quedó trackeado.
+| Artefacto | Productor | ¿Versionado? |
+| --- | --- | --- |
+| `.ancletorc` | `init`/`install`/`update` | Local (gitignored) |
+| `.opencode/` y mirrors por host | `install`/`upgrade`/`import` | Local (gitignored) |
+| `.ancleto/machine-env.md` | `init`/`install`/`upgrade` | Local, excluido vía `.git/info/exclude` |
+| `.ancleto/memory.db` | Tools MCP y `memory *` | Local (no se comparte por git) |
+| `.ancleto/working-context.md` | Refresh de lifecycle/memoria | Local |
+| `.discovery-map.json` | `discovery` | Versionado |
+| `docs/technical-discovery/**` | Skill de discovery | Versionado |
+| `aspec/changes/**`, `aspec/specs/**` | Ciclo `/cleto-*` | Versionado |
 
 ## Convenciones operativas
 
-- **Validaciones**: correr solo lo declarado en `PRODUCT.md` → `## Project Commands`; si un
-  comando no está declarado, se omite y se registra. Nunca inventar runner/linter/formatter.
-- **Commits**: Conventional Commits; no commitear directo a `main`/`master` (`AGENTS.md`).
-- **Operaciones destructivas**: requieren confirmación explícita del usuario (`AGENTS.md`).
-- **Memoria**: consultar `.ancleto/memory.db` antes de revertir decisiones de arquitectura o
-  contratos; la memoria es contexto histórico y no prevalece sobre el diseño vigente.
+- **Tiers**: `normal`, `minimo`, `gratis`; se persisten en el manifiesto y se aplican solo a los
+  mirrors de `opencode` (los demás hosts eliminan o heredan `model:`).
+- **Plantillas**: los bloques `LOCKED` de `AGENTS.md`/`PRODUCT.md` se mergean; el resto del
+  contenido local se preserva.
+- **Memoria**: reglas y decisiones del proyecto van a `.ancleto/memory.db`; notas de sesión del
+  agente no se mezclan (ver `AGENTS.md`).
+- **Validaciones declarativas**: solo se ejecuta lo declarado en `PRODUCT.md` → `## Project
+  Commands`; lo no declarado se omite y se registra.
+- **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, CI o Azure; nombrar la
+  variable o el archivo y omitir el valor.

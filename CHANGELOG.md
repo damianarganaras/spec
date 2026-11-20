@@ -2,6 +2,12 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.40.1] - 2026-11-19
+
+### Changed
+- **Guard de integridad de IDs con quinta fuente declarada**: el guard suma `opencode.json` (`agent.<nombre>.model`) como quinta fuente declarada, vía el collector único `src/core/model-declarations.js` compartido por el guard de tests y la pre-validación de `scripts/refresh-model-catalog.mjs --write`. El collector falla cerrado si una fuente requerida no se puede leer y no usa red.
+- **Delta `agent-model-tiers`**: se promueve el requirement "Integridad de los IDs declarados contra el snapshot" y sus espejos. El advisory de `check` y el runtime de tiers **no** cambian.
+
 ## [0.40.0] - 2026-11-17
 
 ### Added

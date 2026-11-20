@@ -95,16 +95,20 @@ const FIXTURE_DECLARED_IDS = [
   { id: 'opencode/big-pickle', source: 'TIERS.test.gratis' }
 ]
 
-// `main` imprime el estado en stdout; se captura sin tocar procesos ni red.
+// `main` imprime el estado en stdout y los errores del gate en stderr; se capturan
+// ambos sin tocar procesos ni red.
 async function captureLogs(fn) {
   const lines = []
-  const original = console.log
+  const originalLog = console.log
+  const originalError = console.error
   console.log = (...args) => { lines.push(args.join(' ')) }
+  console.error = (...args) => { lines.push(args.join(' ')) }
   try {
     const value = await fn()
     return { value, output: lines.join('\n') }
   } finally {
-    console.log = original
+    console.log = originalLog
+    console.error = originalError
   }
 }
 
@@ -650,6 +654,15 @@ describe('guards de contenido del descubrimiento', () => {
     assert.match(SCRIPT_SOURCE, /import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href/)
   })
 
+  it('el guard y la pre-validación de --write comparten el collector único', () => {
+    assert.match(
+      SCRIPT_SOURCE,
+      /import\s*{[^}]*\breadModelDeclarations\b[^}]*}\s*from '\.\.\/src\/core\/model-declarations\.js'/
+    )
+    assert.match(SCRIPT_SOURCE, /readModelDeclarations\(\{\s*rootDir\s*\}\)/)
+    assert.equal(SCRIPT_SOURCE.includes('readAgentModels'), false, 'no conserva un collector local duplicado')
+  })
+
   it('README documenta el procedimiento y las clasificaciones del catálogo', () => {
     for (const token of [
       'binary-missing',
@@ -853,6 +866,50 @@ describe('main --write y gate de IDs declarados', () => {
         [],
         'sin temporales tras --write'
       )
+    })
+  })
+
+  it('deriva opencode.json bajo rootDir y rechaza un ID ausente del candidato', async () => {
+    await withDirAsync(async (dir) => {
+      const { catalogPath, candidatePath, base } = catalogFixture(dir)
+      const rootDir = join(dir, 'root')
+      mkdirSync(join(rootDir, 'agents'), { recursive: true })
+      mkdirSync(join(rootDir, 'profiles'), { recursive: true })
+      writeFileSync(join(rootDir, 'agents', 'coder.md'), '---\nmodel: alpha/a\n---\n')
+      writeFileSync(
+        join(rootDir, 'opencode.json'),
+        JSON.stringify({ agent: { coder: { model: 'missing/only-in-opencode' } } })
+      )
+
+      const { value, output } = await captureLogs(
+        () => main(['--write'], { run: availableRun(), catalogPath, candidatePath, rootDir })
+      )
+
+      assert.equal(value, 1, 'exit code no cero')
+      assert.match(output, /missing\/only-in-opencode/)
+      assert.match(output, /opencode\.json#agent\.coder\.model/, 'nombra el origen del ID ausente')
+      assert.equal(readFileSync(catalogPath, 'utf8'), base, 'el snapshot commiteado queda byte-idéntico')
+      assert.equal(existsSync(candidatePath), false, 'no se escribe el reporte candidato')
+    })
+  })
+
+  it('falla cerrado sin escribir si una fuente del collector no se puede leer', async () => {
+    await withDirAsync(async (dir) => {
+      const { catalogPath, candidatePath, base } = catalogFixture(dir)
+      const rootDir = join(dir, 'root')
+      // `agents/` y `profiles/` legibles pero `opencode.json` ausente: una fuente
+      // requerida ilegible no puede degradar el gate a cero declaraciones.
+      mkdirSync(join(rootDir, 'agents'), { recursive: true })
+      mkdirSync(join(rootDir, 'profiles'), { recursive: true })
+
+      const { value, output } = await captureLogs(
+        () => main(['--write'], { run: availableRun(), catalogPath, candidatePath, rootDir })
+      )
+
+      assert.equal(value, 1, 'exit code no cero')
+      assert.match(output, /opencode\.json/, 'nombra la fuente ilegible')
+      assert.equal(readFileSync(catalogPath, 'utf8'), base, 'el snapshot commiteado queda byte-idéntico')
+      assert.equal(existsSync(candidatePath), false, 'no se escribe el reporte candidato')
     })
   })
 })

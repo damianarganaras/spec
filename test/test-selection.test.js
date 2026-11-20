@@ -597,6 +597,13 @@ describe('test-selection — pins por clase de escape (repo real)', () => {
     assertCovered(plan, 'test/test-selection.test.js')
   })
 
+  it('opencode.json selecciona el guard que lo lee sin importarlo', () => {
+    // `readModelDeclarations` lee el archivo en tiempo de ejecución: sin import edge,
+    // el coupling declarado es la única vía que selecciona el guard.
+    const plan = planTestSelection({ rootDir: ROOT, seeds: ['opencode.json'], unresolved: [] })
+    assertCovered(plan, 'test/model-catalog.test.js')
+  })
+
   it('una hoja importada selecciona el test que la importa y no lo excluye', () => {
     const plan = planTestSelection({ rootDir: ROOT, seeds: ['src/core/tier-models.js'] })
     assertCovered(plan, 'test/tier-models.test.js')

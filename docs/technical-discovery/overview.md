@@ -2,8 +2,8 @@
 node: overview
 kind: overview
 read_when: "qué es el proyecto, cómo está armado, componentes y flujos principales"
-generatedAt: 2026-11-20T22:23:58.644Z
-pluginVersion: 0.43.0
+generatedAt: 2026-11-21T05:55:56.128Z
+pluginVersion: 0.43.1
 skillVersion: '2.3'
 ---
 
@@ -54,12 +54,14 @@ El paquete publica además una **superficie instalable** (`package.json` → `fi
 | --- | --- | --- |
 | CLI y ciclo de vida | `init`, `install`, `update`, `upgrade`, `import`, `export`, `check`, `doctor`, `projects` | `src/cli/index.js` |
 | Instalador multi-host | Materializa assets, adapta frontmatter, escribe MCP y aplica tiers | `src/cli/index.js`, `src/core/adapters/frontmatter.js` |
+| Matriz de hosts (verificación) | Prueba offline de 8 hosts × `init`/`install`/`update`/`upgrade`/`import --repair` | `test/host-matrix.test.js` |
 | Discovery | Mapa topológico, estado, impacto y pack Repomix | `src/core/discovery.js`, `src/core/discovery-state.js`, `src/core/repomix-tier.js` |
 | Memoria | Motor SQLite/FTS5, supersesión, refs, recall BM25-first, MCP y operaciones | `src/core/memory/**` |
 | Working-context | Render derivado y **resolución del presupuesto configurable** | `src/core/memory/working-context.js` |
 | Modelos | Catálogo commiteado, declaraciones versionadas y resolución por tier | `src/core/model-catalog.js`, `src/core/model-declarations.js`, `src/core/tier-models.js` |
 | Specs | Validación de specs canónicas y merge de deltas | `src/core/specs-merge.js` |
 | Cambios | Artefactos SDD activos, archivados y backlog de release | `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` |
+| Baseline técnico | Baseline read-only previo a optimizaciones de hosts/métricas (CH-00) | `docs/baseline/CH-00-2026-11-20.md` |
 | Juez advisory | Envoltorio read-only de `jev-spec` | `src/core/judge.js` |
 
 ## Flujos principales
@@ -69,7 +71,10 @@ El paquete publica además una **superficie instalable** (`package.json` → `fi
 `ancleto install` / `init` / `upgrade` resuelven el host activo, copian los assets a su layout
 nativo, adaptan el frontmatter, mergean los bloques `LOCKED` de los templates, configuran el MCP
 del host, aplican el tier de modelos y escriben el manifiesto `.ancletorc`. `upgrade` no aplica
-tier: materializa la fuente canónica. Evidencia: `src/cli/index.js`, `src/core/adapters/frontmatter.js`.
+tier: materializa la fuente canónica. Desde 0.43.1 este contrato se verifica con
+`test/host-matrix.test.js`, una matriz offline de 8 hosts × cinco operaciones de proyecto que no
+invoca hosts reales, binarios de host ni red. Evidencia: `src/cli/index.js`,
+`src/core/adapters/frontmatter.js`, `test/host-matrix.test.js`.
 
 ### 2. Descubrir el repositorio
 
@@ -85,9 +90,9 @@ Las tools MCP (`searchMemory`, `recordRule`, `recordDecision`) leen y escriben
 escrituras pasan por validación de refs y rechazo de secretos. Desde 0.41.0 el recall ordena por
 **BM25 ascendente** después de las `required`; desde 0.42.0 el bloque `<ProjectMemoryRules>` de
 `.ancleto/working-context.md` usa un presupuesto **configurable** (default 4000 tokens) resuelto en
-`working-context.js`; desde 0.43.0 el import exige `scope` string no vacío. Evidencia:
-`src/core/memory/engine.js`, `src/core/memory/working-context.js`, `src/core/memory/tools.js`,
-`src/core/memory/mcp-server.js`, `src/cli/index.js`.
+`working-context.js`; desde 0.43.0 el import exige `scope` string no vacío. 0.43.1 no cambia la
+memoria. Evidencia: `src/core/memory/engine.js`, `src/core/memory/working-context.js`,
+`src/core/memory/tools.js`, `src/core/memory/mcp-server.js`, `src/cli/index.js`.
 
 ### 4. Ciclo de cambio SDD
 
@@ -109,12 +114,14 @@ Un tag `v*` dispara `.github/workflows/publish.yml`: `npm ci` → lint → tests
 
 ## Estado de release
 
-`package.json` declara `0.43.0` (commit `9ba7975`, `chore(release): 0.43.0`). La release está
-**publicada y verificada**: tag anotado `v0.43.0` (objeto `e12cffa`) → commit `9a7220c`, run
-`publish.yml` `44827344442` en `success` y `@ancleto/spec@0.43.0` como `latest` en npm con gitHead
-`9a7220c`. La anterior es `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run `44808502480` en
-`success`, npm `latest`); antes, `0.41.0` (tag `v0.41.0` sobre `5c171bc`, run `44781865327`). El
-HEAD de `development` es `be47c58` (`docs(backlog): record 0.43.0 release data`).
+`package.json` declara `0.43.1` (commit `7758d46`, `chore(release): 0.43.1`). La release está
+**preparada, sin push**: existe el tag anotado local `v0.43.1` (objeto `fce834b` → commit
+`7758d46`) y `CHANGELOG.md` tiene su sección, pero `aspec/backlog.md` la declara "preparada, sin
+push" y no registra run de publicación ni verificación en npm. La última release **publicada y
+verificada** sigue siendo `0.43.0` (tag anotado `v0.43.0` → `9a7220c`, run `44827344442`
+`success`, npm `latest` con gitHead `9a7220c`). Antes, `0.42.0` (tag `v0.42.0` → `c6319c8`, run
+`44808502480`). El HEAD de `development` es `c58a01b` (`docs(backlog): evaluar CH-09c/CH-09d sin
+disparador`).
 
 ## Límites y decisiones de frontera
 
@@ -122,6 +129,7 @@ HEAD de `development` es `be47c58` (`docs(backlog): record 0.43.0 release data`)
 - El CLI es dueño del ciclo de vida; los módulos `src/core/**` son dueños de sus invariantes.
 - La memoria es **cwd-scoped**: `<cwd>/.ancleto/memory.db`.
 - El presupuesto del working-context es configuración de proyecto/entorno, no estado persistido.
+- 0.43.1 es **solo test + spec**: no hay cambios de runtime, comandos ni flags.
 - El seed técnico es un mapa, no un inventario: ver `inventory.md` y `unknowns.md`.
 
 ## Riesgos de cambio de alto nivel
@@ -135,5 +143,7 @@ HEAD de `development` es `be47c58` (`docs(backlog): record 0.43.0 release data`)
   costo explícita del usuario.
 - El endurecimiento de `memory import` (0.43.0) es un **cambio de contrato**: archivos con `scope`
   no-string dejan de importar; ya está publicado en npm `0.43.0`.
+- `0.43.1` **no está publicada**: el tag es local y el backlog no registra push ni run; no asumir
+  que npm la expone.
 - Detalle: `decisions.md`; recorridos: `units/cli-install.md`, `units/discovery-engine.md`,
   `units/memory-engine.md`.

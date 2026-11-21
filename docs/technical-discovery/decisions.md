@@ -2,8 +2,8 @@
 node: decisions
 kind: decisions
 read_when: "reglas, contratos, riesgos, deuda y acoplamiento que condicionan cambios"
-generatedAt: 2026-11-20T22:23:58.644Z
-pluginVersion: 0.43.0
+generatedAt: 2026-11-21T05:55:56.128Z
+pluginVersion: 0.43.1
 skillVersion: '2.3'
 ---
 
@@ -42,6 +42,13 @@ skillVersion: '2.3'
 - **Validador de import único**: `src/core/memory/engine.js` → `validateImportEntries` es el único
   dueño del esquema de entrada; `importNodes` y `classifyImport` (dry-run) lo comparten y el CLI
   lo reusa como pre-check antes de abrir la base (`src/cli/index.js`).
+- **Oráculo de la matriz de hosts**: `test/host-matrix.test.js` declara su propio mapa `HOSTS`
+  (destino de assets y MCP por host) independiente del descriptor de producción
+  (`AGENT_TARGETS`/`HOST_MCP_TARGETS`); una deriva del descriptor debe **fallar** la matriz, no
+  actualizar la expectativa en silencio.
+- **Tier observable en la matriz**: la matriz fija `normal`, no `minimo`. La canónica declara el
+  modelo de `minimo`, así que `applyTier` con `minimo` es no-op y una regresión de aplicación de
+  tier pasaría inadvertida (`test/host-matrix.test.js`).
 
 ## Reglas de negocio y contratos
 
@@ -84,9 +91,9 @@ skillVersion: '2.3'
 - **`required` fail-closed**: las `criticalKeys` del proyecto se resuelven antes del corte y una
   regla requerida que no entra no se omite en silencio: falla con error diagnóstico. El aviso de
   overflow gobierna solo las reglas no requeridas.
-- **Sin cambio de schema en 0.42.0/0.43.0**: no se agregan columnas, índices, PRAGMAs persistentes
-  ni `ruleVersion`; la configuración y la validación se resuelven al parsear. Un binario 0.41.x lee
-  el mismo estado persistido.
+- **Sin cambio de schema en 0.42.0/0.43.0/0.43.1**: no se agregan columnas, índices, PRAGMAs
+  persistentes ni `ruleVersion`; la configuración y la validación se resuelven al parsear. Un
+  binario 0.41.x lee el mismo estado persistido.
 - **Puerta de criticidad**: si una operación supersedería una `memory_key` declarada en
   `.ancletorc` → `memory.criticalKeys`, rechaza con exit 2. El engine nunca lee `.ancletorc`; el
   conjunto se inyecta desde el CLI.
@@ -102,22 +109,6 @@ skillVersion: '2.3'
 - **Migración aditiva**: `superseded_at` se agrega de forma guardada; una base legacy sigue
   midiendo elegibilidad por `created_at` sin migrar en dry-run.
 
-### Discovery y tests
-
-- **Un pack**: la generación del seed usa un único pack Repomix comprimido; `--check` no crea
-  packs.
-- **Impacto**: el estado compara hashes por área; el bump de `version` de `package.json` se
-  neutraliza con un centinela para no contar como cambio de contenido. `CHANGELOG.md` sí es un
-  área raíz observable: un cambio de release puede producir `STALE/minor` aunque el bump de
-  versión se neutralice.
-- **Rutas efímeras**: `.ancleto/**` y `.discovery-map.json` no participan de la frescura;
-  `documentation/` y `audit logs/` están gitignored y se excluyen. El propio `outputDir` del seed
-  se omite del walk, de modo que reescribir el seed no genera deriva.
-- **Fail-closed en tests**: si el manifiesto `test/affected-tests.json` no cubre el universo o hay
-  imports irresolubles, `complete` es `false` y el consumidor corre la suite completa declarada.
-- **Grafo conservador**: un argumento no literal en `import()`/`require()` se reporta como
-  `unresolved`; no se adivina. Los no relativos cuentan como externos (`externalCount`).
-
 ### Instalación y hosts
 
 - **`.opencode/` es mirror**: se regenera; no se edita a mano. `ancleto upgrade` materializa la
@@ -128,13 +119,37 @@ skillVersion: '2.3'
 - **Templates**: solo se mergean bloques `LOCKED`; el contenido local fuera de ellos se preserva.
   Un bloque mal formado no se toca.
 - **Migración legacy `openspec/`**: copia no destructiva; `openspec/` se conserva como backup.
+- **Matriz de ciclo de vida (0.43.1)**: para los 8 hosts declarados, `init`, `install`, `update`,
+  `upgrade` e `import --repair` (sin bundle) deben respetar el destino nativo por asset, la
+  cobertura soportada, el destino MCP del host, la idempotencia/no destrucción y la preservación de
+  `EXTENSIBLE`. `import --repair` sin bundle no reescribe assets ni templates. Evidencia:
+  `test/host-matrix.test.js`, `aspec/specs/agent-install-routing/spec.md`.
+
+### Discovery y tests
+
+- **Un pack**: la generación del seed usa un único pack Repomix comprimido; `--check` no crea
+  packs.
+- **Impacto**: el estado compara hashes por área; el bump de `version` de `package.json` se
+  neutraliza con un centinela para no contar como cambio de contenido. `CHANGELOG.md` sí es un
+  área raíz observable: un cambio de release puede producir `STALE/minor` aunque el bump de
+  versión se neutralice. `.ancletorc` también aparece como área raíz aunque sea local/gitignored.
+- **Rutas efímeras**: `.ancleto/**` y `.discovery-map.json` no participan de la frescura;
+  `documentation/` y `audit logs/` están gitignored y se excluyen. El propio `outputDir` del seed
+  se omite del walk, de modo que reescribir el seed no genera deriva.
+- **Fail-closed en tests**: si el manifiesto `test/affected-tests.json` no cubre el universo o hay
+  imports irresolubles, `complete` es `false` y el consumidor corre la suite completa declarada.
+- **Grafo conservador**: un argumento no literal en `import()`/`require()` se reporta como
+  `unresolved`; no se adivina. Los no relativos cuentan como externos (`externalCount`).
+- **Selección de la matriz de hosts**: `test/affected-tests.json` incluye `test/host-matrix.test.js`
+  en el coupling de `src/cli/**` y agrega el trigger `commands/**` + `templates/**`, porque la
+  matriz lee esos assets como texto sin importarlos. Evidencia: `test/affected-tests.json`.
 
 ## Riesgos, deuda y acoplamiento
 
 | Riesgo | Impacto | Mitigación / evidencia |
 | --- | --- | --- |
-| `src/cli/index.js` es un monolito de ~1.100 líneas | Alto acoplamiento entre instalación, MCP, tiers, discovery y memoria | Dueños por módulo en `src/core/**`; cambios acotados por subcomando |
-| Superficie instalable duplicada por host | Un cambio en `agents/`/`commands/`/`skills/` afecta a todos los hosts | Adaptador único + `check` de frontmatter y huérfanos |
+| `src/cli/index.js` es un monolito de ~5.851 líneas | Alto acoplamiento entre instalación, MCP, tiers, discovery y memoria | Dueños por módulo en `src/core/**`; cambios acotados por subcomando |
+| Superficie instalable duplicada por host | Un cambio en `agents/`/`commands/`/`skills/` afecta a todos los hosts | Adaptador único + matriz offline de hosts + `check` de frontmatter/huérfanos |
 | Migraciones de SQLite | Riesgo de pérdida de datos o bloqueo | Migración aditiva guardada, transacciones y `doctor` |
 | Refresco manual del catálogo | IDs declarados pueden faltar en el snapshot | Guard de integridad con quinta fuente (`opencode.json`) |
 | Dependencias externas opcionales | Repomix/opencode/jev-spec pueden faltar | Degradación explícita: `skipped`/`unavailable`, error claro |
@@ -143,11 +158,32 @@ skillVersion: '2.3'
 | Presupuesto mal configurado | Un valor inválido cae al default sin avisar; un valor muy chico omite reglas no requeridas | Resolución tolerante y determinista; `required` falla cerrado; el aviso de overflow nombra las claves omitidas |
 | Cambio de configuración del presupuesto | El working-context puede quedar `desactualizado` hasta el próximo refresh | El chequeo de frescura es advisory; no hay invalidación automática |
 | Endurecimiento del import (0.43.0) | Archivos con `scope` numérico/objeto/**vacío** que antes importaban (o fallaban al bindear) ahora se rechazan enteros | Cambio de contrato **intencional** declarado en `CHANGELOG.md` y en la spec `memory-ops`; sin schema ni migración; publicado en npm `0.43.0` |
+| Release `0.43.1` preparada, sin push | Un consumidor puede asumir que npm ya la expone | `aspec/backlog.md` declara "preparada, sin push"; solo hay tag local `v0.43.1` |
+| Matriz de hosts como verificación principal del ruteo | No prueba hosts reales, binarios de host ni red | Es una matriz de contrato de archivos/MCP; límites en `unknowns.md` |
 | Secretos en configuración | Fuga en docs o bundles | Nombrar variable/archivo y omitir valor; rechazo en memoria |
 | Dependencia de `version` en `package.json` | Un bump no debe invalidar el seed | Centinela byte-preserving en `hashSources`; observado en `src/cli/index.js` |
 
-## Decisiones recientes relevantes (0.40.x–0.43.0)
+## Decisiones recientes relevantes (0.40.x–0.43.1)
 
+- **0.43.1 — matriz de hosts offline (CH-10)**: se agrega `test/host-matrix.test.js` con una
+  matriz determinista de 8 hosts × `init`/`install`/`update`/`upgrade`/`import --repair` sin
+  bundle, sin host real, sin binarios de host y sin red. Verifica destino nativo por asset,
+  cobertura soportada, MCP por host, `LOCKED`/`EXTENSIBLE`, idempotencia/no destrucción y deriva de
+  manifiesto entre `init`/`upgrade` repetidos. La expectativa (`HOSTS`) es un oráculo independiente
+  del descriptor de producción. Change archivado en
+  `aspec/changes/archive/2026-11-21-ch-10-host-matrix-hardening/`; requirement `ADDED` promovido a
+  `aspec/specs/agent-install-routing/spec.md` (11 scenarios).
+- **0.43.1 — PATCH solo test + spec**: la release no cambia runtime, comandos ni flags;
+  `package.json` solo cambia de versión. Se publica como PATCH por convención del repo (precedentes
+  0.22.2, 0.26.3, 0.26.4). Estado: **preparada, sin push**; tag anotado local `v0.43.1` (objeto
+  `fce834b`) → `7758d46`.
+- **CH-00 baseline (2026-11-20/21)**: `docs/baseline/CH-00-2026-11-20.md` captura un baseline
+  read-only de conformidad y métricas antes de las optimizaciones de hosts; change archivado en
+  `aspec/changes/archive/2026-11-20-ch-00-baseline/`. No modifica runtime.
+- **CH-07 trigger (2026-11-21)**: se archiva un gate read-only para el A/B de prefijos/caché/modelos
+  con criterio `not-supported` antes que extrapolar métricas de host. No implementa el A/B ni toca
+  specs canónicas; change archivado en
+  `aspec/changes/archive/2026-11-21-ch-07-trigger-workload-metricas-host/`.
 - **0.43.0 — `scope` string en el import**: el validador compartido (`importNodes` +
   `classifyImport`) rechaza `scope` no-string o vacío con `entry[i].scope invalido`, elimina la
   coerción de SQLite (afinidad TEXT) y hace coincidir la predicción del dry-run con el efecto real.
@@ -181,5 +217,5 @@ skillVersion: '2.3'
   comparte el collector `src/core/model-declarations.js` con `refresh-model-catalog --write`.
 - **0.40.0**: `ancleto judge` es un adaptador **advisory**, read-only y opt-in a `jev-spec`; no es
   gate de archive ni de conformidad (`src/core/judge.js`).
-- **Compatibilidad declarada**: ningún cambio de 0.40.x–0.43.0 toca schema, PRAGMAs persistentes ni
+- **Compatibilidad declarada**: ningún cambio de 0.40.x–0.43.1 toca schema, PRAGMAs persistentes ni
   `ruleVersion`; un binario `0.40.x`/`0.41.x`/`0.42.x` lee el mismo estado persistido.

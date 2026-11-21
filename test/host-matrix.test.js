@@ -6,10 +6,18 @@ import { tmpdir } from 'node:os'
 import { join, dirname, delimiter } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { adaptFrontmatter, parseFrontmatter } from '../src/core/adapters/frontmatter.js'
+import { TIERS, tierModels } from '../src/core/tier-models.js'
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO = join(TEST_DIR, '..')
 const CLI = join(REPO, 'src', 'cli', 'index.js')
+
+// Tier de la matriz con modelos distintos de la canónica (`agents/*.md` declara
+// `opencode-go/deepseek-v4.1-flash`, que es justo el valor de `minimo`). Con `minimo`
+// `applyTier` es no-op y una regresión que omita la aplicación del tier pasaría
+// inadvertida; `normal` hace la aplicación observable.
+const TIER = 'normal'
+const TIER_MODELS = tierModels(TIER, TIERS)
 
 // Oráculo independiente del descriptor de produccion (decision host-matrix-oracle-
 // independent): una deriva de AGENT_TARGETS/HOST_MCP_TARGETS debe fallar aca en vez
@@ -194,6 +202,32 @@ function snapshotAssets(project, host) {
   return out
 }
 
+// Snapshot de idempotencia: `.ancletorc.installedAt` es un timestamp de la corrida,
+// no contenido materializado, así que no cuenta como escritura distinta.
+function snapshotMaterialized(project) {
+  const out = snapshotTree(project)
+  delete out['.ancletorc']
+  return out
+}
+
+// Bytes de todos los destinos de assets y MCP declarados por cualquier host: sirve
+// para probar que una operación escribe sólo el destino del host activo.
+function snapshotHostWrites(project) {
+  const out = {}
+  for (const rel of new Set([...ALL_ASSET_PATHS, ...MCP_FILES])) {
+    out[rel] = existsSync(join(project, rel)) ? readFileSync(join(project, rel)).toString('base64') : null
+  }
+  return out
+}
+
+// Mirror que una operación de re-materialización debe restaurar. Prefiere un agent
+// (formato con frontmatter); cursor/roo sólo tienen skills.
+function corruptibleMirror(host) {
+  const entries = [...expectedAssets(host).entries()]
+  const agent = entries.find(([, meta]) => meta.kind === 'agents')
+  return (agent || entries[0])[0]
+}
+
 function assertAssets(project, host) {
   const expected = expectedAssets(host)
   for (const rel of ALL_ASSET_PATHS) {
@@ -258,21 +292,40 @@ function quiet(fn) {
   }
 }
 
-function assertMirrors(project, host) {
+function assertMirrors(project, host, tier = null) {
+  // Sólo opencode escribe `model:` en su mirror y por lo tanto recibe `applyTier`.
+  // El tier elegido debe diferir de la canónica para que la aplicación sea observable.
+  if (tier && host === 'opencode') {
+    const observable = AGENT_NAMES.some((name) => {
+      const canonical = /^model: (.*)$/m.exec(readFileSync(join(REPO, 'agents', `${name}.md`), 'utf8'))?.[1]
+      return TIER_MODELS[name] !== canonical
+    })
+    assert.ok(observable, `${host}: el tier ${tier} debe diferir del canónico para que applyTier sea observable`)
+  }
   for (const [rel, meta] of expectedAssets(host)) {
     const actual = readFileSync(join(project, rel), 'utf8')
     const source = readFileSync(meta.source, 'utf8')
     if (meta.kind === 'command-skill') {
+      // `commandToSkill` (src/cli/index.js:1294-1300) emite `name` + `description`
+      // del origen y el body verbatim. Se pinea el head completo: una regresión que
+      // descarte `description` debe fallar.
       const parsed = parseFrontmatter(source)
-      assert.match(actual, new RegExp(`^---\\nname: ${meta.name}\\n`), `${host}: ${rel} declara name`)
-      assert.ok(
-        actual.endsWith(parsed.hasFrontmatter ? parsed.body : source),
-        `${host}: ${rel} conserva el body verbatim del command`
-      )
+      const description = parsed.hasFrontmatter
+        ? parsed.entries.find((entry) => entry.key === 'description')
+        : null
+      assert.ok(description, `${host}: ${rel} el command canónico declara description`)
+      const head = ['---', `name: ${meta.name}`, ...description.lines, '---'].join('\n')
+      assert.ok(actual.startsWith(`${head}\n`), `${host}: ${rel} head exacto de commandToSkill`)
+      assert.equal(actual, `${head}\n${parsed.body}`, `${host}: ${rel} contenido exacto de commandToSkill`)
+      assert.match(actual, new RegExp(`^---\\nname: ${meta.name}\\ndescription: `), `${host}: ${rel} head incluye description`)
       assert.doesNotMatch(actual, /^(?:mode|model|tools|mainAgent|subagent|commandExecutionPolicy):/m)
       continue
     }
-    const expected = quiet(() => adaptFrontmatter(source, host, meta.kind, meta.name))
+    let expected = quiet(() => adaptFrontmatter(source, host, meta.kind, meta.name))
+    if (tier && host === 'opencode' && meta.kind === 'agents') {
+      // Misma transformación que `applyTier`: reemplazo del primer `model:`.
+      expected = expected.replace(/^model: .*$/m, `model: ${TIER_MODELS[meta.name]}`)
+    }
     if (meta.kind === 'agents' && meta.name === 'orchestrator' && (host === 'copilot' || host === 'commandcode')) {
       const label = host === 'copilot' ? 'Copilot' : 'Command Code'
       assert.ok(actual.startsWith(expected), `${host}: ${rel} parte de la adaptacion canonica`)
@@ -387,10 +440,17 @@ for (const host of HOST_NAMES) {
           assert.equal(readFileSync(join(project, foreign), 'utf8'), foreignContent, `${host}: no modifica ${foreign}`)
         }
 
-        const init = run(['init', '--agent', host, '--tier', 'minimo'], project, env)
+        // Mirror que `upgrade` y `update` deben re-materializar desde la canónica.
+        // Se corrompe con un centinela: una reescritura idéntica o una omisión de la
+        // materialización ya no alcanzan para pasar.
+        const mirrorRel = corruptibleMirror(host)
+        const mirrorSentinel = `MIRROR_CORRUPTO_${host}\n`
+        const templateSentinel = `TEMPLATE_CORRUPTO_${host}\n`
+
+        const init = run(['init', '--agent', host, '--tier', TIER], project, env)
         assert.equal(init.status, 0, init.stderr)
         assertAssets(project, host)
-        assertMirrors(project, host)
+        assertMirrors(project, host, TIER)
         assertManifest(project, host)
         assertTemplatesMerged(project, 'EXTENSIBLE_PROPIO_INIT')
         assertMcpWrites(project, host, allowedForeign)
@@ -405,8 +465,22 @@ for (const host of HOST_NAMES) {
           assert.match(init.stderr, new RegExp(`skip ${cat}: not supported by host '${host}'`))
         }
 
-        // import --repair sin bundle: solo puede tocar el MCP declarado y, con un MCP
-        // sano, no escribe nada. Se ejecuta dos veces para afirmar idempotencia.
+        // Idempotencia de `init`: la segunda corrida no altera bytes materializados
+        // (`.ancletorc.installedAt` es un timestamp y no cuenta como materialización).
+        const afterInit = snapshotMaterialized(project)
+        const initAgain = run(['init', '--agent', host, '--tier', TIER], project, env)
+        assert.equal(initAgain.status, 0, initAgain.stderr)
+        assert.deepEqual(snapshotMaterialized(project), afterInit, `${host}: init idempotente`)
+        assertAssets(project, host)
+        assertMirrors(project, host, TIER)
+
+        // import --repair sin bundle es MCP-only: se siembran un asset y un template
+        // corruptos con centinela. Deben seguir corruptos (no se acepta una reescritura
+        // idéntica como prueba) y el árbol completo debe quedar byte-idéntico.
+        writeFileSync(join(project, mirrorRel), mirrorSentinel)
+        writeFileSync(join(project, 'AGENTS.md'), templateSentinel)
+        assert.equal(readFileSync(join(project, mirrorRel), 'utf8'), mirrorSentinel, `${host}: sanity asset corrupto`)
+        assert.equal(readFileSync(join(project, 'AGENTS.md'), 'utf8'), templateSentinel, `${host}: sanity template corrupto`)
         const beforeRepair = snapshotTree(project)
         for (let pass = 0; pass < 2; pass += 1) {
           const repair = run(['import', '--repair'], project, env)
@@ -417,6 +491,8 @@ for (const host of HOST_NAMES) {
             `${host}: aviso MCP esperado en import --repair`
           )
           assert.deepEqual(snapshotTree(project), beforeRepair, `${host}: import --repair byte-identico`)
+          assert.equal(readFileSync(join(project, mirrorRel), 'utf8'), mirrorSentinel, `${host}: import --repair no reescribe assets`)
+          assert.equal(readFileSync(join(project, 'AGENTS.md'), 'utf8'), templateSentinel, `${host}: import --repair no reescribe templates`)
           assertMcpWrites(project, host, allowedForeign)
           assertForeignUntouched()
         }
@@ -434,6 +510,7 @@ for (const host of HOST_NAMES) {
             : { type: 'local', enabled: true, command: [missing] }
           writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n')
         }
+        assert.equal(readFileSync(join(project, mirrorRel), 'utf8'), mirrorSentinel, `${host}: sanity mirror corrupto antes de upgrade`)
         const upgrade = run(['upgrade', '--agent', host], project, env)
         assert.equal(upgrade.status, 0, upgrade.stderr)
         assertAssets(project, host)
@@ -446,15 +523,23 @@ for (const host of HOST_NAMES) {
           assert.equal(mcpEntryCommand(project, host), process.execPath, `${host}: upgrade repara su MCP`)
         }
 
+        // Idempotencia de `upgrade`: la segunda corrida no altera bytes materializados.
+        const afterUpgrade = snapshotMaterialized(project)
+        const upgradeAgain = run(['upgrade', '--agent', host], project, env)
+        assert.equal(upgradeAgain.status, 0, upgradeAgain.stderr)
+        assert.deepEqual(snapshotMaterialized(project), afterUpgrade, `${host}: upgrade idempotente`)
+        assertAssets(project, host)
+        assertMirrors(project, host)
+
         // install/update sobre un proyecto nuevo: mismas rutas y mirrors, idempotencia
         // de la misma operacion y ausencia de escrituras MCP fuera del destino.
         const installed = join(root, 'install')
         mkdirSync(installed, { recursive: true })
         seedTemplates(installed, 'EXTENSIBLE_PROPIO_INSTALL')
-        const install1 = run(['install', '--project', installed, '--agent', host, '--tier', 'minimo'], installed, env)
+        const install1 = run(['install', '--project', installed, '--agent', host, '--tier', TIER], installed, env)
         assert.equal(install1.status, 0, install1.stderr)
         assertAssets(installed, host)
-        assertMirrors(installed, host)
+        assertMirrors(installed, host, TIER)
         assertManifest(installed, host)
         assertTemplatesMerged(installed, 'EXTENSIBLE_PROPIO_INSTALL')
         assertMcpWrites(installed, host)
@@ -466,19 +551,23 @@ for (const host of HOST_NAMES) {
 
         const beforeInstall = snapshotAssets(installed, host)
         const beforeMcpNames = mcpEntryNames(installed, host)
-        const install2 = run(['install', '--project', installed, '--agent', host, '--tier', 'minimo'], installed, env)
+        const install2 = run(['install', '--project', installed, '--agent', host, '--tier', TIER], installed, env)
         assert.equal(install2.status, 0, install2.stderr)
         assertAssets(installed, host)
-        assertMirrors(installed, host)
+        assertMirrors(installed, host, TIER)
         assertManifest(installed, host)
         assertTemplatesMerged(installed, 'EXTENSIBLE_PROPIO_INSTALL')
         assertMcpWrites(installed, host)
         assertMergedAfterRepeat(installed, host, beforeInstall, beforeMcpNames)
 
-        const update = run(['update', '--project', installed, '--agent', host, '--tier', 'minimo'], installed, env)
+        // `update` debe materializar, no sólo repetir un estado ya correcto: se
+        // corrompe un asset antes y se exige su restauración al contenido del tier.
+        writeFileSync(join(installed, mirrorRel), mirrorSentinel)
+        assert.equal(readFileSync(join(installed, mirrorRel), 'utf8'), mirrorSentinel, `${host}: sanity mirror corrupto antes de update`)
+        const update = run(['update', '--project', installed, '--agent', host, '--tier', TIER], installed, env)
         assert.equal(update.status, 0, update.stderr)
         assertAssets(installed, host)
-        assertMirrors(installed, host)
+        assertMirrors(installed, host, TIER)
         assertManifest(installed, host)
         assertTemplatesMerged(installed, 'EXTENSIBLE_PROPIO_INSTALL')
         assertMcpWrites(installed, host)
@@ -497,7 +586,8 @@ describe('host matrix — no destruccion entre hosts', () => {
       seedTemplates(project, 'EXTENSIBLE_PROPIO_MIXED')
       const first = run(['init', '--agent', 'opencode', '--tier', 'minimo', '--no-mcp'], project, env)
       assert.equal(first.status, 0, first.stderr)
-      const opencodeAssets = snapshotAssets(project, 'opencode')
+      const installedHosts = ['opencode']
+      const hostSnapshots = new Map([['opencode', snapshotAssets(project, 'opencode')]])
       const hostDirs = { skills: new Set(), agents: new Set(), commands: new Set() }
       const addDirs = (host) => {
         for (const cat of ASSET_CATEGORIES) {
@@ -508,10 +598,29 @@ describe('host matrix — no destruccion entre hosts', () => {
       addDirs('opencode')
 
       for (const host of HOST_NAMES.filter((name) => name !== 'opencode')) {
+        const beforeWrites = snapshotHostWrites(project)
         const installed = run(['install', '--project', project, '--agent', host, '--tier', 'minimo', '--no-mcp'], project, env)
         assert.equal(installed.status, 0, installed.stderr)
         addDirs(host)
-        assert.deepEqual(snapshotAssets(project, 'opencode'), opencodeAssets, `opencode conservado al instalar ${host}`)
+        // Todos los hosts previos conservan sus bytes; no se asume que sólo opencode
+        // importa.
+        for (const prev of installedHosts) {
+          assert.deepEqual(snapshotAssets(project, prev), hostSnapshots.get(prev), `${prev} conservado al instalar ${host}`)
+        }
+        // Cero escrituras huérfanas: todo path de asset que cambió pertenece al host
+        // activo (los paths compartidos entre hosts siguen siendo del host activo).
+        const afterWrites = snapshotHostWrites(project)
+        const allowed = new Set([
+          ...expectedAssets(host).keys(),
+          ...(HOSTS[host].mcp ? [HOSTS[host].mcp.file] : [])
+        ])
+        for (const rel of new Set([...Object.keys(beforeWrites), ...Object.keys(afterWrites)])) {
+          if (beforeWrites[rel] !== afterWrites[rel]) {
+            assert.ok(allowed.has(rel), `${host}: escritura fuera del host activo en ${rel}`)
+          }
+        }
+        installedHosts.push(host)
+        hostSnapshots.set(host, snapshotAssets(project, host))
         for (const rel of expectedAssets(host).keys()) {
           assert.ok(existsSync(join(project, rel)), `${host}: ${rel} materializado`)
         }
@@ -524,6 +633,7 @@ describe('host matrix — no destruccion entre hosts', () => {
       }
 
       for (const host of HOST_NAMES) {
+        assert.deepEqual(snapshotAssets(project, host), hostSnapshots.get(host), `${host}: assets estables al final`)
         for (const rel of expectedAssets(host).keys()) {
           assert.ok(existsSync(join(project, rel)), `${host}: ${rel} presente al final`)
         }

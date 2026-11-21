@@ -10,6 +10,10 @@
 ## File-set de implementación (autorizado)
 
 - `test/host-matrix.test.js` (nuevo) — oráculo offline de la matriz host × operación.
+- `test/affected-tests.json` — Amendment A1: coupling `src/cli/**` → `test/host-matrix.test.js`
+  (la suite spawnea el CLI y no deja edge en el grafo de imports).
+- `test/test-selection.test.js` — Amendment A1: pin del coupling anterior con semilla real
+  `src/cli/index.js`.
 - `test/cli.test.js` — sólo si un defecto confirmado necesita un caso en la suite existente; no
   duplicar la matriz completa.
 - `test/adapters-frontmatter.test.js` — sólo si un defecto confirmado pertenece al adaptador de

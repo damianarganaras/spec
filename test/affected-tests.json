@@ -25,6 +25,11 @@
       "reason": "suites spawn the CLI without importing it, so the import graph has no edge to src/cli"
     },
     {
+      "trigger": ["commands/**", "templates/**"],
+      "tests": ["test/host-matrix.test.js"],
+      "reason": "host-matrix reads commands (description assertion of commandToSkill) and templates (firstLockedBlock) as text without importing them"
+    },
+    {
       "trigger": ["src/core/memory/**"],
       "tests": [
         "test/memory-readonly-surfaces.test.js",

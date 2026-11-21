@@ -202,11 +202,28 @@ function snapshotAssets(project, host) {
   return out
 }
 
+// JSON con orden de claves estable: el manifiesto se reescribe en cada corrida y
+// el orden de claves no es contenido materializado.
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    const entries = Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+    return `{${entries.join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
 // Snapshot de idempotencia: `.ancletorc.installedAt` es un timestamp de la corrida,
-// no contenido materializado, así que no cuenta como escritura distinta.
+// no contenido materializado, así que no cuenta como escritura distinta. El resto
+// del manifiesto (agent, profile, installedPaths, azure, discovery, version) sí
+// cuenta: una segunda corrida que los altere debe fallar.
 function snapshotMaterialized(project) {
   const out = snapshotTree(project)
-  delete out['.ancletorc']
+  if (Object.hasOwn(out, '.ancletorc')) {
+    const manifest = JSON.parse(readFileSync(join(project, '.ancletorc'), 'utf8'))
+    delete manifest.installedAt
+    out['.ancletorc'] = stableJson(manifest)
+  }
   return out
 }
 
@@ -473,6 +490,7 @@ for (const host of HOST_NAMES) {
         assert.deepEqual(snapshotMaterialized(project), afterInit, `${host}: init idempotente`)
         assertAssets(project, host)
         assertMirrors(project, host, TIER)
+        assertManifest(project, host)
 
         // import --repair sin bundle es MCP-only: se siembran un asset y un template
         // corruptos con centinela. Deben seguir corruptos (no se acepta una reescritura
@@ -530,6 +548,7 @@ for (const host of HOST_NAMES) {
         assert.deepEqual(snapshotMaterialized(project), afterUpgrade, `${host}: upgrade idempotente`)
         assertAssets(project, host)
         assertMirrors(project, host)
+        assertManifest(project, host)
 
         // install/update sobre un proyecto nuevo: mismas rutas y mirrors, idempotencia
         // de la misma operacion y ausencia de escrituras MCP fuera del destino.

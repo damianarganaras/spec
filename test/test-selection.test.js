@@ -561,6 +561,9 @@ describe('test-selection — pins por clase de escape (repo real)', () => {
     const plan = planTestSelection({ rootDir: ROOT, seeds: ['src/cli/index.js'] })
     assertCovered(plan, 'test/cli.test.js')
     assertCovered(plan, 'test/judge.test.js')
+    // La matriz importa `src/core/adapters/frontmatter.js` y spawnea el CLI: sin el
+    // coupling `src/cli/**` un cambio en `src/cli` no la seleccionaria.
+    assertCovered(plan, 'test/host-matrix.test.js')
     assertCovered(plan, 'test/test-selection.test.js')
     // `test/cli.test.js` también lo cubre el coupling `src/**`; specs-merge sólo
     // entra por `src/cli/**`, así que un typo en ese trigger rompe este pin.

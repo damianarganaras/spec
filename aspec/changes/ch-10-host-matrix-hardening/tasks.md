@@ -108,7 +108,7 @@ coincidencia.
   ruta explícita (`node --test test/cli.test.js` y/o `node --test test/adapters-frontmatter.test.js`).
   **Hecho cuando:** sale con código 0 y sin fallos nuevos respecto del baseline.
 
-- [ ] **3.3** Ejecutar `npm test`.
+- [x] **3.3** Ejecutar `npm test`.
   **Hecho cuando:** la suite declarada pasa completa; cualquier skip preexistente se reporta como
   tal.
 
@@ -126,5 +126,7 @@ coincidencia.
 - **2.3 — Aserciones permanentes:** la matriz completa (`test/host-matrix.test.js`) es la aserción
   permanente del contrato; no hay corrección que convertir.
 - **2.4 — Resultado:** el change cierra como contrato + tests. No se inventaron cambios de runtime.
-- **3.3 — Pendiente:** la suite declarada completa (`npm test`) queda a cargo de `@tester`; la
-  self-validación acotada de implementación no la reemplaza.
+- **3.3 — Cumplido:** `npm test` pasa completa (1529 tests, 1524 pass, 0 fail, 5 skip
+  preexistentes de plataforma/entorno; ninguno en `test/host-matrix.test.js`). Amendment A1
+  aplicado: `src/cli/**` selecciona `test/host-matrix.test.js` y queda pineado con semilla real
+  `src/cli/index.js` en `test/test-selection.test.js`.

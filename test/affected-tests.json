@@ -9,6 +9,7 @@
         "test/cli.test.js",
         "test/curation.test.js",
         "test/discovery-topology.test.js",
+        "test/host-matrix.test.js",
         "test/judge.test.js",
         "test/mcp.test.js",
         "test/memory-doctor-uninitialized.test.js",

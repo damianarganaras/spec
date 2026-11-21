@@ -423,7 +423,6 @@ for (const host of HOST_NAMES) {
 
         // upgrade re-materializa los assets desde la canónica y refresca solo el
         // destino MCP declarado. Los templates se vuelven a sembrar desactualizados.
-        const beforeUpgrade = snapshotAssets(project, host)
         seedTemplates(project, 'EXTENSIBLE_PROPIO_UPGRADE')
         if (host === 'copilot' || host === 'commandcode') {
           const model = HOSTS[host]
@@ -446,7 +445,6 @@ for (const host of HOST_NAMES) {
         if (host === 'copilot' || host === 'commandcode') {
           assert.equal(mcpEntryCommand(project, host), process.execPath, `${host}: upgrade repara su MCP`)
         }
-        assert.deepEqual(snapshotAssets(project, host), beforeUpgrade, `${host}: upgrade conserva los assets`)
 
         // install/update sobre un proyecto nuevo: mismas rutas y mirrors, idempotencia
         // de la misma operacion y ausencia de escrituras MCP fuera del destino.

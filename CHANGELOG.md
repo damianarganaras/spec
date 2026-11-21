@@ -2,6 +2,28 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.43.2] - 2026-11-21
+
+### Notas
+
+- **Cierre del backlog**: CH-09c/CH-09d evaluados el 2026-11-21 y no disparados (drift=0; 957 refs / ~230 ms).
+- **Technical seed regenerado**: `docs/technical-discovery/` actualizado el 2026-11-21.
+- **Sin cambios de runtime, comandos ni flags**: sólo se actualiza la versión del paquete.
+
+## [0.43.1] - 2026-11-21
+
+### Tests
+
+- **Matriz offline de hosts × operaciones de ciclo de vida (CH-10)**: matriz determinista sobre los 8 hosts declarados (`opencode`, `claude`, `vscode`, `antigravity`, `cursor`, `roo`, `copilot`, `commandcode`) × `init`/`install`/`update`/`upgrade`/`import --repair` sin bundle, sin host real, sin binarios de host y sin red; cubre destino nativo por asset, cobertura soportada, MCP por host, templates `LOCKED`/`EXTENSIBLE`, idempotencia y no destrucción, y deriva de manifiesto entre `init`/`upgrade` repetidos. La selección de tests por affected-set incluye cambios en `src/cli/**`, `commands/**` y `templates/**`.
+
+### Docs
+
+- **Requirement `Matriz de hosts y operaciones de ciclo de vida` en `agent-install-routing`**: delta `ADDED` con 11 scenarios, promovido a la spec canónica al archivar el change.
+
+### Notas
+
+- **Sin cambios de runtime, comandos ni flags**: CH-10 es sólo test + spec; `package.json` sólo cambia de versión. Change archivado en `aspec/changes/archive/2026-11-21-ch-10-host-matrix-hardening/`.
+
 ## [0.43.0] - 2026-11-20
 
 ### Changed

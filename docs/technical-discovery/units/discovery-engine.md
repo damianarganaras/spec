@@ -3,9 +3,9 @@ node: units/discovery-engine
 kind: dossier
 read_when: "cómo se genera el mapa topológico, el pack Repomix, el impacto del seed, el affected-set, la selección de tests y la resolución de modelos"
 covers: [topología, empaquetado, tiers, estado del seed, impacted-set, selección de tests, catálogo de modelos, integridad de IDs]
-sources: ["src/core/discovery.js", "src/core/discovery-glob.js", "src/core/discovery-state.js", "src/core/repomix-tier.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/model-declarations.js", "src/core/tier-models.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", ".discovery-map.json"]
-generatedAt: 2026-11-20T22:00:13.847Z
-pluginVersion: 0.43.0
+sources: ["src/core/discovery.js", "src/core/discovery-glob.js", "src/core/discovery-state.js", "src/core/repomix-tier.js", "src/core/affected-set.js", "src/core/test-selection.js", "src/core/model-catalog.js", "src/core/model-catalog.json", "src/core/model-declarations.js", "src/core/tier-models.js", "scripts/refresh-model-catalog.mjs", "scripts/test-affected.mjs", "src/cli/index.js", ".discovery-map.json", "test/affected-tests.json"]
+generatedAt: 2026-11-21T05:55:56.128Z
+pluginVersion: 0.43.1
 skillVersion: '2.3'
 ---
 
@@ -23,22 +23,23 @@ modelos por tier. Es una unidad de soporte a decisiones, no de producto visible.
 
 1. `buildTopologyMap` recorre el repositorio, aplica los ignores y resume archivos por directorio.
    `writeDiscoveryMap` persiste `.discovery-map.json` (`last_updated`, `total_files`,
-   `tree_summary`, `root_files`). El mapa vigente resume **975 archivos** (`aspec` 384,
-   `documentation` 340, `.opencode` 66, `test` 40, `docs` 22, `src` 25, `skills` 35).
+   `tree_summary`, `root_files`). El mapa vigente resume **984 archivos** (`aspec` 391,
+   `documentation` 340, `.opencode` 66, `test` 41, `docs` 23, `src` 25, `skills` 35).
 2. `discovery --check` calcula hashes por archivo y por área, compara con el estado almacenado y
    deriva `state`/`impact`/`affectedDocs`. Los cambios efímeros (`.ancleto/**`,
    `.discovery-map.json`) no generan áreas; el `outputDir` del seed se excluye del walk. El bump de
    `version` de `package.json` se reemplaza por un centinela para no contar como cambio de
    contenido; aun así, `CHANGELOG.md` es un área raíz observable y un cierre de release puede
-   producir `STALE/minor` sin cambiar el resultado del centinela.
+   producir `STALE/minor` sin cambiar el resultado del centinela. `.ancletorc` también se comporta
+   como archivo raíz observable, aunque sea local/gitignored.
 3. `discovery --compress` construye **un** pack Repomix con `buildRepomixArgs(flags, tier,
    exclude)`; el presupuesto de tokens depende del tier. El pack va a un archivo temporal y el
-   estado se guarda con `packTokens` y hashes. En esta generación: **935 archivos, ≈85.629
-   tokens**.
+   estado se guarda con `packTokens` y hashes. En esta generación: **943 archivos, ≈85.629
+   tokens**; Repomix excluye `docs/**`, `**/*.md`, `test/**` y lockfiles por default.
 4. `seed-map.json` mapea cada documento del seed a las áreas de las que sacó evidencia; el check lo
    usa para acotar la próxima regeneración (`affectedDocs`). El reporte que motivó esta corrida
-   marcó `STALE/minor` por `CHANGELOG.md`, `aspec` y `src` (release 0.43.0 + change
-   `memory-import-scope-string`) y listó **los once documentos** como afectados.
+   marcó `STALE/minor` (HEAD `c58a01b`) por las áreas `.ancletorc`, `CHANGELOG.md`, `aspec`, `docs`
+   y `test`, y listó **los once documentos** como afectados.
 
 ### Globs
 
@@ -64,6 +65,11 @@ universo `test/*.test.js`, hay imports irresolubles o un test no puede clasifica
 `false` y el consumidor (`scripts/test-affected.mjs`) corre la suite completa declarada. Nunca
 interpreta la ausencia de plan como selección vacía.
 
+Desde 0.43.1, `test/host-matrix.test.js` entra por dos vías: el coupling de `src/cli/**` (todas las
+suites que spawnean el CLI sin importarlo) y un trigger `commands/**` + `templates/**`, porque la
+matriz lee esos assets como texto. Evidencia: `test/affected-tests.json`,
+`test/test-selection.test.js`.
+
 ### Catálogo y tiers
 
 - `src/core/model-catalog.json` es un snapshot commiteado (proveedores, IDs, `cost`, `limit`),
@@ -84,7 +90,8 @@ interpreta la ausencia de plan como selección vacía.
 - **Estado byte-estable**: `discovery-state.js` no ordena ni normaliza; el orden de claves es
   contrato para poder pinear offline los bytes persistidos.
 - **Impacto por área**: un área es el directorio de primer nivel o un archivo raíz. Los cambios
-  efímeros no deben producir `affectedDocs`; `CHANGELOG.md` sí participa como archivo raíz.
+  efímeros no deben producir `affectedDocs`; `CHANGELOG.md` y `.ancletorc` sí participan como
+  archivos raíz.
 - **Grafo conservador**: `unresolved` no es un error fatal del comando, pero sí vuelve no confiable
   el cierre para la selección de tests.
 - **Manifiesto cerrado**: declarar un test fuera del universo o un coupling sin trigger/tests
@@ -104,6 +111,7 @@ interpreta la ausencia de plan como selección vacía.
 | `src/core/repomix-tier.js` | Tier del proyecto, presupuesto y argumentos del pack |
 | `src/core/affected-set.js` | Grafo de imports y clausura de dependientes |
 | `src/core/test-selection.js` | Plan de tests fail-closed |
+| `test/affected-tests.json` | Couplings y triggers del plan de tests |
 | `src/core/model-catalog.js` | Parseo, diff y validación del catálogo |
 | `src/core/model-catalog.json` | Snapshot commiteado de modelos |
 | `src/core/model-declarations.js` | Collector de declaraciones versionadas |

@@ -2,8 +2,8 @@
 node: setup
 kind: setup
 read_when: "preparar el entorno o ejecutar los comandos principales"
-generatedAt: 2026-11-20T22:00:13.847Z
-pluginVersion: 0.43.0
+generatedAt: 2026-11-21T05:55:56.128Z
+pluginVersion: 0.43.1
 skillVersion: '2.3'
 ---
 
@@ -27,14 +27,18 @@ skillVersion: '2.3'
 | Lint | `npm run lint` | `package.json` |
 | Tests | `npm test` | `package.json` |
 | Tests afectados | `npm run test:affected` | `package.json`, `scripts/test-affected.mjs` |
+| Matriz de hosts (offline) | `node --test test/host-matrix.test.js` (incluida en `npm test`) | `test/host-matrix.test.js` |
 | CLI local | `node src/cli/index.js <comando>` | `PRODUCT.md` |
 | CLI instalada | `ancleto <comando>` o `aspec <comando>` | `package.json` → `bin` |
 | Refrescar catálogo de modelos | `node scripts/refresh-model-catalog.mjs` | `scripts/refresh-model-catalog.mjs` |
 | Publicar (CI) | tag `v*` → `npm ci` + lint + tests + `npm publish` | `.github/workflows/publish.yml` |
 
 Regla del repositorio: **toda corrida de CLI usa `node src/cli/index.js ...`**. El binario del
-PATH puede estar rezagado respecto del código local (el `.ancleto/machine-env.md` de este clon
-declara `0.40.0`, mientras el paquete está en `0.43.0`).
+PATH puede estar rezagado respecto del código local.
+
+`npm run test:affected` usa el affected-set y el manifiesto `test/affected-tests.json`. Desde
+0.43.1, cambios en `src/cli/**`, `commands/**` o `templates/**` seleccionan
+`test/host-matrix.test.js`, porque la matriz lee assets como texto sin importarlos.
 
 ## Subcomandos
 
@@ -103,6 +107,7 @@ abrir (y crear) la base. Evidencia: `src/core/memory/engine.js` (`validateImport
 | `.ancleto/working-context.md` | Refresh de lifecycle/memoria y `memory context` | Local |
 | `.discovery-map.json` | `discovery` | Versionado |
 | `docs/technical-discovery/**` | Skill de discovery | Versionado |
+| `docs/baseline/**` | Cierre CH-00 (baseline read-only) | Versionado |
 | `aspec/changes/**`, `aspec/specs/**`, `aspec/backlog.md` | Ciclo `/cleto-*` y cierre de release | Versionado |
 
 ## Convenciones operativas
@@ -118,9 +123,12 @@ abrir (y crear) la base. Evidencia: `src/core/memory/engine.js` (`validateImport
 - **Presupuesto**: la configuración es tolerante y nunca impide el render; un cambio de env o de
   `.ancletorc` puede dejar el working-context marcado como `desactualizado` hasta el próximo
   refresh (no hay lógica de invalidación).
+- **Matriz de hosts**: la verificación es offline y determinista; no requiere host real, binario
+  de host ni red (`test/host-matrix.test.js`).
 - **Validaciones declarativas**: solo se ejecuta lo declarado en `PRODUCT.md` → `## Project
   Commands`; lo no declarado se omite y se registra.
 - **Secretos**: nunca copiar valores de `.ancletorc`, `opencode.json`, CI o Azure; nombrar la
   variable o el archivo y omitir el valor.
-- **Release**: `0.43.0` está preparada (bump `9ba7975`), **sin tag ni run**; la última publicada es
-  `0.42.0` (tag `v0.42.0` → `c6319c8`, run `44808502480`, npm `latest`).
+- **Release**: `0.43.1` está **preparada, sin push** (tag anotado local `v0.43.1` → `7758d46`, sin
+  run registrado); la última publicada y verificada es `0.43.0` (tag `v0.43.0` → `9a7220c`, run
+  `44827344442`, npm `latest`).

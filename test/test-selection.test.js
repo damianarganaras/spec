@@ -561,10 +561,23 @@ describe('test-selection — pins por clase de escape (repo real)', () => {
     const plan = planTestSelection({ rootDir: ROOT, seeds: ['src/cli/index.js'] })
     assertCovered(plan, 'test/cli.test.js')
     assertCovered(plan, 'test/judge.test.js')
+    // La matriz importa `src/core/adapters/frontmatter.js` y spawnea el CLI: sin el
+    // coupling `src/cli/**` un cambio en `src/cli` no la seleccionaria.
+    assertCovered(plan, 'test/host-matrix.test.js')
     assertCovered(plan, 'test/test-selection.test.js')
     // `test/cli.test.js` también lo cubre el coupling `src/**`; specs-merge sólo
     // entra por `src/cli/**`, así que un typo en ese trigger rompe este pin.
     assertCovered(plan, 'test/specs-merge.test.js')
+  })
+
+  it('un command o un template selecciona la matriz que los lee como texto', () => {
+    // La matriz lee `commands/**` (description de commandToSkill) y `templates/**`
+    // (firstLockedBlock) como texto: sin trigger no hay arista de import que la
+    // seleccione. Semillas reales para que un typo en el glob rompa el pin.
+    for (const seed of ['commands/cleto-apply.md', 'templates/AGENTS.md']) {
+      const plan = planTestSelection({ rootDir: ROOT, seeds: [seed] })
+      assertCovered(plan, 'test/host-matrix.test.js')
+    }
   })
 
   it('un delta de change selecciona los guards que lo leen como texto', () => {

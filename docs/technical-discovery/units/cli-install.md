@@ -1,11 +1,11 @@
 ---
 node: units/cli-install
 kind: dossier
-read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, MCP, tiers y diagnósticos"
-covers: [instalación, hosts, frontmatter, MCP, tiers, templates, import-export, import de memoria, check, doctor, judge, publicación, working-context]
-sources: ["src/cli/index.js", "src/cli/ui.js", "src/core/adapters/frontmatter.js", "src/core/model-declarations.js", "src/core/model-catalog.js", "src/core/tier-models.js", "src/core/judge.js", "src/core/machine-env.js", "agents/**", "commands/**", "skills/**", "templates/**", "profiles/**", "opencode.json", "package.json", ".github/workflows/publish.yml"]
-generatedAt: 2026-11-20T22:00:13.847Z
-pluginVersion: 0.43.0
+read_when: "cómo el CLI inicializa e instala el framework, rutas por host, adaptación de frontmatter, MCP, tiers, matriz offline de hosts y diagnósticos"
+covers: [instalación, hosts, frontmatter, MCP, tiers, templates, import-export, import de memoria, matriz de hosts, check, doctor, judge, publicación, working-context]
+sources: ["src/cli/index.js", "src/cli/ui.js", "src/core/adapters/frontmatter.js", "src/core/model-declarations.js", "src/core/model-catalog.js", "src/core/tier-models.js", "src/core/judge.js", "src/core/machine-env.js", "agents/**", "commands/**", "skills/**", "templates/**", "profiles/**", "opencode.json", "package.json", ".github/workflows/publish.yml", "test/host-matrix.test.js"]
+generatedAt: 2026-11-21T05:55:56.128Z
+pluginVersion: 0.43.1
 skillVersion: '2.3'
 ---
 
@@ -47,6 +47,26 @@ aporta la UI de terminal.
 proyecto. `upgrade` materializa la canónica sin aplicar tier. `update` reintenta la instalación
 sobre el manifiesto existente.
 
+### Matriz de hosts y ciclo de vida (0.43.1)
+
+`test/host-matrix.test.js` es una matriz determinista y **offline** sobre los 8 hosts declarados ×
+`init`/`install`/`update`/`upgrade`/`import --repair` (sin bundle). No invoca hosts reales,
+binarios de host ni red. Verifica:
+
+- destino nativo y convención de nombre por asset (incluido `.agent.md` de vscode y `.prompt.md` de
+  copilot/vscode);
+- cobertura soportada (cursor/roo sin agents ni commands; copilot sin skills);
+- MCP por host y ausencia de `.opencode/opencode.json` en hosts sin destino;
+- templates `LOCKED` actualizados y `EXTENSIBLE` preservado;
+- idempotencia y no destrucción entre ejecuciones;
+- deriva de manifiesto entre `init`/`upgrade` repetidos.
+
+Dos decisiones del test importan para cambios futuros: usa un mapa `HOSTS` propio como **oráculo
+independiente** del descriptor de producción, y fija tier `normal` (no `minimo`) para que la
+aplicación de tier sea observable. Change archivado:
+`aspec/changes/archive/2026-11-21-ch-10-host-matrix-hardening/`; requirement promovido a
+`aspec/specs/agent-install-routing/spec.md`.
+
 ### Import / export de proyecto
 
 - `export` produce un bundle portátil con allowlist: no copia `opencode.json` (rutas absolutas),
@@ -74,10 +94,11 @@ exit 1 **sin abrir ni crear la base**; el mismo contrato lo aplica el dry-run. E
 ### Release
 
 Un tag `v*` dispara `.github/workflows/publish.yml` (lint, tests, publish idempotente, Release y
-canary no bloqueante). `0.43.0` está **preparada, sin tag ni run**: `package.json` declara la
-versión (commit `9ba7975`) y `CHANGELOG.md` tiene su sección, pero `aspec/backlog.md` no registra
-tag, run ni `dist-tag`. La última publicada es `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run
-`44808502480` `success`, npm `latest`).
+canary no bloqueante). `0.43.1` está **preparada, sin push**: `package.json` y `CHANGELOG.md`
+declaran la versión (commit `7758d46`) y existe el tag anotado local `v0.43.1` (objeto `fce834b`),
+pero el backlog no registra run. La última publicada y verificada es `0.43.0` (tag anotado
+`v0.43.0` → `9a7220c`, run `44827344442` `success`, npm `latest`). Antes, `0.42.0` (tag anotado
+`v0.42.0` → `c6319c8`, run `44808502480` `success`, npm `latest`).
 
 ## Reglas, contratos y riesgos
 
@@ -98,6 +119,8 @@ tag, run ni `dist-tag`. La última publicada es `0.42.0` (tag anotado `v0.42.0` 
   `memory context`; el lifecycle no debe persistir un bloque degradado.
 - **Pre-check de `memory import`**: la validación se hace antes de abrir la base para no crear
   `.ancleto/memory.db` ante un archivo inválido; no reimplementar el esquema en el CLI.
+- **Matriz offline**: cualquier cambio de ruteo debe pasar `test/host-matrix.test.js`; actualizar
+  el oráculo `HOSTS` para “hacer pasar” una regresión rompe el contrato.
 - **Riesgo principal**: `src/cli/index.js` concentra demasiadas responsabilidades; los cambios
   deben aislarse por subcomando y apoyarse en los módulos de `src/core/**`.
 
@@ -115,6 +138,7 @@ tag, run ni `dist-tag`. La última publicada es `0.42.0` (tag anotado `v0.42.0` 
 | `src/core/machine-env.js` | Detección de shell/EOL/tools y exclusión git |
 | `src/core/memory/working-context.js` | Render y presupuesto del artefacto refrescado por el lifecycle |
 | `src/core/memory/engine.js` | `validateImportEntries`, usado como pre-check por el CLI |
+| `test/host-matrix.test.js` | Matriz offline de 8 hosts × operaciones de ciclo de vida |
 | `agents/**`, `commands/**`, `skills/**`, `templates/**`, `profiles/**` | Superficie instalable |
 | `package.json` | Bins, versión, engines y scripts |
 | `.github/workflows/publish.yml` | Pipeline de publicación y Release |

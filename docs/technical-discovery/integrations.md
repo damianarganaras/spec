@@ -2,8 +2,8 @@
 node: integrations
 kind: integrations
 read_when: "sistemas externos y dependencias privadas observables"
-generatedAt: 2026-11-20T22:00:13.847Z
-pluginVersion: 0.43.0
+generatedAt: 2026-11-21T05:55:56.128Z
+pluginVersion: 0.43.1
 skillVersion: '2.3'
 ---
 
@@ -29,9 +29,9 @@ que el núcleo de la CLI funcione.
 
 - Se invoca on-demand con `discovery --compress`; se resuelve por `PATH` o vía `npx`.
 - El pack se escribe en el directorio temporal del sistema (`%TEMP%`), nunca en el repo ni en
-  `.ancleto`.
+  `.ancleto`. En esta generación: `C:\Users\…\Temp\ancleto-pack-*.txt`.
 - El CLI pasa `--ignore` con los globs resueltos de `discovery.exclude`; Repomix agrega sus
-  propios defaults (incluye `**/*.md` y `test/**`).
+  propios defaults (excluye `docs/**`, `**/*.md`, `test/**` y lockfiles).
 - El estado persistido registra `packTokens` y los hashes por archivo.
 - Evidencia: `src/cli/index.js`, `src/core/repomix-tier.js`, `src/core/discovery-state.js`.
 
@@ -86,13 +86,16 @@ que el núcleo de la CLI funcione.
 - `.github/workflows/publish.yml` se dispara con tags `v*` (o manualmente).
 - Pasos: `npm ci`, `npm run lint`, `node --test test/*.test.js`, `npm publish --access public`
   (omite si la versión ya existe), creación del Release y canary no bloqueante del tarball.
-- Estado actual: `0.43.0` está **preparada, sin tag ni run**. `package.json` declara la versión
-  (commit `9ba7975`); `aspec/backlog.md` no registra todavía tag, run ni `dist-tag` para 0.43.0.
-- Última release publicada: `0.42.0` (tag anotado `v0.42.0` → `c6319c8`, run `44808502480` en
-  `success`, npm `@ancleto/spec@0.42.0` `latest`). La anterior, `0.41.0`, fue tag `v0.41.0` sobre
-  `5c171bc`, run `44781865327` exitoso y `latest` en npm.
+- Estado actual: `0.43.1` está **preparada, sin push**. `package.json` y `CHANGELOG.md` declaran
+  la versión (commit `7758d46`); existe el tag anotado local `v0.43.1` (objeto `fce834b`) →
+  `7758d46`, pero `aspec/backlog.md` no registra push ni run, así que **no hay publicación
+  verificada**.
+- Última publicada y verificada: `0.43.0` (tag anotado `v0.43.0` → `9a7220c`, run `44827344442`
+  `success`, npm `@ancleto/spec@0.43.0` `latest` con gitHead `9a7220c`). Antes, `0.42.0` (tag
+  anotado `v0.42.0` → `c6319c8`, run `44808502480` `success`, npm `latest`) y `0.41.0` (tag
+  `v0.41.0` sobre `5c171bc`, run `44781865327`).
 - Variables: `NODE_AUTH_TOKEN` y `GITHUB_TOKEN`/`GH_TOKEN`; valores omitidos.
-- Evidencia: `.github/workflows/publish.yml`, `package.json`, `aspec/backlog.md`.
+- Evidencia: `.github/workflows/publish.yml`, `package.json`, `CHANGELOG.md`, `aspec/backlog.md`.
 
 ## Hosts de agentes
 
@@ -104,11 +107,12 @@ Destinos nativos resueltos por un descriptor único (`src/cli/index.js`):
 | antigravity | `.agents/agents` | `.agents/skills/<n>/SKILL.md` | `.agents/skills` | `.agents/mcp_config.json` |
 | commandcode | `.commandcode/agents` | `.commandcode/commands` | `.commandcode/skills` | `.mcp.json` |
 | claude | `.claude/agents` | `.claude/commands` | `.claude/skills` | sin destino propio |
-| vscode | `.github/agents` | `.github/prompts` | `.github/skills` | sin destino propio |
+| vscode | `.github/agents/<n>.agent.md` | `.github/prompts/<n>.prompt.md` | `.github/skills` | sin destino propio |
 | copilot | `.github/prompts` | `.github/prompts` | no soportado | `copilot-mcp.json` |
-| cursor / roo | solo skills | no soportado | `.cursor`/`.roo` | sin formato documentado |
+| cursor / roo | no soportado | no soportado | `.cursor`/`.roo` | sin formato documentado |
 
 La adaptación de frontmatter es passthrough para opencode y skills/commands; transforma agents
 para antigravity y commandcode; elimina claves gestionadas para claude/vscode/copilot; y avisa sin
-transformar para cursor/roo y hosts desconocidos. Evidencia:
-`src/core/adapters/frontmatter.js`.
+transformar para cursor/roo y hosts desconocidos. Desde 0.43.1 esta tabla se verifica con
+`test/host-matrix.test.js`, un oráculo offline independiente del descriptor de producción.
+Evidencia: `src/core/adapters/frontmatter.js`, `test/host-matrix.test.js`.

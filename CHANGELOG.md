@@ -2,6 +2,14 @@
 
 Todas las versiones notables de `@ancleto/spec`.
 
+## [0.43.2] - 2026-11-21
+
+### Notas
+
+- **Cierre del backlog**: CH-09c/CH-09d evaluados el 2026-11-21 y no disparados (drift=0; 957 refs / ~230 ms).
+- **Technical seed regenerado**: `docs/technical-discovery/` actualizado el 2026-11-21.
+- **Sin cambios de runtime, comandos ni flags**: sólo se actualiza la versión del paquete.
+
 ## [0.43.1] - 2026-11-21
 
 ### Tests
